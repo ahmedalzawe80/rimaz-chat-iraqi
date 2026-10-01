@@ -9,7 +9,7 @@ const {Server}=require("socket.io");
 const app=express(), server=http.createServer(app), io=new Server(server);
 const PORT=process.env.PORT||3000;
 const DATA=path.join(__dirname,"data.json");
-const UP=path.join(__dirname,"uploads");
+const UP=path.join(__dirname,"/tmp/uploads");
 if(!fs.existsSync(UP))fs.mkdirSync(UP);
 const db=fs.existsSync(DATA)?JSON.parse(fs.readFileSync(DATA,"utf8")):{users:{},guests:[],messages:[],wall:[],likes:{},lastLike:{},sessions:{}};
 const save=()=>fs.writeFileSync(DATA,JSON.stringify(db,null,2));
