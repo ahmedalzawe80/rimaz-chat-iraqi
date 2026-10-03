@@ -29,7 +29,7 @@ const defaultRooms=[
 ];
 for(const r of defaultRooms) if(!db.rooms[r.name]) db.rooms[r.name]=r;
 function profileOf(name){return db.profiles[name]||{avatar:"👤",status:"متصل الآن",bio:"عضو في دردشة ريماز عراقية",nameColor:"#222222",bgColor:"#ffffff"}}
-function isAdmin(u){return !!u && (u.type==="admin" || u.name==="admin" || (process.env.ADMIN_NAME && u.name===process.env.ADMIN_NAME))}
+function isAdmin(u){return !!u && u.type==="member" && u.name==="admin"}
 function likesOfAny(n){ if(db.users[n]) return db.users[n].likes||0; const sess=Object.values(db.sessions).find(x=>x.type==="guest"&&x.name===n); return sess?.likes||0 }
 function levelAny(n){return level(likesOfAny(n))}
 
