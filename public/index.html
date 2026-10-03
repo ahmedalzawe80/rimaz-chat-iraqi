@@ -87,7 +87,7 @@ body{background:#f3f4f7}
 </head>
 <body><div id="app"></div><div id="modal" class="modal"><div class="box" id="box"></div></div>
 <script>
-let sid=localStorage.getItem("rimaz_sid"), me=null, socket=null, currentRoom="الغرفة العامة";
+let sid=sessionStorage.getItem("rimaz_sid"), me=null, socket=null, currentRoom="الغرفة العامة";
 let rooms=[["🏠","الغرفة العامة","نص فقط",120],["🔒","غرفة الأصدقاء","خاص",48],["❤️","غرفة الحب","خاص",35],["🎙️","غرفة الصوت","مايك",22]];
 async function api(url,opt={}){opt.headers={...(opt.headers||{}),...(sid?{"x-session":sid}:{})};let r=await fetch(url,opt);let j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||"حدث خطأ");return j}
 async function start(){try{let s=await api("/api/state");me=s.user;if(me){await syncRooms();show("rooms")}else auth()}catch(e){auth()}}
