@@ -73,9 +73,9 @@ app.post("/api/login",(req,res)=>{
 });
 app.post("/api/guest",(req,res)=>{
  const n=clean(req.body.name);
- if(!n||db.users[n]||db.guests.includes(n))return res.status(409).json({error:"الاسم مستخدم، اختر اسمًا آخر"});
- db.guests.push(n);const sid=makeSession(n,"guest",0);save();res.json({sid});
-});
+ const n=clean(req.body.name);
+db.guests=db.guests.filter(g=>Object.values(db.sessions||{}).some(s=>s.type==="guest"&&s.name===g));
+if(!n||db.users[n]||db.guests.includes(n))return res.status(409).json({error:"الاسم مستخدم، اختر اسمًا آخر"});
 app.post("/api/logout",(req,res)=>{
  const u=userFrom(req); if(u?.type==="guest")db.guests=db.guests.filter(x=>x!==u.name);
  delete db.sessions[req.headers["x-session"]];save();res.json({ok:true});
