@@ -1,293 +1,2652 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>دردشة ريماز عراقية</title><script src="/socket.io/socket.io.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>دردشة ريماز عراقية</title>
+<script src="/socket.io/socket.io.js"></script>
+
 <style>
-*{box-sizing:border-box}body{margin:0;font-family:Tahoma,Arial;background:#faf7f0;color:#17182b;padding-bottom:62px}
-button,input,textarea{font:inherit}button{cursor:pointer}.black{background:#090b1b;color:#fff;border:0;border-radius:6px;padding:10px 14px}.purple{background:#7547e8;color:#fff;border:0;border-radius:7px;padding:10px 14px}.red{background:#df5555;color:#fff;border:0;border-radius:6px;padding:10px 14px}
-.top{height:70px;background:#fff;border-bottom:1px solid #dfe2ed;display:flex;align-items:center;gap:12px;padding:8px 14px;position:sticky;top:0;z-index:5}.logo{flex:1;text-align:center;font-weight:900;font-size:23px;color:#171a4b}.logo span{color:#7547e8}.nav{display:flex;gap:5px}.nav button{border:0;background:transparent;padding:9px;border-radius:7px}.nav .on{background:#eee9ff;color:#5b35c5}.user{font-weight:bold;display:flex;align-items:center;gap:7px}.ava{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#e9ddff}
-.layout{max-width:1450px;margin:12px auto;padding:0 10px;display:grid;grid-template-columns:250px minmax(0,1fr) 270px;gap:10px}.card{background:#fffdf9;border:1px solid #d5d2ca;border-radius:2px;box-shadow:0 1px 5px #2221}.side{padding:10px}.title{font-weight:900;font-size:18px;margin:4px 3px 12px}.room{display:flex;align-items:center;gap:8px;padding:8px;border-radius:1px;margin:2px 0;border-bottom:1px solid #eee8df}.room.active{background:#eee9ff;border-right:4px solid #090b1b}.pic{width:40px;height:40px;border-radius:3px;background:#eee8df;display:grid;place-items:center;border:1px solid #ddd7cc}.count{margin-right:auto;color:#6338c7}.member{display:flex;align-items:center;gap:8px;padding:8px 2px;border-bottom:1px solid #f0f1f5}.member .ava{width:33px;height:33px}.dot{width:8px;height:8px;border-radius:50%;background:#2bb66e;margin-right:auto}
-.chat{min-height:680px;border-radius:2px;display:flex;flex-direction:column;overflow:hidden}.chathead{padding:9px 12px;border-bottom:1px solid #d8d4ca;background:#f4eee4;display:flex;align-items:center;gap:8px}.chathead strong{flex:1}.tag{background:#eee9ff;color:#6338c7;padding:5px 9px;border-radius:99px;font-size:12px}.messages{padding:8px;flex:1;overflow:auto}.notice{background:#f3eaff;color:#5c38bc;border:1px solid #ddd2ef;border-radius:2px;padding:9px;text-align:center;margin-bottom:8px}.msg{display:flex;gap:7px;margin:4px 0;border-bottom:1px solid #f0ebe3;padding:5px 2px}.bubble{background:#fbf1e5;border:1px solid #e7ddcf;border-radius:2px;padding:6px 9px;max-width:82%}.name{font-weight:900;color:#6338c7;font-size:13px}.time{font-size:10px;color:#999}.compose{display:flex;gap:4px;padding:7px;border-top:1px solid #d5d1c8;background:#f7f3ec}.compose input{flex:1;border:1px solid #c9c5bc;border-radius:1px;padding:9px;background:#fff}.bottom{position:fixed;bottom:0;left:0;right:0;background:#050716;border-top:2px solid #2d2e3a;display:flex;justify-content:center;gap:3px;padding:4px;z-index:8;direction:rtl}.bottom button{background:#090b1b;color:#fff;border:1px solid #252638;border-radius:2px;padding:8px 13px;min-width:105px;font-weight:700}.bottom button.active{background:#15172a}.bottom b{color:#fff;font-size:13px}
-.modal{position:fixed;inset:0;background:#0008;display:none;place-items:center;z-index:20}.modal.open{display:grid}.box{width:min(560px,94vw);max-height:90vh;overflow:auto;background:#fff;border-radius:11px}.boxhead{background:#090b1b;color:#fff;padding:12px;font-size:19px;font-weight:bold;display:flex;justify-content:space-between}.boxbody{padding:13px}.boxbody label{display:block;background:#090b1b;color:#fff;padding:7px}.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.settings-grid>div{min-width:0}.boxbody input,.boxbody textarea{width:100%;padding:9px;border:1px solid #bbb;margin-bottom:8px}.close{background:#df5555;color:#fff;border:0;border-radius:5px;padding:2px 9px}
-.auth{min-height:100vh;display:grid;place-items:center;background:#f2efff}.authbox{width:min(760px,94vw);background:#fff;border:1px solid #ddd;border-radius:17px;padding:23px;box-shadow:0 10px 45px #2222}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.authcard{border:1px solid #ddd;border-radius:11px;padding:14px}.authcard input{width:100%;padding:10px;border:1px solid #ddd;border-radius:7px;margin:4px 0 8px}.muted{font-size:12px;color:#777}.post{border:1px solid #ddd;border-radius:10px;padding:11px;margin:8px 0}.locked{opacity:.55}
-@media(max-width:900px){.settings-grid{grid-template-columns:1fr}.layout{grid-template-columns:1fr}.side{display:none}.logo{font-size:19px}.nav{overflow:auto}.top{height:auto;flex-wrap:wrap}.logo{flex-basis:100%;order:-1}.bottom button{font-size:11px;padding:8px 5px;min-width:0;flex:1}.grid{grid-template-columns:1fr}}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;width:100%;min-height:100%;font-family:Tahoma,Arial,sans-serif}
+body{background:#f3f4f6;color:#222;overflow-x:hidden;padding-bottom:70px}
+button,input,textarea,select{font:inherit}
+button{cursor:pointer}
 
-/* V5 - rooms and bottom navigation refinement */
-body{background:#f3f4f7}
-.top{background:#fff;border-bottom:1px solid #cfd2da;box-shadow:0 1px 5px #0001}
-.logo{font-size:21px;color:#171717}
+.black{background:#08090c;color:#fff;border:0;border-radius:5px;padding:9px 13px}
+.purple{background:#7547e8;color:#fff;border:0;border-radius:6px;padding:9px 13px}
+.red{background:#df5555;color:#fff;border:0;border-radius:5px;padding:9px 13px}
+.green{background:#198754;color:#fff;border:0;border-radius:5px;padding:9px 13px}
+
+.top{
+  min-height:64px;background:#fff;border-bottom:1px solid #cfd2da;
+  box-shadow:0 1px 5px #0001;display:flex;align-items:center;
+  gap:10px;padding:7px 10px;position:sticky;top:0;z-index:30
+}
+
+.logo{
+  flex:1;text-align:center;font-weight:900;font-size:21px;color:#171717
+}
 .logo span{color:#171717}
-.layout{max-width:1180px;margin:8px auto 74px;gap:7px;padding:0 6px}
-.card{border:1px solid #c9ccd4;border-radius:7px;box-shadow:0 1px 4px #0001}
+
+.user{font-weight:bold;display:flex;align-items:center;gap:7px}
+.ava{
+  width:38px;height:38px;border-radius:50%;display:grid;
+  place-items:center;background:#e9e9ec;border:1px solid #ccc
+}
+
+.nav{display:flex;gap:4px;overflow:auto}
+.nav button{
+  border:0;background:#f7f7f8;padding:8px 9px;border-radius:6px;
+  white-space:nowrap
+}
+.nav .on{background:#222;color:#fff}
+
+.layout{
+  max-width:1180px;margin:8px auto 12px;padding:0 6px;
+  display:grid;grid-template-columns:220px minmax(0,1fr) 230px;gap:7px
+}
+
+.card{
+  background:#fff;border:1px solid #c9ccd4;border-radius:7px;
+  box-shadow:0 1px 4px #0001
+}
 .side{padding:7px}
-.title{font-size:16px;margin:3px 4px 8px}
-.room{background:#fafafa;border:1px solid #e1e2e6;border-radius:4px;padding:7px;margin:3px 0;min-height:52px}
+.title{font-weight:900;font-size:16px;margin:3px 4px 8px}
+
+.room{
+  display:flex;align-items:center;gap:8px;background:#fafafa;
+  border:1px solid #e1e2e6;border-radius:4px;padding:7px;
+  margin:3px 0;min-height:52px
+}
 .room.active{background:#e7e7eb;color:#111;border-color:#bfc2c9}
-.pic{width:35px;height:35px;border-radius:4px;background:#e3e3e6}
-.count{font-size:11px;color:#444}
-.chat{min-height:650px;border-radius:7px}
-.chathead{background:#fafafa;padding:9px;border-bottom:1px solid #cfd2da}
-.chathead strong{font-size:16px}
-.tag{background:#e9e9ec;color:#222;border:1px solid #d2d3d8;padding:4px 7px}
-.messages{background:#fff;padding:10px}
-.notice{background:#f0f0f2;color:#222;border:1px solid #d6d7dc;border-radius:5px;padding:8px}
-.bubble{background:#f4f4f5;border:1px solid #d7d8dd;border-radius:5px;padding:7px 9px}
-.name{color:#222}
-.compose{background:#f4f4f5;padding:7px;border-top:1px solid #cfd2da}
-.compose input{border-radius:4px;background:#fff}
-.bottom{background:#fff;border-top:1px solid #bfc2c9;box-shadow:0 -2px 8px #0001;padding:5px 6px;gap:3px}
-.bottom button{background:#08090c;color:#fff;border:1px solid #000;border-radius:4px;min-width:88px;padding:9px 10px;font-size:13px}
-.bottom button.active,.bottom button:hover{background:#08090c}
-.rooms-strip{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;margin-bottom:7px}
-.rooms-strip .room{margin:0}
-.room-tools{display:flex;gap:4px;margin-top:7px}
-.room-tools button{flex:1;background:#08090c;color:#fff;border:0;border-radius:4px;padding:8px;font-size:12px}
-@media(max-width:900px){
- .layout{margin-top:5px;margin-bottom:66px;padding:0 4px}
- .chat{min-height:calc(100vh - 135px)}
- .bottom{justify-content:stretch}
- .bottom button{flex:1;min-width:0;font-size:11px;padding:8px 3px}
- .top{padding:5px 7px}
- .logo{font-size:18px}
+.pic{
+  width:35px;height:35px;border-radius:4px;background:#e3e3e6;
+  display:grid;place-items:center;border:1px solid #d0d0d4
+}
+.count{font-size:11px;color:#444;margin-right:auto}
+.muted{font-size:12px;color:#777}
+
+.chat{
+  min-height:650px;border-radius:7px;display:flex;
+  flex-direction:column;overflow:hidden
 }
 
-/* V6 - chat room detail refinement */
-.room-meta{display:flex;align-items:center;gap:5px;font-size:11px;color:#666;padding:4px 9px;background:#f1f1f3;border-bottom:1px solid #d0d1d6}
-.room-meta b{color:#222}.room-meta .sep{color:#aaa}
-.chat-actions{display:flex;gap:4px}.chat-actions button{background:#090b1b;color:#fff;border:0;border-radius:4px;padding:6px 8px;font-size:11px}
-.msgline{display:flex;gap:7px;align-items:flex-start;margin:7px 0}
+.chathead{
+  background:#fafafa;padding:9px;border-bottom:1px solid #cfd2da;
+  display:flex;align-items:center;gap:7px
+}
+.chathead strong{font-size:16px;flex:1}
+
+.tag{
+  background:#e9e9ec;color:#222;border:1px solid #d2d3d8;
+  padding:4px 7px;border-radius:5px;font-size:11px
+}
+
+.room-meta{
+  display:flex;align-items:center;gap:5px;font-size:11px;color:#666;
+  padding:5px 9px;background:#f1f1f3;border-bottom:1px solid #d0d1d6
+}
+.room-meta b{color:#222}
+.room-meta .sep{color:#aaa}
+
+.chat-actions{display:flex;gap:4px}
+.chat-actions button{
+  background:#090b1b;color:#fff;border:0;border-radius:4px;
+  padding:6px 8px;font-size:11px
+}
+
+.messages{
+  background:#fff;padding:10px;flex:1;min-height:48vh;
+  max-height:calc(100vh - 250px);overflow:auto
+}
+
+.notice{
+  background:#f0f0f2;color:#222;border:1px solid #d6d7dc;
+  border-radius:5px;padding:8px;text-align:center;margin-bottom:8px
+}
+
+.msgline{
+  display:flex;gap:7px;align-items:flex-start;margin:7px 0
+}
 .msgline .ava{flex:0 0 32px;width:32px;height:32px}
-.msgbody{min-width:0;flex:1}.bubble{display:inline-block;vertical-align:top}
+.msgbody{min-width:0;flex:1}
+.bubble{
+  display:inline-block;vertical-align:top;background:#f4f4f5;
+  border:1px solid #d7d8dd;border-radius:5px;padding:7px 9px;
+  max-width:90%;word-break:break-word
+}
+.name{font-weight:900;color:#222;font-size:13px}
+.time{font-size:10px;color:#999;margin-right:5px}
 .msgtools{display:inline-flex;gap:3px;margin-right:4px;vertical-align:top}
-.msgtools button{border:1px solid #d2d3d7;background:#fff;border-radius:4px;padding:2px 5px;font-size:11px}
-.quickbar{display:flex;gap:4px;padding:5px 7px;background:#fff;border-top:1px solid #e1e2e5;overflow:auto}
-.quickbar button{border:1px solid #d2d3d8;background:#f7f7f8;border-radius:4px;padding:5px 9px;white-space:nowrap}
-.membertools{display:flex;gap:4px;margin-top:5px}
-.membertools button{background:#090b1b;color:#fff;border:0;border-radius:4px;padding:5px 7px;font-size:10px}
-.room-banner{background:#ececef;border:1px solid #d0d1d6;border-radius:5px;padding:6px 8px;margin-bottom:7px;font-size:12px;color:#333}
-@media(max-width:900px){
- .chathead{padding:7px}.chat-actions button{padding:5px 6px}
- .room-meta{font-size:10px}.messages{padding:7px}.bubble{max-width:90%}
+.msgtools button{
+  border:1px solid #d2d3d7;background:#fff;border-radius:4px;
+  padding:2px 5px;font-size:11px
 }
 
-/* V8 - profile, members, notifications and like system */
-.profile-card{display:grid;grid-template-columns:92px 1fr;gap:12px;align-items:center;background:#f7f7f8;border:1px solid #d4d5da;border-radius:6px;padding:12px;margin-bottom:10px}.profile-avatar{width:84px;height:84px;border-radius:50%;display:grid;place-items:center;background:#ececef;border:2px solid #bfc2c9;font-size:42px}.statrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.stat{background:#fff;border:1px solid #d4d5da;border-radius:4px;padding:7px 10px;font-size:12px}.stat b{font-size:15px}.member-row{display:grid;grid-template-columns:42px 1fr auto;gap:9px;align-items:center;padding:9px 5px;border-bottom:1px solid #ececf0}.member-row .avatar{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:#eee;border:1px solid #ccc;font-size:21px}.member-meta{min-width:0}.member-meta b{display:block}.member-meta small{color:#777}.level{display:inline-block;background:#090b1b;color:#fff;border-radius:3px;padding:2px 5px;font-size:10px;margin-right:4px}.like-btn{background:#fff;border:1px solid #bbb;border-radius:4px;padding:7px 10px;font-weight:700}.like-btn.ready{border-color:#222}.like-btn.locked{opacity:.55}.like-count{color:#b33a65;font-weight:900}.notice-list{max-height:430px;overflow:auto}.notif{display:flex;gap:8px;padding:9px;border-bottom:1px solid #ececf0}.notif.unread{background:#f1edff}.notif-icon{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#ececef}.notif-body{flex:1}.notif-body small{display:block;color:#888;margin-top:3px}.bell{position:relative}.bell-count{position:absolute;top:-4px;left:-4px;background:#df5555;color:#fff;border-radius:99px;min-width:17px;height:17px;font-size:10px;display:grid;place-items:center}.admin-box{background:#fff8e8;border:1px solid #e6d29b;border-radius:5px;padding:8px;margin-top:10px}.profile-buttons{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}.profile-buttons button{flex:1;min-width:110px}@media(max-width:600px){.profile-card{grid-template-columns:70px 1fr}.profile-avatar{width:66px;height:66px;font-size:31px}.member-row{grid-template-columns:38px 1fr}.member-row .like-btn{grid-column:2}.profile-buttons button{min-width:0}}
+.compose{
+  display:flex;gap:4px;background:#f4f4f5;padding:7px;
+  border-top:1px solid #cfd2da
+}
+.compose input{
+  flex:1;min-width:0;border:1px solid #c9c5bc;
+  border-radius:5px;padding:9px;background:#fff
+}
 
-/* V9 - ranks and badges */
-.rank-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:12px;background:#fff;border:1px solid #cfd2da;font-size:11px;font-weight:900}.rank-icon{font-size:14px}.badge-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}.badge{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;border:1px solid #cfd2da;background:#f7f7f8;font-size:21px;position:relative}.badge.locked{opacity:.32;filter:grayscale(1)}.badge small{position:absolute;bottom:-15px;font-size:8px;color:#666;white-space:nowrap}.rank-panel{background:#f7f7f8;border:1px solid #d4d5da;border-radius:6px;padding:10px;margin:9px 0}.rank-title{font-weight:900;margin-bottom:6px}.rank-progress{height:8px;background:#ddd;border-radius:99px;overflow:hidden}.rank-progress i{display:block;height:100%;background:#222}.member-rank{margin-top:3px}.profile-rank{font-size:14px;font-weight:900}
+.quickbar{
+  display:flex;gap:4px;padding:5px 7px;background:#fff;
+  border-top:1px solid #e1e2e5;overflow:auto
+}
+.quickbar button{
+  border:1px solid #d2d3d8;background:#f7f7f8;
+  border-radius:4px;padding:5px 9px;white-space:nowrap
+}
 
-/* V10 - room administration and microphone room */
-.room-admin{background:#f8f8fa;border:1px solid #d4d5da;border-radius:6px;padding:9px;margin-top:8px}.room-admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.room-admin-grid button{padding:8px}.voice-stage{background:linear-gradient(#f4f4f6,#fff);border:1px solid #cfd2da;border-radius:7px;padding:10px}.voice-top{display:flex;gap:6px;align-items:center;margin-bottom:8px}.voice-top .tag{margin-right:auto}.mic-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.mic-seat{min-height:104px;background:#fff;border:1px solid #d0d2d8;border-radius:7px;display:grid;place-items:center;text-align:center;padding:7px}.mic-seat.on{border:2px solid #222;background:#f0f0f2}.mic-avatar{width:48px;height:48px;border-radius:50%;background:#e6e7eb;display:grid;place-items:center;font-size:25px}.voice-controls{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.voice-controls button{flex:1;min-width:110px}.moderation-list{max-height:360px;overflow:auto;border:1px solid #ddd;border-radius:5px}.moderation-row{display:grid;grid-template-columns:1fr auto;gap:6px;padding:8px;border-bottom:1px solid #eee;align-items:center}.moderation-actions{display:flex;gap:4px;flex-wrap:wrap}.moderation-actions button{font-size:10px;padding:5px}.room-badge{font-size:10px;background:#eee;border:1px solid #d3d3d8;border-radius:3px;padding:2px 5px}.mic-request{background:#fff7df;border:1px solid #ead59b;padding:8px;border-radius:5px;margin-top:8px}@media(max-width:600px){.mic-grid{grid-template-columns:repeat(2,1fr)}.room-admin-grid{grid-template-columns:1fr}}
-\n/* FINAL FINISH - mobile polish and unified visual system */
-:root{--ink:#101116;--line:#d7d9df;--soft:#f5f6f8;--panel:#fff;--accent:#111;--pink:#b64a72}
-body{background:#eef0f3;color:#17181c;font-family:Tahoma,Arial,sans-serif}
-.top{height:58px;padding:5px 10px;border-bottom:1px solid #c9ccd3;background:#fff;box-shadow:0 1px 4px #0001}
-.logo{font-size:20px;letter-spacing:.1px}.logo span{color:#111}
-.user{font-size:12px;min-width:120px}.user .ava{width:32px;height:32px;background:#eceef2;border:1px solid #d2d4da}
-.nav button{font-size:12px;padding:7px 9px}.nav .on{background:#111;color:#fff}
-.layout{max-width:1200px;margin:7px auto 74px;gap:6px;padding:0 5px}.card{background:#fff;border:1px solid #cdd0d6;border-radius:6px;box-shadow:0 1px 3px #0001}
-.side{padding:7px}.title{font-size:15px;margin:3px 4px 8px}.room{padding:6px;min-height:49px;border:1px solid #e0e2e6;background:#fafbfc}.room.active{background:#eceef1;border-right:4px solid #111}
-.pic{width:34px;height:34px;background:#e9ebee}.count{color:#555}.member{padding:7px 2px}.member .ava{width:31px;height:31px}
-.chat{min-height:calc(100vh - 145px);border-radius:6px}.chathead{min-height:48px;background:#fafbfc;padding:7px 9px}.chathead strong{font-size:15px}.chat-actions button{background:#111;padding:5px 7px}
-.room-meta{background:#f0f1f3;padding:4px 8px;font-size:10px}.messages{padding:8px}.room-banner{background:#f5f5f6;border-color:#d9dbe0}.notice{background:#f2f3f5;color:#222;border-color:#d7d9df}.msgline{margin:6px 0}.bubble{background:#f7f7f8;border-color:#d9dbe0;border-radius:6px}.name{color:#222}
-.quickbar{padding:4px 6px;background:#fff}.quickbar button{background:#f4f5f7;border-color:#d5d7dc;padding:4px 8px}
-.compose{background:#f0f1f3;padding:6px;gap:4px}.compose input{border-color:#c9ccd2;border-radius:5px}.compose .black,.compose .purple{padding:8px 11px;border-radius:5px}.purple{background:#111}
-.bottom{background:#fff;border-top:1px solid #bfc2c9;box-shadow:0 -2px 7px #0001;padding:4px 5px}.bottom button{background:#0d0e12;color:#fff;border:1px solid #000;border-radius:4px;padding:8px 10px;min-width:86px}.bottom button.active{background:#0d0e12}
-.modal{background:#0009}.box{border:1px solid #c9ccd2;border-radius:8px;box-shadow:0 14px 45px #0004}.boxhead{background:#111216;padding:10px 12px;font-size:16px}.boxbody{padding:11px}.boxbody label{background:#111216;font-size:12px;padding:6px}.boxbody input,.boxbody textarea{border-color:#cdd0d6;border-radius:4px}
-.profile-card{background:#f4f5f7!important;border-color:#d2d4da}.profile-avatar{background:#e9ebee;border-color:#c4c7ce}.stat{background:#fff;border-color:#d4d6dc}.rank-panel{background:#f4f5f7;border-color:#d2d4da}.rank-progress{background:#d7d9de}.rank-progress i{background:#111}.rank-pill{background:#fff;border-color:#c8cbd2}.badge{background:#f4f5f7;border-color:#cfd2d8}.member-row{padding:8px 4px}.like-btn{padding:6px 9px}.like-count{color:#a83e63}
-.room-admin{background:#f5f6f7;border-color:#d3d5da}.voice-stage{background:#f6f7f8;border-color:#cdd0d6}.mic-seat{background:#fff;border-color:#d0d2d8}.mic-seat.on{background:#f0f1f3;border-color:#111}.mic-avatar{background:#e9ebee}
-@media(max-width:900px){.top{height:auto;min-height:58px;gap:5px}.user{order:2;min-width:0}.logo{order:1;flex:1;font-size:17px}.nav{order:3;width:100%;overflow:auto;justify-content:center}.nav button{padding:6px 8px}.layout{margin-bottom:68px}.side{display:none}.chat{min-height:calc(100vh - 150px)}.chathead{position:sticky;top:0;z-index:2}.bottom button{font-size:10px;padding:8px 3px}.bottom b{font-size:11px}.rooms-strip{grid-template-columns:1fr 1fr}.room{min-height:46px}.room .pic{width:31px;height:31px}.room-tools button{padding:7px 4px}.profile-card{grid-template-columns:68px 1fr}.profile-avatar{width:62px;height:62px;font-size:30px}.member-row{grid-template-columns:38px 1fr}.member-row .like-btn{grid-column:2;justify-self:start}.mic-grid{gap:5px}.mic-seat{min-height:92px}.box{width:96vw}.settings-grid{grid-template-columns:1fr}}
-@media(max-width:380px){.logo{font-size:15px}.nav button{font-size:10px;padding:5px}.bottom button{font-size:9px}.rooms-strip{grid-template-columns:1fr}.chat-actions button{font-size:9px;padding:5px}.quickbar button{padding:4px 6px}}
-</style>
+.rooms-strip{
+  display:grid;grid-template-columns:repeat(2,1fr);
+  gap:5px;margin-bottom:7px
+}
+.rooms-strip .room{margin:0}
 
-<style id="rimaz-mobile-finish">
-*{box-sizing:border-box}html,body{margin:0;padding:0;width:100%;min-height:100%;font-family:Tahoma,Arial,sans-serif}body{background:#f3f4f6;color:#222;overflow-x:hidden}.app,.page,.chat-shell,.room-shell{width:100%;max-width:520px;margin:0 auto}.topbar{position:sticky;top:0;z-index:30;min-height:54px;padding:8px 10px;background:#fff;border-bottom:1px solid #ddd;box-shadow:0 1px 4px #0001}.topbar button,.btn{min-height:40px;border-radius:10px;border:1px solid #222;padding:8px 12px;font-size:14px}.content{padding:10px 10px 82px}.bottom-nav{position:fixed;left:50%;bottom:0;transform:translateX(-50%);z-index:50;width:min(100%,520px);display:grid;grid-template-columns:repeat(5,1fr);gap:5px;padding:7px 7px calc(7px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #ddd;box-shadow:0 -3px 12px #0002}.bottom-nav button{min-height:48px;border:1px solid #ccc;background:#f7f7f8;border-radius:10px;font-size:12px}.bottom-nav button.active{background:#222;color:#fff;border-color:#222}.room-strip{display:flex;gap:7px;overflow-x:auto;padding:7px 1px 9px;scrollbar-width:none}.room-strip::-webkit-scrollbar{display:none}.room-card{flex:0 0 118px;padding:9px;border:1px solid #ddd;background:#fff;border-radius:12px}.room-card strong{display:block;font-size:13px}.room-card small{color:#777}.messages{min-height:48vh;max-height:calc(100vh - 250px);overflow:auto;padding:8px 2px}.message{margin:7px 0;padding:8px 10px;background:#fff;border:1px solid #e1e1e1;border-radius:12px;box-shadow:0 1px 2px #0000000a}.composer{position:sticky;bottom:64px;z-index:20;display:flex;gap:6px;padding:7px;background:#fff;border:1px solid #ddd;border-radius:12px}.composer input{min-width:0;flex:1;height:42px;border:1px solid #ccc;border-radius:10px;padding:0 10px;font-size:15px}.composer button{width:44px;height:42px;border-radius:10px;border:1px solid #222}.list-item,.profile-card,.settings-card,.notice-card{background:#fff;border:1px solid #ddd;border-radius:13px;padding:11px;margin:8px 0}.avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;display:inline-flex;align-items:center;justify-content:center;background:#eee}.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:999px;font-size:11px;background:#f0f0f2;margin:2px}.modal>div{width:min(100%,520px);max-height:88vh;overflow:auto;background:#fff;border-radius:18px 18px 0 0;padding:16px}.modal input,.modal select,.modal textarea{width:100%;min-height:42px;border:1px solid #ccc;border-radius:10px;padding:8px;font-size:15px}@media(min-width:521px){body{padding-bottom:0}.content{padding-bottom:20px}.bottom-nav{bottom:12px;border:1px solid #ddd;border-radius:16px;width:500px}.composer{bottom:12px}}
+.bottom{
+  position:fixed;bottom:0;left:0;right:0;background:#fff;
+  border-top:1px solid #bfc2c9;box-shadow:0 -2px 8px #0001;
+  display:flex;justify-content:center;gap:3px;padding:5px 6px;z-index:50
+}
+.bottom button{
+  background:#08090c;color:#fff;border:1px solid #000;
+  border-radius:4px;min-width:88px;padding:9px 10px;font-size:13px
+}
+.bottom button.active{background:#08090c}
+
+.profile-card{
+  display:grid;grid-template-columns:85px 1fr;gap:12px;
+  align-items:center;background:#f7f7f8;border:1px solid #d4d5da;
+  border-radius:6px;padding:12px;margin-bottom:10px
+}
+.profile-avatar{
+  width:78px;height:78px;border-radius:50%;display:grid;
+  place-items:center;background:#ececef;border:2px solid #bfc2c9;
+  font-size:38px
+}
+.statrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.stat{
+  background:#fff;border:1px solid #d4d5da;border-radius:4px;
+  padding:7px 10px;font-size:12px
+}
+.stat b{font-size:15px}
+
+.member-row{
+  display:grid;grid-template-columns:42px 1fr auto;gap:9px;
+  align-items:center;padding:9px 5px;border-bottom:1px solid #ececf0
+}
+.member-row .avatar{
+  width:40px;height:40px;border-radius:50%;display:grid;
+  place-items:center;background:#eee;border:1px solid #ccc;font-size:21px
+}
+.member-meta{min-width:0}
+.member-meta b{display:block}
+.member-meta small{color:#777}
+
+.level{
+  display:inline-block;background:#090b1b;color:#fff;border-radius:3px;
+  padding:2px 5px;font-size:10px;margin-right:4px
+}
+.like-btn{
+  background:#fff;border:1px solid #bbb;border-radius:4px;
+  padding:7px 10px;font-weight:700
+}
+.like-btn.locked{opacity:.55}
+.like-count{color:#b33a65;font-weight:900}
+
+.rank-panel{
+  background:#f7f7f8;border:1px solid #d4d5da;border-radius:6px;
+  padding:10px;margin:9px 0
+}
+.rank-title{font-weight:900;margin-bottom:6px}
+.rank-progress{
+  height:8px;background:#ddd;border-radius:99px;overflow:hidden
+}
+.rank-progress i{display:block;height:100%;background:#222}
+
+.badge-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+.badge{
+  width:36px;height:36px;border-radius:9px;display:grid;
+  place-items:center;border:1px solid #cfd2da;background:#f7f7f8;
+  font-size:21px
+}
+.badge.locked{opacity:.32;filter:grayscale(1)}
+
+.notice-list{max-height:430px;overflow:auto}
+.notif{
+  display:flex;gap:8px;padding:9px;border-bottom:1px solid #ececf0
+}
+.notif.unread{background:#f1edff}
+.notif-icon{
+  width:34px;height:34px;border-radius:50%;display:grid;
+  place-items:center;background:#ececef
+}
+.notif-body{flex:1}
+.notif-body small{display:block;color:#888;margin-top:3px}
+
+.bell{position:relative}
+.bell-count{
+  position:absolute;top:-4px;left:-4px;background:#df5555;color:#fff;
+  border-radius:99px;min-width:17px;height:17px;font-size:10px;
+  display:grid;place-items:center
+}
+
+.admin-box{
+  background:#fff8e8;border:1px solid #e6d29b;
+  border-radius:5px;padding:8px;margin-top:10px
+}
+
+.profile-buttons{
+  display:flex;gap:5px;flex-wrap:wrap;margin-top:8px
+}
+.profile-buttons button{flex:1;min-width:110px}
+
+.room-admin{
+  background:#f8f8fa;border:1px solid #d4d5da;
+  border-radius:6px;padding:9px;margin-top:8px
+}
+.room-admin-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:6px
+}
+.room-admin-grid button{padding:8px}
+
+.voice-stage{
+  background:linear-gradient(#f4f4f6,#fff);
+  border:1px solid #cfd2da;border-radius:7px;padding:10px
+}
+.voice-top{
+  display:flex;gap:6px;align-items:center;margin-bottom:8px
+}
+.voice-top .tag{margin-right:auto}
+.mic-grid{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:8px
+}
+.mic-seat{
+  min-height:104px;background:#fff;border:1px solid #d0d2d8;
+  border-radius:7px;display:grid;place-items:center;
+  text-align:center;padding:7px
+}
+.mic-seat.on{border:2px solid #222;background:#f0f0f2}
+.mic-avatar{
+  width:48px;height:48px;border-radius:50%;
+  background:#e6e7eb;display:grid;place-items:center;font-size:25px
+}
+.voice-controls{
+  display:flex;gap:6px;flex-wrap:wrap;margin-top:9px
+}
+.voice-controls button{flex:1;min-width:110px}
+
+.moderation-list{
+  max-height:360px;overflow:auto;border:1px solid #ddd;border-radius:5px
+}
+.moderation-row{
+  display:grid;grid-template-columns:1fr auto;gap:6px;
+  padding:8px;border-bottom:1px solid #eee;align-items:center
+}
+.moderation-actions{display:flex;gap:4px;flex-wrap:wrap}
+.moderation-actions button{font-size:10px;padding:5px}
+
+.post{
+  border:1px solid #ddd;border-radius:8px;padding:11px;margin:8px 0;
+  background:#fff
+}
+
+.locked{opacity:.55}
+
+.modal{
+  position:fixed;inset:0;background:#0008;display:none;
+  place-items:center;z-index:100
+}
+.modal.open{display:grid}
+.box{
+  width:min(560px,94vw);max-height:90vh;overflow:auto;
+  background:#fff;border-radius:11px
+}
+.boxhead{
+  background:#090b1b;color:#fff;padding:12px;font-size:19px;
+  font-weight:bold;display:flex;justify-content:space-between
+}
+.boxbody{padding:13px}
+.boxbody label{
+  display:block;background:#090b1b;color:#fff;padding:7px;
+  margin-top:7px
+}
+.boxbody input,.boxbody textarea,.boxbody select{
+  width:100%;padding:9px;border:1px solid #bbb;margin-bottom:8px
+}
+.close{
+  background:#df5555;color:#fff;border:0;border-radius:5px;padding:2px 9px
+}
+
+.auth{
+  min-height:100vh;display:grid;place-items:center;
+  background:#f2efff;padding:15px
+}
+.authbox{
+  width:min(760px,94vw);background:#fff;border:1px solid #ddd;
+  border-radius:17px;padding:23px;box-shadow:0 10px 45px #2222
+}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.authcard{border:1px solid #ddd;border-radius:11px;padding:14px}
+.authcard input{
+  width:100%;padding:10px;border:1px solid #ddd;
+  border-radius:7px;margin:4px 0 8px
+}
+
+.room-banner{
+  background:#ececef;border:1px solid #d0d1d6;border-radius:5px;
+  padding:6px 8px;margin-bottom:7px;font-size:12px;color:#333
+}
+
+.hidden{display:none!important}
+
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr;margin-top:5px;margin-bottom:70px;padding:0 4px}
+  .side{display:none}
+  .chat{min-height:calc(100vh - 135px)}
+  .rooms-strip{grid-template-columns:1fr}
+  .grid{grid-template-columns:1fr}
+  .nav{width:100%}
+  .top{flex-wrap:wrap}
+  .logo{order:-1;flex-basis:100%;font-size:18px}
+  .bottom button{flex:1;min-width:0;font-size:11px;padding:8px 3px}
+}
+
+@media(max-width:600px){
+  .profile-card{grid-template-columns:70px 1fr}
+  .profile-avatar{width:66px;height:66px;font-size:31px}
+  .member-row{grid-template-columns:38px 1fr}
+  .member-row .like-btn{grid-column:2}
+  .profile-buttons button{min-width:0}
+  .mic-grid{grid-template-columns:repeat(2,1fr)}
+  .room-admin-grid{grid-template-columns:1fr}
+}
 </style>
 </head>
 
 <body>
+
 <div id="app"></div>
-<div id="modal" class="modal"><div class="box" id="box"></div></div>
+
+<div id="modal" class="modal">
+  <div class="box" id="box"></div>
+</div>
 
 <script>
-let sid=sessionStorage.getItem("rimaz_sid"), me=null, socket=null, currentRoom="الغرفة العامة";
-let rooms=[["🏠","الغرفة العامة","نص فقط",120],["🔒","غرفة الأصدقاء","خاص",48],["❤️","غرفة الحب","خاص",35],["🎙️","غرفة الصوت","مايك",22]];
+let sid=sessionStorage.getItem("rimaz_sid")||"";
+let me=null;
+let socket=null;
+let currentRoom="الغرفة العامة";
+let rooms=[];
+let members=[];
 let privateToName="";
-let rtc=null, rtcTarget="", rtcKind="", pendingIce=[];
+let rtc=null;
+let rtcTarget="";
+let rtcKind="";
+let localStream=null;
+let pendingIce=[];
+let currentPage="rooms";
+
+const app=document.getElementById("app");
+const modal=document.getElementById("modal");
+const box=document.getElementById("box");
+
+function esc(v){
+  return String(v??"")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+}
+
+function timeText(t){
+  try{
+    return new Date(t).toLocaleTimeString("ar-IQ",{hour:"2-digit",minute:"2-digit"});
+  }catch(e){return "";}
+}
+
+function rankName(level){
+  if(level>=3)return "⭐ مميز";
+  if(level>=2)return "🏅 متفاعل";
+  return "عضو";
+}
+
+function rankProgress(likes){
+  if(likes>=500)return 100;
+  if(likes>=400)return Math.round(((likes-400)/100)*100);
+  return Math.round((likes/400)*100);
+}
+
+function openModal(title,html){
+  box.innerHTML=`
+    <div class="boxhead">
+      <span>${esc(title)}</span>
+      <button class="close" onclick="closeModal()">×</button>
+    </div>
+    <div class="boxbody">${html}</div>
+  `;
+  modal.classList.add("open");
+}
+
+function closeModal(){
+  modal.classList.remove("open");
+}
+
+modal.addEventListener("click",e=>{
+  if(e.target===modal)closeModal();
+});
 
 async function api(url,opt={}){
- opt.headers={...(opt.headers||{}),...(sid?{"x-session":sid}:{})};
- let r=await fetch(url,opt);
- let j=await r.json().catch(()=>({}));
- if(!r.ok)throw Error(j.error||"حدث خطأ");
- return j;
+  opt.headers={
+    ...(opt.headers||{}),
+    ...(sid?{"x-session":sid}:{})
+  };
+
+  const r=await fetch(url,opt);
+  const j=await r.json().catch(()=>({}));
+
+  if(!r.ok)throw Error(j.error||"حدث خطأ");
+  return j;
 }
 
 async function start(){
- try{
-  let s=await api("/api/state");
-  me=s.user;
-  if(me){
-   await syncRooms();
-   show("rooms");
-  }else auth();
- }catch(e){auth()}
+  try{
+    const s=await api("/api/state");
+    me=s.user;
+
+    if(!me){
+      auth();
+      return;
+    }
+
+    await syncRooms();
+    connectSocket();
+    await show("rooms");
+  }catch(e){
+    console.error(e);
+    auth();
+  }
 }
 
 async function syncRooms(){
- try{
-  const rs=await api("/api/rooms");
-  const icons=["🏠","🔒","❤️","🎙️","🌙","⭐","🌹","🎧"];
-  rooms=rs.map((r,i)=>[
-   icons[i%icons.length],
-   r.name,
-   r.kind==="voice"?"مايك":r.kind==="private"?"خاص":r.desc||"نص فقط",
-   r.online||r.count||0,
-   r.kind
-  ]);
- }catch(e){}
+  try{
+    const rs=await api("/api/rooms");
+    const icons=["🏠","🔒","❤️","🎙️","🌙","⭐","🌹","🎧"];
+
+    rooms=rs.map((r,i)=>({
+      icon:icons[i%icons.length],
+      name:r.name,
+      desc:r.kind==="voice"?"مايك":r.kind==="private"?"خاص":r.desc||"نص فقط",
+      count:r.online??r.count??0,
+      kind:r.kind,
+      capacity:r.capacity||0,
+      mics:r.mics||0
+    }));
+  }catch(e){
+    console.error(e);
+  }
 }
 
 function auth(){
- app.innerHTML=`<div class="auth"><div class="authbox">
- <div class="logo">دردشة <span>ريماز عراقية</span></div>
- <p style="text-align:center">دخول بدون إيميل أو رقم هاتف</p>
- <div class="grid">
-  <div class="authcard">
-   <h2>دخول عضو</h2>
-   <input id="ln" placeholder="اسم المستخدم">
-   <input id="lp" type="password" placeholder="كلمة المرور">
-   <button class="purple" style="width:100%" onclick="login()">دخول عضو</button>
-   <p class="muted">المسجل سابقًا لا يحتاج إعادة التسجيل.</p>
-  </div>
-  <div class="authcard">
-   <h2>تسجيل حساب</h2>
-   <input id="rn" placeholder="اسم المستخدم">
-   <input id="rp" type="password" placeholder="كلمة المرور">
-   <button class="purple" style="width:100%" onclick="reg()">إنشاء حساب</button>
-   <p class="muted">اسم + باسورد فقط.</p>
-  </div>
- </div>
- <div class="authcard" style="margin-top:10px">
-  <h2>دخول زائر</h2>
-  <input id="gn" placeholder="اسم فريد">
-  <button class="black" style="width:100%" onclick="guest()">دخول زائر</button>
- </div>
- </div></div>`;
+  app.innerHTML=`
+    <div class="auth">
+      <div class="authbox">
+
+        <div class="logo">
+          دردشة <span>ريماز عراقية</span>
+        </div>
+
+        <p style="text-align:center">
+          دخول بدون إيميل أو رقم هاتف
+        </p>
+
+        <div class="grid">
+
+          <div class="authcard">
+            <h2>دخول عضو</h2>
+            <input id="ln" placeholder="اسم المستخدم">
+            <input id="lp" type="password" placeholder="كلمة المرور">
+
+            <button class="purple"
+              style="width:100%"
+              onclick="login()">
+              دخول عضو
+            </button>
+
+            <p class="muted">
+              العضو المسجل سابقًا لا يحتاج إعادة التسجيل.
+            </p>
+          </div>
+
+          <div class="authcard">
+            <h2>تسجيل حساب جديد</h2>
+            <input id="rn" placeholder="اسم المستخدم">
+            <input id="rp" type="password" placeholder="كلمة المرور">
+
+            <button class="purple"
+              style="width:100%"
+              onclick="reg()">
+              إنشاء حساب
+            </button>
+
+            <p class="muted">
+              اسم + باسورد فقط.
+            </p>
+          </div>
+
+        </div>
+
+        <div class="authcard" style="margin-top:10px">
+          <h2>دخول زائر</h2>
+
+          <input id="gn" placeholder="اسم فريد">
+
+          <button class="black"
+            style="width:100%"
+            onclick="guest()">
+            دخول زائر
+          </button>
+
+          <p class="muted">
+            اسم الزائر يجب أن يكون غير مستخدم.
+          </p>
+        </div>
+
+      </div>
+    </div>
+  `;
 }
 
 async function reg(){
- try{
-  const name=document.getElementById("rn").value;
-  const password=document.getElementById("rp").value;
-  let j=await api("/api/register",{
-   method:"POST",
-   headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({name,password})
-  });
-  sid=j.sid;
-  sessionStorage.setItem("rimaz_sid",sid);
-  start();
- }catch(e){alert(e.message)}
+  try{
+    const name=document.getElementById("rn").value.trim();
+    const password=document.getElementById("rp").value;
+
+    const j=await api("/api/register",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name,password})
+    });
+
+    sid=j.sid;
+    sessionStorage.setItem("rimaz_sid",sid);
+
+    await start();
+  }catch(e){
+    alert(e.message);
+  }
 }
 
 async function login(){
- try{
-  const name=document.getElementById("ln").value;
-  const password=document.getElementById("lp").value;
-  let j=await api("/api/login",{
-   method:"POST",
-   headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({name,password})
-  });
-  sid=j.sid;
-  sessionStorage.setItem("rimaz_sid",sid);
-  start();
- }catch(e){alert(e.message)}
+  try{
+    const name=document.getElementById("ln").value.trim();
+    const password=document.getElementById("lp").value;
+
+    const j=await api("/api/login",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name,password})
+    });
+
+    sid=j.sid;
+    sessionStorage.setItem("rimaz_sid",sid);
+
+    await start();
+  }catch(e){
+    alert(e.message);
+  }
 }
 
 async function guest(){
- try{
-  const name=document.getElementById("gn").value;
-  let j=await api("/api/guest",{
-   method:"POST",
-   headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({name})
+  try{
+    const name=document.getElementById("gn").value.trim();
+
+    const j=await api("/api/guest",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name})
+    });
+
+    sid=j.sid;
+    sessionStorage.setItem("rimaz_sid",sid);
+
+    await start();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+function connectSocket(){
+  if(socket){
+    try{socket.disconnect()}catch(e){}
+  }
+
+  socket=io();
+
+  socket.on("connect",()=>{
+    joinCurrentRoom();
   });
-  sid=j.sid;
-  sessionStorage.setItem("rimaz_sid",sid);
-  start();
- }catch(e){alert(e.message)}
+
+  socket.on("history",items=>{
+    renderMessages(items||[]);
+  });
+
+  socket.on("message",m=>{
+    if(m.room===currentRoom)addMessage(m);
+  });
+
+  socket.on("private",m=>{
+    if(m.from===privateToName || m.to===privateToName){
+      addPrivateMessage(m);
+    }
+  });
+
+  socket.on("room-presence",async()=>{
+    await syncRooms();
+    if(currentPage==="rooms")refreshRoomPage();
+  });
+
+  socket.on("room-error",d=>{
+    alert(d?.message||"حدث خطأ في الغرفة");
+  });
+
+  socket.on("room-denied",d=>{
+    alert(d?.message||"لا يمكنك دخول هذه الغرفة");
+  });
+
+  socket.on("room-kicked",async()=>{
+    currentRoom="الغرفة العامة";
+    alert("تم إخراجك من الغرفة");
+    await syncRooms();
+    await show("rooms");
+  });
+
+  socket.on("room-moderation",d=>{
+    if(d?.action==="mute")alert("تم كتمك في هذه الغرفة");
+    if(d?.action==="unmute")alert("تم إلغاء كتمك");
+  });
+
+  socket.on("mic-state",async()=>{
+    if(currentPage==="rooms" && currentRoom==="غرفة الصوت"){
+      await renderVoiceRoom();
+    }
+  });
+
+  socket.on("mic-request",d=>{
+    if(me?.admin && d?.name){
+      alert("طلب تشغيل المايك من: "+d.name);
+    }
+  });
+
+  socket.on("call-offer",receiveCallOffer);
+  socket.on("call-answer",receiveCallAnswer);
+  socket.on("ice",receiveIce);
+}
+
+function joinCurrentRoom(){
+  if(!socket||!socket.connected||!sid)return;
+
+  socket.emit("join",{
+    sid,
+    room:currentRoom
+  });
+}
+
+async function show(page){
+  currentPage=page;
+
+  if(!me){
+    auth();
+    return;
+  }
+
+  if(page==="rooms"){
+    await syncRooms();
+    roomsPage();
+  }
+
+  if(page==="private"){
+    await privatePage();
+  }
+
+  if(page==="members"){
+    await membersPage();
+  }
+
+  if(page==="wall"){
+    await wallPage();
+  }
+
+  if(page==="profile"){
+    await profilePage();
+  }
+
+  if(page==="notifications"){
+    await notificationsView();
+  }
+
+  if(page==="settings"){
+    await settings();
+  }
 }
 
 function header(active){
- return `<header class="top">
-  <div class="user">
-   <div class="ava">👤</div>
-   <span>${esc(me.name)}${me.type==="guest"?" (زائر)":""}</span>
-  </div>
+  return `
+    <header class="top">
 
-  <div class="logo">دردشة <span>ريماز عراقية</span></div>
+      <div class="user">
+        <div class="ava">${esc(me?.profile?.avatar||"👤")}</div>
+        <span>
+          ${esc(me?.name||"")}
+          ${me?.type==="guest"?" (زائر)":""}
+        </span>
+      </div>
 
-  <nav class="nav">
-   <button class="${active==="rooms"?"on":""}" onclick="show('rooms')">الغرف</button>
-   <button class="${active==="private"?"on":""}" onclick="show('private')">الخاص</button>
-   <button class="${active==="members"?"on":""}" onclick="show('members')">الأعضاء</button>
-   <button class="${active==="wall"?"on":""}" onclick="show('wall')">الحائط</button>
+      <div class="logo">
+        دردشة <span>ريماز عراقية</span>
+      </div>
 
-   <button class="bell" onclick="notificationsView()">
-    🔔 الإشعارات
-    <span id="bellCount" class="bell-count" style="display:none">0</span>
-   </button>
+      <nav class="nav">
 
-   <button onclick="settings()">⚙ الضبط</button>
-  </nav>
- </header>`;
+        <button class="${active==="rooms"?"on":""}"
+          onclick="show('rooms')">
+          الغرف
+        </button>
+
+        <button class="${active==="private"?"on":""}"
+          onclick="show('private')">
+          الخاص
+        </button>
+
+        <button class="${active==="members"?"on":""}"
+          onclick="show('members')">
+          الأعضاء
+        </button>
+
+        <button class="${active==="wall"?"on":""}"
+          onclick="show('wall')">
+          الحائط
+        </button>
+
+        <button class="bell"
+          onclick="notificationsView()">
+          🔔
+          <span id="bellCount"
+            class="bell-count"
+            style="display:none">
+            0
+          </span>
+        </button>
+
+        <button onclick="settings()">
+          ⚙ الضبط
+        </button>
+
+      </nav>
+    </header>
+  `;
 }
 
 function side(){
- return `<aside class="card side">
-  <div class="title">الغرف</div>
-  ${rooms.map((r,i)=>`
-   <div class="room ${r[1]===currentRoom?"active":""}" onclick="openRoom('${esc(r[1])}')">
-    <div class="pic">${r[0]}</div>
-    <div>
-     <b>${esc(r[1])}</b>
-     <div class="muted">${esc(r[2])}</div>
-    </div>
-    <span class="count">${r[3]}</span>
-   </div>
-  `).join("")}
- </aside>`;
+  return `
+    <aside class="card side">
+
+      <div class="title">الغرف</div>
+
+      ${rooms.map(r=>`
+        <div class="room ${r.name===currentRoom?"active":""}"
+          onclick='openRoom(${JSON.stringify(r.name)})'>
+
+          <div class="pic">${r.icon}</div>
+
+          <div>
+            <b>${esc(r.name)}</b>
+            <div class="muted">${esc(r.desc)}</div>
+          </div>
+
+          <span class="count">
+            ${r.count}
+          </span>
+
+        </div>
+      `).join("")}
+
+    </aside>
+  `;
 }
 
 function people(){
- return `<aside class="card side">
-  <div class="title">الأعضاء المتصلون</div>
-  <div class="member">
-   <div class="ava">👤</div>
-   <b>${esc(me?.name||"أنت")}</b>
-   <span class="dot"></span>
-  </div>
-  <div class="muted" style="padding:10px;text-align:center">
-   قائمة الأعضاء الكاملة من قسم الأعضاء.
-  </div>
- </aside>`;
+  return `
+    <aside class="card side">
+
+      <div class="title">
+        معلومات الغرفة
+      </div>
+
+      <div class="room-banner">
+        <b>${esc(currentRoom)}</b>
+        <br>
+        اختر الغرفة لعرض المحادثة.
+      </div>
+
+      <button class="black"
+        style="width:100%"
+        onclick="roomPeople()">
+        👥 الموجودون الآن
+      </button>
+
+      <button class="black"
+        style="width:100%;margin-top:5px"
+        onclick="profilePage()">
+        👤 ملفي
+      </button>
+
+    </aside>
+  `;
 }
 
-function roomsView(){
- const isPublic=currentRoom==="الغرفة العامة";
+function roomsPage(){
+  app.innerHTML=`
+    ${header("rooms")}
 
- return `<div class="rooms-strip">
-  ${rooms.map(r=>`
-   <div class="room ${r[1]===currentRoom?"active":""}" onclick="openRoom('${esc(r[1])}')">
-    <div class="pic">${r[0]}</div>
-    <div style="flex:1">
-     <b>${esc(r[1])}</b>
-     <div class="muted">${esc(r[2])}</div>
+    <main class="layout">
+
+      ${side()}
+
+      <section class="chat card">
+
+        <div class="chathead">
+          <strong>${esc(currentRoom)}</strong>
+
+          <span class="tag">
+            ${roomKindText()}
+          </span>
+
+          <div class="chat-actions">
+            <button onclick="roomPeople()">👥</button>
+            <button onclick="refreshRoomPage()">↻</button>
+          </div>
+        </div>
+
+        <div class="room-meta">
+          <b>${esc(currentRoom)}</b>
+          <span class="sep">•</span>
+          <span>${roomKindText()}</span>
+        </div>
+
+        <div id="roomContent"></div>
+
+      </section>
+
+      ${people()}
+
+    </main>
+
+    ${bottom("rooms")}
+  `;
+
+  renderCurrentRoom();
+  updateBell();
+}
+
+function refreshRoomPage(){
+  if(currentPage==="rooms"){
+    roomsPage();
+  }
+}
+
+function roomKindText(){
+  const r=rooms.find(x=>x.name===currentRoom);
+  return r?.kind==="voice"?"غرفة مايك":
+         r?.kind==="private"?"غرفة خاصة":
+         "نص فقط";
+}
+
+async function renderCurrentRoom(){
+  const r=rooms.find(x=>x.name===currentRoom);
+
+  if(r?.kind==="voice"){
+    await renderVoiceRoom();
+  }else{
+    renderTextRoom();
+  }
+}
+
+async function renderTextRoom(){
+  const holder=document.getElementById("roomContent");
+  if(!holder)return;
+
+  holder.innerHTML=`
+    <div class="messages" id="messages">
+      <div class="notice">
+        ${currentRoom==="الغرفة العامة"
+          ?"الغرفة العامة للنص فقط."
+          :"يمكنك الدردشة هنا."}
+      </div>
     </div>
-    <span class="count">${r[3]}</span>
-   </div>
-  `).join("")}
- </d
+
+    <div class="quickbar">
+      <button onclick="sendQuick('هلا والله 🌹')">هلا والله 🌹</button>
+      <button onclick="sendQuick('شلونكم؟')">شلونكم؟</button>
+      <button onclick="sendQuick('صباح الخير ☀️')">صباح الخير</button>
+      <button onclick="sendQuick('مساء الخير 🌙')">مساء الخير</button>
+    </div>
+
+    <div class="compose">
+      <input id="msgInput"
+        placeholder="اكتب رسالتك..."
+        onkeydown="if(event.key==='Enter')sendMessage()">
+
+      <button class="black"
+        onclick="sendMessage()">
+        إرسال
+      </button>
+    </div>
+  `;
+
+  try{
+    const items=await api(
+      "/api/messages?room="+encodeURIComponent(currentRoom)
+    );
+
+    renderMessages(items||[]);
+  }catch(e){}
+}
+
+function renderMessages(items){
+  const el=document.getElementById("messages");
+  if(!el)return;
+
+  el.innerHTML=`
+    <div class="notice">
+      ${currentRoom==="الغرفة العامة"
+        ?"الغرفة العامة للنص فقط."
+        :"محادثة الغرفة"}
+    </div>
+  `;
+
+  items.forEach(addMessage);
+
+  el.scrollTop=el.scrollHeight;
+}
+
+function addMessage(m){
+  const el=document.getElementById("messages");
+  if(!el)return;
+
+  const row=document.createElement("div");
+  row.className="msgline";
+
+  row.innerHTML=`
+    <div class="ava">👤</div>
+
+    <div class="msgbody">
+
+      <div>
+        <span class="name">${esc(m.name)}</span>
+        <span class="time">${timeText(m.time)}</span>
+      </div>
+
+      <div class="bubble">
+        ${esc(m.text)}
+      </div>
+
+      <span class="msgtools">
+        <button onclick='openMember(${JSON.stringify(m.name)})'>
+          الملف
+        </button>
+      </span>
+
+    </div>
+  `;
+
+  el.appendChild(row);
+  el.scrollTop=el.scrollHeight;
+}
+
+function sendMessage(){
+  const input=document.getElementById("msgInput");
+  if(!input||!socket)return;
+
+  const text=input.value.trim();
+  if(!text)return;
+
+  socket.emit("message",{text});
+  input.value="";
+}
+
+function sendQuick(text){
+  if(socket)socket.emit("message",{text});
+}
+
+function bottom(active){
+  return `
+    <nav class="bottom">
+
+      <button class="${active==="rooms"?"active":""}"
+        onclick="show('rooms')">
+        🏠 الغرف
+      </button>
+
+      <button class="${active==="private"?"active":""}"
+        onclick="show('private')">
+        💬 الخاص
+      </button>
+
+      <button class="${active==="members"?"active":""}"
+        onclick="show('members')">
+        👥 الأعضاء
+      </button>
+
+      <button class="${active==="wall"?"active":""}"
+        onclick="show('wall')">
+        📝 الحائط
+      </button>
+
+      <button onclick="profilePage()">
+        👤 حسابي
+      </button>
+
+    </nav>
+  `;
+}
+
+async function openRoom(name){
+  currentRoom=name;
+  privateToName="";
+
+  if(socket)joinCurrentRoom();
+
+  await show("rooms");
+}
+
+async function roomPeople(){
+  try{
+    const s=await api(
+      "/api/room/status?room="+encodeURIComponent(currentRoom)
+    );
+
+    const people=s.people||[];
+
+    openModal(
+      "الموجودون في "+currentRoom,
+      `
+        ${people.length?people.map(p=>`
+          <div class="member-row">
+
+            <div class="avatar">👤</div>
+
+            <div class="member-meta">
+              <b>
+                ${esc(p.name)}
+                ${p.type==="guest"
+                  ?'<small> زائر</small>'
+                  :""}
+              </b>
+
+              <small>
+                ❤️ ${p.likes||0}
+                ${p.muted?" • مكتوم":""}
+              </small>
+            </div>
+
+            <button class="like-btn"
+              onclick='openMember(${JSON.stringify(p.name)})'>
+              فتح
+            </button>
+
+          </div>
+        `).join("")
+        :'<div class="notice">لا يوجد أعضاء ظاهرون حاليًا.</div>'}
+
+        ${s.canManage?`
+          <div class="admin-box">
+            <b>أدوات الإدارة</b>
+            <p class="muted">
+              يمكنك التحكم بالأعضاء من لوحة الإدارة.
+            </p>
+            <button class="black"
+              onclick="adminPanel()">
+              لوحة الإدارة
+            </button>
+          </div>
+        `:""}
+      `
+    );
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function membersPage(){
+  try{
+    members=await api("/api/members");
+
+    app.innerHTML=`
+      ${header("members")}
+
+      <main class="layout">
+
+        <section class="card" style="padding:10px;grid-column:2">
+
+          <div class="title">
+            👥 أعضاء دردشة ريماز عراقية
+          </div>
+
+          <div class="notice">
+            ❤️ الإعجاب متاح كل 10 ثوانٍ.
+            <br>
+            عند 400 إعجاب تفتح الإشعارات.
+            <br>
+            عند 500 إعجاب تفتح الصور والفيديو والصوت.
+          </div>
+
+          <div id="memberList">
+            ${members.map(memberCard).join("")}
+          </div>
+
+        </section>
+
+      </main>
+
+      ${bottom("members")}
+    `;
+
+    updateBell();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+function memberCard(m){
+  const likes=Number(m.likes||0);
+
+  return `
+    <div class="member-row">
+
+      <div class="avatar">
+        ${esc(m.profile?.avatar||"👤")}
+      </div>
+
+      <div class="member-meta">
+
+        <b>
+          ${esc(m.name)}
+          ${m.online
+            ?'<span style="color:#198754"> ●</span>'
+            :""}
+        </b>
+
+        <small>
+          ❤️ <span class="like-count">${likes}</span>
+          <span class="level">${rankName(m.level)}</span>
+        </small>
+
+      </div>
+
+      <button class="like-btn"
+        onclick='openMember(${JSON.stringify(m.name)})'>
+        الملف
+      </button>
+
+    </div>
+  `;
+}
+
+async function openMember(name){
+  try{
+    const list=await api("/api/members");
+    const m=list.find(x=>x.name===name);
+
+    if(!m){
+      alert("العضو غير موجود");
+      return;
+    }
+
+    const likes=Number(m.likes||0);
+
+    openModal(
+      m.name,
+      `
+        <div class="profile-card">
+
+          <div class="profile-avatar">
+            ${esc(m.profile?.avatar||"👤")}
+          </div>
+
+          <div>
+            <h2 style="margin:0">
+              ${esc(m.name)}
+            </h2>
+
+            <div>
+              ${m.online
+                ?"🟢 متصل الآن"
+                :"⚪ غير متصل"}
+            </div>
+
+            <div class="statrow">
+
+              <div class="stat">
+                ❤️ <b>${likes}</b>
+              </div>
+
+              <div class="stat">
+                🏅 <b>${rankName(m.level)}</b>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+        <div class="rank-panel">
+          <div class="rank-title">
+            مستوى العضو
+          </div>
+
+          <div class="rank-progress">
+            <i style="width:${rankProgress(likes)}%"></i>
+          </div>
+
+          <p class="muted">
+            ${likes<400
+              ?"باقي "+(400-likes)+" إعجاب لفتح الإشعارات."
+              :likes<500
+              ?"باقي "+(500-likes)+" إعجاب لفتح الوسائط."
+              :"كل الصلاحيات الأساسية مفتوحة."}
+          </p>
+        </div>
+
+        <div class="post">
+          <b>الحالة</b>
+          <br>
+          ${esc(m.profile?.status||"متصل الآن")}
+        </div>
+
+        <div class="post">
+          <b>النبذة</b>
+          <br>
+          ${esc(m.profile?.bio||"عضو في دردشة ريماز عراقية")}
+        </div>
+
+        <div class="profile-buttons">
+
+          ${name!==me.name?`
+            <button class="like-btn"
+              onclick='giveLike(${JSON.stringify(name)})'>
+              ❤️ إعجاب
+            </button>
+
+            <button class="black"
+              onclick='startPrivate(${JSON.stringify(name)})'>
+              💬 خاص
+            </button>
+          `:""}
+
+          ${name!==me.name&&likes>=400?`
+            <button class="black"
+              onclick='sendNoticeTo(${JSON.stringify(name)})'>
+              🔔 تنبيه
+            </button>
+          `:""}
+
+          ${name!==me.name&&likes>=500&&m.online?`
+            <button class="black"
+              onclick='startCall(${JSON.stringify(name)},false)'>
+              📞 اتصال
+            </button>
+
+            <button class="black"
+              onclick='startCall(${JSON.stringify(name)},true)'>
+              📹 كاميرا
+            </button>
+          `:""}
+
+        </div>
+
+        ${me.admin?`
+          <div class="admin-box">
+            <b>إدارة العضو</b>
+
+            <div class="profile-buttons">
+
+              <button class="black"
+                onclick='adminGrantLike(${JSON.stringify(name)})'>
+                ❤️ إضافة إعجابات
+              </button>
+
+              <button class="black"
+                onclick='adminModerate(${JSON.stringify(name)})'>
+                🛠 إدارة الغرفة
+              </button>
+
+            </div>
+          </div>
+        `:""}
+      `
+    );
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function giveLike(name){
+  try{
+    const j=await api("/api/like",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({to:name})
+    });
+
+    alert("تم إعطاء إعجاب ❤️\nمجموع الإعجابات: "+j.targetLikes);
+    closeModal();
+
+    if(currentPage==="members"){
+      await membersPage();
+    }
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function notificationsView(){
+  if(!me)return;
+
+  try{
+    const ns=await api("/api/notifications");
+
+    openModal(
+      "🔔 الإشعارات",
+      `
+        <div class="notice-list">
+
+          ${ns.length?ns.map(n=>`
+            <div class="notif ${n.read?"":"unread"}">
+
+              <div class="notif-icon">
+                ${n.type==="like"?"❤️":"🔔"}
+              </div>
+
+              <div class="notif-body">
+                <b>${esc(n.from||"النظام")}</b>
+                <div>${esc(n.text||"")}</div>
+                <small>${timeText(n.time)}</small>
+              </div>
+
+            </div>
+          `).join("")
+          :'<div class="notice">لا توجد إشعارات.</div>'}
+
+        </div>
+
+        ${ns.length?`
+          <button class="black"
+            style="width:100%;margin-top:8px"
+            onclick="readNotifications()">
+            تعليم الكل كمقروء
+          </button>
+        `:""}
+      `
+    );
+
+    updateBell();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function readNotifications(){
+  try{
+    await api("/api/notifications/read",{
+      method:"POST"
+    });
+
+    closeModal();
+    await updateBell();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function updateBell(){
+  try{
+    const ns=await api("/api/notifications");
+    const unread=ns.filter(x=>!x.read).length;
+
+    const b=document.getElementById("bellCount");
+
+    if(b){
+      b.textContent=unread;
+      b.style.display=unread?"grid":"none";
+    }
+  }catch(e){}
+}
+
+async function sendNoticeTo(name){
+  if((me.likes||0)<400){
+    alert("التنبيهات تفتح عند 400 إعجاب.");
+    return;
+  }
+
+  openModal(
+    "إرسال تنبيه",
+    `
+      <p>
+        إلى:
+        <b>${esc(name)}</b>
+      </p>
+
+      <textarea id="noticeText"
+        rows="4"
+        placeholder="اكتب التنبيه..."></textarea>
+
+      <button class="black"
+        style="width:100%"
+        onclick='sendNotice(${JSON.stringify(name)})'>
+        إرسال التنبيه
+      </button>
+    `
+  );
+}
+
+async function sendNotice(name){
+  try{
+    const text=document.getElementById("noticeText").value.trim();
+
+    await api("/api/notify",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({to:name,text})
+    });
+
+    alert("تم إرسال التنبيه.");
+    closeModal();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function privatePage(){
+  app.innerHTML=`
+    ${header("private")}
+
+    <main class="layout">
+
+      <section class="card" style="grid-column:2;padding:10px">
+
+        <div class="title">
+          💬 المحادثة الخاصة
+        </div>
+
+        <div class="notice">
+          اختر عضوًا من قائمة الأعضاء لبدء محادثة خاصة.
+        </div>
+
+        <div id="privateBox"></div>
+
+      </section>
+
+    </main>
+
+    ${bottom("private")}
+  `;
+
+  if(privateToName){
+    renderPrivateChat();
+  }else{
+    const list=await api("/api/members");
+
+    document.getElementById("privateBox").innerHTML=
+      list.map(memberCard).join("");
+  }
+
+  updateBell();
+}
+
+async function startPrivate(name){
+  privateToName=name;
+  closeModal();
+  await show("private");
+}
+
+function renderPrivateChat(){
+  const el=document.getElementById("privateBox");
+  if(!el)return;
+
+  el.innerHTML=`
+    <div class="room-banner">
+      المحادثة الخاصة مع:
+      <b>${esc(privateToName)}</b>
+    </div>
+
+    <div id="privateMessages"
+      class="messages"
+      style="min-height:55vh">
+    </div>
+
+    <div class="quickbar">
+      <button onclick="sendPrivateQuick('هلا 🌹')">هلا 🌹</button>
+      <button onclick="sendPrivateQuick('شلونك؟')">شلونك؟</button>
+    </div>
+
+    <div class="compose">
+
+      <input id="privateInput"
+        placeholder="اكتب رسالة خاصة..."
+        onkeydown="if(event.key==='Enter')sendPrivate()">
+
+      <button class="black"
+        onclick="sendPrivate()">
+        إرسال
+      </button>
+
+    </div>
+
+    <div class="profile-buttons">
+
+      <button class="black"
+        onclick='startCall(${JSON.stringify(privateToName)},false)'>
+        📞 اتصال صوتي
+      </button>
+
+      <button class="black"
+        onclick='startCall(${JSON.stringify(privateToName)},true)'>
+        📹 اتصال كام
+      </button>
+
+      <button class="black"
+        onclick="mediaPicker()">
+        📎 إرسال صورة/فيديو/صوت
+      </button>
+
+    </div>
+
+    <input id="mediaInput"
+      type="file"
+      accept="image/*,video/*,audio/*"
+      class="hidden"
+      onchange="uploadMedia()">
+  `;
+}
+
+function sendPrivate(){
+  const input=document.getElementById("privateInput");
+
+  if(!input||!socket||!privateToName)return;
+
+  const text=input.value.trim();
+  if(!text)return;
+
+  socket.emit("private",{
+    to:privateToName,
+    text
+  });
+
+  input.value="";
+}
+
+function sendPrivateQuick(text){
+  if(socket&&privateToName){
+    socket.emit("private",{
+      to:privateToName,
+      text
+    });
+  }
+}
+
+function addPrivateMessage(m){
+  const el=document.getElementById("privateMessages");
+  if(!el)return;
+
+  const row=document.createElement("div");
+  row.className="msgline";
+
+  row.innerHTML=`
+    <div class="ava">👤</div>
+
+    <div class="msgbody">
+      <div>
+        <span class="name">${esc(m.from)}</span>
+        <span class="time">${timeText(m.time)}</span>
+      </div>
+
+      <div class="bubble">
+        ${esc(m.text)}
+      </div>
+    </div>
+  `;
+
+  el.appendChild(row);
+  el.scrollTop=el.scrollHeight;
+}
+
+function mediaPicker(){
+  if((me.likes||0)<500){
+    alert("إرسال الصور والفيديو والصوت يفتح عند 500 إعجاب.");
+    return;
+  }
+
+  const input=document.getElementById("mediaInput");
+  if(input)input.click();
+}
+
+async function uploadMedia(){
+  try{
+    const input=document.getElementById("mediaInput");
+    if(!input?.files?.length)return;
+
+    const fd=new FormData();
+    fd.append("file",input.files[0]);
+    fd.append("to",privateToName);
+
+    const r=await fetch("/api/media",{
+      method:"POST",
+      headers:sid?{"x-session":sid}:{},
+      body:fd
+    });
+
+    const j=await r.json();
+
+    if(!r.ok)throw Error(j.error||"فشل الرفع");
+
+    if(socket){
+      socket.emit("private",{
+        to:privateToName,
+        text:"📎 تم إرسال ملف: "+j.name+" "+location.origin+j.url
+      });
+    }
+
+    alert("تم رفع الملف وإرساله.");
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function wallPage(){
+  try{
+    const posts=await api("/api/wall");
+
+    app.innerHTML=`
+      ${header("wall")}
+
+      <main class="layout">
+
+        <section class="card" style="grid-column:2;padding:10px">
+
+          <div class="title">
+            📝 الحائط
+          </div>
+
+          <textarea id="wallText"
+            rows="4"
+            placeholder="اكتب منشورك..."></textarea>
+
+          <button class="black"
+            style="width:100%"
+            onclick="addWallPost()">
+            نشر
+          </button>
+
+          <div style="margin-top:10px">
+            ${posts.length?posts.map(p=>`
+              <div class="post">
+
+                <b>${esc(p.name)}</b>
+
+                <span class="time">
+                  ${timeText(p.time)}
+                </span>
+
+                <div style="margin-top:7px">
+                  ${esc(p.text)}
+                </div>
+
+              </div>
+            `).join("")
+            :'<div class="notice">لا توجد منشورات حتى الآن.</div>'}
+          </div>
+
+        </section>
+
+      </main>
+
+      ${bottom("wall")}
+    `;
+
+    updateBell();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function addWallPost(){
+  try{
+    const text=document.getElementById("wallText").value.trim();
+
+    await api("/api/wall",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({text})
+    });
+
+    await wallPage();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function profilePage(){
+  try{
+    const p=await api("/api/profile");
+    me.likes=p.likes;
+    me.level=p.level;
+    me.profile=p.profile;
+    me.admin=p.admin;
+
+    app.innerHTML=`
+      ${header("")}
+
+      <main class="layout">
+
+        <section class="card" style="grid-column:2;padding:10px">
+
+          <div class="title">
+            👤 ملفي الشخصي
+          </div>
+
+          <div class="profile-card">
+
+            <div class="profile-avatar">
+              ${esc(p.profile?.avatar||"👤")}
+            </div>
+
+            <div>
+
+              <h2 style="margin:0">
+                ${esc(p.name)}
+              </h2>
+
+              <div>
+                ${p.admin
+                  ?"👑 الإدارة"
+                  :p.type==="guest"
+                  ?"زائر"
+                  :"عضو"}
+              </div>
+
+              <div class="statrow">
+
+                <div class="stat">
+                  ❤️ <b>${p.likes||0}</b>
+                </div>
+
+                <div class="stat">
+                  🏅 <b>${rankName(p.level)}</b>
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          <div class="rank-panel">
+
+            <div class="rank-title">
+              تقدم المستوى
+            </div>
+
+            <div class="rank-progress">
+              <i style="width:${rankProgress(p.likes||0)}%"></i>
+            </div>
+
+          </div>
+
+          <label>الصورة الرمزية</label>
+          <input id="profileAvatar"
+            value="${esc(p.profile?.avatar||"👤")}">
+
+          <label>الحالة</label>
+          <input id="profileStatus"
+            value="${esc(p.profile?.status||"")}">
+
+          <label>النبذة</label>
+          <textarea id="profileBio"
+            rows="4">${esc(p.profile?.bio||"")}</textarea>
+
+          <button class="black"
+            style="width:100%"
+            onclick="saveProfile()">
+            حفظ التعديلات
+          </button>
+
+          <button class="red"
+            style="width:100%;margin-top:7px"
+            onclick="logout()">
+            تسجيل الخروج
+          </button>
+
+        </section>
+
+      </main>
+
+      ${bottom("")}
+    `;
+
+    updateBell();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function saveProfile(){
+  try{
+    const avatar=document.getElementById("profileAvatar").value;
+    const status=document.getElementById("profileStatus").value;
+    const bio=document.getElementById("profileBio").value;
+
+    await api("/api/profile",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        avatar,status,bio
+      })
+    });
+
+    alert("تم حفظ الملف.");
+    await profilePage();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function logout(){
+  try{
+    await api("/api/logout",{
+      method:"POST"
+    });
+  }catch(e){}
+
+  sid="";
+  me=null;
+  sessionStorage.removeItem("rimaz_sid");
+
+  if(socket){
+    try{socket.disconnect()}catch(e){}
+  }
+
+  auth();
+}
+
+async function settings(){
+  if(!me)return;
+
+  openModal(
+    "⚙ الضبط",
+    `
+      <div class="profile-buttons">
+
+        <button class="black"
+          onclick="closeModal();profilePage()">
+          👤 ملفي
+        </button>
+
+        <button class="black"
+          onclick="closeModal();notificationsView()">
+          🔔 الإشعارات
+        </button>
+
+        <button class="black"
+          onclick="closeModal();roomPeople()">
+          👥 الغرفة
+        </button>
+
+        ${me.admin?`
+          <button class="black"
+            onclick="closeModal();adminPanel()">
+            👑 لوحة الإدارة
+          </button>
+        `:""}
+
+      </div>
+
+      <div class="notice" style="margin-top:10px">
+        اسم الموقع: <b>دردشة ريماز عراقية</b>
+        <br>
+        المستوى الحالي: <b>${rankName(me.level||1)}</b>
+        <br>
+        الإعجابات: <b>${me.likes||0}</b>
+      </div>
+    `
+  );
+}
+
+async function adminPanel(){
+  if(!me?.admin){
+    alert("الإدارة فقط.");
+    return;
+  }
+
+  try{
+    const rs=await api("/api/rooms");
+
+    openModal(
+      "👑 لوحة الإدارة",
+      `
+        <div class="admin-box">
+
+          <h3>إضافة إعجابات</h3>
+
+          <input id="grantName"
+            placeholder="اسم العضو">
+
+          <input id="grantAmount"
+            type="number"
+            value="1"
+            min="1"
+            placeholder="عدد الإعجابات">
+
+          <button class="black"
+            style="width:100%"
+            onclick="grantLikes()">
+            إضافة الإعجابات
+          </button>
+
+        </div>
+
+        <div class="admin-box">
+
+          <h3>إنشاء غرفة</h3>
+
+          <input id="newRoomName"
+            placeholder="اسم الغرفة">
+
+          <input id="newRoomDesc"
+            placeholder="الوصف">
+
+          <select id="newRoomKind">
+            <option value="public">عامة</option>
+            <option value="private">خاصة</option>
+            <option value="voice">مايك</option>
+          </select>
+
+          <input id="newRoomCapacity"
+            type="number"
+            value="50"
+            placeholder="السعة">
+
+          <input id="newRoomMics"
+            type="number"
+            value="4"
+            placeholder="عدد المايكات">
+
+          <button class="black"
+            style="width:100%"
+            onclick="createRoom()">
+            إنشاء الغرفة
+          </button>
+
+        </div>
+
+        <div class="admin-box">
+
+          <h3>الغرف الحالية</h3>
+
+          ${rs.map(r=>`
+            <div class="post">
+
+              <b>${esc(r.name)}</b>
+
+              <div class="muted">
+                ${esc(r.desc||"")}
+                •
+                ${r.online||0} متصل
+              </div>
+
+              <div class="profile-buttons">
+
+                <button class="black"
+                  onclick='editRoom(${JSON.stringify(r.name)})'>
+                  تعديل
+                </button>
+
+                ${(r.name!=="الغرفة العامة"&&r.name!=="غرفة الصوت")?`
+                  <button class="red"
+                    onclick='deleteRoom(${JSON.stringify(r.name)})'>
+                    حذف
+                  </button>
+                `:""}
+
+              </div>
+
+            </div>
+          `).join("")}
+
+        </div>
+
+        <div class="admin-box">
+          <h3>إدارة أعضاء الغرفة</h3>
+
+          <button class="black"
+            style="width:100%"
+            onclick="adminModerationList()">
+            فتح قائمة الإدارة
+          </button>
+        </div>
+      `
+    );
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function grantLikes(){
+  try{
+    const to=document.getElementById("grantName").value.trim();
+    const amount=Number(document.getElementById("grantAmount").value||1);
+
+    const j=await api("/api/admin/grant-like",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({to,amount})
+    });
+
+    alert("تمت إضافة الإعجابات.\nالمجموع: "+j.likes);
+    await adminPanel();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function adminGrantLike(name){
+  closeModal();
+
+  openModal(
+    "إضافة إعجابات",
+    `
+      <p>
+        العضو:
+        <b>${esc(name)}</b>
+      </p>
+
+      <input id="oneGrantAmount"
+        type="number"
+        value="1"
+        min="1">
+
+      <button class="black"
+        style="width:100%"
+        onclick='adminGrantLikeDo(${JSON.stringify(name)})'>
+        إضافة
+      </button>
+    `
+  );
+}
+
+async function adminGrantLikeDo(name){
+  try{
+    const amount=Number(
+      document.getElementById("oneGrantAmount").value||1
+    );
+
+    const j=await api("/api/admin/grant-like",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({to:name,amount})
+    });
+
+    alert("تمت الإضافة. المجموع: "+j.likes);
+    closeModal();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function createRoom(){
+  try{
+    const name=document.getElementById("newRoomName").value.trim();
+    const desc=document.getElementById("newRoomDesc").value.trim();
+    const kind=document.getElementById("newRoomKind").value;
+    const capacity=Number(document.getElementById("newRoomCapacity").value||50);
+    const mics=Number(document.getElementById("newRoomMics").value||4);
+
+    await api("/api/rooms/create",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        name,desc,kind,capacity,mics
+      })
+    });
+
+    await syncRooms();
+    alert("تم إنشاء الغرفة.");
+    await adminPanel();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function editRoom(name){
+  const r=rooms.find(x=>x.name===name);
+
+  openModal(
+    "تعديل الغرفة",
+    `
+      <p>
+        <b>${esc(name)}</b>
+      </p>
+
+      <input id="editDesc"
+        value="${esc(r?.desc||"")}"
+        placeholder="الوصف">
+
+      <input id="editCapacity"
+        type="number"
+        value="${r?.capacity||50}"
+        placeholder="السعة">
+
+      <input id="editMics"
+        type="number"
+        value="${r?.mics||4}"
+        placeholder="المايكات">
+
+      <button class="black"
+        style="width:100%"
+        onclick='updateRoom(${JSON.stringify(name)})'>
+        حفظ
+      </button>
+    `
+  );
+}
+
+async function updateRoom(name){
+  try{
+    const desc=document.getElementById("editDesc").value;
+    const capacity=Number(document.getElementById("editCapacity").value||50);
+    const mics=Number(document.getElementById("editMics").value||4);
+
+    await api("/api/rooms/update",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        name,desc,capacity,mics
+      })
+    });
+
+    await syncRooms();
+    alert("تم تعديل الغرفة.");
+    await adminPanel();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function deleteRoom(name){
+  if(!confirm("متأكد تريد حذف غرفة "+name+" ؟"))return;
+
+  try{
+    await api("/api/rooms/delete",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name})
+    });
+
+    if(currentRoom===name){
+      currentRoom="الغرفة العامة";
+    }
+
+    await syncRooms();
+    alert("تم حذف الغرفة.");
+    await adminPanel();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function adminModerationList(){
+  try{
+    const s=await api(
+      "/api/room/status?room="+encodeURIComponent(currentRoom)
+    );
+
+    openModal(
+      "إدارة أعضاء "+currentRoom,
+      `
+        <div class="moderation-list">
+
+          ${(s.people||[]).map(p=>`
+            <div class="moderation-row">
+
+              <div>
+                <b>${esc(p.name)}</b>
+                <div class="muted">
+                  ❤️ ${p.likes||0}
+                  ${p.muted?" • مكتوم":""}
+                </div>
+              </div>
+
+              <div class="moderation-actions">
+
+                <button class="black"
+                  onclick='moderate(${JSON.stringify(p.name)},"mute")'>
+                  كتم
+                </button>
+
+                <button class="black"
+                  onclick='moderate(${JSON.stringify(p.name)},"unmute")'>
+                  إلغاء الكتم
+                </button>
+
+                <button class="black"
+                  onclick='moderate(${JSON.stringify(p.name)},"kick")'>
+                  طرد
+                </button>
+
+                <button class="red"
+                  onclick='moderate(${JSON.stringify(p.name)},"ban")'>
+                  حظر
+                </button>
+
+              </div>
+
+            </div>
+          `).join("")}
+
+        </div>
+      `
+    );
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function adminModerate(name){
+  closeModal();
+  await adminModerationList();
+}
+
+async function moderate(name,action){
+  try{
+    await api("/api/room/moderate",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        room:currentRoom,
+        to:name,
+        action,
+        minutes:10
+      })
+    });
+
+    alert("تم تنفيذ: "+action);
+    await adminModerationList();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function renderVoiceRoom(){
+  const holder=document.getElementById("roomContent");
+  if(!holder)return;
+
+  try{
+    const s=await api(
+      "/api/room/status?room="+encodeURIComponent(currentRoom)
+    );
+
+    const people=s.people||[];
+    const mics=s.mics||[];
+
+    holder.innerHTML=`
+      <div class="messages">
+
+        <div class="voice-stage">
+
+          <div class="voice-top">
+
+            <b>🎙️ غرفة الصوت</b>
+
+            <span class="tag">
+              ${mics.length}/${s.room.mics||0} مايك
+            </span>
+
+          </div>
+
+          <div class="mic-grid">
+
+            ${people.map(p=>`
+              <div class="mic-seat ${mics.includes(p.name)?"on":""}">
+
+                <div class="mic-avatar">
+                  ${mics.includes(p.name)?"🎙️":"👤"}
+                </div>
+
+                <b>${esc(p.name)}</b>
+
+                <small>
+                  ❤️ ${p.likes||0}
+                </small>
+
+              </div>
+            `).join("")}
+
+          </div>
+
+          <div class="voice-controls">
+
+            <button class="black"
+              onclick="toggleMic()">
+              🎙️ تشغيل / إيقاف المايك
+            </button>
+
+            <button class="black"
+              onclick="requestMic()">
+              🙋 طلب مايك
+            </button>
+
+            ${s.canManage?`
+              <button class="black"
+                onclick="adminModerationList()">
+                🛠 الإدارة
+              </button>
+            `:""}
+
+          </div>
+
+        </div>
+
+      </div>
+    `;
+  }catch(e){
+    holder.innerHTML=`
+      <div class="notice">
+        ${esc(e.message)}
+      </div>
+    `;
+  }
+}
+
+async function toggleMic(){
+  try{
+    const s=await api(
+      "/api/room/status?room="+encodeURIComponent(currentRoom)
+    );
+
+    const mine=s.people?.find(x=>x.name===me.name);
+    const on=!Boolean(mine?.mic);
+
+    await api("/api/room/mic",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        room:currentRoom,
+        on
+      })
+    });
+
+    await renderVoiceRoom();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function requestMic(){
+  try{
+    await api("/api/room/mic-request",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        room:currentRoom
+      })
+    });
+
+    alert("تم إرسال طلب المايك للإدارة.");
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function startCall(name,video){
+  if((me.likes||0)<500){
+    alert("الاتصال يفتح عند 500 إعجاب.");
+    return;
+  }
+
+  if(!socket){
+    alert("الاتصال غير جاهز.");
+    return;
+  }
+
+  try{
+    localStream=await navigator.mediaDevices.getUserMedia({
+      audio:true,
+      video:!!video
+    });
+
+    rtc=new RTCPeerConnection({
+      iceServers:[
+        {urls:"stun:stun.l.google.com:19302"}
+      ]
+    });
+
+    rtcTarget=name;
+    rtcKind=video?"video":"audio";
+    pendingIce=[];
+
+    localStream.getTracks().forEach(t=>{
+      rtc.addTrack(t,localStream);
+    });
+
+    rtc.onicecandidate=e=>{
+      if(e.candidate){
+        socket.emit("ice",{
+          to:rtcTarget,
+          candidate:e.candidate
+        });
+      }
+    };
+
+    rtc.ontrack=e=>{
+      showRemoteStream(e.streams[0]);
+    };
+
+    const offer=await rtc.createOffer();
+    await rtc.setLocalDescription(offer);
+
+    socket.emit("call-offer",{
+      to:name,
+      offer,
+      video
+    });
+
+    showCallBox(name,video,false);
+  }catch(e){
+    alert("تعذر تشغيل الاتصال: "+e.message);
+    stopCall();
+  }
+}
+
+async function receiveCallOffer(d){
+  if(!d?.from)return;
+
+  if((me.likes||0)<500)return;
+
+  const ok=confirm(
+    (d.video?"📹":"📞")+" اتصال وارد من "+d.from+"\nهل تريد الرد؟"
+  );
+
+  if(!ok)return;
+
+  try{
+    localStream=await navigator.mediaDevices.getUserMedia({
+      audio:true,
+      video:!!d.video
+    });
+
+    rtc=new RTCPeerConnection({
+      iceServers:[
+        {urls:"stun:stun.l.google.com:19302"}
+      ]
+    });
+
+    rtcTarget=d.from;
+    rtcKind=d.video?"video":"audio";
+
+    localStream.getTracks().forEach(t=>{
+      rtc.addTrack(t,localStream);
+    });
+
+    rtc.onicecandidate=e=>{
+      if(e.candidate){
+        socket.emit("ice",{
+          to:rtcTarget,
+          candidate:e.candidate
+        });
+      }
+    };
+
+    rtc.ontrack=e=>{
+      showRemoteStream(e.streams[0]);
+    };
+
+    await rtc.setRemoteDescription(
+      new RTCSessionDescription(d.offer)
+    );
+
+    const answer=await rtc.createAnswer();
+    await rtc.setLocalDescription(answer);
+
+    socket.emit("call-answer",{
+      to:d.from,
+      answer
+    });
+
+    showCallBox(d.from,!!d.video,true);
+
+    for(const c of pendingIce){
+      try{
+        await rtc.addIceCandidate(c);
+      }catch(e){}
+    }
+
+    pendingIce=[];
+  }catch(e){
+    alert("تعذر الرد على الاتصال: "+e.message);
+    stopCall();
+  }
+}
+
+async function receiveCallAnswer(d){
+  if(!rtc||!d?.answer)return;
+
+  try{
+    await rtc.setRemoteDescription(
+      new RTCSessionDescription(d.answer)
+    );
+
+    for(const c of pendingIce){
+      try{
+        await rtc.addIceCandidate(c);
+      }catch(e){}
+    }
+
+    pendingIce=[];
+  }catch(e){
+    console.error(e);
+  }
+}
+
+async function receiveIce(d){
+  if(!d?.candidate)return;
+
+  const c=new RTCIceCandidate(d.candidate);
+
+  if(rtc?.remoteDescription){
+    try{
+      await rtc.addIceCandidate(c);
+    }catch(e){}
+  }else{
+    pendingIce.push(c);
+  }
+}
+
+function showCallBox(name,video,incoming){
+  openModal(
+    video?"📹 اتصال كاميرا":"📞 اتصال صوتي",
+    `
+      <div class="notice">
+        ${incoming?"مكالمة واردة":"جاري الاتصال"} مع
+        <b>${esc(name)}</b>
+      </div>
+
+      <video id="remoteVideo"
+        ${video?"":"style=\"display:none\""}
+        autoplay playsinline
+        style="width:100%;background:#000;border-radius:8px">
+      </video>
+
+      <audio id="remoteAudio"
+        autoplay
+        ${video?"style=\"display:none\"":""}>
+      </audio>
+
+      <div class="profile-buttons">
+
+        <button class="red"
+          onclick="stopCall()">
+          إنهاء الاتصال
+        </button>
+
+      </div>
+    `
+  );
+}
+
+function showRemoteStream(stream){
+  const video=document.getElementById("remoteVideo");
+  const audio=document.getElementById("remoteAudio");
+
+  if(video){
+    video.srcObject=stream;
+    video.play().catch(()=>{});
+  }
+
+  if(audio){
+    audio.srcObject=stream;
+    audio.play().catch(()=>{});
+  }
+}
+
+function stopCall(){
+  try{
+    if(rtc){
+      rtc.close();
+      rtc=null;
+    }
+  }catch(e){}
+
+  if(localStream){
+    localStream.getTracks().forEach(t=>{
+      try{t.stop()}catch(e){}
+    });
+    localStream=null;
+  }
+
+  rtcTarget="";
+  pendingIce=[];
+
+  closeModal();
+}
+
+start();
+</script>
+
+</body>
+</html>
