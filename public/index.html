@@ -79,160 +79,1876 @@ body{background:#f3f4f7}
 
 /* V10 - room administration and microphone room */
 .room-admin{background:#f8f8fa;border:1px solid #d4d5da;border-radius:6px;padding:9px;margin-top:8px}.room-admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.room-admin-grid button{padding:8px}.voice-stage{background:linear-gradient(#f4f4f6,#fff);border:1px solid #cfd2da;border-radius:7px;padding:10px}.voice-top{display:flex;gap:6px;align-items:center;margin-bottom:8px}.voice-top .tag{margin-right:auto}.mic-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.mic-seat{min-height:104px;background:#fff;border:1px solid #d0d2d8;border-radius:7px;display:grid;place-items:center;text-align:center;padding:7px}.mic-seat.on{border:2px solid #222;background:#f0f0f2}.mic-avatar{width:48px;height:48px;border-radius:50%;background:#e6e7eb;display:grid;place-items:center;font-size:25px}.voice-controls{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.voice-controls button{flex:1;min-width:110px}.moderation-list{max-height:360px;overflow:auto;border:1px solid #ddd;border-radius:5px}.moderation-row{display:grid;grid-template-columns:1fr auto;gap:6px;padding:8px;border-bottom:1px solid #eee;align-items:center}.moderation-actions{display:flex;gap:4px;flex-wrap:wrap}.moderation-actions button{font-size:10px;padding:5px}.room-badge{font-size:10px;background:#eee;border:1px solid #d3d3d8;border-radius:3px;padding:2px 5px}.mic-request{background:#fff7df;border:1px solid #ead59b;padding:8px;border-radius:5px;margin-top:8px}@media(max-width:600px){.mic-grid{grid-template-columns:repeat(2,1fr)}.room-admin-grid{grid-template-columns:1fr}}
-\n/* FINAL FINISH - mobile polish and unified visual system */\n:root{--ink:#101116;--line:#d7d9df;--soft:#f5f6f8;--panel:#fff;--accent:#111;--pink:#b64a72}\nbody{background:#eef0f3;color:#17181c;font-family:Tahoma,Arial,sans-serif}\n.top{height:58px;padding:5px 10px;border-bottom:1px solid #c9ccd3;background:#fff;box-shadow:0 1px 4px #0001}\n.logo{font-size:20px;letter-spacing:.1px}.logo span{color:#111}\n.user{font-size:12px;min-width:120px}.user .ava{width:32px;height:32px;background:#eceef2;border:1px solid #d2d4da}\n.nav button{font-size:12px;padding:7px 9px}.nav .on{background:#111;color:#fff}\n.layout{max-width:1200px;margin:7px auto 74px;gap:6px;padding:0 5px}.card{background:#fff;border:1px solid #cdd0d6;border-radius:6px;box-shadow:0 1px 3px #0001}\n.side{padding:7px}.title{font-size:15px;margin:3px 4px 8px}.room{padding:6px;min-height:49px;border:1px solid #e0e2e6;background:#fafbfc}.room.active{background:#eceef1;border-right:4px solid #111}\n.pic{width:34px;height:34px;background:#e9ebee}.count{color:#555}.member{padding:7px 2px}.member .ava{width:31px;height:31px}\n.chat{min-height:calc(100vh - 145px);border-radius:6px}.chathead{min-height:48px;background:#fafbfc;padding:7px 9px}.chathead strong{font-size:15px}.chat-actions button{background:#111;padding:5px 7px}\n.room-meta{background:#f0f1f3;padding:4px 8px;font-size:10px}.messages{padding:8px}.room-banner{background:#f5f5f6;border-color:#d9dbe0}.notice{background:#f2f3f5;color:#222;border-color:#d7d9df}.msgline{margin:6px 0}.bubble{background:#f7f7f8;border-color:#d9dbe0;border-radius:6px}.name{color:#222}\n.quickbar{padding:4px 6px;background:#fff}.quickbar button{background:#f4f5f7;border-color:#d5d7dc;padding:4px 8px}\n.compose{background:#f0f1f3;padding:6px;gap:4px}.compose input{border-color:#c9ccd2;border-radius:5px}.compose .black,.compose .purple{padding:8px 11px;border-radius:5px}.purple{background:#111}\n.bottom{background:#fff;border-top:1px solid #bfc2c9;box-shadow:0 -2px 7px #0001;padding:4px 5px}.bottom button{background:#0d0e12;color:#fff;border:1px solid #000;border-radius:4px;padding:8px 10px;min-width:86px}.bottom button.active{background:#0d0e12}\n.modal{background:#0009}.box{border:1px solid #c9ccd2;border-radius:8px;box-shadow:0 14px 45px #0004}.boxhead{background:#111216;padding:10px 12px;font-size:16px}.boxbody{padding:11px}.boxbody label{background:#111216;font-size:12px;padding:6px}.boxbody input,.boxbody textarea{border-color:#cdd0d6;border-radius:4px}\n.profile-card{background:#f4f5f7!important;border-color:#d2d4da}.profile-avatar{background:#e9ebee;border-color:#c4c7ce}.stat{background:#fff;border-color:#d4d6dc}.rank-panel{background:#f4f5f7;border-color:#d2d4da}.rank-progress{background:#d7d9de}.rank-progress i{background:#111}.rank-pill{background:#fff;border-color:#c8cbd2}.badge{background:#f4f5f7;border-color:#cfd2d8}.member-row{padding:8px 4px}.like-btn{padding:6px 9px}.like-count{color:#a83e63}\n.room-admin{background:#f5f6f7;border-color:#d3d5da}.voice-stage{background:#f6f7f8;border-color:#cdd0d6}.mic-seat{background:#fff;border-color:#d0d2d8}.mic-seat.on{background:#f0f1f3;border-color:#111}.mic-avatar{background:#e9ebee}\n@media(max-width:900px){.top{height:auto;min-height:58px;gap:5px}.user{order:2;min-width:0}.logo{order:1;flex:1;font-size:17px}.nav{order:3;width:100%;overflow:auto;justify-content:center}.nav button{padding:6px 8px}.layout{margin-bottom:68px}.side{display:none}.chat{min-height:calc(100vh - 150px)}.chathead{position:sticky;top:0;z-index:2}.bottom button{font-size:10px;padding:8px 3px}.bottom b{font-size:11px}.rooms-strip{grid-template-columns:1fr 1fr}.room{min-height:46px}.room .pic{width:31px;height:31px}.room-tools button{padding:7px 4px}.profile-card{grid-template-columns:68px 1fr}.profile-avatar{width:62px;height:62px;font-size:30px}.member-row{grid-template-columns:38px 1fr}.member-row .like-btn{grid-column:2;justify-self:start}.mic-grid{gap:5px}.mic-seat{min-height:92px}.box{width:96vw}.settings-grid{grid-template-columns:1fr}}\n@media(max-width:380px){.logo{font-size:15px}.nav button{font-size:10px;padding:5px}.bottom button{font-size:9px}.rooms-strip{grid-template-columns:1fr}.chat-actions button{font-size:9px;padding:5px}.quickbar button{padding:4px 6px}}\n</style>
+\n/* FINAL FINISH - mobile polish and unified visual system */
+:root{--ink:#101116;--line:#d7d9df;--soft:#f5f6f8;--panel:#fff;--accent:#111;--pink:#b64a72}
+body{background:#eef0f3;color:#17181c;font-family:Tahoma,Arial,sans-serif}
+.top{height:58px;padding:5px 10px;border-bottom:1px solid #c9ccd3;background:#fff;box-shadow:0 1px 4px #0001}
+.logo{font-size:20px;letter-spacing:.1px}.logo span{color:#111}
+.user{font-size:12px;min-width:120px}.user .ava{width:32px;height:32px;background:#eceef2;border:1px solid #d2d4da}
+.nav button{font-size:12px;padding:7px 9px}.nav .on{background:#111;color:#fff}
+.layout{max-width:1200px;margin:7px auto 74px;gap:6px;padding:0 5px}.card{background:#fff;border:1px solid #cdd0d6;border-radius:6px;box-shadow:0 1px 3px #0001}
+.side{padding:7px}.title{font-size:15px;margin:3px 4px 8px}.room{padding:6px;min-height:49px;border:1px solid #e0e2e6;background:#fafbfc}.room.active{background:#eceef1;border-right:4px solid #111}
+.pic{width:34px;height:34px;background:#e9ebee}.count{color:#555}.member{padding:7px 2px}.member .ava{width:31px;height:31px}
+.chat{min-height:calc(100vh - 145px);border-radius:6px}.chathead{min-height:48px;background:#fafbfc;padding:7px 9px}.chathead strong{font-size:15px}.chat-actions button{background:#111;padding:5px 7px}
+.room-meta{background:#f0f1f3;padding:4px 8px;font-size:10px}.messages{padding:8px}.room-banner{background:#f5f5f6;border-color:#d9dbe0}.notice{background:#f2f3f5;color:#222;border-color:#d7d9df}.msgline{margin:6px 0}.bubble{background:#f7f7f8;border-color:#d9dbe0;border-radius:6px}.name{color:#222}
+.quickbar{padding:4px 6px;background:#fff}.quickbar button{background:#f4f5f7;border-color:#d5d7dc;padding:4px 8px}
+.compose{background:#f0f1f3;padding:6px;gap:4px}.compose input{border-color:#c9ccd2;border-radius:5px}.compose .black,.compose .purple{padding:8px 11px;border-radius:5px}.purple{background:#111}
+.bottom{background:#fff;border-top:1px solid #bfc2c9;box-shadow:0 -2px 7px #0001;padding:4px 5px}.bottom button{background:#0d0e12;color:#fff;border:1px solid #000;border-radius:4px;padding:8px 10px;min-width:86px}.bottom button.active{background:#0d0e12}
+.modal{background:#0009}.box{border:1px solid #c9ccd2;border-radius:8px;box-shadow:0 14px 45px #0004}.boxhead{background:#111216;padding:10px 12px;font-size:16px}.boxbody{padding:11px}.boxbody label{background:#111216;font-size:12px;padding:6px}.boxbody input,.boxbody textarea{border-color:#cdd0d6;border-radius:4px}
+.profile-card{background:#f4f5f7!important;border-color:#d2d4da}.profile-avatar{background:#e9ebee;border-color:#c4c7ce}.stat{background:#fff;border-color:#d4d6dc}.rank-panel{background:#f4f5f7;border-color:#d2d4da}.rank-progress{background:#d7d9de}.rank-progress i{background:#111}.rank-pill{background:#fff;border-color:#c8cbd2}.badge{background:#f4f5f7;border-color:#cfd2d8}.member-row{padding:8px 4px}.like-btn{padding:6px 9px}.like-count{color:#a83e63}
+.room-admin{background:#f5f6f7;border-color:#d3d5da}.voice-stage{background:#f6f7f8;border-color:#cdd0d6}.mic-seat{background:#fff;border-color:#d0d2d8}.mic-seat.on{background:#f0f1f3;border-color:#111}.mic-avatar{background:#e9ebee}
+@media(max-width:900px){.top{height:auto;min-height:58px;gap:5px}.user{order:2;min-width:0}.logo{order:1;flex:1;font-size:17px}.nav{order:3;width:100%;overflow:auto;justify-content:center}.nav button{padding:6px 8px}.layout{margin-bottom:68px}.side{display:none}.chat{min-height:calc(100vh - 150px)}.chathead{position:sticky;top:0;z-index:2}.bottom button{font-size:10px;padding:8px 3px}.bottom b{font-size:11px}.rooms-strip{grid-template-columns:1fr 1fr}.room{min-height:46px}.room .pic{width:31px;height:31px}.room-tools button{padding:7px 4px}.profile-card{grid-template-columns:68px 1fr}.profile-avatar{width:62px;height:62px;font-size:30px}.member-row{grid-template-columns:38px 1fr}.member-row .like-btn{grid-column:2;justify-self:start}.mic-grid{gap:5px}.mic-seat{min-height:92px}.box{width:96vw}.settings-grid{grid-template-columns:1fr}}
+@media(max-width:380px){.logo{font-size:15px}.nav button{font-size:10px;padding:5px}.bottom button{font-size:9px}.rooms-strip{grid-template-columns:1fr}.chat-actions button{font-size:9px;padding:5px}.quickbar button{padding:4px 6px}}
+</style>
 
 <style id="rimaz-mobile-finish">
 *{box-sizing:border-box}html,body{margin:0;padding:0;width:100%;min-height:100%;font-family:Tahoma,Arial,sans-serif}body{background:#f3f4f6;color:#222;overflow-x:hidden}.app,.page,.chat-shell,.room-shell{width:100%;max-width:520px;margin:0 auto}.topbar{position:sticky;top:0;z-index:30;min-height:54px;padding:8px 10px;background:#fff;border-bottom:1px solid #ddd;box-shadow:0 1px 4px #0001}.topbar button,.btn{min-height:40px;border-radius:10px;border:1px solid #222;padding:8px 12px;font-size:14px}.content{padding:10px 10px 82px}.bottom-nav{position:fixed;left:50%;bottom:0;transform:translateX(-50%);z-index:50;width:min(100%,520px);display:grid;grid-template-columns:repeat(5,1fr);gap:5px;padding:7px 7px calc(7px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #ddd;box-shadow:0 -3px 12px #0002}.bottom-nav button{min-height:48px;border:1px solid #ccc;background:#f7f7f8;border-radius:10px;font-size:12px}.bottom-nav button.active{background:#222;color:#fff;border-color:#222}.room-strip{display:flex;gap:7px;overflow-x:auto;padding:7px 1px 9px;scrollbar-width:none}.room-strip::-webkit-scrollbar{display:none}.room-card{flex:0 0 118px;padding:9px;border:1px solid #ddd;background:#fff;border-radius:12px}.room-card strong{display:block;font-size:13px}.room-card small{color:#777}.messages{min-height:48vh;max-height:calc(100vh - 250px);overflow:auto;padding:8px 2px}.message{margin:7px 0;padding:8px 10px;background:#fff;border:1px solid #e1e1e1;border-radius:12px;box-shadow:0 1px 2px #0000000a}.composer{position:sticky;bottom:64px;z-index:20;display:flex;gap:6px;padding:7px;background:#fff;border:1px solid #ddd;border-radius:12px}.composer input{min-width:0;flex:1;height:42px;border:1px solid #ccc;border-radius:10px;padding:0 10px;font-size:15px}.composer button{width:44px;height:42px;border-radius:10px;border:1px solid #222}.list-item,.profile-card,.settings-card,.notice-card{background:#fff;border:1px solid #ddd;border-radius:13px;padding:11px;margin:8px 0}.avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;display:inline-flex;align-items:center;justify-content:center;background:#eee}.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:999px;font-size:11px;background:#f0f0f2;margin:2px}.modal>div{width:min(100%,520px);max-height:88vh;overflow:auto;background:#fff;border-radius:18px 18px 0 0;padding:16px}.modal input,.modal select,.modal textarea{width:100%;min-height:42px;border:1px solid #ccc;border-radius:10px;padding:8px;font-size:15px}@media(min-width:521px){body{padding-bottom:0}.content{padding-bottom:20px}.bottom-nav{bottom:12px;border:1px solid #ddd;border-radius:16px;width:500px}.composer{bottom:12px}}
 </style>
 </head>
-<body><div id="app"></div><div id="modal" class="modal"><div class="box" id="box"></div></div>
+
+<body>
+<div id="app"></div>
+<div id="modal" class="modal"><div class="box" id="box"></div></div>
+
 <script>
 let sid=sessionStorage.getItem("rimaz_sid"), me=null, socket=null, currentRoom="الغرفة العامة";
 let rooms=[["🏠","الغرفة العامة","نص فقط",120],["🔒","غرفة الأصدقاء","خاص",48],["❤️","غرفة الحب","خاص",35],["🎙️","غرفة الصوت","مايك",22]];
-async function api(url,opt={}){opt.headers={...(opt.headers||{}),...(sid?{"x-session":sid}:{})};let r=await fetch(url,opt);let j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||"حدث خطأ");return j}
-async function start(){try{let s=await api("/api/state");me=s.user;if(me){await syncRooms();show("rooms")}else auth()}catch(e){auth()}}
-async function syncRooms(){try{const rs=await api("/api/rooms");const icons=["🏠","🔒","❤️","🎙️","🌙","⭐","🌹","🎧"];rooms=rs.map((r,i)=>[icons[i%icons.length],r.name,r.kind==="voice"?"مايك":r.kind==="private"?"خاص":r.desc||"نص فقط",r.online||r.count||0,r.kind]);}catch(e){}}
-function auth(){app.innerHTML=`<div class="auth"><div class="authbox"><div class="logo">دردشة <span>ريماز عراقية</span></div><p style="text-align:center">دخول بدون إيميل أو رقم هاتف</p><div class="grid"><div class="authcard"><h2>دخول عضو</h2><input id="ln" placeholder="اسم المستخدم"><input id="lp" type="password" placeholder="كلمة المرور"><button class="purple" style="width:100%" onclick="login()">دخول عضو</button><p class="muted">المسجل سابقًا لا يحتاج إعادة التسجيل.</p></div><div class="authcard"><h2>تسجيل حساب</h2><input id="rn" placeholder="اسم المستخدم"><input id="rp" type="password" placeholder="كلمة المرور"><button class="purple" style="width:100%" onclick="reg()">إنشاء حساب</button><p class="muted">اسم + باسورد فقط.</p></div></div><div class="authcard" style="margin-top:10px"><h2>دخول زائر</h2><input id="gn" placeholder="اسم فريد"><button class="black" style="width:100%" onclick="guest()">دخول زائر</button></div></div></div>`}
-async function reg(){try{let j=await api("/api/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:rn.value,password:rp.value})});sid=j.sid;localStorage.rimaz_sid=sid;start()}catch(e){alert(e.message)}}
-async function login(){try{let j=await api("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:ln.value,password:lp.value})});sid=j.sid;localStorage.rimaz_sid=sid;start()}catch(e){alert(e.message)}}
-async function guest(){try{let j=await api("/api/guest",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:gn.value})});sid=j.sid;localStorage.rimaz_sid=sid;start()}catch(e){alert(e.message)}}
-function header(active){return `<header class="top"><div class="user"><div class="ava">👤</div><span>${me.name}${me.type==="guest"?" (زائر)":""}</span></div><div class="logo">دردشة <span>ريماز عراقية</span></div><nav class="nav"><button class="${active==="rooms"?"on":""}" onclick="show('rooms')">الغرف</button><button class="${active==="private"?"on":""}" onclick="show('private')">الخاص</button><button class="${active==="members"?"on":""}" onclick="show('members')">الأعضاء</button><button class="${active==="wall"?"on":""}" onclick="show('wall')">الحائط</button><button onclick="settings()">⚙ الضبط</button></nav></header><div class="bottom"><button class="${active==="members"?"active":""}" onclick="show('members')">👤 <b>595</b></button><button class="${active==="private"?"active":""}" onclick="show('private')">💬 خاص</button><button class="${active==="rooms"?"active":""}" onclick="show('rooms')">👥 الغرف</button><button onclick="show('wall')">💬 الحائط 5</button><button onclick="settings()">⚙ الضبط</button></div>`}
-function side(){return `<aside class="card side"><div class="title">الغرف</div>${rooms.map((r,i)=>`<div class="room ${r[1]===currentRoom?"active":""}" onclick="openRoom('${r[1]}')"><div class="pic">${r[0]}</div><div><b>${r[1]}</b><div class="muted">${r[2]}</div></div><span class="count">${r[3]}</span></div>`).join("")}</aside>`}
-function people(){return `<aside class="card side"><div class="title">الأعضاء المتصلون</div>${["ريماز","Queen","علي العراقي","نور","كرار","ملاذ","حسين","سجاد"].map((x,i)=>`<div class="member"><div class="ava">${i%2?"👨":"👩"}</div><b>${x}</b><span class="dot"></span></div>`).join("")}</aside>`}
+let privateToName="";
+let rtc=null, rtcTarget="", rtcKind="", pendingIce=[];
+
+async function api(url,opt={}){
+ opt.headers={...(opt.headers||{}),...(sid?{"x-session":sid}:{})};
+ let r=await fetch(url,opt);
+ let j=await r.json().catch(()=>({}));
+ if(!r.ok)throw Error(j.error||"حدث خطأ");
+ return j;
+}
+
+async function start(){
+ try{
+  let s=await api("/api/state");
+  me=s.user;
+  if(me){
+   await syncRooms();
+   show("rooms");
+  }else auth();
+ }catch(e){auth()}
+}
+
+async function syncRooms(){
+ try{
+  const rs=await api("/api/rooms");
+  const icons=["🏠","🔒","❤️","🎙️","🌙","⭐","🌹","🎧"];
+  rooms=rs.map((r,i)=>[
+   icons[i%icons.length],
+   r.name,
+   r.kind==="voice"?"مايك":r.kind==="private"?"خاص":r.desc||"نص فقط",
+   r.online||r.count||0,
+   r.kind
+  ]);
+ }catch(e){}
+}
+
+function auth(){
+ app.innerHTML=`<div class="auth"><div class="authbox">
+ <div class="logo">دردشة <span>ريماز عراقية</span></div>
+ <p style="text-align:center">دخول بدون إيميل أو رقم هاتف</p>
+ <div class="grid">
+  <div class="authcard">
+   <h2>دخول عضو</h2>
+   <input id="ln" placeholder="اسم المستخدم">
+   <input id="lp" type="password" placeholder="كلمة المرور">
+   <button class="purple" style="width:100%" onclick="login()">دخول عضو</button>
+   <p class="muted">المسجل سابقًا لا يحتاج إعادة التسجيل.</p>
+  </div>
+  <div class="authcard">
+   <h2>تسجيل حساب</h2>
+   <input id="rn" placeholder="اسم المستخدم">
+   <input id="rp" type="password" placeholder="كلمة المرور">
+   <button class="purple" style="width:100%" onclick="reg()">إنشاء حساب</button>
+   <p class="muted">اسم + باسورد فقط.</p>
+  </div>
+ </div>
+ <div class="authcard" style="margin-top:10px">
+  <h2>دخول زائر</h2>
+  <input id="gn" placeholder="اسم فريد">
+  <button class="black" style="width:100%" onclick="guest()">دخول زائر</button>
+ </div>
+ </div></div>`;
+}
+
+async function reg(){
+ try{
+  const name=document.getElementById("rn").value;
+  const password=document.getElementById("rp").value;
+  let j=await api("/api/register",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({name,password})
+  });
+  sid=j.sid;
+  sessionStorage.setItem("rimaz_sid",sid);
+  start();
+ }catch(e){alert(e.message)}
+}
+
+async function login(){
+ try{
+  const name=document.getElementById("ln").value;
+  const password=document.getElementById("lp").value;
+  let j=await api("/api/login",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({name,password})
+  });
+  sid=j.sid;
+  sessionStorage.setItem("rimaz_sid",sid);
+  start();
+ }catch(e){alert(e.message)}
+}
+
+async function guest(){
+ try{
+  const name=document.getElementById("gn").value;
+  let j=await api("/api/guest",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({name})
+  });
+  sid=j.sid;
+  sessionStorage.setItem("rimaz_sid",sid);
+  start();
+ }catch(e){alert(e.message)}
+}
+
+function header(active){
+ return `<header class="top">
+  <div class="user">
+   <div class="ava">👤</div>
+   <span>${esc(me.name)}${me.type==="guest"?" (زائر)":""}</span>
+  </div>
+
+  <div class="logo">دردشة <span>ريماز عراقية</span></div>
+
+  <nav class="nav">
+   <button class="${active==="rooms"?"on":""}" onclick="show('rooms')">الغرف</button>
+   <button class="${active==="private"?"on":""}" onclick="show('private')">الخاص</button>
+   <button class="${active==="members"?"on":""}" onclick="show('members')">الأعضاء</button>
+   <button class="${active==="wall"?"on":""}" onclick="show('wall')">الحائط</button>
+
+   <button class="bell" onclick="notificationsView()">
+    🔔 الإشعارات
+    <span id="bellCount" class="bell-count" style="display:none">0</span>
+   </button>
+
+   <button onclick="settings()">⚙ الضبط</button>
+  </nav>
+ </header>`;
+}
+
+function side(){
+ return `<aside class="card side">
+  <div class="title">الغرف</div>
+  ${rooms.map((r,i)=>`
+   <div class="room ${r[1]===currentRoom?"active":""}" onclick="openRoom('${esc(r[1])}')">
+    <div class="pic">${r[0]}</div>
+    <div>
+     <b>${esc(r[1])}</b>
+     <div class="muted">${esc(r[2])}</div>
+    </div>
+    <span class="count">${r[3]}</span>
+   </div>
+  `).join("")}
+ </aside>`;
+}
+
+function people(){
+ return `<aside class="card side">
+  <div class="title">الأعضاء المتصلون</div>
+  <div class="member">
+   <div class="ava">👤</div>
+   <b>${esc(me?.name||"أنت")}</b>
+   <span class="dot"></span>
+  </div>
+  <div class="muted" style="padding:10px;text-align:center">
+   قائمة الأعضاء الكاملة من قسم الأعضاء.
+  </div>
+ </aside>`;
+}
+
 function roomsView(){
  const isPublic=currentRoom==="الغرفة العامة";
- return `<div class="rooms-strip">${rooms.map(r=>`<div class="room ${r[1]===currentRoom?"active":""}" onclick="openRoom('${r[1]}')"><div class="pic">${r[0]}</div><div style="flex:1"><b>${r[1]}</b><div class="muted">${r[2]}</div></div><span class="count">${r[3]}</span></div>`).join("")}</div>
- <main class="layout">${side()}<section class="card chat">
- <div class="chathead"><strong>${currentRoom}</strong><span class="tag">👥 ${isPublic?120:"—"}</span><div class="chat-actions"><button onclick="rules()">القوانين</button><button onclick="roomInfo()">ⓘ</button>${me.admin?`<button onclick="roomAdmin()">👑</button><button onclick="createRoomPrompt()">＋ غرفة</button>`:""}</div></div>
- <div class="room-meta"><b>${isPublic?"الغرفة العامة":currentRoom}</b><span class="sep">•</span><span>${isPublic?"كتابة نصية فقط":"غرفة منفصلة"}</span><span class="sep">•</span><span>${isPublic?"لا وسائط":"حسب نوع الغرفة"}</span></div>
- <div class="messages" id="msgs"><div class="room-banner">أهلًا وسهلًا بكم في <b>دردشة ريماز عراقية</b> ❤️ — يرجى احترام الجميع.</div><div class="notice">${isPublic?"هذه الغرفة مخصصة للرسائل النصية فقط. الصور والفيديو والصوت والمكالمات متاحة في الخاص وفق الصلاحيات.":"هذه غرفة منفصلة عن الغرفة العامة."}</div></div>
- <div class="quickbar"><button onclick="insertEmoji('😊')">😊</button><button onclick="insertEmoji('❤️')">❤️</button><button onclick="insertEmoji('😂')">😂</button><button onclick="insertEmoji('🌹')">🌹</button><button onclick="insertEmoji('👍')">👍</button><button onclick="insertEmoji('😍')">😍</button></div>
- <div class="compose"><button class="black" onclick="insertEmoji('😊')">☺</button><input id="msg" placeholder="اكتب رسالتك هنا..." onkeydown="if(event.key==='Enter')send()"><button class="purple" onclick="send()">إرسال</button></div>
- </section>${people()}</main>`}
 
-function insertEmoji(e){if(msg){msg.value+=e;msg.focus()}}
+ return `<div class="rooms-strip">
+  ${rooms.map(r=>`
+   <div class="room ${r[1]===currentRoom?"active":""}" onclick="openRoom('${esc(r[1])}')">
+    <div class="pic">${r[0]}</div>
+    <div style="flex:1">
+     <b>${esc(r[1])}</b>
+     <div class="muted">${esc(r[2])}</div>
+    </div>
+    <span class="count">${r[3]}</span>
+   </div>
+  `).join("")}
+ </div>
+
+ <main class="layout">
+  ${side()}
+
+  <section class="card chat">
+   <div class="chathead">
+    <strong>${esc(currentRoom)}</strong>
+    <span class="tag">👥 ${isPublic?120:"—"}</span>
+
+    <div class="chat-actions">
+     <button onclick="rules()">القوانين</button>
+     <button onclick="roomInfo()">ⓘ</button>
+     ${me.admin?`
+      <button onclick="roomAdmin()">👑</button>
+      <button onclick="createRoomPrompt()">＋ غرفة</button>
+     `:""}
+    </div>
+   </div>
+
+   <div class="room-meta">
+    <b>${esc(isPublic?"الغرفة العامة":currentRoom)}</b>
+    <span class="sep">•</span>
+    <span>${isPublic?"كتابة نصية فقط":"غرفة منفصلة"}</span>
+    <span class="sep">•</span>
+    <span>${isPublic?"لا وسائط":"حسب نوع الغرفة"}</span>
+   </div>
+
+   <div class="messages" id="msgs">
+    <div class="room-banner">
+     أهلًا وسهلًا بكم في <b>دردشة ريماز عراقية</b> ❤️ — يرجى احترام الجميع.
+    </div>
+    <div class="notice">
+     ${isPublic
+      ?"هذه الغرفة مخصصة للرسائل النصية فقط. الصور والفيديو والصوت والمكالمات متاحة في الخاص وفق الصلاحيات."
+      :"هذه غرفة منفصلة عن الغرفة العامة."}
+    </div>
+   </div>
+
+   <div class="quickbar">
+    <button onclick="insertEmoji('😊')">😊</button>
+    <button onclick="insertEmoji('❤️')">❤️</button>
+    <button onclick="insertEmoji('😂')">😂</button>
+    <button onclick="insertEmoji('🌹')">🌹</button>
+    <button onclick="insertEmoji('👍')">👍</button>
+    <button onclick="insertEmoji('😍')">😍</button>
+   </div>
+
+   <div class="compose">
+    <button class="black" onclick="insertEmoji('😊')">☺</button>
+    <input id="msg" placeholder="اكتب رسالتك هنا..." onkeydown="if(event.key==='Enter')send()">
+    <button class="purple" onclick="send()">إرسال</button>
+   </div>
+  </section>
+
+  ${people()}
+ </main>`;
+}
+
+function insertEmoji(e){
+ const input=document.getElementById("msg");
+ if(input){
+  input.value+=e;
+  input.focus();
+ }
+}
+
 async function roomInfo(){
- try{const st=await api(`/api/room/status?room=${encodeURIComponent(currentRoom)}`);
- const r=st.room;
- modal(`<div class="boxhead">معلومات الغرفة<button class="close" onclick="closeM()">×</button></div><div class="boxbody"><p><b>الغرفة:</b> ${esc(r.name)}</p><p><b>النوع:</b> ${r.kind==="voice"?"مايك وصوت":r.kind==="private"?"خاصة":"نص فقط"}</p><p><b>السعة:</b> ${r.capacity}</p><p><b>عدد المايكات:</b> ${r.mics||0}</p><p><b>المتصلون الآن:</b> ${st.people.length}</p><div class="notice">${r.kind==="voice"?"🎙️ هذه الغرفة مخصصة للصوت والمايك فقط. الغرفة العامة لا تحتوي على مايك.":r.name==="الغرفة العامة"?"✍️ الغرفة العامة للكتابة النصية فقط.":"🔒 غرفة منفصلة عن العامة."}</div>${st.canManage?`<button class="black" style="width:100%;margin-top:7px" onclick="roomAdmin()">👑 إدارة الغرفة</button>`:""}</div>`);
+ try{
+  const st=await api(`/api/room/status?room=${encodeURIComponent(currentRoom)}`);
+  const r=st.room;
+
+  modal(`
+   <div class="boxhead">
+    معلومات الغرفة
+    <button class="close" onclick="closeM()">×</button>
+   </div>
+
+   <div class="boxbody">
+    <p><b>الغرفة:</b> ${esc(r.name)}</p>
+    <p><b>النوع:</b> ${r.kind==="voice"?"مايك وصوت":r.kind==="private"?"خاصة":"نص فقط"}</p>
+    <p><b>السعة:</b> ${r.capacity}</p>
+    <p><b>عدد المايكات:</b> ${r.mics||0}</p>
+    <p><b>المتصلون الآن:</b> ${st.people.length}</p>
+
+    <div class="notice">
+     ${r.kind==="voice"
+      ?"🎙️ هذه الغرفة مخصصة للصوت والمايك فقط. الغرفة العامة لا تحتوي على مايك."
+      :r.name==="الغرفة العامة"
+      ?"✍️ الغرفة العامة للكتابة النصية فقط."
+      :"🔒 غرفة منفصلة عن العامة."}
+    </div>
+
+    ${st.canManage?`
+     <button class="black" style="width:100%;margin-top:7px" onclick="roomAdmin()">
+      👑 إدارة الغرفة
+     </button>
+    `:""}
+   </div>
+  `);
  }catch(e){alert(e.message)}
 }
+
 async function createRoomPrompt(){
  if(!me.admin)return alert("الإدارة فقط");
- const name=prompt("اسم الغرفة:"); if(!name)return;
- const kind=prompt("النوع: public / private / voice","public"); if(!kind)return;
+
+ const name=prompt("اسم الغرفة:");
+ if(!name)return;
+
+ const kind=prompt("النوع: public / private / voice","public");
+ if(!kind)return;
+
  const desc=prompt("وصف الغرفة:",kind==="voice"?"مايك":"نص فقط")||"نص فقط";
- const capacity=prompt("السعة:","50")||50; const mics=kind==="voice"?(prompt("عدد المايكات:","4")||4):0;
- try{await api("/api/rooms/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,kind,desc,capacity,mics})});await syncRooms();alert("تم إنشاء الغرفة");show("rooms")}catch(e){alert(e.message)}
+ const capacity=prompt("السعة:","50")||50;
+ const mics=kind==="voice"?(prompt("عدد المايكات:","4")||4):0;
+
+ try{
+  await api("/api/rooms/create",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({name,kind,desc,capacity,mics})
+  });
+
+  await syncRooms();
+  alert("تم إنشاء الغرفة");
+  show("rooms");
+ }catch(e){alert(e.message)}
 }
+
 async function roomAdmin(){
  if(!me.admin)return alert("الإدارة فقط");
+
  try{
-  const st=await api(`/api/room/status?room=${encodeURIComponent(currentRoom)}`),r=st.room;
+  const st=await api(`/api/room/status?room=${encodeURIComponent(currentRoom)}`);
+  const r=st.room;
+
   const rows=st.people.map(x=>{
-   const rn=JSON.stringify(r.name),xn=JSON.stringify(x.name);
-   return `<div class="moderation-row"><div><b>${esc(x.name)}</b> <span class="room-badge">❤️ ${x.likes}</span><br><small>${x.muted?"🔇 مكتوم":"🟢 متاح"}</small></div><div class="moderation-actions"><button class="black" onclick='moderate(${rn},${xn},${x.muted?"unmute":"mute"})'>${x.muted?"🔊 فك الكتم":"🔇 كتم"}</button><button class="black" onclick='moderate(${rn},${xn},"kick")'>🚪 طرد</button><button class="red" onclick='moderate(${rn},${xn},"ban")'>⛔ حظر</button></div></div>`;
+   const rn=JSON.stringify(r.name);
+   const xn=JSON.stringify(x.name);
+
+   return `<div class="moderation-row">
+    <div>
+     <b>${esc(x.name)}</b>
+     <span class="room-badge">❤️ ${x.likes}</span>
+     <br>
+     <small>${x.muted?"🔇 مكتوم":"🟢 متاح"}</small>
+    </div>
+
+    <div class="moderation-actions">
+     <button class="black" onclick='moderate(${rn},${xn},${x.muted?"unmute":"mute"})'>
+      ${x.muted?"🔊 فك الكتم":"🔇 كتم"}
+     </button>
+
+     <button class="black" onclick='moderate(${rn},${xn},"kick")'>
+      🚪 طرد
+     </button>
+
+     <button class="red" onclick='moderate(${rn},${xn},"ban")'>
+      ⛔ حظر
+     </button>
+    </div>
+   </div>`;
   }).join("");
-  const bans=st.banned.map(n=>`<div class="member-row"><div class="member-meta"><b>${esc(n)}</b><small>محظور في ${esc(r.name)}</small></div><button class="black" onclick='moderate(${JSON.stringify(r.name)},${JSON.stringify(n)},"unban")'>رفع الحظر</button></div>`).join("");
-  const micInput=r.kind==="voice"?`<label>عدد المايكات</label><input id="raMics" type="number" value="${r.mics||4}">`:"";
-  const del=r.name!=="الغرفة العامة"&&r.name!=="غرفة الصوت"?`<button class="red" style="width:100%;margin-top:10px" onclick='deleteRoom(${JSON.stringify(r.name)})'>حذف الغرفة</button>`:"";
-  modal(`<div class="boxhead">إدارة ${esc(r.name)}<button class="close" onclick="closeM()">×</button></div><div class="boxbody"><div class="notice">الكتم والطرد والحظر تعمل على هذه الغرفة فقط.</div><div class="room-admin"><b>إعدادات الغرفة</b><div class="settings-grid"><div><label>الوصف</label><input id="raDesc" value="${esc(r.desc)}"></div><div><label>السعة</label><input id="raCap" type="number" value="${r.capacity}"></div></div>${micInput}<button class="black" style="width:100%" onclick="saveRoomSettings()">حفظ إعدادات الغرفة</button></div><div class="title" style="margin-top:10px">الأعضاء داخل الغرفة</div><div class="moderation-list">${rows||`<div class="muted" style="padding:12px;text-align:center">لا يوجد أعضاء حاليًا.</div>`}</div><div class="title" style="margin-top:10px">المحظورون</div><div>${bans||`<div class="muted">لا توجد أسماء محظورة.</div>`}</div>${del}</div>`);
+
+  const bans=st.banned.map(n=>`
+   <div class="member-row">
+    <div class="member-meta">
+     <b>${esc(n)}</b>
+     <small>محظور في ${esc(r.name)}</small>
+    </div>
+    <button class="black" onclick='moderate(${JSON.stringify(r.name)},${JSON.stringify(n)},"unban")'>
+     رفع الحظر
+    </button>
+   </div>
+  `).join("");
+
+  const micInput=r.kind==="voice"
+   ?`<label>عدد المايكات</label><input id="raMics" type="number" value="${r.mics||4}">`
+   :"";
+
+  const del=r.name!=="الغرفة العامة"&&r.name!=="غرفة الصوت"
+   ?`<button class="red" style="width:100%;margin-top:10px" onclick='deleteRoom(${JSON.stringify(r.name)})'>حذف الغرفة</button>`
+   :"";
+
+  modal(`
+   <div class="boxhead">
+    إدارة ${esc(r.name)}
+    <button class="close" onclick="closeM()">×</button>
+   </div>
+
+   <div class="boxbody">
+    <div class="notice">
+     الكتم والطرد والحظر تعمل على هذه الغرفة فقط.
+    </div>
+
+    <div class="room-admin">
+     <b>إعدادات الغرفة</b>
+
+     <div class="settings-grid">
+      <div>
+       <label>الوصف</label>
+       <input id="raDesc" value="${esc(r.desc||"")}">
+      </div>
+
+      <div>
+       <label>السعة</label>
+       <input id="raCap" type="number" value="${r.capacity}">
+      </div>
+     </div>
+
+     ${micInput}
+
+     <button class="black" style="width:100%" onclick="saveRoomSettings()">
+      حفظ إعدادات الغرفة
+     </button>
+    </div>
+
+    <div class="title" style="margin-top:10px">الأعضاء داخل الغرفة</div>
+
+    <div class="moderation-list">
+     ${rows||`<div class="muted" style="padding:12px;text-align:center">لا يوجد أعضاء حاليًا.</div>`}
+    </div>
+
+    <div class="title" style="margin-top:10px">المحظورون</div>
+
+    <div>
+     ${bans||`<div class="muted">لا توجد أسماء محظورة.</div>`}
+    </div>
+
+    ${del}
+   </div>
+  `);
  }catch(e){alert(e.message)}
 }
-async function saveRoomSettings(){try{await api("/api/rooms/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:currentRoom,desc:raDesc.value,capacity:raCap.value,mics:window.raMics?.value||4})});alert("تم حفظ إعدادات الغرفة");roomAdmin()}catch(e){alert(e.message)}}
-async function moderate(room,to,action){const mins=prompt(action==="ban"?"مدة الحظر بالدقائق:":action==="kick"?"مدة الطرد بالدقائق:":"مدة الكتم بالدقائق:",action==="ban"?60:10);if(!mins)return;try{await api("/api/room/moderate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({room,to,action,minutes:mins})});alert("تم تنفيذ الإجراء");roomAdmin()}catch(e){alert(e.message)}}
-async function deleteRoom(name){if(!confirm("حذف الغرفة "+name+"؟"))return;try{await api("/api/rooms/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});currentRoom="الغرفة العامة";closeM();show("rooms")}catch(e){alert(e.message)}}
 
-function connect(){if(socket)socket.disconnect();socket=io();socket.emit("join",{sid,room:currentRoom});socket.on("history",a=>a.forEach(add));socket.on("message",add);socket.on("private",d=>{if(d.to===me.name&&d.from===privateToName)pmsgs.insertAdjacentHTML("beforeend",`<div class="msg"><div class="ava">👤</div><div><div class="bubble"><div class="name">${esc(d.from)}</div>${esc(d.text)}</div></div></div>`)});socket.on("call-offer",async d=>{if(Number(me.likes||0)<500)return; if(!confirm(`مكالمة ${d.from} — قبول؟`))return; try{rtcTarget=d.from;rtcKind=d.video?"video":"audio";rtc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:rtcKind==="video"});stream.getTracks().forEach(t=>rtc.addTrack(t,stream));rtc.onicecandidate=e=>{if(e.candidate)socket.emit("ice",{to:d.from,candidate:e.candidate})};rtc.ontrack=e=>{let v=document.getElementById("remoteMedia");if(!v){v=document.createElement(rtcKind==="video"?"video":"audio");v.id="remoteMedia";v.playsInline=true;v.autoplay=true;document.body.appendChild(v)}v.srcObject=e.streams[0]};await rtc.setRemoteDescription(d.offer);const ans=await rtc.createAnswer();await rtc.setLocalDescription(ans);socket.emit("call-answer",{to:d.from,answer:ans});}catch(e){alert(e.message)}});socket.on("call-answer",async d=>{if(rtc)try{await rtc.setRemoteDescription(d.answer)}catch(e){}});socket.on("ice",async d=>{if(rtc&&d.candidate)try{await rtc.addIceCandidate(d.candidate)}catch(e){}});socket.on("room-denied",d=>alert(d.message));socket.on("room-error",d=>alert(d.message));socket.on("room-kicked",d=>{alert(d.action==="ban"?"تم حظرك من الغرفة":"تم طردك من الغرفة");currentRoom="الغرفة العامة";show("rooms")});socket.on("mic-state",()=>{if(currentRoom==="غرفة الصوت")show("voice")})}
-function add(m){msgs.insertAdjacentHTML("beforeend",`<div class="msgline"><div class="ava">👤</div><div class="msgbody"><div><div class="bubble"><div class="name">${esc(m.name)}</div>${esc(m.text)}</div><span class="msgtools"><button onclick="reactMsg('❤️')">♥</button><button onclick="reactMsg('👍')">👍</button></span></div><div class="time">${new Date(m.time).toLocaleTimeString("ar-IQ",{hour:"2-digit",minute:"2-digit"})}</div></div></div>`);msgs.scrollTop=msgs.scrollHeight}
-function reactMsg(e){alert('تفاعل '+e+' مع الرسالة')}
-function send(){let v=msg.value.trim();if(!v)return;socket.emit("message",{text:v});msg.value=""}
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-function openRoom(n){currentRoom=n;if(n==="الغرفة العامة"||n==="غرفة الأصدقاء"||n==="غرفة الحب"){show("rooms");return}if(n==="غرفة الصوت"){show("voice");return}show("rooms")}
-function rules(){modal(`<div class="boxhead">قوانين الغرفة<button class="close" onclick="closeM()">×</button></div><div class="boxbody"><p>الغرفة العامة: كتابة نصية فقط.</p><p>لا صور ولا فيديو ولا تسجيل صوت ولا مكالمات.</p><p>الإعجاب: انتظار 10 ثوانٍ بين كل إعجاب.</p><p>400 إعجاب: التنبيهات. 500 إعجاب: الصور والفيديو والخصائص المحددة.</p></div>`)}
-async function voiceView(){
- let st;try{st=await api(`/api/room/status?room=${encodeURIComponent("غرفة الصوت")}`)}catch(e){return `<main class="layout"><section class="card" style="padding:15px"><div class="notice">${esc(e.message)}</div></section></main>`}
- const seats=st.mics||[]; const total=st.room.mics||4;
- return `<main class="layout"><aside class="card side"><div class="title">غرف الصوت</div>${rooms.filter(r=>r[1]==="غرفة الصوت").map(r=>`<div class="room active"><div class="pic">🎙️</div><div><b>${r[1]}</b><div class="muted">${r[2]}</div></div><span class="count">${r[3]}</span></div>`).join("")}<div class="room-tools"><button onclick="show('rooms')">الغرف</button></div>${me.admin?`<div class="room-admin"><b>إدارة</b><button class="black" style="width:100%;margin-top:6px" onclick="roomAdmin()">إدارة الغرفة</button></div>`:""}</aside><section class="card" style="padding:10px"><div class="voice-stage"><div class="voice-top"><strong>🎙️ غرفة الصوت</strong><span class="tag">${st.people.length} متصل</span><span class="tag">${seats.length}/${total} مايك</span></div><div class="notice">المايك موجود هنا فقط. الغرفة العامة تبقى كتابة نصية فقط.</div><div class="mic-grid">${Array.from({length:total},(_,i)=>{const n=seats[i];return `<div class="mic-seat ${n?"on":""}">${n?`<div class="mic-avatar">🎙️</div><b>${esc(n)}</b><small>يتحدث الآن</small>`:`<div class="mic-avatar">🎤</div><small>مايك فارغ</small>`}</div>`}).join("")}</div><div class="voice-controls"><button class="black" onclick="toggleMic(true)">🎙️ تشغيل المايك</button><button class="black" onclick="toggleMic(false)">🔇 إيقاف المايك</button><button class="black" onclick="requestMic()">✋ طلب المايك</button><button class="red" onclick="show('rooms')">🚪 خروج</button></div><div class="mic-request">ℹ️ طلب المايك يرسل إشعارًا للمشرف، ولا يسمح باستخدام مايك الغرفة العامة.</div></div></section>${people()}</main>`
+async function saveRoomSettings(){
+ try{
+  const desc=document.getElementById("raDesc")?.value||"";
+  const capacity=document.getElementById("raCap")?.value||50;
+  const mics=document.getElementById("raMics")?.value||4;
+
+  await api("/api/rooms/update",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    name:currentRoom,
+    desc,
+    capacity,
+    mics
+   })
+  });
+
+  alert("تم حفظ إعدادات الغرفة");
+  roomAdmin();
+ }catch(e){alert(e.message)}
 }
-async function toggleMic(on){try{if(on&&navigator.mediaDevices?.getUserMedia){try{window.rimazMic=await navigator.mediaDevices.getUserMedia({audio:true})}catch(e){return alert("السماح بالمايك مطلوب من المتصفح")}}if(!on&&window.rimazMic){window.rimazMic.getTracks().forEach(t=>t.stop());window.rimazMic=null}await api("/api/room/mic",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({room:"غرفة الصوت",on})});show("voice")}catch(e){alert(e.message)}}
-async function requestMic(){try{await api("/api/room/mic-request",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({room:"غرفة الصوت"})});alert("تم إرسال طلب المايك للمشرف 🎙️")}catch(e){alert(e.message)}}
-function privateView(){let can=Number(me.likes||0)>=500;return `<main class="layout"><aside class="card side"><div class="title">المحادثات الخاصة</div><div class="notice">الخاص يدعم الصور والفيديو والصوت والمكالمات حسب الصلاحية.</div>${["ريماز","Queen","علي العراقي","نور","كرار"].map(x=>`<div class="member"><div class="ava">👤</div><b style="flex:1">${x}</b><button class="black" onclick="privateTo('${x}')">فتح</button></div>`).join("")}</aside><section class="card chat"><div class="chathead"><strong id="ptitle">المحادثة الخاصة</strong><span class="tag">🔒 خاص</span></div><div class="room-meta"><b>وسائط خاصة</b><span class="sep">•</span><span>صورة</span><span class="sep">•</span><span>فيديو</span><span class="sep">•</span><span>صوت</span><span class="sep">•</span><span>مكالمات</span></div><div class="messages" id="pmsgs"><div class="room-banner">اختر عضوًا من القائمة لفتح المحادثة الخاصة.</div><div class="notice">${can?'تم فتح صلاحيات الوسائط عند 500 إعجاب.':'الصور والفيديو والوسائط تُفتح عند 500 إعجاب.'}</div></div><div class="quickbar"><button onclick="insertPrivate('😊')">😊</button><button onclick="insertPrivate('❤️')">❤️</button><button onclick="insertPrivate('😂')">😂</button><button onclick="insertPrivate('🌹')">🌹</button><button onclick="insertPrivate('👍')">👍</button></div><div class="compose"><button class="black ${can?'':'locked'}" onclick="uploadMedia()">📎</button><button class="black ${can?"":"locked"}" onclick="startCall(false)">📞</button><button class="black ${can?"":"locked"}" onclick="startCall(true)">📹</button><button class="black ${can?"":"locked"}" onclick="recordVoice()">🎙️</button><input id="pmsg" placeholder="اكتب رسالتك الخاصة..." onkeydown="if(event.key==='Enter')sendPrivate()"><button class="purple" onclick="sendPrivate()">إرسال</button></div></section>${people()}</main>`}
-function insertPrivate(e){if(pmsg){pmsg.value+=e;pmsg.focus()}}
+
+async function moderate(room,to,action){
+ const mins=prompt(
+  action==="ban"?"مدة الحظر بالدقائق:":
+  action==="kick"?"مدة الطرد بالدقائق:":
+  "مدة الكتم بالدقائق:",
+  action==="ban"?60:10
+ );
+
+ if(!mins)return;
+
+ try{
+  await api("/api/room/moderate",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({room,to,action,minutes:mins})
+  });
+
+  alert("تم تنفيذ الإجراء");
+  roomAdmin();
+ }catch(e){alert(e.message)}
+}
+
+async function deleteRoom(name){
+ if(!confirm("حذف الغرفة "+name+"؟"))return;
+
+ try{
+  await api("/api/rooms/delete",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({name})
+  });
+
+  currentRoom="الغرفة العامة";
+  closeM();
+  show("rooms");
+ }catch(e){alert(e.message)}
+}
+
+function connect(){
+ if(socket){
+  socket.disconnect();
+  socket=null;
+ }
+
+ socket=io();
+
+ socket.emit("join",{
+  sid,
+  room:currentRoom
+ });
+
+ socket.on("history",a=>{
+  a.forEach(add);
+ });
+
+ socket.on("message",add);
+
+ socket.on("private",d=>{
+  if(d.to===me.name){
+   const box=document.getElementById("pmsgs");
+   if(box){
+    box.insertAdjacentHTML(
+     "beforeend",
+     `<div class="msg">
+      <div class="ava">👤</div>
+      <div>
+       <div class="bubble">
+        <div class="name">${esc(d.from)}</div>
+        ${esc(d.text)}
+       </div>
+      </div>
+     </div>`
+    );
+
+    box.scrollTop=box.scrollHeight;
+   }
+  }
+ });
+
+ socket.on("call-offer",async d=>{
+  if(Number(me.likes||0)<500)return;
+
+  if(!confirm(`مكالمة ${d.from} — قبول؟`))return;
+
+  try{
+   rtcTarget=d.from;
+   rtcKind=d.video?"video":"audio";
+   pendingIce=[];
+
+   rtc=new RTCPeerConnection({
+    iceServers:[{urls:"stun:stun.l.google.com:19302"}]
+   });
+
+   const stream=await navigator.mediaDevices.getUserMedia({
+    audio:true,
+    video:rtcKind==="video"
+   });
+
+   window.rimazCallStream=stream;
+
+   stream.getTracks().forEach(t=>rtc.addTrack(t,stream));
+
+   rtc.onicecandidate=e=>{
+    if(e.candidate){
+     socket.emit("ice",{
+      to:d.from,
+      candidate:e.candidate
+     });
+    }
+   };
+
+   rtc.ontrack=e=>{
+    let v=document.getElementById("remoteMedia");
+
+    if(!v){
+     v=document.createElement(rtcKind==="video"?"video":"audio");
+     v.id="remoteMedia";
+     v.playsInline=true;
+     v.autoplay=true;
+     v.controls=true;
+     v.style="position:fixed;right:12px;bottom:80px;z-index:120;max-width:80vw;max-height:45vh;background:#111;border-radius:12px";
+     document.body.appendChild(v);
+    }
+
+    v.srcObject=e.streams[0];
+   };
+
+   await rtc.setRemoteDescription(d.offer);
+
+   for(const c of pendingIce){
+    try{await rtc.addIceCandidate(c)}catch(e){}
+   }
+   pendingIce=[];
+
+   const ans=await rtc.createAnswer();
+
+   await rtc.setLocalDescription(ans);
+
+   socket.emit("call-answer",{
+    to:d.from,
+    answer:ans
+   });
+
+  }catch(e){
+   alert(e.message||"تعذر قبول المكالمة");
+  }
+ });
+
+ socket.on("call-answer",async d=>{
+  if(rtc){
+   try{
+    await rtc.setRemoteDescription(d.answer);
+
+    for(const c of pendingIce){
+     try{await rtc.addIceCandidate(c)}catch(e){}
+    }
+
+    pendingIce=[];
+   }catch(e){}
+  }
+ });
+
+ socket.on("ice",async d=>{
+  if(!d.candidate)return;
+
+  if(rtc && rtc.remoteDescription){
+   try{
+    await rtc.addIceCandidate(d.candidate);
+   }catch(e){}
+  }else{
+   pendingIce.push(d.candidate);
+  }
+ });
+
+ socket.on("room-denied",d=>alert(d.message));
+ socket.on("room-error",d=>alert(d.message));
+
+ socket.on("room-kicked",d=>{
+  alert(d.action==="ban"?"تم حظرك من الغرفة":"تم طردك من الغرفة");
+  currentRoom="الغرفة العامة";
+  show("rooms");
+ });
+
+ socket.on("mic-state",()=>{
+  if(currentRoom==="غرفة الصوت")show("voice");
+ });
+}
+
+function add(m){
+ const box=document.getElementById("msgs");
+ if(!box)return;
+
+ box.insertAdjacentHTML(
+  "beforeend",
+  `<div class="msgline">
+   <div class="ava">👤</div>
+   <div class="msgbody">
+    <div>
+     <div class="bubble">
+      <div class="name">${esc(m.name)}</div>
+      ${esc(m.text)}
+     </div>
+
+     <span class="msgtools">
+      <button onclick="reactMsg('❤️')">♥</button>
+      <button onclick="reactMsg('👍')">👍</button>
+     </span>
+    </div>
+
+    <div class="time">
+     ${new Date(m.time).toLocaleTimeString("ar-IQ",{hour:"2-digit",minute:"2-digit"})}
+    </div>
+   </div>
+  </div>`
+ );
+
+ box.scrollTop=box.scrollHeight;
+}
+
+function reactMsg(e){
+ alert("تفاعل "+e+" مع الرسالة");
+}
+
+function send(){
+ const input=document.getElementById("msg");
+ if(!input || !socket)return;
+
+ const v=input.value.trim();
+ if(!v)return;
+
+ socket.emit("message",{text:v});
+ input.value="";
+}
+
+function esc(s){
+ return String(s??"").replace(
+  /[&<>"']/g,
+  c=>({
+   "&":"&amp;",
+   "<":"&lt;",
+   ">":"&gt;",
+   '"':"&quot;",
+   "'":"&#39;"
+  }[c])
+ );
+}
+
+function openRoom(n){
+ currentRoom=n;
+
+ if(n==="الغرفة العامة"||n==="غرفة الأصدقاء"||n==="غرفة الحب"){
+  show("rooms");
+  return;
+ }
+
+ if(n==="غرفة الصوت"){
+  show("voice");
+  return;
+ }
+
+ show("rooms");
+}
+
+function rules(){
+ modal(`
+  <div class="boxhead">
+   قوانين الغرفة
+   <button class="close" onclick="closeM()">×</button>
+  </div>
+
+  <div class="boxbody">
+   <p>الغرفة العامة: كتابة نصية فقط.</p>
+   <p>لا صور ولا فيديو ولا تسجيل صوت ولا مكالمات.</p>
+   <p>الإعجاب: انتظار 10 ثوانٍ بين كل إعجاب.</p>
+   <p>400 إعجاب: التنبيهات. 500 إعجاب: الصور والفيديو والخصائص المحددة.</p>
+  </div>
+ `);
+}
+
+async function voiceView(){
+ let st;
+
+ try{
+  st=await api(`/api/room/status?room=${encodeURIComponent("غرفة الصوت")}`);
+ }catch(e){
+  return `
+   <main class="layout">
+    <section class="card" style="padding:15px">
+     <div class="notice">${esc(e.message)}</div>
+    </section>
+   </main>
+  `;
+ }
+
+ const seats=Array.isArray(st.mics)?st.mics:[];
+ const total=Number(st.room.mics)||4;
+
+ return `
+  <main class="layout">
+   <aside class="card side">
+    <div class="title">غرف الصوت</div>
+
+    ${rooms.filter(r=>r[1]==="غرفة الصوت").map(r=>`
+     <div class="room active">
+      <div class="pic">🎙️</div>
+      <div>
+       <b>${esc(r[1])}</b>
+       <div class="muted">${esc(r[2])}</div>
+      </div>
+      <span class="count">${r[3]}</span>
+     </div>
+    `).join("")}
+
+    <div class="room-tools">
+     <button onclick="show('rooms')">الغرف</button>
+    </div>
+
+    ${me.admin?`
+     <div class="room-admin">
+      <b>إدارة</b>
+      <button class="black" style="width:100%;margin-top:6px" onclick="roomAdmin()">
+       إدارة الغرفة
+      </button>
+     </div>
+    `:""}
+   </aside>
+
+   <section class="card" style="padding:10px">
+    <div class="voice-stage">
+     <div class="voice-top">
+      <strong>🎙️ غرفة الصوت</strong>
+      <span class="tag">${st.people.length} متصل</span>
+      <span class="tag">${seats.length}/${total} مايك</span>
+     </div>
+
+     <div class="notice">
+      المايك موجود هنا فقط. الغرفة العامة تبقى كتابة نصية فقط.
+     </div>
+
+     <div class="mic-grid">
+      ${Array.from({length:total},(_,i)=>{
+       const n=seats[i];
+
+       return `<div class="mic-seat ${n?"on":""}">
+        ${n
+         ?`<div class="mic-avatar">🎙️</div><b>${esc(n)}</b><small>يتحدث الآن</small>`
+         :`<div class="mic-avatar">🎤</div><small>مايك فارغ</small>`}
+       </div>`;
+      }).join("")}
+     </div>
+
+     <div class="voice-controls">
+      <button class="black" onclick="toggleMic(true)">🎙️ تشغيل المايك</button>
+      <button class="black" onclick="toggleMic(false)">🔇 إيقاف المايك</button>
+      <button class="black" onclick="requestMic()">✋ طلب المايك</button>
+      <button class="red" onclick="show('rooms')">🚪 خروج</button>
+     </div>
+
+     <div class="mic-request">
+      ℹ️ طلب المايك يرسل إشعارًا للمشرف، ولا يسمح باستخدام مايك الغرفة العامة.
+     </div>
+    </div>
+   </section>
+
+   ${people()}
+  </main>
+ `;
+}
+
+async function toggleMic(on){
+ try{
+  if(on&&navigator.mediaDevices?.getUserMedia){
+   try{
+    window.rimazMic=await navigator.mediaDevices.getUserMedia({audio:true});
+   }catch(e){
+    return alert("السماح بالمايك مطلوب من المتصفح");
+   }
+  }
+
+  if(!on&&window.rimazMic){
+   window.rimazMic.getTracks().forEach(t=>t.stop());
+   window.rimazMic=null;
+  }
+
+  await api("/api/room/mic",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    room:"غرفة الصوت",
+    on
+   })
+  });
+
+  show("voice");
+ }catch(e){alert(e.message)}
+}
+
+async function requestMic(){
+ try{
+  await api("/api/room/mic-request",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({room:"غرفة الصوت"})
+  });
+
+  alert("تم إرسال طلب المايك للمشرف 🎙️");
+ }catch(e){alert(e.message)}
+}
+
+async function getMembersForPrivate(){
+ try{
+  const list=await api("/api/members");
+  return Array.isArray(list)?list.filter(x=>x.name!==me.name):[];
+ }catch(e){
+  return [];
+ }
+}
+
+async function privateView(){
+ const can=Number(me.likes||0)>=500;
+ const list=await getMembersForPrivate();
+
+ return `
+  <main class="layout">
+   <aside class="card side">
+    <div class="title">المحادثات الخاصة</div>
+
+    <div class="notice">
+     الخاص يدعم الصور والفيديو والصوت والمكالمات حسب الصلاحية.
+    </div>
+
+    ${list.length
+     ?list.map(x=>`
+      <div class="member">
+       <div class="ava">${x.profile?.avatar||"👤"}</div>
+       <b style="flex:1">${esc(x.name)}</b>
+       <button class="black" onclick="privateTo(${JSON.stringify(x.name)})">
+        فتح
+       </button>
+      </div>
+     `).join("")
+     :`<div class="muted" style="padding:10px;text-align:center">لا يوجد أعضاء آخرون حاليًا.</div>`}
+   </aside>
+
+   <section class="card chat">
+    <div class="chathead">
+     <strong id="ptitle">المحادثة الخاصة</strong>
+     <span class="tag">🔒 خاص</span>
+    </div>
+
+    <div class="room-meta">
+     <b>وسائط خاصة</b>
+     <span class="sep">•</span><span>صورة</span>
+     <span class="sep">•</span><span>فيديو</span>
+     <span class="sep">•</span><span>صوت</span>
+     <span class="sep">•</span><span>مكالمات</span>
+    </div>
+
+    <div class="messages" id="pmsgs">
+     <div class="room-banner">
+      اختر عضوًا من القائمة لفتح المحادثة الخاصة.
+     </div>
+
+     <div class="notice">
+      ${can
+       ?"تم فتح صلاحيات الوسائط عند 500 إعجاب."
+       :"الصور والفيديو والوسائط تُفتح عند 500 إعجاب."}
+     </div>
+    </div>
+
+    <div class="quickbar">
+     <button onclick="insertPrivate('😊')">😊</button>
+     <button onclick="insertPrivate('❤️')">❤️</button>
+     <button onclick="insertPrivate('😂')">😂</button>
+     <button onclick="insertPrivate('🌹')">🌹</button>
+     <button onclick="insertPrivate('👍')">👍</button>
+    </div>
+
+    <div class="compose">
+     <button class="black ${can?'':'locked'}" onclick="uploadMedia()">📎</button>
+     <button class="black ${can?'':'locked'}" onclick="startCall(false)">📞</button>
+     <button class="black ${can?'':'locked'}" onclick="startCall(true)">📹</button>
+     <button class="black ${can?'':'locked'}" onclick="recordVoice()">🎙️</button>
+
+     <input id="pmsg" placeholder="اكتب رسالتك الخاصة..." onkeydown="if(event.key==='Enter')sendPrivate()">
+
+     <button class="purple" onclick="sendPrivate()">إرسال</button>
+    </div>
+   </section>
+
+   ${people()}
+  </main>
+ `;
+}
+
+function insertPrivate(e){
+ const input=document.getElementById("pmsg");
+
+ if(input){
+  input.value+=e;
+  input.focus();
+ }
+}
+
 async function recordVoice(){
  if(!privateToName)return alert("اختر شخصًا أولًا");
- if(Number(me.likes||0)<500)return alert("التسجيل الصوتي يفتح عند 500 إعجاب");
- if(!navigator.mediaDevices?.getUserMedia)return alert("المتصفح لا يدعم التسجيل الصوتي");
+
+ if(Number(me.likes||0)<500)
+  return alert("التسجيل الصوتي يفتح عند 500 إعجاب");
+
+ if(!navigator.mediaDevices?.getUserMedia)
+  return alert("المتصفح لا يدعم التسجيل الصوتي");
+
  try{
-   const stream=await navigator.mediaDevices.getUserMedia({audio:true});
-   const rec=new MediaRecorder(stream); const chunks=[];
-   rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
-   rec.onstop=async()=>{stream.getTracks().forEach(t=>t.stop()); const blob=new Blob(chunks,{type:rec.mimeType||"audio/webm"}); const fd=new FormData(); fd.append("file",blob,"voice.webm"); fd.append("to",privateToName); try{const j=await api("/api/media",{method:"POST",body:fd});pmsgs.insertAdjacentHTML("beforeend",`<div class="notice">🎙️ تسجيل صوتي خاص: <audio controls src="${j.url}"></audio></div>`)}catch(e){alert(e.message)}};
-   rec.start(); alert("بدأ التسجيل. اضغط موافق ثم التسجيل سيستمر 10 ثوانٍ."); setTimeout(()=>{if(rec.state!=="inactive")rec.stop()},10000);
- }catch(e){alert(e.message)}
-}
-let privateToName="";
-function privateTo(n){privateToName=n;ptitle.textContent="الخاص مع "+n}
-function sendPrivate(){let v=pmsg.value.trim();if(!v||!privateToName)return;socket.emit("private",{to:privateToName,text:v});pmsgs.insertAdjacentHTML("beforeend",`<div class="msg"><div class="ava">👤</div><div><div class="bubble"><div class="name">${esc(me.name)}</div>${esc(v)}</div></div></div>`);pmsg.value=""}
-function rankInfo(n){n=Number(n)||0;if(n>=500)return {name:"عضو ملكي",icon:"👑",next:null};if(n>=400)return {name:"عضو ماسي",icon:"💎",next:500};if(n>=300)return {name:"عضو فضي",icon:"🔷",next:400};if(n>=200)return {name:"عضو ذهبي",icon:"⭐",next:300};if(n>=100)return {name:"عضو مميز",icon:"🌟",next:200};if(n>=50)return {name:"مشارك نشط",icon:"🔥",next:100};return {name:"عضو جديد",icon:"✦",next:50}}
-function badgeInfo(n){n=Number(n)||0;return [{need:100,icon:"❤️",name:"المحبة"},{need:200,icon:"👑",name:"النجم"},{need:300,icon:"💎",name:"الماس"},{need:400,icon:"🔥",name:"النشاط"},{need:500,icon:"📷",name:"المصور"},{need:500,icon:"🎙️",name:"الصوت"},{need:500,icon:"🛡️",name:"التميز"}]}
-function rankBadgeHtml(n){const r=rankInfo(n);return `<span class="rank-pill"><span class="rank-icon">${r.icon}</span>${r.name}</span>`}
-function badgesHtml(n){return `<div class="badge-row">${badgeInfo(n).map(b=>`<div class="badge ${n>=b.need?"":"locked"}" title="${b.name} — ${b.need} إعجاب">${b.icon}<small>${b.need}</small></div>`).join("")}</div>`}
-function rankPanelHtml(n){const r=rankInfo(n);const prev=r.next?({50:0,100:50,200:100,300:200,400:300,500:400}[r.next]||0):500;const pct=r.next?Math.min(100,Math.round(((n-prev)/(r.next-prev))*100)):100;return `<div class="rank-panel"><div class="rank-title">${r.icon} ${r.name}</div><div class="muted">${r.next?`${n} إعجاب — باقي ${Math.max(0,r.next-n)} للوصول إلى الرتبة التالية`:`${n} إعجاب — أعلى رتبة حالياً`}</div><div class="rank-progress"><i style="width:${pct}%"></i></div></div>`}
-async function membersView(){
- const list=await api("/api/members");
- const myLikes=Number(me.likes||0), canNotice=myLikes>=400;
- return `<main class="layout"><aside class="card side"><div class="title">ملفي</div><div class="profile-card" style="grid-template-columns:1fr"><div class="profile-avatar">${me.profile?.avatar||"👤"}</div><div><b style="color:${esc(me.profile?.nameColor||"#222")}">${esc(me.name)}</b><div class="muted">${esc(me.profile?.status||"متصل الآن")}</div><div class="member-rank">${rankBadgeHtml(myLikes)}</div></div></div><div class="statrow"><div class="stat"><b>${myLikes}</b><br>إعجاب</div><div class="stat"><b>${me.level}</b><br>مستوى</div></div>${rankPanelHtml(myLikes)}<div class="profile-rank">الأوسمة</div>${badgesHtml(myLikes)}<div class="profile-buttons"><button class="black" onclick="profileView()">الملف</button><button class="black" onclick="notificationsView()">الإشعارات</button></div></aside><section class="card" style="padding:10px"><div class="title">قائمة الأعضاء</div><div class="notice">❤️ إعجاب واحد كل 10 ثوانٍ. الرتب تتدرج مع الإعجابات، والأوسمة تفتح تدريجياً.</div>${list.map(x=>{const own=x.name===me.name;return `<div class="member-row"><div class="avatar">${x.profile?.avatar||"👤"}</div><div class="member-meta"><b style="color:${esc(x.profile?.nameColor||"#222")}">${esc(x.name)} ${x.online?"🟢":"⚪"}</b><div class="member-rank">${rankBadgeHtml(x.likes)}</div><small>${esc(x.profile?.status||"عضو")} · <span class="like-count">❤️ ${x.likes}</span></small><div class="badge-row">${badgeInfo(x.likes).filter(b=>x.likes>=b.need).slice(0,4).map(b=>`<span class="badge" style="width:27px;height:27px;font-size:15px" title="${b.name}">${b.icon}</span>`).join("")}</div></div><button class="like-btn ${own?"locked":"ready"}" ${own?"disabled":""} onclick="like('${esc(x.name)}')">❤️ إعجاب</button></div>`}).join("")}${canNotice?`<div class="admin-box"><b>التنبيهات متاحة لك</b><div class="muted">يمكنك إرسال تنبيه لعضو عند بلوغ 400 إعجاب.</div><button class="black" style="width:100%;margin-top:6px" onclick="sendNoticePrompt()">إرسال تنبيه</button></div>`:""}${me.admin?`<div class="admin-box"><b>أدوات الإدارة</b><div class="muted">الإدارة فقط تستطيع زيادة إعجابات الأعضاء.</div><button class="black" style="width:100%;margin-top:6px" onclick="adminGrantPrompt()">إضافة إعجابات لعضو</button></div>`:""}</section>${people()}</main>`
-}
-async function like(n){try{const j=await api("/api/like",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({to:n})});alert(`تم إعطاء الإعجاب ❤️\nإعجابات ${n}: ${j.targetLikes}`);show("members")}catch(e){alert(e.message)}}
-async function profileView(){
- const p=await api("/api/profile"), likes=Number(p.likes||0);
- modal(`<div class="boxhead">الملف الشخصي <button class="close" onclick="closeM()">×</button></div><div class="boxbody"><div class="profile-card" style="background:${esc(p.profile.bgColor||"#f7f7f8")}"><div class="profile-avatar">${esc(p.profile.avatar||"👤")}</div><div><h2 style="margin:0;color:${esc(p.profile.nameColor||"#222")}">${esc(p.name)}</h2><div>${esc(p.profile.status||"")}</div><div class="profile-rank">${rankBadgeHtml(likes)}</div><div class="statrow"><div class="stat">❤️ <b>${likes}</b> إعجاب</div><div class="stat">المستوى <b>${p.level}</b></div></div></div></div>${rankPanelHtml(likes)}<div class="profile-rank">أوسمة العضو</div>${badgesHtml(likes)}<label>الرمز / الصورة</label><input id="pfAvatar" maxlength="4" value="${esc(p.profile.avatar||"👤")}"><label>الحالة</label><input id="pfStatus" maxlength="80" value="${esc(p.profile.status||"")}"><label>نبذة</label><textarea id="pfBio" rows="3" maxlength="300">${esc(p.profile.bio||"")}</textarea><div class="settings-grid"><div><label>لون الاسم</label><input id="pfNameColor" type="color" value="${esc(p.profile.nameColor||"#222222")}"></div><div><label>خلفية الملف</label><input id="pfBgColor" type="color" value="${esc(p.profile.bgColor||"#ffffff")}"></div></div><button class="black" style="width:100%;margin-top:8px" onclick="saveProfile()">حفظ الملف</button></div>`)
-}
-async function saveProfile(){try{const j=await api("/api/profile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({avatar:pfAvatar.value,status:pfStatus.value,bio:pfBio.value,nameColor:pfNameColor.value,bgColor:pfBgColor.value})});me.profile=j.profile;closeM();show("members")}catch(e){alert(e.message)}}
-async function notificationsView(){
- const ns=await api("/api/notifications");
- const unread=ns.filter(n=>!n.read).length;
- const rows=ns.map(n=>`<div class="notif ${n.read?"":"unread"}"><div class="notif-icon">${n.type==="like"?"❤️":"🔔"}</div><div class="notif-body"><b>${esc(n.from||"النظام")}</b><div>${esc(n.text||"")}</div><small>${new Date(n.time).toLocaleString("ar-IQ")}</small></div></div>`).join("");
- const send=Number(me.likes||0)>=400?`<button class="purple" style="width:100%;margin-top:6px" onclick="sendNoticePrompt()">إرسال تنبيه لعضو</button>`:"";
- modal(`<div class="boxhead">الإشعارات <button class="close" onclick="closeM()">×</button></div><div class="boxbody"><div class="notice">${unread?`لديك ${unread} إشعار غير مقروء`:`لا توجد إشعارات جديدة`}</div><div class="notice-list">${rows||`<div class="muted" style="text-align:center;padding:20px">لا توجد إشعارات بعد.</div>`}</div><button class="black" style="width:100%;margin-top:8px" onclick="markNotifications()">تحديد الكل كمقروء</button>${send}</div>`);
-}
-async function markNotifications(){try{await api("/api/notifications/read",{method:"POST"});notificationsView()}catch(e){alert(e.message)}}
-async function sendNoticePrompt(){if(Number(me.likes||0)<400)return alert("إرسال التنبيهات يفتح عند 400 إعجاب");const to=prompt("اسم العضو:");if(!to)return;const text=prompt("نص التنبيه:");if(!text)return;try{await api("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({to,text})});alert("تم إرسال التنبيه 🔔")}catch(e){alert(e.message)}}
-async function adminGrantPrompt(){if(!me.admin)return alert("هذا الإجراء للإدارة فقط");const to=prompt("اسم العضو المسجل:");if(!to)return;const amount=prompt("عدد الإعجابات المراد إضافتها:","10");if(!amount)return;try{const j=await api("/api/admin/grant-like",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({to,amount})});alert(`تمت الإضافة. الرصيد الجديد: ${j.likes}`);show("members")}catch(e){alert(e.message)}}
-async function refreshBell(){try{const ns=await api("/api/notifications");const c=ns.filter(n=>!n.read).length;const b=document.getElementById("bellCount");if(b){b.textContent=c>99?"99+":c;b.style.display=c?"grid":"none"}}catch(e){}}
-async function wallView(){let w=await api("/api/wall");return `<main class="layout"><aside class="card side"><div class="title">الحائط</div><p class="muted">منشورات الأعضاء.</p></aside><section class="card" style="padding:14px"><div class="title">الحائط</div><textarea id="post" style="width:100%;padding:10px" rows="3" placeholder="اكتب منشورك..."></textarea><button class="purple" style="width:100%;margin:5px 0" onclick="postWall()">نشر</button>${w.map(p=>`<div class="post"><b>${esc(p.name)}</b><p>${esc(p.text)}</p><span class="muted">❤️ ${p.likes||0}</span></div>`).join("")}</section>${people()}</main>`}
-async function postWall(){try{await api("/api/wall",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:post.value})});show("wall")}catch(e){alert(e.message)}}
-async function uploadMedia(){let s=await api("/api/state");if((me.likes||0)<500)return alert("الوسائط الخاصة تفتح عند 500 إعجاب");let f=document.createElement("input");f.type="file";f.accept="image/*,video/*,audio/*";f.onchange=async()=>{let fd=new FormData();fd.append("file",f.files[0]);fd.append("to",privateToName);try{let j=await api("/api/media",{method:"POST",body:fd});pmsgs.insertAdjacentHTML("beforeend",`<div class="notice">تم رفع ملف خاص: <a href="${j.url}" target="_blank">${esc(j.name)}</a></div>`)}catch(e){alert(e.message)}};f.click()}
-async function startCall(video){
- if(!privateToName)return alert("اختر شخصًا أولًا");
- if(Number(me.likes||0)<500)return alert("المكالمات الخاصة تفتح عند 500 إعجاب");
- if(!window.isSecureContext && location.hostname!=="localhost")return alert("المكالمات تحتاج HTTPS عند الاستضافة");
- try{
-   rtcTarget=privateToName; rtcKind=video?"video":"audio";
-   rtc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
-   const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:video});
-   window.rimazCallStream=stream; stream.getTracks().forEach(t=>rtc.addTrack(t,stream));
-   rtc.onicecandidate=e=>{if(e.candidate)socket.emit("ice",{to:privateToName,candidate:e.candidate})};
-   rtc.ontrack=e=>{let v=document.getElementById("remoteMedia");if(!v){v=document.createElement(video?"video":"audio");v.id="remoteMedia";v.playsInline=true;v.autoplay=true;v.controls=true;v.style="position:fixed;right:12px;bottom:80px;z-index:120;max-width:80vw;max-height:45vh;background:#111;border-radius:12px";document.body.appendChild(v)}v.srcObject=e.streams[0]};
-   const offer=await rtc.createOffer(); await rtc.setLocalDescription(offer); socket.emit("call-offer",{to:privateToName,offer,video});
-   alert(video?"تم إرسال طلب مكالمة فيديو 📹":"تم إرسال طلب مكالمة صوتية 📞");
- }catch(e){alert(e.message||"تعذر تشغيل المكالمة")}
-}
-function settings(){modal(`<div class="boxhead">الإعدادات<button class="close" onclick="closeM()">×</button></div><div class="boxbody"><div class="settings-grid"><div><label>اسم المستخدم</label><input value="${esc(me.name)}" disabled></div><div><label>الحالة</label><input value="${me.likes||0} إعجاب" disabled></div></div><div class="notice"><b>صلاحيات الحساب</b><br>0–399: دردشة + إعجاب<br>400: إرسال التنبيهات<br>500: الصور والفيديو والخصائص المحددة</div><button class="black" style="width:100%;margin-top:6px" onclick="profileView()">👤 الملف الشخصي</button><button class="black" style="width:100%;margin-top:6px" onclick="notificationsView()">🔔 الإشعارات</button><button class="black" style="width:100%;margin-top:6px" onclick="show('members');closeM()">👥 قائمة الأعضاء</button><button style="width:100%;margin-top:6px;background:#58b957;color:white;border:0;padding:12px;border-radius:3px;font-weight:900" onclick="closeM()">حفظ</button><button class="red" style="width:100%;margin-top:6px" onclick="logout()">تسجيل خروج</button></div>`)}
-async function logout(){await api("/api/logout",{method:"POST"});localStorage.removeItem("rimaz_sid");sid=null;me=null;if(socket)socket.disconnect();closeM();auth()}
-function modal(h){document.getElementById("box").innerHTML=h;document.getElementById("modal").classList.add("open")}function closeM(){document.getElementById("modal").classList.remove("open")}
-function bottomNav(active){
- return `<div class="bottom">
- <button class="${active==="members"?"active":""}" onclick="show('members')">👥 الأعضاء</button>
- <button class="${active==="private"?"active":""}" onclick="show('private')">💬 الخاص</button>
- <button class="${active==="rooms"?"active":""}" onclick="show('rooms')">🏠 الغرف</button>
- <button class="${active==="wall"?"active":""}" onclick="show('wall')">📝 الحائط</button>
- <button onclick="settings()">⚙ الضبط</button>
- </div>`
+  const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+  const rec=new MediaRecorder(stream);
+  const chunks=[];
+
+  rec.ondataavailable=e=>{
+   if(e.data.size)chunks.push(e.data);
+  };
+
+  rec.onstop=async()=>{
+   stream.getTracks().forEach(t=>t.stop());
+
+   const blob=new Blob(chunks,{
+    type:rec.mimeType||"audio/webm"
+   });
+
+   const fd=new FormData();
+   fd.append("file",blob,"voice.webm");
+   fd.append("to",privateToName);
+
+   try{
+    const j=await api("/api/media",{
+     method:"POST",
+     body:fd
+    });
+
+    const box=document.getElementById("pmsgs");
+
+    if(box){
+     box.insertAdjacentHTML(
+      "beforeend",
+      `<div class="notice">
+       🎙️ تسجيل صوتي خاص:
+       <audio controls src="${esc(j.url)}"></audio>
+      </div>`
+     );
+    }
+   }catch(e){
+    alert(e.message);
+   }
+  };
+
+  rec.start();
+
+  alert("بدأ التسجيل. سيستمر التسجيل 10 ثوانٍ.");
+
+  setTimeout(()=>{
+   if(rec.state!=="inactive")rec.stop();
+  },10000);
+
+ }catch(e){
+  alert(e.message);
+ }
 }
 
-async function show(page){let s=await api("/api/state");me=s.user;if(!me)return auth();await syncRooms();if(page==="rooms"){app.innerHTML=header(page)+roomsView()+bottomNav(page);connect()}else if(page==="voice"){app.innerHTML=header("rooms")+(await voiceView())+bottomNav("rooms")}else if(page==="private"){app.innerHTML=header(page)+privateView()+bottomNav(page);connect()}else if(page==="members"){app.innerHTML=header(page)+await membersView()+bottomNav(page)}else{app.innerHTML=header(page)+await wallView()+bottomNav(page)};refreshBell()}
+function privateTo(n){
+ privateToName=n;
+
+ const title=document.getElementById("ptitle");
+
+ if(title)
+  title.textContent="الخاص مع "+n;
+}
+
+function sendPrivate(){
+ const input=document.getElementById("pmsg");
+ const box=document.getElementById("pmsgs");
+
+ if(!input||!box||!privateToName||!socket)return;
+
+ const v=input.value.trim();
+
+ if(!v)return;
+
+ socket.emit("private",{
+  to:privateToName,
+  text:v
+ });
+
+ box.insertAdjacentHTML(
+  "beforeend",
+  `<div class="msg">
+   <div class="ava">👤</div>
+   <div>
+    <div class="bubble">
+     <div class="name">${esc(me.name)}</div>
+     ${esc(v)}
+    </div>
+   </div>
+  </div>`
+ );
+
+ input.value="";
+ box.scrollTop=box.scrollHeight;
+}
+
+function rankInfo(n){
+ n=Number(n)||0;
+
+ if(n>=500)return {name:"عضو ملكي",icon:"👑",next:null};
+ if(n>=400)return {name:"عضو ماسي",icon:"💎",next:500};
+ if(n>=300)return {name:"عضو فضي",icon:"🔷",next:400};
+ if(n>=200)return {name:"عضو ذهبي",icon:"⭐",next:300};
+ if(n>=100)return {name:"عضو مميز",icon:"🌟",next:200};
+ if(n>=50)return {name:"مشارك نشط",icon:"🔥",next:100};
+
+ return {name:"عضو جديد",icon:"✦",next:50};
+}
+
+function badgeInfo(n){
+ n=Number(n)||0;
+
+ return [
+  {need:100,icon:"❤️",name:"المحبة"},
+  {need:200,icon:"👑",name:"النجم"},
+  {need:300,icon:"💎",name:"الماس"},
+  {need:400,icon:"🔥",name:"النشاط"},
+  {need:500,icon:"📷",name:"المصور"},
+  {need:500,icon:"🎙️",name:"الصوت"},
+  {need:500,icon:"🛡️",name:"التميز"}
+ ];
+}
+
+function rankBadgeHtml(n){
+ const r=rankInfo(n);
+
+ return `<span class="rank-pill">
+  <span class="rank-icon">${r.icon}</span>
+  ${r.name}
+ </span>`;
+}
+
+function badgesHtml(n){
+ return `<div class="badge-row">
+  ${badgeInfo(n).map(b=>`
+   <div class="badge ${n>=b.need?"":"locked"}"
+    title="${esc(b.name)} — ${b.need} إعجاب">
+    ${b.icon}
+    <small>${b.need}</small>
+   </div>
+  `).join("")}
+ </div>`;
+}
+
+function rankPanelHtml(n){
+ const r=rankInfo(n);
+ const prev=r.next?({50:0,100:50,200:100,300:200,400:300,500:400}[r.next]||0):500;
+ const pct=r.next
+  ?Math.min(100,Math.round(((n-prev)/(r.next-prev))*100))
+  :100;
+
+ return `<div class="rank-panel">
+  <div class="rank-title">${r.icon} ${r.name}</div>
+
+  <div class="muted">
+   ${r.next
+    ?`${n} إعجاب — باقي ${Math.max(0,r.next-n)} للوصول إلى الرتبة التالية`
+    :`${n} إعجاب — أعلى رتبة حالياً`}
+  </div>
+
+  <div class="rank-progress">
+   <i style="width:${pct}%"></i>
+  </div>
+ </div>`;
+}
+
+async function membersView(){
+ const list=await api("/api/members");
+ const myLikes=Number(me.likes||0);
+ const canNotice=myLikes>=400;
+
+ return `
+  <main class="layout">
+   <aside class="card side">
+    <div class="title">ملفي</div>
+
+    <div class="profile-card" style="grid-template-columns:1fr">
+     <div class="profile-avatar">
+      ${me.profile?.avatar||"👤"}
+     </div>
+
+     <div>
+      <b style="color:${esc(me.profile?.nameColor||"#222")}">
+       ${esc(me.name)}
+      </b>
+
+      <div class="muted">
+       ${esc(me.profile?.status||"متصل الآن")}
+      </div>
+
+      <div class="member-rank">
+       ${rankBadgeHtml(myLikes)}
+      </div>
+     </div>
+    </div>
+
+    <div class="statrow">
+     <div class="stat">
+      <b>${myLikes}</b><br>إعجاب
+     </div>
+
+     <div class="stat">
+      <b>${me.level}</b><br>مستوى
+     </div>
+    </div>
+
+    ${rankPanelHtml(myLikes)}
+
+    <div class="profile-rank">الأوسمة</div>
+    ${badgesHtml(myLikes)}
+
+    <div class="profile-buttons">
+     <button class="black" onclick="profileView()">الملف</button>
+     <button class="black" onclick="notificationsView()">الإشعارات</button>
+    </div>
+   </aside>
+
+   <section class="card" style="padding:10px">
+    <div class="title">قائمة الأعضاء</div>
+
+    <div class="notice">
+     ❤️ إعجاب واحد كل 10 ثوانٍ. الرتب تتدرج مع الإعجابات، والأوسمة تفتح تدريجياً.
+    </div>
+
+    ${list.map(x=>{
+     const own=x.name===me.name;
+
+     return `<div class="member-row">
+      <div class="avatar">
+       ${x.profile?.avatar||"👤"}
+      </div>
+
+      <div class="member-meta">
+       <b style="color:${esc(x.profile?.nameColor||"#222")}">
+        ${esc(x.name)} ${x.online?"🟢":"⚪"}
+       </b>
+
+       <div class="member-rank">
+        ${rankBadgeHtml(x.likes)}
+       </div>
+
+       <small>
+        ${esc(x.profile?.status||"عضو")}
+        ·
+        <span class="like-count">❤️ ${x.likes}</span>
+       </small>
+
+       <div class="badge-row">
+        ${badgeInfo(x.likes)
+         .filter(b=>x.likes>=b.need)
+         .slice(0,4)
+         .map(b=>`
+          <span class="badge"
+           style="width:27px;height:27px;font-size:15px"
+           title="${esc(b.name)}">
+           ${b.icon}
+          </span>
+         `).join("")}
+       </div>
+      </div>
+
+      <button
+       class="like-btn ${own?"locked":"ready"}"
+       ${own?"disabled":""}
+       onclick="like(${JSON.stringify(x.name)})">
+       ❤️ إعجاب
+      </button>
+     </div>`;
+    }).join("")}
+
+    ${canNotice?`
+     <div class="admin-box">
+      <b>التنبيهات متاحة لك</b>
+      <div class="muted">
+       يمكن إرسال تنبيه لعضو عند بلوغ 400 إعجاب.
+      </div>
+      <button class="black" style="width:100%;margin-top:6px" onclick="sendNoticePrompt()">
+       إرسال تنبيه
+      </button>
+     </div>
+    `:""}
+
+    ${me.admin?`
+     <div class="admin-box">
+      <b>أدوات الإدارة</b>
+      <div class="muted">
+       الإدارة فقط تستطيع زيادة إعجابات الأعضاء.
+      </div>
+      <button class="black" style="width:100%;margin-top:6px" onclick="adminGrantPrompt()">
+       إضافة إعجابات لعضو
+      </button>
+     </div>
+    `:""}
+   </section>
+
+   ${people()}
+  </main>
+ `;
+}
+
+async function like(n){
+ try{
+  const j=await api("/api/like",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({to:n})
+  });
+
+  alert(`تم إعطاء الإعجاب ❤️\nإعجابات ${n}: ${j.targetLikes}`);
+
+  show("members");
+ }catch(e){
+  alert(e.message);
+ }
+}
+
+async function profileView(){
+ const p=await api("/api/profile");
+ const likes=Number(p.likes||0);
+
+ modal(`
+  <div class="boxhead">
+   الملف الشخصي
+   <button class="close" onclick="closeM()">×</button>
+  </div>
+
+  <div class="boxbody">
+   <div class="profile-card" style="background:${esc(p.profile.bgColor||"#f7f7f8")}">
+    <div class="profile-avatar">
+     ${esc(p.profile.avatar||"👤")}
+    </div>
+
+    <div>
+     <h2 style="margin:0;color:${esc(p.profile.nameColor||"#222")}">
+      ${esc(p.name)}
+     </h2>
+
+     <div>${esc(p.profile.status||"")}</div>
+
+     <div class="profile-rank">
+      ${rankBadgeHtml(likes)}
+     </div>
+
+     <div class="statrow">
+      <div class="stat">
+       ❤️ <b>${likes}</b> إعجاب
+      </div>
+
+      <div class="stat">
+       المستوى <b>${p.level}</b>
+      </div>
+     </div>
+    </div>
+   </div>
+
+   ${rankPanelHtml(likes)}
+
+   <div class="profile-rank">أوسمة العضو</div>
+   ${badgesHtml(likes)}
+
+   <label>الرمز / الصورة</label>
+   <input id="pfAvatar" maxlength="4" value="${esc(p.profile.avatar||"👤")}">
+
+   <label>الحالة</label>
+   <input id="pfStatus" maxlength="80" value="${esc(p.profile.status||"")}">
+
+   <label>نبذة</label>
+   <textarea id="pfBio" rows="3" maxlength="300">${esc(p.profile.bio||"")}</textarea>
+
+   <div class="settings-grid">
+    <div>
+     <label>لون الاسم</label>
+     <input id="pfNameColor" type="color" value="${esc(p.profile.nameColor||"#222222")}">
+    </div>
+
+    <div>
+     <label>خلفية الملف</label>
+     <input id="pfBgColor" type="color" value="${esc(p.profile.bgColor||"#ffffff")}">
+    </div>
+   </div>
+
+   <button class="black" style="width:100%;margin-top:8px" onclick="saveProfile()">
+    حفظ الملف
+   </button>
+  </div>
+ `);
+}
+
+async function saveProfile(){
+ try{
+  const j=await api("/api/profile",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    avatar:document.getElementById("pfAvatar")?.value||"👤",
+    status:document.getElementById("pfStatus")?.value||"",
+    bio:document.getElementById("pfBio")?.value||"",
+    nameColor:document.getElementById("pfNameColor")?.value||"#222222",
+    bgColor:document.getElementById("pfBgColor")?.value||"#ffffff"
+   })
+  });
+
+  me.profile=j.profile;
+  closeM();
+  show("members");
+ }catch(e){alert(e.message)}
+}
+
+async function notificationsView(){
+ try{
+  const ns=await api("/api/notifications");
+  const unread=ns.filter(n=>!n.read).length;
+
+  const rows=ns.map(n=>`
+   <div class="notif ${n.read?"":"unread"}">
+    <div class="notif-icon">
+     ${n.type==="like"?"❤️":"🔔"}
+    </div>
+
+    <div class="notif-body">
+     <b>${esc(n.from||"النظام")}</b>
+     <div>${esc(n.text||"")}</div>
+     <small>${new Date(n.time).toLocaleString("ar-IQ")}</small>
+    </div>
+   </div>
+  `).join("");
+
+  const send=Number(me.likes||0)>=400
+   ?`<button class="purple" style="width:100%;margin-top:6px" onclick="sendNoticePrompt()">إرسال تنبيه لعضو</button>`
+   :"";
+
+  modal(`
+   <div class="boxhead">
+    الإشعارات
+    <button class="close" onclick="closeM()">×</button>
+   </div>
+
+   <div class="boxbody">
+    <div class="notice">
+     ${unread
+      ?`لديك ${unread} إشعار غير مقروء`
+      :"لا توجد إشعارات جديدة"}
+    </div>
+
+    <div class="notice-list">
+     ${rows||`
+      <div class="muted" style="text-align:center;padding:20px">
+       لا توجد إشعارات بعد.
+      </div>
+     `}
+    </div>
+
+    <button class="black" style="width:100%;margin-top:8px" onclick="markNotifications()">
+     تحديد الكل كمقروء
+    </button>
+
+    ${send}
+   </div>
+  `);
+
+  await refreshBell();
+ }catch(e){
+  alert(e.message);
+ }
+}
+
+async function markNotifications(){
+ try{
+  await api("/api/notifications/read",{
+   method:"POST"
+  });
+
+  await notificationsView();
+  await refreshBell();
+ }catch(e){
+  alert(e.message);
+ }
+}
+
+async function sendNoticePrompt(){
+ if(Number(me.likes||0)<400)
+  return alert("إرسال التنبيهات يفتح عند 400 إعجاب");
+
+ const to=prompt("اسم العضو:");
+ if(!to)return;
+
+ const text=prompt("نص التنبيه:");
+ if(!text)return;
+
+ try{
+  await api("/api/notify",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({to,text})
+  });
+
+  alert("تم إرسال التنبيه 🔔");
+ }catch(e){
+  alert(e.message);
+ }
+}
+
+async function adminGrantPrompt(){
+ if(!me.admin)return alert("هذا الإجراء للإدارة فقط");
+
+ const to=prompt("اسم العضو المسجل:");
+ if(!to)return;
+
+ const amount=prompt("عدد الإعجابات المراد إضافتها:","10");
+ if(!amount)return;
+
+ try{
+  const j=await api("/api/admin/grant-like",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({to,amount})
+  });
+
+  alert(`تمت الإضافة. الرصيد الجديد: ${j.likes}`);
+  show("members");
+ }catch(e){
+  alert(e.message);
+ }
+}
+
+async function refreshBell(){
+ try{
+  const ns=await api("/api/notifications");
+  const c=ns.filter(n=>!n.read).length;
+  const b=document.getElementById("bellCount");
+
+  if(b){
+   b.textContent=c>99?"99+":c;
+   b.style.display=c?"grid":"none";
+  }
+ }catch(e){}
+}
+
+async function wallView(){
+ let w=await api("/api/wall");
+
+ return `
+  <main class="layout">
+   <aside class="card side">
+    <div class="title">الحائط</div>
+    <p class="muted">منشورات الأعضاء.</p>
+   </aside>
+
+   <section class="card" style="padding:14px">
+    <div class="title">الحائط</div>
+
+    <textarea id="post" style="width:100%;padding:10px" rows="3" placeholder="اكتب منشورك..."></textarea>
+
+    <button class="purple" style="width:100%;margin:5px 0" onclick="postWall()">
+     نشر
+    </button>
+
+    ${w.map(p=>`
+     <div class="post">
+      <b>${esc(p.name)}</b>
+      <p>${esc(p.text)}</p>
+      <span class="muted">❤️ ${p.likes||0}</span>
+     </div>
+    `).join("")}
+   </section>
+
+   ${people()}
+  </main>
+ `;
+}
+
+async function postWall(){
+ try{
+  const input=document.getElementById("post");
+
+  await api("/api/wall",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    text:input?.value||""
+   })
+  });
+
+  show("wall");
+ }catch(e){
+  alert(e.message);
+ }
+}
+
+async function uploadMedia(){
+ if((me.likes||0)<500)
+  return alert("الوسائط الخاصة تفتح عند 500 إعجاب");
+
+ if(!privateToName)
+  return alert("اختر شخصًا أولًا");
+
+ let f=document.createElement("input");
+
+ f.type="file";
+ f.accept="image/*,video/*,audio/*";
+
+ f.onchange=async()=>{
+  if(!f.files?.[0])return;
+
+  let fd=new FormData();
+
+  fd.append("file",f.files[0]);
+  fd.append("to",privateToName);
+
+  try{
+   let j=await api("/api/media",{
+    method:"POST",
+    body:fd
+   });
+
+   const box=document.getElementById("pmsgs");
+
+   if(box){
+    box.insertAdjacentHTML(
+     "beforeend",
+     `<div class="notice">
+      تم رفع ملف خاص:
+      <a href="${esc(j.url)}" target="_blank">${esc(j.name)}</a>
+     </div>`
+    );
+   }
+  }catch(e){
+   alert(e.message);
+  }
+ };
+
+ f.click();
+}
+
+async function startCall(video){
+ if(!privateToName)
+  return alert("اختر شخصًا أولًا");
+
+ if(Number(me.likes||0)<500)
+  return alert("المكالمات الخاصة تفتح عند 500 إعجاب");
+
+ if(!window.isSecureContext&&location.hostname!=="localhost")
+  return alert("المكالمات تحتاج HTTPS عند الاستضافة");
+
+ if(!navigator.mediaDevices?.getUserMedia)
+  return alert("المتصفح لا يدعم المكالمات");
+
+ if(!socket)
+  return alert("الاتصال بالخادم غير جاهز، حاول مرة ثانية");
+
+ try{
+  rtcTarget=privateToName;
+  rtcKind=video?"video":"audio";
+  pendingIce=[];
+
+  if(rtc){
+   try{rtc.close()}catch(e){}
+   rtc=null;
+  }
+
+  rtc=new RTCPeerConnection({
+   iceServers:[
+    {urls:"stun:stun.l.google.com:19302"}
+   ]
+  });
+
+  const stream=await navigator.mediaDevices.getUserMedia({
+   audio:true,
+   video:video
+  });
+
+  window.rimazCallStream=stream;
+
+  stream.getTracks().forEach(t=>rtc.addTrack(t,stream));
+
+  rtc.onicecandidate=e=>{
+   if(e.candidate){
+    socket.emit("ice",{
+     to:privateToName,
+     candidate:e.candidate
+    });
+   }
+  };
+
+  rtc.ontrack=e=>{
+   let v=document.getElementById("remoteMedia");
+
+   if(!v){
+    v=document.createElement(video?"video":"audio");
+    v.id="remoteMedia";
+    v.playsInline=true;
+    v.autoplay=true;
+    v.controls=true;
+
+    v.style="position:fixed;right:12px;bottom:80px;z-index:120;max-width:80vw;max-height:45vh;background:#111;border-radius:12px";
+
+    document.body.appendChild(v);
+   }
+
+   v.srcObject=e.streams[0];
+
+   if(v.play){
+    v.play().catch(()=>{});
+   }
+  };
+
+  const offer=await rtc.createOffer();
+
+  await rtc.setLocalDescription(offer);
+
+  socket.emit("call-offer",{
+   to:privateToName,
+   offer,
+   video
+  });
+
+  alert(video
+   ?"تم إرسال طلب مكالمة فيديو 📹"
+   :"تم إرسال طلب مكالمة صوتية 📞");
+
+ }catch(e){
+  alert(e.message||"تعذر تشغيل المكالمة");
+ }
+}
+
+function settings(){
+ modal(`
+  <div class="boxhead">
+   الإعدادات
+   <button class="close" onclick="closeM()">×</button>
+  </div>
+
+  <div class="boxbody">
+   <div class="settings-grid">
+    <div>
+     <label>اسم المستخدم</label>
+     <input value="${esc(me.name)}" disabled>
+    </div>
+
+    <div>
+     <label>الحالة</label>
+     <input value="${me.likes||0} إعجاب" disabled>
+    </div>
+   </div>
+
+   <div class="notice">
+    <b>صلاحيات الحساب</b><br>
+    0–399: دردشة + إعجاب<br>
+    400: إرسال التنبيهات<br>
+    500: الصور والفيديو والخصائص المحددة
+   </div>
+
+   <button class="black" style="width:100%;margin-top:6px" onclick="profileView()">
+    👤 الملف الشخصي
+   </button>
+
+   <button class="black" style="width:100%;margin-top:6px" onclick="notificationsView()">
+    🔔 الإشعارات
+   </button>
+
+   <button class="black" style="width:100%;margin-top:6px" onclick="show('members');closeM()">
+    👥 قائمة الأعضاء
+   </button>
+
+   <button style="width:100%;margin-top:6px;background:#58b957;color:white;border:0;padding:12px;border-radius:3px;font-weight:900" onclick="closeM()">
+    حفظ
+   </button>
+
+   <button class="red" style="width:100%;margin-top:6px" onclick="logout()">
+    تسجيل خروج
+   </button>
+  </div>
+ `);
+}
+
+async function logout(){
+ try{
+  await api("/api/logout",{
+   method:"POST"
+  });
+ }catch(e){}
+
+ sessionStorage.removeItem("rimaz_sid");
+
+ sid=null;
+ me=null;
+
+ if(socket){
+  socket.disconnect();
+  socket=null;
+ }
+
+ if(window.rimazCallStream){
+  try{
+   window.rimazCallStream.getTracks().forEach(t=>t.stop());
+  }catch(e){}
+  window.rimazCallStream=null;
+ }
+
+ if(window.rimazMic){
+  try{
+   window.rimazMic.getTracks().forEach(t=>t.stop());
+  }catch(e){}
+  window.rimazMic=null;
+ }
+
+ if(rtc){
+  try{rtc.close()}catch(e){}
+  rtc=null;
+ }
+
+ const remote=document.getElementById("remoteMedia");
+ if(remote)remote.remove();
+
+ closeM();
+ auth();
+}
+
+function modal(h){
+ document.getElementById("box").innerHTML=h;
+ document.getElementById("modal").classList.add("open");
+}
+
+function closeM(){
+ document.getElementById("modal").classList.remove("open");
+}
+
+function bottomNav(active){
+ return `<div class="bottom">
+  <button class="${active==="members"?"active":""}" onclick="show('members')">
+   👥 الأعضاء
+  </button>
+
+  <button class="${active==="private"?"active":""}" onclick="show('private')">
+   💬 الخاص
+  </button>
+
+  <button class="${active==="rooms"?"active":""}" onclick="show('rooms')">
+   🏠 الغرف
+  </button>
+
+  <button class="${active==="wall"?"active":""}" onclick="show('wall')">
+   📝 الحائط
+  </button>
+
+  <button onclick="settings()">
+   ⚙ الضبط
+  </button>
+ </div>`;
+}
+
+async function show(page){
+ try{
+  let s=await api("/api/state");
+  me=s.user;
+
+  if(!me){
+   auth();
+   return;
+  }
+
+  await syncRooms();
+
+  if(page==="rooms"){
+   app.innerHTML=header(page)+roomsView()+bottomNav(page);
+   connect();
+
+  }else if(page==="voice"){
+   app.innerHTML=header("rooms")+(await voiceView())+bottomNav("rooms");
+
+  }else if(page==="private"){
+   app.innerHTML=header(page)+(await privateView())+bottomNav(page);
+   connect();
+
+  }else if(page==="members"){
+   app.innerHTML=header(page)+await membersView()+bottomNav(page);
+
+  }else{
+   app.innerHTML=header(page)+await wallView()+bottomNav(page);
+  }
+
+  await refreshBell();
+
+ }catch(e){
+  console.error(e);
+ }
+}
+
 start();
 </script>
-</body></html>
+</body>
+</html>
