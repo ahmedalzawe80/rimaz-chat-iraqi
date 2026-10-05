@@ -737,95 +737,63 @@ async function show(page){
 }
 
 function header(active){
-  return `<header class="top">
+function header(active){
+  return `
+    <header class="top">
 
-  <div class="user">
-    <div class="ava">${esc(me?.profile?.avatar||"👤")}</div>
+      <div class="user">
+        <div class="ava">${esc(me?.profile?.avatar||"👤")}</div>
+        <span>
+          ${esc(me?.name||"")}
+          ${me?.type==="guest"?" (زائر)":""}
+        </span>
+      </div>
 
-    <span>
-      ${esc(me?.name||"")}
-      ${me?.type==="guest"?" (زائر)":""}
-    </span>
-  </div>
+      <div class="logo">
+        دردشة <span>ريماز عراقية</span>
+      </div>
 
-  <div class="logo">
-    دردشة <span>ريماز عراقية</span>
-  </div>
+      <nav class="nav">
 
-  <div class="top-stats">
+        <button class="${active==="rooms"?"on":""}"
+          onclick="show('rooms')">
+          الغرف
+        </button>
 
-    <div class="stat account"
-         onclick="profilePage()">
-      👤
-      <small>حسابي</small>
-    </div>
+        <button class="${active==="private"?"on":""}"
+          onclick="show('private')">
+          الخاص
+        </button>
 
-    <div class="stat likes">
-      ❤️
-      <small>
-        اللايكات
-        <b>${Number(me?.likes||0)}</b>
-      </small>
-    </div>
+        <button class="${active==="members"?"on":""}"
+          onclick="show('members')">
+          الأعضاء
+        </button>
 
-    <div class="stat remaining">
-      <small>
-        المتبقي
-        <b>${Math.max(0,400-Number(me?.likes||0))}/400</b>
-        <b>${Math.max(0,500-Number(me?.likes||0))}/500</b>
-      </small>
-    </div>
+        <button class="${active==="wall"?"on":""}"
+          onclick="show('wall')">
+          الحائط
+        </button>
 
-    <div class="stat level">
-      ⭐
-      <small>
-        المستوى
-        <b>${Number(me?.likes||0)>=500?3:Number(me?.likes||0)>=400?2:1}</b>
-      </small>
-    </div>
+        <button class="bell"
+          onclick="notificationsView()">
+          🔔
+          <span id="bellCount"
+            class="bell-count"
+            style="display:none">
+            0
+          </span>
+        </button>
 
-  </div>
+        <button onclick="settings()">
+          ⚙ الضبط
+        </button>
 
-  <nav class="nav">
-
-    <button class="${active==="rooms"?"on":""}"
-      onclick="show('rooms')">
-      الغرف
-    </button>
-
-    <button class="${active==="private"?"on":""}"
-      onclick="show('private')">
-      الخاص
-    </button>
-
-    <button class="${active==="members"?"on":""}"
-      onclick="show('members')">
-      الأعضاء
-    </button>
-
-    <button class="${active==="wall"?"on":""}"
-      onclick="show('wall')">
-      الحائط
-    </button>
-
-    <button class="bell"
-      onclick="notificationsView()">
-      🔔
-      <span id="bellCount"
-        class="bell-count"
-        style="display:none">
-        0
-      </span>
-    </button>
-
-    <button onclick="settings()">
-      ⚙ الضبط
-    </button>
-
-  </nav>
-
-</header>
+      </nav>
+    </header>
+  `;
 }
+
 function side(){
   return `
     <aside class="card side">
