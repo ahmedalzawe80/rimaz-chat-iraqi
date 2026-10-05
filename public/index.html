@@ -1029,19 +1029,9 @@ function bottom(active){
   return `
     <nav class="bottom">
 
-      <button class="${active==="rooms"?"active":""}"
-        onclick="show('rooms')">
-        🏠 الغرف
-      </button>
-
-      <button class="${active==="private"?"active":""}"
-        onclick="show('private')">
-        💬 الخاص
-      </button>
-
-      <button class="${active==="members"?"active":""}"
-        onclick="show('members')">
-        👥 الأعضاء
+      <button class="${active==="settings"?"active":""}"
+        onclick="settings()">
+        ⚙️ الضبط
       </button>
 
       <button class="${active==="wall"?"active":""}"
@@ -1049,12 +1039,46 @@ function bottom(active){
         📝 الحائط
       </button>
 
-      <button onclick="profilePage()">
+      <button class="${active==="private"?"active":""}"
+        onclick="show('private')">
+        💬 الخاص
+      </button>
+
+      <button
+        onclick="roomPeople()">
+        👥 المتواجدين
+      </button>
+
+      <button
+        onclick="leaveCurrentRoom()">
+        🚪 خروج من الغرفة
+      </button>
+
+      <button class="${active==="profile"?"active":""}"
+        onclick="profilePage()">
         👤 حسابي
       </button>
 
     </nav>
   `;
+}
+
+async function leaveCurrentRoom(){
+  try{
+    if(socket){
+      socket.emit("leave-room");
+    }
+
+    currentRoom="";
+    privateToName="";
+
+    alert("تم الخروج من الغرفة.");
+
+    await show("rooms");
+
+  }catch(e){
+    alert(e.message||"تعذر الخروج من الغرفة");
+  }
 }
 
 async function openRoom(name){
