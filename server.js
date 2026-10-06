@@ -37,7 +37,8 @@ function newDb() {
     rooms: {},
     roomBans: {},
     roomMutes: {},
-    roomKicks: {}
+    roomKicks: {},
+    moderators: []
   };
 }
 
@@ -52,7 +53,7 @@ function loadDb() {
 }
 
 const db = loadDb();
-const arrayKeys = ["guests", "messages", "privateMessages", "wall"];
+const arrayKeys = ["guests", "messages", "privateMessages", "wall", "moderators"];
 const objectKeys = [
   "users", "likes", "lastLike", "sessions", "notifications", "profiles",
   "settings", "permissionOverrides", "rooms", "roomBans", "roomMutes", "roomKicks"
@@ -89,9 +90,9 @@ function userFrom(req) {
 function likesOf(name) { return Number(db.users[name]?.likes || 0); }
 function userLikes(u) { return u?.type === "member" ? likesOf(u.name) : Number(u?.likes || 0); }
 function level(likes) { return likes >= 500 ? 3 : likes >= 400 ? 2 : 1; }
-function canNotice(u) { return isAdmin(u) || userLikes(u) >= 400 || !!db.permissionOverrides[u?.name]?.notice; }
-function canMedia(u) { return isAdmin(u) || userLikes(u) >= 500 || !!db.permissionOverrides[u?.name]?.media; }
-function canAvatar(u) { return isAdmin(u) || userLikes(u) >= 10 || !!db.permissionOverrides[u?.name]?.avatar; }
+function canNotice(u) { return canAdminControl(u) || userLikes(u) >= 400 || !!db.permissionOverrides[u?.name]?.notice; }
+function canMedia(u) { return canAdminControl(u) || userLikes(u) >= 500 || !!db.permissionOverrides[u?.name]?.media; }
+function canAvatar(u) { return canAdminControl(u) || userLikes(u) >= 10 || !!db.permissionOverrides[u?.name]?.avatar; }
 function profileOf(name) {
   return db.profiles[name] || {
     avatar: "👤",
@@ -125,6 +126,12 @@ function isAdmin(u) {
   const configured = String(process.env.ADMIN_PASSWORD || "");
   return !!u.adminVerified && (!!configured || u.name === "admin");
 }
+
+function isModerator(u) {
+  return !!u && u.type === "member" && !isAdmin(u) && Array.isArray(db.moderators) && db.moderators.includes(u.name);
+}
+function canAdminControl(u) { return isAdmin(u) || isModerator(u); }
+function canResetLikes(u) { return isAdmin(u); }
 
 function makeSession(name, type, likes = 0, adminVerified = false) {
   const sid = crypto.randomUUID();
@@ -176,7 +183,7 @@ function roomDenied(u, room) {
 function roomMuted(u, room) { return Number(db.roomMutes[room + "::" + u.name] || 0) > now(); }
 function canEnterRoom(u, room) {
   if (!u || !room) return "بيانات الدخول غير صحيحة";
-  if (room.kind === "admin" && !isAdmin(u)) return "هذه الغرفة للإدارة فقط";
+  if (room.kind === "admin" && !canAdminControl(u)) return "هذه الغرفة للإدارة فقط";
   return null;
 }
 
@@ -244,7 +251,9 @@ app.get("/api/state", (req, res) => {
       type: u.type,
       likes,
       level: level(likes),
-      admin: isAdmin(u),
+      admin: canAdminControl(u),
+      ownerAdmin: isAdmin(u),
+      moderator: isModerator(u),
       profile: profileOf(u.name),
       settings: settingsOf(u.name),
       room: u.room || ""
@@ -349,7 +358,7 @@ app.get("/api/profile", (req, res) => {
   const u = userFrom(req);
   if (!u) return res.status(401).json({ error: "سجل الدخول" });
   const likes = userLikes(u);
-  res.json({ name: u.name, type: u.type, likes, level: level(likes), profile: profileOf(u.name), settings: settingsOf(u.name), admin: isAdmin(u) });
+  res.json({ name: u.name, type: u.type, likes, level: level(likes), profile: profileOf(u.name), settings: settingsOf(u.name), admin: canAdminControl(u), ownerAdmin: isAdmin(u), moderator: isModerator(u) });
 });
 
 app.get("/api/profile/:name", (req, res) => {
@@ -454,7 +463,7 @@ app.post("/api/notify", (req, res) => {
 
 app.post("/api/admin/grant-like", (req, res) => {
   const u = userFrom(req);
-  if (!isAdmin(u)) return res.status(403).json({ error: "هذا الإجراء للإدارة فقط" });
+  if (!canAdminControl(u)) return res.status(403).json({ error: "هذا الإجراء للإدارة فقط" });
   const to = clean(req.body.to);
   const amount = Math.max(1, Math.min(10000, Number(req.body.amount) || 1));
   if (!to) return res.status(400).json({ error: "اسم العضو مطلوب" });
@@ -466,15 +475,49 @@ app.post("/api/admin/grant-like", (req, res) => {
 
 app.get("/api/admin/users", (req, res) => {
   const u = userFrom(req);
-  if (!isAdmin(u)) return res.status(403).json({ error: "الإدارة فقط" });
+  if (!canAdminControl(u)) return res.status(403).json({ error: "الإدارة فقط" });
   const members = Object.keys(db.users).map(name => ({ name, type: "member", likes: likesOf(name), online: activeSessions(name).length > 0, room: sessionTarget(name)?.room || "" }));
   const guests = Object.values(db.sessions).filter(s => s.type === "guest").map(s => ({ name: s.name, type: "guest", likes: s.likes || 0, online: true, room: s.room || "" }));
   res.json({ members, guests });
 });
 
+app.get("/api/admin/moderators", (req, res) => {
+  const u = userFrom(req);
+  if (!canAdminControl(u)) return res.status(403).json({ error: "الإدارة فقط" });
+  res.json({ moderators: db.moderators || [] });
+});
+
+app.post("/api/admin/moderators", (req, res) => {
+  const u = userFrom(req);
+  if (!isAdmin(u)) return res.status(403).json({ error: "الأدمن الأساسي فقط يستطيع تعيين المراقبين" });
+  const action = clean(req.body.action, 20);
+  const name = clean(req.body.name);
+  if (!name || !db.users[name]) return res.status(404).json({ error: "الحساب غير موجود" });
+  if (name === u.name) return res.status(400).json({ error: "لا يمكن تعيين الأدمن الأساسي كمراقب" });
+  if (action === "add") {
+    if (!db.moderators.includes(name) && db.moderators.length >= 2) return res.status(400).json({ error: "الحد الأقصى مراقبان فقط" });
+    if (!db.moderators.includes(name)) db.moderators.push(name);
+  } else if (action === "remove") {
+    db.moderators = db.moderators.filter(x => x !== name);
+  } else return res.status(400).json({ error: "الإجراء غير صحيح" });
+  save();
+  res.json({ ok: true, moderators: db.moderators });
+});
+
+app.post("/api/admin/reset-like", (req, res) => {
+  const u = userFrom(req);
+  if (!canResetLikes(u)) return res.status(403).json({ error: "تصفير الإعجابات للأدمن الأساسي فقط" });
+  const name = clean(req.body.to);
+  if (!name) return res.status(400).json({ error: "اسم العضو مطلوب" });
+  if (db.users[name]) { db.users[name].likes = 0; save(); return res.json({ ok: true, likes: 0 }); }
+  const guest = sessionTarget(name);
+  if (guest?.type === "guest") { guest.likes = 0; save(); return res.json({ ok: true, likes: 0, temporary: true }); }
+  return res.status(404).json({ error: "العضو غير موجود أو غير متصل" });
+});
+
 app.post("/api/admin/permission", (req, res) => {
   const u = userFrom(req);
-  if (!isAdmin(u)) return res.status(403).json({ error: "الإدارة فقط" });
+  if (!canAdminControl(u)) return res.status(403).json({ error: "الإدارة فقط" });
   const name = clean(req.body.name);
   const key = String(req.body.permission || "").trim();
   if (!name || !["notice", "media", "avatar"].includes(key)) return res.status(400).json({ error: "الاسم والصلاحية غير صحيحين" });
@@ -492,7 +535,7 @@ app.get("/api/rooms", (req, res) => {
 
 app.post("/api/rooms/create", (req, res) => {
   const u = userFrom(req);
-  if (!isAdmin(u)) return res.status(403).json({ error: "الإدارة فقط" });
+  if (!canAdminControl(u)) return res.status(403).json({ error: "الإدارة فقط" });
   const name = clean(req.body.name);
   const desc = String(req.body.desc || "نص فقط").slice(0, 80);
   const kinds = ["public", "public_voice", "voice", "private", "private2", "admin"];
@@ -510,7 +553,7 @@ app.post("/api/rooms/create", (req, res) => {
 app.post("/api/rooms/update", (req, res) => {
   const u = userFrom(req);
   const name = clean(req.body.name);
-  if (!isAdmin(u)) return res.status(403).json({ error: "الإدارة فقط" });
+  if (!canAdminControl(u)) return res.status(403).json({ error: "الإدارة فقط" });
   const r = db.rooms[name];
   if (!r) return res.status(404).json({ error: "الغرفة غير موجودة" });
   r.desc = String(req.body.desc ?? r.desc).slice(0, 80);
@@ -523,7 +566,7 @@ app.post("/api/rooms/update", (req, res) => {
 app.post("/api/rooms/delete", (req, res) => {
   const u = userFrom(req);
   const name = clean(req.body.name);
-  if (!isAdmin(u)) return res.status(403).json({ error: "الإدارة فقط" });
+  if (!canAdminControl(u)) return res.status(403).json({ error: "الإدارة فقط" });
   if (defaultRooms.some(r => r.name === name)) return res.status(400).json({ error: "لا يمكن حذف الغرف الأساسية" });
   if (!db.rooms[name]) return res.status(404).json({ error: "الغرفة غير موجودة" });
   delete db.rooms[name];
@@ -536,7 +579,7 @@ app.post("/api/room/moderate", (req, res) => {
   const room = clean(req.body.room);
   const to = clean(req.body.to);
   const action = String(req.body.action || "");
-  if (!isAdmin(u)) return res.status(403).json({ error: "الإدارة فقط" });
+  if (!canAdminControl(u)) return res.status(403).json({ error: "الإدارة فقط" });
   if (!room || !to || !roomOf(room)) return res.status(400).json({ error: "الغرفة أو العضو غير صحيح" });
   const key = room + "::" + to;
   const mins = Math.max(1, Math.min(10080, Number(req.body.minutes) || 10));
@@ -567,7 +610,7 @@ app.get("/api/room/status", (req, res) => {
   const people = roomPeople(room).map(x => ({ name: x.name, type: x.type, likes: userLikes(x), level: level(userLikes(x)), muted: roomMuted(x, room), mic: !!x.mic, profile: profileOf(x.name) }));
   const banned = Object.keys(db.roomBans).filter(k => k.startsWith(room + "::")).map(k => k.slice((room + "::").length));
   const mics = roomIsVoice(r) ? people.filter(x => x.mic).map(x => x.name) : [];
-  res.json({ room: r, people, banned, mics, canManage: isAdmin(u), muted: roomMuted(u, room) });
+  res.json({ room: r, people, banned, mics, canManage: canAdminControl(u), muted: roomMuted(u, room) });
 });
 
 app.post("/api/room/mic-request", (req, res) => {
