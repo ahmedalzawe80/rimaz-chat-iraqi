@@ -737,7 +737,6 @@ async function show(page){
 }
 
 function header(active){
-function header(active){
   return `
     <header class="top">
 
@@ -1030,14 +1029,9 @@ function bottom(active){
   return `
     <nav class="bottom">
 
-      <button class="${active==="settings"?"active":""}"
-        onclick="settings()">
-        ⚙️ الضبط
-      </button>
-
-      <button class="${active==="wall"?"active":""}"
-        onclick="show('wall')">
-        📝 الحائط
+      <button class="${active==="rooms"?"active":""}"
+        onclick="show('rooms')">
+        🏠 الغرف
       </button>
 
       <button class="${active==="private"?"active":""}"
@@ -1045,41 +1039,22 @@ function bottom(active){
         💬 الخاص
       </button>
 
-      <button
-        onclick="roomPeople()">
-        👥 المتواجدين
+      <button class="${active==="members"?"active":""}"
+        onclick="show('members')">
+        👥 الأعضاء
       </button>
 
-      <button
-        onclick="leaveCurrentRoom()">
-        🚪 خروج من الغرفة
+      <button class="${active==="wall"?"active":""}"
+        onclick="show('wall')">
+        📝 الحائط
       </button>
 
-      <button class="${active==="profile"?"active":""}"
-        onclick="profilePage()">
+      <button onclick="profilePage()">
         👤 حسابي
       </button>
 
     </nav>
   `;
-}
-
-async function leaveCurrentRoom(){
-  try{
-    if(socket){
-      socket.emit("leave-room");
-    }
-
-    currentRoom="";
-    privateToName="";
-
-    alert("تم الخروج من الغرفة.");
-
-    await show("rooms");
-
-  }catch(e){
-    alert(e.message||"تعذر الخروج من الغرفة");
-  }
 }
 
 async function openRoom(name){
