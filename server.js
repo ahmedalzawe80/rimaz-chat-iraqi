@@ -215,5 +215,5 @@ io.on('connection',socket=>{
   socket.on('disconnect',()=>{const sid=socket.data.sid,u=socket.data.user,room=socket.data.user&&socket.data.user.room;if(sid)socketUsers.delete(sid);if(room)roomSockets.get(room)?.delete(sid);if(u)io.emit('presence',{name:u.name,displayName:displayName(u.name),status:profile(u.name).status,action:'leave',room:room||''});emitState();});
 });
 
-app.get('*',(req,res)=>res.sendFile(path.join(ROOT,'index.html')));
+app.get(/.*/,(req,res)=>res.sendFile(path.join(ROOT,'index.html')));
 server.listen(PORT,()=>console.log(`Rimaz server listening on ${PORT}`));
