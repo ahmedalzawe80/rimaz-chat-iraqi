@@ -8,9 +8,10 @@ const {Server}=require("socket.io");
 
 const app=express(),server=http.createServer(app),io=new Server(server);
 const PORT=process.env.PORT||3000;
-const DATA=path.join("/data","data.json");
-const UP=path.join("/data","uploads");
-if(!fs.existsSync("/data"))fs.mkdirSync("/data",{recursive:true});
+const DATA_DIR=process.env.DATA_DIR || "/data";
+const DATA=path.join(DATA_DIR,"data.json");
+const UP=path.join(DATA_DIR,"uploads");
+if(!fs.existsSync(DATA_DIR))fs.mkdirSync(DATA_DIR,{recursive:true});
 if(!fs.existsSync(UP))fs.mkdirSync(UP,{recursive:true});
 
 const db=fs.existsSync(DATA)?JSON.parse(fs.readFileSync(DATA,"utf8")):{
