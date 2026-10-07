@@ -1,314 +1,199 @@
-const express=require("express");
-const http=require("http");
-const path=require("path");
-const fs=require("fs");
-const bcrypt=require("bcryptjs");
-const multer=require("multer");
-const {Server}=require("socket.io");
+const express = require('express');
+const http = require('http');
+const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const { Server } = require('socket.io');
 
-const app=express(),server=http.createServer(app),io=new Server(server);
-const PORT=process.env.PORT||3000;
-const DATA=path.join("/data","data.json");
-const UP=path.join("/data","uploads");
-if(!fs.existsSync("/data"))fs.mkdirSync("/data",{recursive:true});
-if(!fs.existsSync(UP))fs.mkdirSync(UP,{recursive:true});
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { maxHttpBufferSize: 12 * 1024 * 1024 });
 
-const db=fs.existsSync(DATA)?JSON.parse(fs.readFileSync(DATA,"utf8")):{
- users:{},guests:[],messages:[],wall:[],likes:{},lastLike:{},sessions:{},
- notifications:{},profiles:{},permissionOverrides:{},rooms:{},roomBans:{},roomMutes:{},roomKicks:{}
-};
-const save=()=>fs.writeFileSync(DATA,JSON.stringify(db,null,2));
+const PORT = Number(process.env.PORT || 3000);
+const ROOT = __dirname;
+const DATA_DIR = process.env.DATA_DIR || (fs.existsSync('/data') ? '/data/rimaz' : path.join('/tmp', 'rimaz-data'));
+const UP_DIR = path.join(DATA_DIR, 'uploads');
+const DB_FILE = path.join(DATA_DIR, 'data.json');
+fs.mkdirSync(UP_DIR, { recursive: true });
 
-// تتبع الاتصالات حتى لا يؤدي انقطاع Socket مؤقت إلى طرد المستخدم
-// أو إظهاره كأنه خرج بينما يعيد الاتصال.
-const connectedSockets=new Map();
-const disconnectTimers=new Map();
-for(const k of ["notifications","profiles","permissionOverrides","likes","rooms","roomBans","roomMutes","roomKicks"])db[k]=db[k]||{};
-db.users=db.users||{};db.guests=db.guests||[];db.messages=db.messages||[];db.wall=db.wall||[];db.sessions=db.sessions||{};db.lastLike=db.lastLike||{};
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static(UP_DIR, { maxAge: '7d' }));
+app.use(express.static(path.join(ROOT, 'public')));
 
-const defaultRooms=[
- {name:"الغرفة العامة",count:0,desc:"نص فقط",kind:"public",capacity:200,mics:0,owner:"admin",media:false},
- {name:"غرفة عامة + مايك",count:0,desc:"نص + مايك",kind:"public_voice",capacity:200,mics:8,owner:"admin",media:false},
- {name:"غرفة المايك",count:0,desc:"مايك فقط",kind:"voice",capacity:50,mics:8,owner:"admin",media:false},
- {name:"غرفة شخصين",count:0,desc:"شخصان فقط",kind:"private2",capacity:2,mics:0,owner:"admin",media:true},
- {name:"غرفة المسابقات",count:0,desc:"مسابقات",kind:"public",capacity:200,mics:0,owner:"admin",media:false},
- {name:"غرفة ريماز",count:0,desc:"عامة",kind:"public",capacity:200,mics:0,owner:"admin",media:false},
- {name:"غرفة الإدارة",count:0,desc:"الإدارة والمشرفون فقط",kind:"admin",capacity:50,mics:0,owner:"admin",media:false}
-];
-for(const r of defaultRooms)if(!db.rooms[r.name])db.rooms[r.name]=r;
-// ترقية الغرفة العامة + مايك إذا كانت محفوظة من نسخة قديمة
-if(db.rooms["غرفة عامة + مايك"]){
- db.rooms["غرفة عامة + مايك"].kind="public_voice";
- db.rooms["غرفة عامة + مايك"].desc="نص + مايك";
- db.rooms["غرفة عامة + مايك"].mics=8;
+const defaults = () => ({
+  users: {}, guests: {}, sessions: {}, messages: [], wall: [], notifications: {},
+  profiles: {}, lastLike: {}, permissionOverrides: {},
+  rooms: [
+    { id:'public', name:'الغرفة العامة', desc:'غرفة عامة ..', kind:'public', capacity:200, mics:0, owner:'admin' },
+    { id:'friends', name:'غرفة الأصدقاء', desc:'غرفة خاصة ..', kind:'private', capacity:100, mics:0, owner:'admin' },
+    { id:'love', name:'غرفة الحب', desc:'غرفة خاصة ..', kind:'private', capacity:100, mics:0, owner:'admin' },
+    { id:'voice', name:'غرفة الصوت', desc:'مايك ..', kind:'voice', capacity:50, mics:8, owner:'admin' }
+  ],
+  roomBans:{}, roomMutes:{}, roomKicks:{},
+  wallLikes:{}, wallComments:{}
+});
+
+let db;
+try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { db = defaults(); }
+for (const [k,v] of Object.entries(defaults())) if (db[k] === undefined) db[k] = v;
+function save(){ fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); }
+
+const sessions = new Map(); // sid -> {name,type,created}
+for (const [sid,s] of Object.entries(db.sessions||{})) sessions.set(sid,s);
+const roomSockets = new Map();
+const socketUsers = new Map();
+
+function cleanName(v){ return String(v||'').trim().replace(/\s+/g,' ').slice(0,32); }
+function keyName(n){ return cleanName(n).toLowerCase(); }
+function isAdmin(u){
+  if (!u || u.type !== 'member') return false;
+  const n = keyName(u.name);
+  const owner = keyName(process.env.ADMIN_NAME || 'admin');
+  return n === 'admin' || n === owner;
 }
-save();
+function getUser(name){ return db.users[cleanName(name)] || null; }
+function userLikes(u){ if (!u) return 0; if (isAdmin(u)) return 999999; return Number(getUser(u.name)?.likes ?? db.guests[u.name]?.likes ?? u.likes ?? 0); }
+function level(l){ l=Number(l)||0; return l>=500?3:l>=400?2:1; }
+function canNotice(u){ return isAdmin(u) || userLikes(u)>=400; }
+function canMedia(u){ return isAdmin(u) || userLikes(u)>=500; }
+function profile(name){
+  if (!db.profiles[name]) db.profiles[name]={avatar:'',status:'متصل الآن',bio:'عضو في دردشة ريماز عراقية',nameColor:'#222222',bgColor:'#ffffff',privateOpen:true,notificationsOpen:true};
+  return db.profiles[name];
+}
+function sessionUser(sid){ const s=sessions.get(sid); if(!s)return null; return {...s, likes:isAdmin(s)?999999:userLikes(s)}; }
+function makeSession(name,type){
+  const sid=crypto.randomBytes(24).toString('hex');
+  const s={name,type,created:Date.now()}; sessions.set(sid,s); db.sessions[sid]=s; save(); return sid;
+}
+function requireAuth(req,res,next){
+  const u=sessionUser(req.get('x-session')); if(!u)return res.status(401).json({error:'يجب تسجيل الدخول'}); req.user=u; next();
+}
+function requireAdmin(req,res,next){ requireAuth(req,res,()=>isAdmin(req.user)?next():res.status(403).json({error:'صلاحية الادمن فقط'})); }
+function emitState(){ io.emit('live-state', {online:getOnlineUsers(), rooms:db.rooms}); }
+function getOnlineUsers(){
+  const arr=[]; for(const [sid,u] of sessions){ if(socketUsers.has(sid)) arr.push({...u,likes:userLikes(u),level:level(userLikes(u)),profile:profile(u.name)}); }
+  const seen=new Set(); return arr.filter(x=>{const k=keyName(x.name); if(seen.has(k))return false; seen.add(k); return true;});
+}
+function onlineInRoom(room){
+  const set=roomSockets.get(room); if(!set)return 0; return [...set].filter(sid=>socketUsers.has(sid)).length;
+}
+function roomBanned(name,room){ return Array.isArray(db.roomBans[room]) && db.roomBans[room].includes(keyName(name)); }
+function roomMuted(name,room){ return Array.isArray(db.roomMutes[room]) && db.roomMutes[room].includes(keyName(name)); }
+function safeMessage(m){ return {...m, text:String(m.text||'').slice(0,2000)}; }
+function addMessage(m){ db.messages.push(m); if(db.messages.length>1000)db.messages.splice(0,db.messages.length-1000); save(); }
+function notify(name,item){
+  if(!db.notifications[name])db.notifications[name]=[];
+  db.notifications[name].unshift({...item,id:crypto.randomUUID(),at:Date.now()});
+  db.notifications[name]=db.notifications[name].slice(0,100); save();
+}
 
-function clean(s){return String(s??"").trim().slice(0,40)}
-function profileOf(name){return db.profiles[name]||{avatar:"👤",status:"متصل الآن",bio:"عضو في دردشة ريماز عراقية",nameColor:"#222222",bgColor:"#ffffff"}}
-function isAdmin(u){return !!u&&u.type==="member"&&String(u.name||"").trim().toLowerCase()==="admin"}
-function normalizeOwner(u){if(isAdmin(u)&&db.users[u.name])db.users[u.name].likes=Math.max(Number(db.users[u.name].likes)||0,9999);return u}
-function likesOf(n){return db.users[n]?.likes||0}
-function userLikes(u){return u?.type==="member"?likesOf(u.name):(u?.likes||0)}
-function level(l){return l>=500?3:l>=400?2:1}
-function canMedia(u){return userLikes(u)>=500}
-function canNotice(u){return userLikes(u)>=400}
-function userFrom(req){const sid=req.headers["x-session"];return sid&&db.sessions[sid]?db.sessions[sid]:null}
-function roomOf(n){return db.rooms[n]||null}
-function roomList(){return Object.values(db.rooms)}
-function roomDenied(u,room){
- const r=roomOf(room);if(!r)return"الغرفة غير موجودة";
- const key=room+"::"+u.name,now=Date.now();
- const ban=db.roomBans[key];if(ban&&(!ban.until||ban.until>now))return"أنت محظور من هذه الغرفة";
- const kick=db.roomKicks[key];if(kick&&kick>now)return"تم طردك مؤقتًا من هذه الغرفة";
- if(r.kind==="admin"&&!isAdmin(u))return"غرفة الإدارة للمشرف والإدارة فقط";
- return null;
-}
-function roomMuted(u,room){return (db.roomMutes[room+"::"+u.name]||0)>Date.now()}
-function roomAllowsText(room){const r=roomOf(room);return !!r && r.kind!=="voice"}
-function roomAllowsMic(room){const r=roomOf(room);return !!r && (r.kind==="voice"||r.kind==="public_voice")}
-function destroySession(sid,announce=true){
- const u=db.sessions[sid];
- if(!u)return;
- const room=u.room;
- delete db.sessions[sid];
- if(u.type==="guest"){
-  const still=Object.values(db.sessions).some(x=>x.type==="guest"&&x.name===u.name);
-  if(!still)db.guests=db.guests.filter(x=>x!==u.name);
- }
- if(announce&&room)io.to(room).emit("room-presence",{name:u.name,action:"leave"});
- save();
-}
-function bindSocket(sid,socket){
- if(disconnectTimers.has(sid)){clearTimeout(disconnectTimers.get(sid));disconnectTimers.delete(sid)}
- if(!connectedSockets.has(sid))connectedSockets.set(sid,new Set());
- connectedSockets.get(sid).add(socket.id);
- socket.data.sid=sid;
-}
-function unbindSocket(socket){
- const sid=socket.data.sid;
- if(!sid)return;
- const set=connectedSockets.get(sid);
- if(set){
-  set.delete(socket.id);
-  if(set.size===0){
-   connectedSockets.delete(sid);
-   const timer=setTimeout(()=>{
-    disconnectTimers.delete(sid);
-    if(db.sessions[sid])destroySession(sid,true);
-   },8000);
-   disconnectTimers.set(sid,timer);
+const upload = multer({
+  storage: multer.diskStorage({ destination:UP_DIR, filename:(req,file,cb)=>cb(null,Date.now()+'-'+crypto.randomBytes(5).toString('hex')+path.extname(file.originalname||'')) }),
+  limits:{fileSize:100*1024*1024},
+  fileFilter:(req,file,cb)=>{
+    const ok=/^(image|video|audio)\//i.test(file.mimetype); cb(ok?null:new Error('نوع الملف غير مسموح'),ok);
   }
- }
-}
-function makeSession(name,type,likes=0){
- const sid=require("crypto").randomUUID();
- db.sessions[sid]={name,type,likes,lastLike:0,room:"",privateWith:"",mic:false,created:Date.now()};
- save();
- return sid;
-}
-
-app.use(express.json({limit:"1mb"}));
-app.use(express.static(path.join(__dirname,"public")));
-const upload=multer({dest:UP,limits:{fileSize:100*1024*1024}});
-
-app.get("/api/state",(req,res)=>{
- const u=userFrom(req),ul=u?(isAdmin(u)?9999:userLikes(u)):0;
- res.json({user:u?{name:u.name,type:u.type,likes:ul,level:level(ul),admin:isAdmin(u),profile:profileOf(u.name)}:null,
- rooms:roomList().map(r=>({...r,online:Object.values(db.sessions).filter(x=>x.room===r.name).length}))});
 });
 
-app.post("/api/register",(req,res)=>{
- const n=clean(req.body.name),p=String(req.body.password||"");
- if(!n||!p)return res.status(400).json({error:"اكتب الاسم والباسورد"});
- if(db.users[n]||Object.values(db.sessions).some(x=>x.name===n))return res.status(409).json({error:"الاسم مستخدم"});
- db.users[n]={hash:bcrypt.hashSync(p,10),likes:String(n).toLowerCase()==="admin"?9999:0};res.json({sid:makeSession(n,"member",String(n).toLowerCase()==="admin"?9999:0)});
+app.post('/api/register',(req,res)=>{
+  const n=cleanName(req.body.name), p=String(req.body.password||'');
+  if(!n||!p)return res.status(400).json({error:'الاسم والباسورد مطلوبان'});
+  if(p.length<3)return res.status(400).json({error:'الباسورد 3 أحرف على الأقل'});
+  if(db.users[n]||Object.keys(db.users).some(x=>keyName(x)===keyName(n)))return res.status(409).json({error:'الاسم مستخدم مسبقاً'});
+  db.users[n]={hash:bcrypt.hashSync(p,10),likes:keyName(n)==='admin'?999999:0,created:Date.now()}; profile(n); const sid=makeSession(n,'member'); save(); res.json({sid,user:sessionUser(sid)});
 });
-app.post("/api/login",(req,res)=>{
- const n=clean(req.body.name),p=String(req.body.password||"");
- if(!db.users[n]||!bcrypt.compareSync(p,db.users[n].hash))return res.status(401).json({error:"الاسم أو الباسورد غير صحيح"});
- res.json({sid:makeSession(n,"member",String(n).toLowerCase()==="admin"?9999:0)});
+app.post('/api/login',(req,res)=>{
+  const n=cleanName(req.body.name), p=String(req.body.password||''); const u=db.users[n] || Object.entries(db.users).find(([k])=>keyName(k)===keyName(n))?.[1];
+  if(!u || !bcrypt.compareSync(p,u.hash))return res.status(401).json({error:'الاسم أو الباسورد غير صحيح'});
+  const real=Object.keys(db.users).find(k=>keyName(k)===keyName(n))||n; const sid=makeSession(real,'member'); res.json({sid,user:sessionUser(sid)});
 });
-app.post("/api/guest",(req,res)=>{
- const n=clean(req.body.name);
- // تنظيف أسماء الضيوف القديمة التي لم تعد لها جلسة فعلية
- db.guests=db.guests.filter(g=>Object.values(db.sessions).some(x=>x.type==="guest"&&x.name===g));
- if(!n||db.users[n]||Object.values(db.sessions).some(x=>x.name===n))return res.status(409).json({error:"الاسم مستخدم، اختر اسمًا آخر"});
- db.guests.push(n);
- res.json({sid:makeSession(n,"guest",0)});
+app.post('/api/guest',(req,res)=>{
+  const n=cleanName(req.body.name); if(!n)return res.status(400).json({error:'اكتب اسم الزائر'});
+  const taken=Object.keys(db.users).some(x=>keyName(x)===keyName(n)) || Object.keys(db.guests).some(x=>keyName(x)===keyName(n));
+  if(taken)return res.status(409).json({error:'الاسم مستخدم، اختر اسماً آخر'});
+  db.guests[n]={likes:0,created:Date.now()}; const sid=makeSession(n,'guest'); save(); res.json({sid,user:sessionUser(sid)});
 });
-app.post("/api/logout",(req,res)=>{
- const sid=req.headers["x-session"];
- if(!sid||!db.sessions[sid])return res.json({ok:true});
- destroySession(sid,true);
- const set=connectedSockets.get(sid);
- if(set)for(const id of set){const s=io.sockets.sockets.get(id);if(s){s.data.sid="";s.data.user=null;s.data.room="";}}
- connectedSockets.delete(sid);
- if(disconnectTimers.has(sid)){clearTimeout(disconnectTimers.get(sid));disconnectTimers.delete(sid)}
- res.json({ok:true});
+app.post('/api/logout',requireAuth,(req,res)=>{ const sid=req.get('x-session'); sessions.delete(sid); delete db.sessions[sid]; save(); res.json({ok:true}); });
+
+app.get('/api/state',requireAuth,(req,res)=>{
+  const u=req.user; const likes=userLikes(u); const rooms=db.rooms.map(r=>({...r,online:onlineInRoom(r.id)}));
+  res.json({user:{...u,likes,level:level(likes),admin:isAdmin(u),profile:profile(u.name),notice:canNotice(u),media:canMedia(u)}, rooms, online:getOnlineUsers().map(x=>({name:x.name,type:x.type,likes:x.likes,level:x.level,profile:x.profile}))});
+});
+app.get('/api/history',requireAuth,(req,res)=>{ const room=String(req.query.room||'public'); res.json(db.messages.filter(x=>x.room===room).slice(-200)); });
+app.get('/api/wall',requireAuth,(req,res)=>res.json(db.wall.slice(-100).reverse()));
+app.post('/api/wall',requireAuth,(req,res)=>{const text=String(req.body.text||'').trim();if(!text)return res.status(400).json({error:'اكتب منشورك'});const p={id:crypto.randomUUID(),from:req.user.name,text:text.slice(0,2000),media:null,at:Date.now(),likes:0};db.wall.push(p);db.wall=db.wall.slice(-300);save();io.emit('wall-new',p);res.json(p);});
+app.post('/api/wall/like',requireAuth,(req,res)=>{const p=db.wall.find(x=>x.id===req.body.id);if(!p)return res.status(404).json({error:'المنشور غير موجود'});p.likes=Number(p.likes||0)+1;save();io.emit('wall-like',{id:p.id,likes:p.likes});res.json({ok:true,likes:p.likes});});
+app.post('/api/notify',requireAuth,(req,res)=>{if(!canNotice(req.user))return res.status(403).json({error:'التنبيهات تفتح عند 400 إعجاب'});const to=cleanName(req.body.to),p=profile(to);if(p.notificationsOpen===false)return res.status(403).json({error:'هذا المستخدم أغلق التنبيهات'});if(!getUser(to))return res.status(404).json({error:'العضو غير موجود'});notify(to,{type:'notice',from:req.user.name,text:String(req.body.text||'تنبيه من عضو').slice(0,500)});for(const [sid,u] of socketUsers){if(keyName(u.name)===keyName(to))io.sockets.sockets.get(sid)?.emit('notification',{from:req.user.name,text:String(req.body.text||'تنبيه من عضو').slice(0,500)});}res.json({ok:true});});
+app.get('/api/notifications',requireAuth,(req,res)=>res.json((db.notifications[req.user.name]||[]).slice(0,50)));
+app.post('/api/notifications/read',requireAuth,(req,res)=>{db.notifications[req.user.name]=[];save();res.json({ok:true});});
+
+app.post('/api/message',requireAuth,(req,res)=>{
+  const u=req.user, room=String(req.body.room||'public'), text=String(req.body.text||'').trim();
+  if(!text)return res.status(400).json({error:'الرسالة فارغة'});
+  if(roomBanned(u.name,room))return res.status(403).json({error:'أنت محظور من هذه الغرفة'});
+  if(roomMuted(u.name,room))return res.status(403).json({error:'أنت مكتوم في هذه الغرفة'});
+  const r=db.rooms.find(x=>x.id===room); if(!r)return res.status(404).json({error:'الغرفة غير موجودة'});
+  const m={id:crypto.randomUUID(),room,from:u.name,type:u.type,text,at:Date.now(),likes:userLikes(u),profile:profile(u.name)}; addMessage(m); io.to(room).emit('message',m); res.json({ok:true,message:m});
 });
 
-app.get("/api/messages",(req,res)=>{const room=clean(req.query.room)||"الغرفة العامة";res.json(db.messages.filter(m=>m.room===room).slice(-100))});
+app.post('/api/like',requireAuth,(req,res)=>{
+  const from=req.user,to=cleanName(req.body.to); if(!to)return res.status(400).json({error:'العضو غير موجود'}); if(keyName(from.name)===keyName(to))return res.status(400).json({error:'لا يمكنك الإعجاب لنفسك'});
+  const target=getUser(to); const guestTarget=db.guests[to]; if(!target&&!guestTarget)return res.status(404).json({error:'العضو غير موجود'});
+  const k=from.name+'::'+to, now=Date.now(); if(now-(db.lastLike[k]||0)<10000)return res.status(429).json({error:'انتظر 10 ثواني بين الإعجابات'}); db.lastLike[k]=now;
+  if(target) target.likes=Number(target.likes||0)+1; else guestTarget.likes=Number(guestTarget.likes||0)+1; save(); const l=target?target.likes:guestTarget.likes;
+  if(l===400)notify(to,{type:'unlock',text:'مبروك، تم فتح التنبيهات عند 400 إعجاب'});
+  if(l===500)notify(to,{type:'unlock',text:'مبروك، تم فتح الصور والفيديو والصوت والاتصال عند 500 إعجاب'});
+  io.emit('likes-changed',{name:to,likes:l,level:level(l)}); res.json({ok:true,likes:l,level:level(l)});
+});
+app.post('/api/admin/grant-like',requireAdmin,(req,res)=>{const n=cleanName(req.body.name), amount=Math.max(1,Math.min(100000,Number(req.body.amount)||1)),u=db.users[n];if(!u)return res.status(404).json({error:'العضو غير موجود'});u.likes=Number(u.likes||0)+amount;save();io.emit('likes-changed',{name:n,likes:u.likes,level:level(u.likes)});res.json({ok:true,likes:u.likes});});
+app.post('/api/admin/reset-likes',requireAdmin,(req,res)=>{const n=cleanName(req.body.name),u=db.users[n];if(!u)return res.status(404).json({error:'العضو غير موجود'});u.likes=0;save();io.emit('likes-changed',{name:n,likes:0,level:1});res.json({ok:true});});
+app.post('/api/admin/broadcast',requireAdmin,(req,res)=>{const text=String(req.body.text||'').trim();if(!text)return res.status(400).json({error:'النص فارغ'});io.emit('admin-notice',{text,from:req.user.name});res.json({ok:true});});
+app.delete('/api/admin/message/:id',requireAdmin,(req,res)=>{const id=req.params.id;db.messages=db.messages.filter(x=>x.id!==id);save();io.emit('message-deleted',{id});res.json({ok:true});});
+app.get('/api/admin/data',requireAdmin,(req,res)=>res.json({users:Object.entries(db.users).map(([name,u])=>({name,likes:u.likes||0,level:level(u.likes||0),profile:profile(name)})),guests:Object.keys(db.guests),rooms:db.rooms,messages:db.messages.slice(-100).reverse()}));
+app.post('/api/admin/room',requireAdmin,(req,res)=>{const name=cleanName(req.body.name),kind=req.body.kind==='voice'?'voice':req.body.kind==='private'?'private':'public';if(!name)return res.status(400).json({error:'اسم الغرفة مطلوب'});const id='r_'+crypto.randomBytes(5).toString('hex');db.rooms.push({id,name,desc:String(req.body.desc||'غرفة جديدة'),kind,capacity:Math.max(2,Number(req.body.capacity)||50),mics:kind==='voice'?Math.max(1,Number(req.body.mics)||8):0,owner:req.user.name});save();emitState();res.json({ok:true});});
+app.delete('/api/admin/room/:id',requireAdmin,(req,res)=>{if(['public','voice'].includes(req.params.id))return res.status(400).json({error:'الغرفة الأساسية لا تحذف'});db.rooms=db.rooms.filter(r=>r.id!==req.params.id);save();emitState();res.json({ok:true});});
+function roomAction(type,req,res){const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});db[type][room]=db[type][room]||[];if(type==='roomMutes'||type==='roomBans'){if(!db[type][room].includes(name))db[type][room].push(name);}else db[type][room]=db[type][room].filter(x=>x!==name);save();for(const [sid,u] of socketUsers){if(keyName(u.name)===name&&u.room===room&&type==='roomKicks'){const s=io.sockets.sockets.get(sid);s?.leave(room);roomSockets.get(room)?.delete(sid);s?.emit('kicked',{room});}}emitState();res.json({ok:true});}
+app.post('/api/admin/kick',(req,res)=>{requireAdmin(req,res,()=>{const room=String(req.body.room||'public'),name=keyName(req.body.name);for(const [sid2,u2] of socketUsers){if(keyName(u2.name)===name&&u2.room===room){const so=io.sockets.sockets.get(sid2);so?.leave(room);roomSockets.get(room)?.delete(sid2);so?.emit('kicked',{room});}}emitState();res.json({ok:true});});});
+app.post('/api/admin/mute',(req,res)=>{requireAdmin(req,res,()=>roomAction('roomMutes',req,res));});
+app.post('/api/admin/ban',(req,res)=>{requireAdmin(req,res,()=>roomAction('roomBans',req,res));});
+app.post('/api/admin/unban',(req,res)=>{requireAdmin(req,res,()=>{const room=String(req.body.room||'public'),name=keyName(req.body.name);db.roomBans[room]=(db.roomBans[room]||[]).filter(x=>x!==name);save();res.json({ok:true});});});
 
-app.post("/api/like",(req,res)=>{
- const u=userFrom(req),to=clean(req.body.to);if(!u)return res.status(401).json({error:"سجل الدخول"});
- if(!to||to===u.name)return res.status(400).json({error:"لا يمكنك إعطاء إعجاب لنفسك"});
- const now=Date.now(),last=u.type==="member"?(db.lastLike[u.name]||0):(u.lastLike||0);
- if(now-last<10000)return res.status(429).json({error:`انتظر ${Math.ceil((10000-(now-last))/1000)} ثوانٍ`});
- if(u.type==="member")db.lastLike[u.name]=now;else u.lastLike=now;
- if(db.users[to])db.users[to].likes=(db.users[to].likes||0)+1;
- else{const target=Object.values(db.sessions).find(s=>s.type==="guest"&&s.name===to);if(!target)return res.status(404).json({error:"العضو غير متصل"});target.likes=(target.likes||0)+1}
- db.notifications[to]=db.notifications[to]||[];
- db.notifications[to].unshift({id:require("crypto").randomUUID(),type:"like",from:u.name,text:`لقد وصلك لايك من ${u.name} ❤️`,time:now,read:false});
- db.notifications[to]=db.notifications[to].slice(0,100);save();
- res.json({ok:true,targetLikes:db.users[to]?likesOf(to):(Object.values(db.sessions).find(s=>s.name===to)?.likes||0),cooldown:10});
-});
+app.post('/api/profile',requireAuth,(req,res)=>{const u=req.user;if(!isAdmin(u)&&userLikes(u)<10)return res.status(403).json({error:'تغيير الصورة يفتح عند 10 إعجابات'});const p=profile(u.name);for(const k of ['status','bio','nameColor','bgColor'])if(req.body[k]!==undefined)p[k]=String(req.body[k]).slice(0,300);if(req.body.privateOpen!==undefined)p.privateOpen=!!req.body.privateOpen;if(req.body.notificationsOpen!==undefined)p.notificationsOpen=!!req.body.notificationsOpen;save();res.json({ok:true,profile:p});});
+app.post('/api/profile/avatar',requireAuth,upload.single('file'),(req,res)=>{if(!isAdmin(req.user)&&userLikes(req.user)<10)return res.status(403).json({error:'تغيير الصورة يفتح عند 10 إعجابات'});if(!req.file||!req.file.mimetype.startsWith('image/'))return res.status(400).json({error:'اختر صورة'});const p=profile(req.user.name);p.avatar='/uploads/'+req.file.filename;save();res.json({ok:true,avatar:p.avatar});});
 
-app.get("/api/members",(req,res)=>{
- const u=userFrom(req);if(!u)return res.status(401).json({error:"سجل الدخول"});
- const members=[...new Set(Object.keys(db.users).filter(Boolean))].map(name=>({name,likes:likesOf(name),level:level(likesOf(name)),profile:profileOf(name),online:Object.values(db.sessions).some(x=>x.name===name)}));
- const guests=Object.values(db.sessions).filter(x=>x.type==="guest").map(x=>({name:x.name,likes:x.likes||0,level:level(x.likes||0),profile:profileOf(x.name),online:true,type:"guest"}));
- res.json([...members,...guests].sort((a,b)=>b.likes-a.likes));
-});
-app.get("/api/online",(req,res)=>{
- const u=userFrom(req);if(!u)return res.status(401).json({error:"سجل الدخول"});
- res.json(Object.values(db.sessions).map(x=>({name:x.name,type:x.type,likes:userLikes(x),level:level(userLikes(x)),room:x.room,profile:profileOf(x.name),admin:isAdmin(x)})));
-});
-app.get("/api/profile",(req,res)=>{const u=userFrom(req);if(!u)return res.status(401).json({error:"سجل الدخول"});res.json({name:u.name,type:u.type,likes:userLikes(u),level:level(userLikes(u)),profile:profileOf(u.name),admin:isAdmin(u)})});
-app.post("/api/profile",(req,res)=>{
- const u=userFrom(req);if(!u)return res.status(401).json({error:"سجل الدخول"});
- const old=profileOf(u.name),p={...old,avatar:String(req.body.avatar||old.avatar).slice(0,4),status:String(req.body.status||old.status).slice(0,80),bio:String(req.body.bio||old.bio).slice(0,300),nameColor:String(req.body.nameColor||old.nameColor).slice(0,20),bgColor:String(req.body.bgColor||old.bgColor).slice(0,20)};
- db.profiles[u.name]=p;save();res.json({ok:true,profile:p});
-});
-app.get("/api/notifications",(req,res)=>{const u=userFrom(req);if(!u)return res.status(401).json({error:"سجل الدخول"});res.json((db.notifications[u.name]||[]).slice(0,50))});
-app.post("/api/notifications/read",(req,res)=>{const u=userFrom(req);if(!u)return res.status(401).json({error:"سجل الدخول"});(db.notifications[u.name]||[]).forEach(n=>n.read=true);save();res.json({ok:true})});
-app.post("/api/notify",(req,res)=>{
- const u=userFrom(req),to=clean(req.body.to),text=String(req.body.text||"").trim().slice(0,240);
- if(!u)return res.status(401).json({error:"سجل الدخول"});
- if(!canNotice(u))return res.status(403).json({error:"إرسال التنبيهات يفتح عند 400 إعجاب"});
- if(!to||!text)return res.status(400).json({error:"اختر عضوًا واكتب التنبيه"});
- db.notifications[to]=db.notifications[to]||[];db.notifications[to].unshift({id:require("crypto").randomUUID(),type:"notice",from:u.name,text,time:Date.now(),read:false});db.notifications[to]=db.notifications[to].slice(0,100);save();res.json({ok:true});
+app.post('/api/media',requireAuth,upload.single('file'),(req,res)=>{
+  const u=req.user, to=cleanName(req.body.to||''), scope=String(req.body.scope||'private');
+  if(!req.file)return res.status(400).json({error:'لم يتم اختيار ملف'});
+  if(scope==='private'&&!canMedia(u))return res.status(403).json({error:'الصور والفيديو والصوت والاتصال تفتح عند 500 إعجاب'});
+  if(scope==='wall'&&!/^image\//.test(req.file.mimetype)&&!/^video\//.test(req.file.mimetype))return res.status(400).json({error:'الحائط يسمح بصورة أو فيديو فقط'});
+  const media={url:'/uploads/'+req.file.filename,mime:req.file.mimetype,name:req.file.originalname};
+  if(scope==='private'){
+    const target=getUser(to)||db.guests[to]||null; if(!target)return res.status(404).json({error:'العضو غير موجود'});
+    const tp=profile(to); if(tp.privateOpen===false)return res.status(403).json({error:'هذا المستخدم أغلق الخاص'});
+    const m={id:crypto.randomUUID(),room:'__private__',from:u.name,to,type:'media',media,at:Date.now()}; notify(to,{type:'private-media',from:u.name,text:'أرسلك وسائط خاصة'}); for(const [sid2,u2] of socketUsers){if(keyName(u2.name)===keyName(to))io.sockets.sockets.get(sid2)?.emit('private-media',m);} return res.json(m);
+  }
+  const post={id:crypto.randomUUID(),from:u.name,text:'',media,at:Date.now(),likes:0}; db.wall.push(post); save(); io.emit('wall-new',post); res.json(post);
 });
 
-app.post("/api/admin/grant-like",(req,res)=>{
- const u=userFrom(req),to=clean(req.body.to),amount=Math.max(1,Math.min(10000,Number(req.body.amount)||1));
- if(!isAdmin(u))return res.status(403).json({error:"هذا الإجراء للإدارة فقط"});
- if(db.users[to]){db.users[to].likes=(db.users[to].likes||0)+amount;save();return res.json({ok:true,likes:db.users[to].likes})}
- const guest=Object.values(db.sessions).find(x=>x.type==="guest"&&x.name===to);if(guest){guest.likes=(guest.likes||0)+amount;save();return res.json({ok:true,likes:guest.likes,temporary:true})}
- return res.status(404).json({error:"العضو غير موجود أو غير متصل"});
+io.on('connection',socket=>{
+  socket.on('join',({sid,room='public'}={})=>{
+    const u=sessionUser(sid); if(!u)return;
+    socket.data.sid=sid; socket.data.user=u; socketUsers.set(sid,{...u,room});
+    if(roomBanned(u.name,room)){socket.emit('join-error',{error:'أنت محظور من هذه الغرفة'});return;}
+    socket.join(room); if(!roomSockets.has(room))roomSockets.set(room,new Set());roomSockets.get(room).add(sid);
+    socket.emit('history',db.messages.filter(x=>x.room===room).slice(-200)); io.emit('presence',{name:u.name,action:'join',room}); emitState();
+  });
+  socket.on('leave-room',({room}={})=>{const u=socket.data.user,sid=socket.data.sid;if(!u)return;socket.leave(room);roomSockets.get(room)?.delete(sid);socketUsers.get(sid).room='';io.emit('presence',{name:u.name,action:'leave',room});emitState();});
+  socket.on('send-message',d=>{const u=socket.data.user;if(!u)return;const room=String(d?.room||'public');if(roomMuted(u.name,room)||roomBanned(u.name,room))return socket.emit('error-msg',{error:'لا يمكنك الكتابة هنا'});const text=String(d?.text||'').trim();if(!text)return;const m={id:crypto.randomUUID(),room,from:u.name,type:'text',text:text.slice(0,2000),at:Date.now(),likes:userLikes(u),profile:profile(u.name)};addMessage(m);io.to(room).emit('message',m);});
+  socket.on('private-message',d=>{const u=socket.data.user;if(!u||!d?.to)return;const to=cleanName(d.to),tp=profile(to);if(tp.privateOpen===false)return socket.emit('error-msg',{error:'هذا المستخدم أغلق الخاص'});const target=[...socketUsers.entries()].find(([,x])=>keyName(x.name)===keyName(to));if(!target)return socket.emit('error-msg',{error:'المستخدم غير متصل'});const m={id:crypto.randomUUID(),from:u.name,to,type:'text',text:String(d.text||'').slice(0,2000),at:Date.now()};io.sockets.sockets.get(target[0])?.emit('private-message',m);socket.emit('private-message',m);});
+  socket.on('call-offer',d=>{const u=socket.data.user;if(!u||!canMedia(u)||!d?.to)return;const target=[...socketUsers.entries()].find(([,x])=>keyName(x.name)===keyName(d.to));if(!target)return socket.emit('error-msg',{error:'المستخدم غير متصل'});if(!canMedia(target[1]))return socket.emit('error-msg',{error:'الاتصال يحتاج 500 إعجاب للطرفين'});io.sockets.sockets.get(target[0])?.emit('call-offer',{from:u.name,offer:d.offer,video:!!d.video});});
+  socket.on('call-answer',d=>{const u=socket.data.user;if(!u||!canMedia(u)||!d?.to)return;const target=[...socketUsers.entries()].find(([,x])=>keyName(x.name)===keyName(d.to));if(target)io.sockets.sockets.get(target[0])?.emit('call-answer',{from:u.name,answer:d.answer,video:!!d.video});});
+  socket.on('ice',d=>{const u=socket.data.user;if(!u||!d?.to)return;const target=[...socketUsers.entries()].find(([,x])=>keyName(x.name)===keyName(d.to));if(target)io.sockets.sockets.get(target[0])?.emit('ice',{from:u.name,candidate:d.candidate});});
+  socket.on('disconnect',()=>{const sid=socket.data.sid,u=socket.data.user,room=socket.data.user&&socket.data.user.room;if(sid)socketUsers.delete(sid);if(room)roomSockets.get(room)?.delete(sid);if(u)io.emit('presence',{name:u.name,action:'leave',room:room||''});emitState();});
 });
 
-app.get("/api/rooms",(req,res)=>{
- const u=userFrom(req);if(!u)return res.status(401).json({error:"سجل الدخول"});
- res.json(roomList().map(r=>({...r,online:Object.values(db.sessions).filter(x=>x.room===r.name).length})));
-});
-app.post("/api/rooms/create",(req,res)=>{
- const u=userFrom(req);if(!isAdmin(u))return res.status(403).json({error:"الإدارة فقط"});
- const name=clean(req.body.name),desc=String(req.body.desc||"نص فقط").slice(0,80),kind=["public","public_voice","private","private2","voice","admin"].includes(req.body.kind)?req.body.kind:"public";
- const capacity=Math.max(2,Math.min(200,Number(req.body.capacity)||50)),mics=["voice","public_voice"].includes(kind)?Math.max(1,Math.min(20,Number(req.body.mics)||4)):0;
- if(!name)return res.status(400).json({error:"اسم الغرفة مطلوب"});if(db.rooms[name])return res.status(409).json({error:"الغرفة موجودة"});
- db.rooms[name]={name,desc,kind,capacity,mics,count:0,owner:u.name,media:!!req.body.media};save();res.json(db.rooms[name]);
-});
-app.post("/api/rooms/update",(req,res)=>{
- const u=userFrom(req),name=clean(req.body.name);if(!isAdmin(u))return res.status(403).json({error:"الإدارة فقط"});
- const r=db.rooms[name];if(!r)return res.status(404).json({error:"الغرفة غير موجودة"});
- r.desc=String(req.body.desc??r.desc).slice(0,80);r.capacity=Math.max(2,Math.min(200,Number(req.body.capacity)||r.capacity));
- if(r.kind==="voice"||r.kind==="public_voice")r.mics=Math.max(1,Math.min(20,Number(req.body.mics)||r.mics));save();res.json(r);
-});
-app.post("/api/rooms/delete",(req,res)=>{
- const u=userFrom(req),name=clean(req.body.name);if(!isAdmin(u))return res.status(403).json({error:"الإدارة فقط"});
- if(["الغرفة العامة","غرفة عامة + مايك","غرفة المايك","غرفة شخصين","غرفة المسابقات","غرفة ريماز","غرفة الإدارة"].includes(name))return res.status(400).json({error:"لا يمكن حذف الغرف الأساسية"});
- if(!db.rooms[name])return res.status(404).json({error:"الغرفة غير موجودة"});delete db.rooms[name];save();res.json({ok:true});
-});
-
-app.post("/api/room/moderate",(req,res)=>{
- const u=userFrom(req),room=clean(req.body.room),to=clean(req.body.to),action=String(req.body.action||"");if(!isAdmin(u))return res.status(403).json({error:"الإدارة فقط"});
- if(!room||!to||!roomOf(room))return res.status(400).json({error:"الغرفة أو العضو غير صحيح"});
- const key=room+"::"+to,mins=Math.max(1,Math.min(10080,Number(req.body.minutes)||10));
- if(action==="mute")db.roomMutes[key]=Date.now()+mins*60000;else if(action==="kick")db.roomKicks[key]=Date.now()+mins*60000;else if(action==="ban")db.roomBans[key]={until:Date.now()+mins*60000};else if(action==="unban")delete db.roomBans[key];else if(action==="unmute")delete db.roomMutes[key];else return res.status(400).json({error:"إجراء غير معروف"});
- save();io.sockets.sockets.forEach(s=>{if(s.data.user?.name===to&&s.data.room===room){if(action==="kick"||action==="ban"){s.leave(room);s.data.room="";s.emit("room-kicked",{room,action})}else s.emit("room-moderation",{room,action,minutes})}});
- res.json({ok:true});
-});
-
-app.get("/api/room/status",(req,res)=>{
- const u=userFrom(req),room=clean(req.query.room);if(!u)return res.status(401).json({error:"سجل الدخول"});
- const r=roomOf(room);if(!r)return res.status(404).json({error:"الغرفة غير موجودة"});
- const people=Object.values(db.sessions).filter(x=>x.room===room).map(x=>({name:x.name,type:x.type,likes:userLikes(x),muted:roomMuted(x,room)}));
- const banned=Object.keys(db.roomBans).filter(k=>k.startsWith(room+"::")).map(k=>k.split("::")[1]);
- const mics=Object.values(db.sessions).filter(x=>x.room===room&&x.mic).map(x=>x.name);
- res.json({room:r,people,banned,mics,canManage:isAdmin(u),muted:roomMuted(u,room)});
-});
-app.post("/api/room/mic-request",(req,res)=>{
- const u=userFrom(req),room=clean(req.body.room);if(!u)return res.status(401).json({error:"سجل الدخول"});
- const r=roomOf(room);if(!r||!roomAllowsMic(room))return res.status(400).json({error:"هذه ليست غرفة مايك"});
- const now=Date.now();Object.values(db.sessions).filter(s=>isAdmin(s)).forEach(s=>{db.notifications[s.name]=db.notifications[s.name]||[];db.notifications[s.name].unshift({id:require("crypto").randomUUID(),type:"notice",from:u.name,text:`طلب ${u.name} تشغيل المايك في ${room}`,time:now,read:false})});
- save();io.to(room).emit("mic-request",{name:u.name,room});res.json({ok:true});
-});
-app.post("/api/room/mic",(req,res)=>{
- const u=userFrom(req),room=clean(req.body.room),on=!!req.body.on;if(!u)return res.status(401).json({error:"سجل الدخول"});
- const r=roomOf(room);if(!r||!roomAllowsMic(room))return res.status(400).json({error:"هذه ليست غرفة مايك"});
- const denied=roomDenied(u,room);if(denied)return res.status(403).json({error:denied});
- if(on&&roomMuted(u,room))return res.status(403).json({error:"أنت مكتوم في هذه الغرفة"});
- if(on){const count=Object.values(db.sessions).filter(x=>x.room===room&&x.mic).length;if(count>=r.mics&&!isAdmin(u))return res.status(409).json({error:"كل المايكات ممتلئة"})}
- u.mic=on;save();io.to(room).emit("mic-state",{name:u.name,on});res.json({ok:true,on});
-});
-
-app.post("/api/wall",(req,res)=>{
- const u=userFrom(req);if(!u)return res.status(401).json({error:"سجل الدخول"});
- const text=String(req.body.text||"").trim().slice(0,1000);if(!text)return res.status(400).json({error:"اكتب المنشور"});
- db.wall.push({name:u.name,text,time:Date.now(),likes:0});db.wall=db.wall.slice(-500);save();res.json({ok:true});
-});
-app.get("/api/wall",(req,res)=>res.json(db.wall.slice(-100).reverse()));
-
-app.post("/api/media",upload.single("file"),(req,res)=>{
- const u=userFrom(req),to=clean(req.body.to),room=clean(req.body.room);
- if(!u)return res.status(401).json({error:"سجل الدخول"});
- if(!canMedia(u))return res.status(403).json({error:"الصور والفيديو والصوت والاتصال يفتح عند 500 إعجاب"});
- if(!to||to===u.name)return res.status(400).json({error:"اختر عضوًا للمحادثة الخاصة"});
- if(room&&roomOf(room)?.kind!=="private2"&&roomOf(room)?.kind!=="private")return res.status(403).json({error:"الوسائط مسموحة في المحادثة الخاصة فقط"});
- const target=Object.values(db.sessions).find(x=>x.name===to);if(!target)return res.status(404).json({error:"العضو غير متصل"});
- if(!req.file)return res.status(400).json({error:"لم يتم اختيار ملف"});
- if(!/^(image|video|audio)\//.test(req.file.mimetype)){fs.unlinkSync(req.file.path);return res.status(415).json({error:"المسموح صور أو فيديو أو صوت فقط"})}
- res.json({ok:true,to,url:"/uploads/"+req.file.filename,name:req.file.originalname,mime:req.file.mimetype});
-});
-app.use("/uploads",express.static(UP));
-
-io.on("connection",socket=>{
- socket.on("join",({sid,room})=>{
-  const u=db.sessions[sid];if(!u)return;
-  bindSocket(sid,socket);
-  const target=room||"الغرفة العامة",denied=roomDenied(u,target);if(denied){socket.emit("room-denied",{message:denied});return}
-  const rr=roomOf(target);if(!rr){socket.emit("room-denied",{message:"الغرفة غير موجودة"});return}
-  if(rr.kind==="private2"&&Object.values(db.sessions).some(x=>x.room===target&&x.name!==u.name)){socket.emit("room-denied",{message:"غرفة الشخصين ممتلئة"});return}
-  const occupied=Object.values(db.sessions).filter(x=>x.room===target&&x!==u).length;if(occupied>=rr.capacity){socket.emit("room-denied",{message:"الغرفة ممتلئة"});return}
-  u.room=target;socket.data.user=u;socket.data.room=target;socket.join(target);save();
-  socket.emit("history",db.messages.filter(m=>m.room===target).slice(-100));socket.to(target).emit("room-presence",{name:u.name,action:"join",room:target});
- });
- socket.on("leave",()=>{
-  const u=socket.data.user,r=socket.data.room;if(u&&r){u.room="";u.mic=false;socket.leave(r);socket.data.room="";save();socket.to(r).emit("room-presence",{name:u.name,action:"leave",room:r})}
- });
- socket.on("message",({text})=>{
-  const u=socket.data.user,room=socket.data.room;if(!u||!text)return;
-  const rr=roomOf(room);if(!rr)return;
-  if(!roomAllowsText(room)){socket.emit("room-error",{message:"هذه الغرفة مخصصة للمايك فقط"});return}
-  if(roomMuted(u,room)){socket.emit("room-error",{message:"أنت مكتوم في هذه الغرفة"});return}
-  const m={room,name:u.name,text:String(text).slice(0,1000),time:Date.now()};db.messages.push(m);db.messages=db.messages.slice(-5000);save();io.to(room).emit("message",m);
- });
- socket.on("private",({to,text})=>{
-  const u=socket.data.user;if(!u||!to||!text)return;
-  u.privateWith=to;
-  io.sockets.sockets.forEach(s=>{if(s.data.user?.name===to||s===socket)s.emit("private",{from:u.name,to,text:String(text).slice(0,1000),time:Date.now()})});
- });
- const forward=(event,payload,key)=>{
-  const u=socket.data.user;if(!u||!canMedia(u)||!payload?.to||!payload[key])return;
-  io.sockets.sockets.forEach(s=>{if(s.data.user?.name===payload.to&&canMedia(s.data.user))s.emit(event,{from:u.name,[key]:payload[key],video:!!payload.video})});
- };
- socket.on("call-offer",d=>forward("call-offer",d,"offer"));
- socket.on("call-answer",d=>forward("call-answer",d,"answer"));
- socket.on("ice",d=>forward("ice",d,"candidate"));
- socket.on("disconnect",()=>{
-  unbindSocket(socket);
- });
-});
-app.get("/{*splat}",(req,res)=>res.sendFile(path.join(__dirname,"public","index.html")));
-server.listen(PORT,()=>console.log("دردشة ريماز عراقية تعمل على http://localhost:"+PORT));
+app.get('*',(req,res)=>res.sendFile(path.join(ROOT,'index.html')));
+server.listen(PORT,()=>console.log(`Rimaz server listening on ${PORT}`));
