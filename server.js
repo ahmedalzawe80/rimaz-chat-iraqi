@@ -8,10 +8,9 @@ const {Server}=require("socket.io");
 
 const app=express(),server=http.createServer(app),io=new Server(server);
 const PORT=process.env.PORT||3000;
-const DATA_DIR=process.env.DATA_DIR || "/data";
-const DATA=path.join(DATA_DIR,"data.json");
-const UP=path.join(DATA_DIR,"uploads");
-if(!fs.existsSync(DATA_DIR))fs.mkdirSync(DATA_DIR,{recursive:true});
+const DATA=path.join("/data","data.json");
+const UP=path.join("/data","uploads");
+if(!fs.existsSync("/data"))fs.mkdirSync("/data",{recursive:true});
 if(!fs.existsSync(UP))fs.mkdirSync(UP,{recursive:true});
 
 const db=fs.existsSync(DATA)?JSON.parse(fs.readFileSync(DATA,"utf8")):{
@@ -47,13 +46,29 @@ save();
 
 function clean(s){return String(s??"").trim().slice(0,40)}
 function profileOf(name){return db.profiles[name]||{avatar:"👤",status:"متصل الآن",bio:"عضو في دردشة ريماز عراقية",nameColor:"#222222",bgColor:"#ffffff"}}
-function isAdmin(u){return !!u&&u.type==="member"&&u.name==="admin"}
+function isAdmin(u){
+ return !!u && u.type==="member" && (u.role==="owner" || u.name==="admin");
+}
+function isModerator(u){
+ return isAdmin(u) || (!!u && u.type==="member" && u.role==="moderator");
+}
+function staffRole(name){return db.users[name]?.role || (name==="admin" ? "owner" : "member")}
+function ensureOwner(){
+ if(!db.users.admin){
+  // إذا لم يكن حساب admin موجودًا، لا ننشئ كلمة مرور مجهولة؛ الحساب يمكن إنشاؤه من التسجيل.
+  return;
+ }
+ db.users.admin.role="owner";
+ // صاحب الموقع لا يخضع لنظام اللايكات.
+ db.users.admin.likes=Math.max(9999,Number(db.users.admin.likes)||0);
+}
+ensureOwner();
 function likesOf(n){return db.users[n]?.likes||0}
 function userLikes(u){return u?.type==="member"?likesOf(u.name):(u?.likes||0)}
 function level(l){return l>=500?3:l>=400?2:1}
 function canMedia(u){return userLikes(u)>=500}
 function canNotice(u){return userLikes(u)>=400}
-function userFrom(req){const sid=req.headers["x-session"];return sid&&db.sessions[sid]?db.sessions[sid]:null}
+function userFrom(req){const sid=req.headers["x-session"];if(!sid||!db.sessions[sid])return null;const u=db.sessions[sid];if(u.type==="member")u.role=staffRole(u.name);return u}
 function roomOf(n){return db.rooms[n]||null}
 function roomList(){return Object.values(db.rooms)}
 function roomDenied(u,room){
@@ -83,27 +98,52 @@ function bindSocket(sid,socket){
  if(disconnectTimers.has(sid)){clearTimeout(disconnectTimers.get(sid));disconnectTimers.delete(sid)}
  if(!connectedSockets.has(sid))connectedSockets.set(sid,new Set());
  connectedSockets.get(sid).add(socket.id);
+ if(disconnectTimers.has(sid)){clearTimeout(disconnectTimers.get(sid));disconnectTimers.delete(sid)}
+ const u=db.sessions[sid];
+ if(u?.type==="member")u.role=staffRole(u.name);
  socket.data.sid=sid;
 }
 function unbindSocket(socket){
  const sid=socket.data.sid;
  if(!sid)return;
  const set=connectedSockets.get(sid);
- if(set){
-  set.delete(socket.id);
-  if(set.size===0){
-   connectedSockets.delete(sid);
-   const timer=setTimeout(()=>{
-    disconnectTimers.delete(sid);
-    if(db.sessions[sid])destroySession(sid,true);
-   },8000);
-   disconnectTimers.set(sid,timer);
-  }
+ if(!set)return;
+ set.delete(socket.id);
+ if(set.size>0)return;
+ connectedSockets.delete(sid);
+ const u=db.sessions[sid];
+ if(!u)return;
+ // انقطاع الاتصال لا يعني تسجيل الخروج للعضو؛ نحذف فقط حالة الغرفة/المايك.
+ if(u.room){
+  const oldRoom=u.room;
+  u.room="";
+  u.mic=false;
+  io.to(oldRoom).emit("room-presence",{name:u.name,action:"leave"});
  }
+ save();
+ // الضيف مؤقت: إذا أغلق المتصفح ولم يعد خلال 15 ثانية تختفي جلسته ولايكاته.
+ if(u.type==="guest")scheduleGuestDestroy(sid);
+}
+
+function isConnectedSid(sid){
+ const set=connectedSockets.get(sid);
+ return !!set && set.size>0;
+}
+function onlineSessions(){
+ return Object.entries(db.sessions).filter(([sid])=>isConnectedSid(sid));
+}
+function scheduleGuestDestroy(sid){
+ if(disconnectTimers.has(sid))clearTimeout(disconnectTimers.get(sid));
+ const timer=setTimeout(()=>{
+  disconnectTimers.delete(sid);
+  const u=db.sessions[sid];
+  if(u && u.type==="guest" && !isConnectedSid(sid)) destroySession(sid,true);
+ },15000);
+ disconnectTimers.set(sid,timer);
 }
 function makeSession(name,type,likes=0){
  const sid=require("crypto").randomUUID();
- db.sessions[sid]={name,type,likes,lastLike:0,room:"",privateWith:"",mic:false,created:Date.now()};
+ db.sessions[sid]={name,type,likes,lastLike:0,room:"",privateWith:"",mic:false,role:type==="member"?staffRole(name):"guest",created:Date.now()};
  save();
  return sid;
 }
@@ -115,7 +155,7 @@ const upload=multer({dest:UP,limits:{fileSize:100*1024*1024}});
 app.get("/api/state",(req,res)=>{
  const u=userFrom(req),ul=u?userLikes(u):0;
  res.json({user:u?{name:u.name,type:u.type,likes:ul,level:level(ul),admin:isAdmin(u),profile:profileOf(u.name)}:null,
- rooms:roomList().map(r=>({...r,online:Object.values(db.sessions).filter(x=>x.room===r.name).length}))});
+ rooms:roomList().map(r=>({...r,online:onlineSessions().filter(([,x])=>x.room===r.name).length}))});
 });
 
 app.post("/api/register",(req,res)=>{
@@ -129,6 +169,7 @@ app.post("/api/login",(req,res)=>{
  if(!db.users[n]||!bcrypt.compareSync(p,db.users[n].hash))return res.status(401).json({error:"الاسم أو الباسورد غير صحيح"});
  res.json({sid:makeSession(n,"member")});
 });
+// الضيوف لا يُمنعون بسبب عنوان IP؛ كل متصفح/جهاز يمكنه إنشاء جلسة باسم مختلف.
 app.post("/api/guest",(req,res)=>{
  const n=clean(req.body.name);
  // تنظيف أسماء الضيوف القديمة التي لم تعد لها جلسة فعلية
@@ -166,13 +207,13 @@ app.post("/api/like",(req,res)=>{
 
 app.get("/api/members",(req,res)=>{
  const u=userFrom(req);if(!u)return res.status(401).json({error:"سجل الدخول"});
- const members=[...new Set(Object.keys(db.users).filter(Boolean))].map(name=>({name,likes:likesOf(name),level:level(likesOf(name)),profile:profileOf(name),online:Object.values(db.sessions).some(x=>x.name===name)}));
- const guests=Object.values(db.sessions).filter(x=>x.type==="guest").map(x=>({name:x.name,likes:x.likes||0,level:level(x.likes||0),profile:profileOf(x.name),online:true,type:"guest"}));
+ const members=[...new Set(Object.keys(db.users).filter(Boolean))].map(name=>({name,likes:likesOf(name),level:level(likesOf(name)),profile:profileOf(name),online:Object.entries(db.sessions).some(([sid,x])=>x.name===name&&isConnectedSid(sid))}));
+ const guests=onlineSessions().map(([,x])=>x).filter(x=>x.type==="guest").map(x=>({name:x.name,likes:x.likes||0,level:level(x.likes||0),profile:profileOf(x.name),online:true,type:"guest"}));
  res.json([...members,...guests].sort((a,b)=>b.likes-a.likes));
 });
 app.get("/api/online",(req,res)=>{
  const u=userFrom(req);if(!u)return res.status(401).json({error:"سجل الدخول"});
- res.json(Object.values(db.sessions).map(x=>({name:x.name,type:x.type,likes:userLikes(x),level:level(userLikes(x)),room:x.room,profile:profileOf(x.name),admin:isAdmin(x)})));
+ res.json(onlineSessions().map(([sid,x])=>({sid,name:x.name,type:x.type,likes:userLikes(x),level:level(userLikes(x)),room:x.room,profile:profileOf(x.name),admin:isAdmin(x),role:x.role||staffRole(x.name)})));
 });
 app.get("/api/profile",(req,res)=>{const u=userFrom(req);if(!u)return res.status(401).json({error:"سجل الدخول"});res.json({name:u.name,type:u.type,likes:userLikes(u),level:level(userLikes(u)),profile:profileOf(u.name),admin:isAdmin(u)})});
 app.post("/api/profile",(req,res)=>{
@@ -198,9 +239,65 @@ app.post("/api/admin/grant-like",(req,res)=>{
  return res.status(404).json({error:"العضو غير موجود أو غير متصل"});
 });
 
+
+// =========================
+// إدارة صاحب الموقع
+// =========================
+app.get("/api/admin/users",(req,res)=>{
+ const u=userFrom(req);if(!isAdmin(u))return res.status(403).json({error:"هذه الصفحة لصاحب الموقع فقط"});
+ const members=Object.entries(db.users).map(([name,v])=>({
+  name,type:"member",likes:Number(v.likes)||0,level:level(Number(v.likes)||0),role:v.role||(name==="admin"?"owner":"member"),
+  online:Object.entries(db.sessions).some(([sid,s])=>s.name===name&&isConnectedSid(sid)),profile:profileOf(name)
+ }));
+ const guests=onlineSessions().map(([,v])=>({name:v.name,type:"guest",likes:v.likes||0,level:level(v.likes||0),role:"guest",online:true,room:v.room,profile:profileOf(v.name)}));
+ res.json([...members,...guests].sort((a,b)=>b.likes-a.likes));
+});
+app.post("/api/admin/set-likes",(req,res)=>{
+ const u=userFrom(req);if(!isAdmin(u))return res.status(403).json({error:"هذا الإجراء لصاحب الموقع فقط"});
+ const to=clean(req.body.to);let likes=Math.max(0,Math.min(1000000,Number(req.body.likes)));
+ if(!to||!Number.isFinite(likes))return res.status(400).json({error:"الاسم وعدد اللايكات مطلوبان"});
+ if(to==="admin")likes=Math.max(500,likes);
+ if(db.users[to]){db.users[to].likes=likes;save();return res.json({ok:true,name:to,likes:db.users[to].likes,permanent:true})}
+ const g=Object.values(db.sessions).find(x=>x.type==="guest"&&x.name===to);
+ if(g){g.likes=likes;save();return res.json({ok:true,name:to,likes:g.likes,temporary:true})}
+ return res.status(404).json({error:"المستخدم غير موجود"});
+});
+app.post("/api/admin/reset-likes",(req,res)=>{
+ const u=userFrom(req);if(!isAdmin(u))return res.status(403).json({error:"هذا الإجراء لصاحب الموقع فقط"});
+ const to=clean(req.body.to);if(!to)return res.status(400).json({error:"اختر مستخدمًا"});
+ if(to==="admin")return res.status(400).json({error:"لا يمكن تصفير لايكات صاحب الموقع"});
+ if(db.users[to]){db.users[to].likes=0;save();return res.json({ok:true,name:to,likes:0,permanent:true})}
+ const g=Object.values(db.sessions).find(x=>x.type==="guest"&&x.name===to);if(g){g.likes=0;save();return res.json({ok:true,name:to,likes:0,temporary:true})}
+ return res.status(404).json({error:"المستخدم غير موجود"});
+});
+app.post("/api/admin/role",(req,res)=>{
+ const u=userFrom(req);if(!isAdmin(u))return res.status(403).json({error:"هذا الإجراء لصاحب الموقع فقط"});
+ const to=clean(req.body.to),role=String(req.body.role||"member");
+ if(!db.users[to])return res.status(404).json({error:"العضو غير موجود"});
+ if(to==="admin"||role==="owner")return res.status(400).json({error:"صاحب الموقع لا يمكن تغيير دوره"});
+ if(!["member","moderator"].includes(role))return res.status(400).json({error:"الدور غير صحيح"});
+ db.users[to].role=role;
+ for(const [sid,s] of Object.entries(db.sessions))if(s.name===to)s.role=role;
+ save();res.json({ok:true,name:to,role});
+});
+app.post("/api/admin/delete-user",(req,res)=>{
+ const u=userFrom(req);if(!isAdmin(u))return res.status(403).json({error:"هذا الإجراء لصاحب الموقع فقط"});
+ const to=clean(req.body.to);if(!to||to==="admin")return res.status(400).json({error:"لا يمكن حذف صاحب الموقع"});
+ if(!db.users[to])return res.status(404).json({error:"العضو غير موجود"});
+ delete db.users[to];delete db.profiles[to];delete db.notifications[to];
+ for(const [sid,s] of Object.entries(db.sessions))if(s.name===to)destroySession(sid,true);
+ save();res.json({ok:true});
+});
+app.post("/api/admin/session-kick",(req,res)=>{
+ const u=userFrom(req);if(!isAdmin(u))return res.status(403).json({error:"هذا الإجراء لصاحب الموقع فقط"});
+ const to=clean(req.body.to);if(!to||to==="admin")return res.status(400).json({error:"لا يمكن إخراج صاحب الموقع"});
+ let n=0;for(const [sid,s] of Object.entries(db.sessions))if(s.name===to){destroySession(sid,true);n++}
+ res.json({ok:true,kicked:n});
+});
+
 app.get("/api/rooms",(req,res)=>{
  const u=userFrom(req);if(!u)return res.status(401).json({error:"سجل الدخول"});
- res.json(roomList().map(r=>({...r,online:Object.values(db.sessions).filter(x=>x.room===r.name).length})));
+ res.json(roomList().map(r=>({...r,online:onlineSessions().filter(([,x])=>x.room===r.name).length})));
 });
 app.post("/api/rooms/create",(req,res)=>{
  const u=userFrom(req);if(!isAdmin(u))return res.status(403).json({error:"الإدارة فقط"});
@@ -233,9 +330,9 @@ app.post("/api/room/moderate",(req,res)=>{
 app.get("/api/room/status",(req,res)=>{
  const u=userFrom(req),room=clean(req.query.room);if(!u)return res.status(401).json({error:"سجل الدخول"});
  const r=roomOf(room);if(!r)return res.status(404).json({error:"الغرفة غير موجودة"});
- const people=Object.values(db.sessions).filter(x=>x.room===room).map(x=>({name:x.name,type:x.type,likes:userLikes(x),muted:roomMuted(x,room)}));
+ const people=onlineSessions().filter(([,x])=>x.room===room).map(([,x])=>({name:x.name,type:x.type,likes:userLikes(x),muted:roomMuted(x,room)}));
  const banned=Object.keys(db.roomBans).filter(k=>k.startsWith(room+"::")).map(k=>k.split("::")[1]);
- const mics=Object.values(db.sessions).filter(x=>x.room===room&&x.mic).map(x=>x.name);
+ const mics=onlineSessions().filter(([,x])=>x.room===room&&x.mic).map(([,x])=>x.name);
  res.json({room:r,people,banned,mics,canManage:isAdmin(u),muted:roomMuted(u,room)});
 });
 app.post("/api/room/mic-request",(req,res)=>{
@@ -249,7 +346,7 @@ app.post("/api/room/mic",(req,res)=>{
  const r=roomOf(room);if(!r||!roomAllowsMic(room))return res.status(400).json({error:"هذه ليست غرفة مايك"});
  const denied=roomDenied(u,room);if(denied)return res.status(403).json({error:denied});
  if(on&&roomMuted(u,room))return res.status(403).json({error:"أنت مكتوم في هذه الغرفة"});
- if(on){const count=Object.values(db.sessions).filter(x=>x.room===room&&x.mic).length;if(count>=r.mics&&!isAdmin(u))return res.status(409).json({error:"كل المايكات ممتلئة"})}
+ if(on){const count=onlineSessions().filter(([,x])=>x.room===room&&x.mic).length;if(count>=r.mics&&!isAdmin(u))return res.status(409).json({error:"كل المايكات ممتلئة"})}
  u.mic=on;save();io.to(room).emit("mic-state",{name:u.name,on});res.json({ok:true,on});
 });
 
@@ -279,8 +376,8 @@ io.on("connection",socket=>{
   bindSocket(sid,socket);
   const target=room||"الغرفة العامة",denied=roomDenied(u,target);if(denied){socket.emit("room-denied",{message:denied});return}
   const rr=roomOf(target);if(!rr){socket.emit("room-denied",{message:"الغرفة غير موجودة"});return}
-  if(rr.kind==="private2"&&Object.values(db.sessions).some(x=>x.room===target&&x.name!==u.name)){socket.emit("room-denied",{message:"غرفة الشخصين ممتلئة"});return}
-  const occupied=Object.values(db.sessions).filter(x=>x.room===target&&x!==u).length;if(occupied>=rr.capacity){socket.emit("room-denied",{message:"الغرفة ممتلئة"});return}
+  if(rr.kind==="private2"&&onlineSessions().some(([,x])=>x.room===target&&x.name!==u.name)){socket.emit("room-denied",{message:"غرفة الشخصين ممتلئة"});return}
+  const occupied=onlineSessions().filter(([,x])=>x.room===target&&x!==u).length;if(occupied>=rr.capacity){socket.emit("room-denied",{message:"الغرفة ممتلئة"});return}
   u.room=target;socket.data.user=u;socket.data.room=target;socket.join(target);save();
   socket.emit("history",db.messages.filter(m=>m.room===target).slice(-100));socket.to(target).emit("room-presence",{name:u.name,action:"join"});
  });
