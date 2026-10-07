@@ -191,7 +191,7 @@ body.rimaz-chat-mode #app{width:100%;min-height:100vh}
 let sid=localStorage.getItem("rimaz_sid"), me=null, socket=null, currentRoom="الغرفة العامة";
 let rooms=[["🏠","الغرفة العامة","نص فقط",120],["🔒","غرفة الأصدقاء","خاص",48],["❤️","غرفة الحب","خاص",35],["🎙️","غرفة الصوت","مايك",22]];
 async function api(url,opt={}){opt.headers={...(opt.headers||{}),...(sid?{"x-session":sid}:{})};let r=await fetch(url,opt);let j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||"حدث خطأ");return j}
-async function start(){localStorage.removeItem("rimaz_sid");sid=null;me=null;try{let s=await api("/api/state");me=s.user;if(me){await syncRooms();show("rooms")}else auth()}catch(e){auth()}}
+async function start(){try{let s=await api("/api/state");me=s.user;if(me){await syncRooms();show("rooms")}else auth()}catch(e){auth()}}
 async function syncRooms(){try{const rs=await api("/api/rooms");const icons=["🏠","🔒","❤️","🎙️","🌙","⭐","🌹","🎧"];rooms=rs.map((r,i)=>[icons[i%icons.length],r.name,r.kind==="voice"?"مايك":r.kind==="private"?"خاص":r.desc||"نص فقط",r.online||r.count||0,r.kind]);}catch(e){}}
 function auth(){app.innerHTML=`<div class="auth"><div class="authbox"><section class="auth-hero"><div class="auth-crown">♕</div><h1>دردشة <span>ريماز</span> عراقية</h1><p>مكان عراقي أنيق للتعارف والدردشة وقضاء وقت جميل مع الأصدقاء، بواجهة بسيطة ومريحة على الهاتف.</p><div class="auth-pills"><span class="auth-pill">💬 دردشة مباشرة</span><span class="auth-pill">❤️ أصدقاء جدد</span><span class="auth-pill">🛡️ دخول آمن</span></div></section><section class="auth-panel"><div class="auth-brand"><div class="mini-crown">♕</div><h2>أهلاً بك في <span>ريماز</span></h2><p>اختر طريقة الدخول المناسبة لك</p></div><div class="auth-options"><div class="authcard"><div class="auth-icon">👤</div><h2>دخول زائر</h2><p class="muted">ادخل باسم فقط، بدون تسجيل حساب.</p><input id="gn" placeholder="اسم الزائر" autocomplete="off"><button onclick="guest()">دخول زائر ←</button></div><div class="authcard"><div class="auth-icon">🔐</div><h2>دخول عضو</h2><p class="muted">للأعضاء المسجلين سابقاً.</p><input id="ln" placeholder="اسم المستخدم" autocomplete="username"><input id="lp" type="password" placeholder="كلمة المرور" autocomplete="current-password"><button onclick="login()">دخول عضو ←</button></div><div class="authcard"><div class="auth-icon">✨</div><h2>تسجيل عضو</h2><p class="muted">اسم + كلمة مرور فقط.</p><input id="rn" placeholder="اسم المستخدم" autocomplete="username"><input id="rp" type="password" placeholder="كلمة المرور" autocomplete="new-password"><button onclick="reg()">إنشاء حساب ←</button></div></div><div class="auth-note">🔒 لا نطلب إيميل أو رقم هاتف</div><div class="auth-footer">دردشة ريماز عراقية • أهلاً وسهلاً بالجميع ❤️</div></section></div></div>`}
 async function reg(){try{let j=await api("/api/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:rn.value,password:rp.value})});sid=j.sid;localStorage.rimaz_sid=sid;start()}catch(e){alert(e.message)}}
@@ -375,6 +375,6 @@ connect=rzConnect;
 
 start();
 
-start();
+localStorage.removeItem("rimaz_sid");sid=null;me=null;auth();
 </script>
 </body></html>
