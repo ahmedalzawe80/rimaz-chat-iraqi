@@ -46,7 +46,7 @@ save();
 
 function clean(s){return String(s??"").trim().slice(0,40)}
 function profileOf(name){return db.profiles[name]||{avatar:"👤",status:"متصل الآن",bio:"عضو في دردشة ريماز عراقية",nameColor:"#222222",bgColor:"#ffffff"}}
-function isAdmin(u){return !!u&&u.type==="member"&&String(u.name||"").trim().toLowerCase()==="admin"}
+function isAdmin(u){return !!u&&u.type==="member"&&String(u.name||"").trim().toLowerCase()==="admin"&&!!db.users[u.name]}
 function normalizeOwner(u){if(isAdmin(u)&&db.users[u.name])db.users[u.name].likes=Math.max(Number(db.users[u.name].likes)||0,9999);return u}
 function likesOf(n){return db.users[n]?.likes||0}
 function userLikes(u){return u?.type==="member"?likesOf(u.name):(u?.likes||0)}
@@ -121,19 +121,22 @@ app.get("/api/state",(req,res)=>{
 app.post("/api/register",(req,res)=>{
  const n=clean(req.body.name),p=String(req.body.password||"");
  if(!n||!p)return res.status(400).json({error:"اكتب الاسم والباسورد"});
- if(db.users[n]||Object.values(db.sessions).some(x=>x.name===n))return res.status(409).json({error:"الاسم مستخدم"});
+ const key=n.toLowerCase();
+ if(Object.keys(db.users).some(x=>x.toLowerCase()===key)||Object.values(db.sessions).some(x=>String(x.name||'').toLowerCase()===key))return res.status(409).json({error:"الاسم مستخدم"});
  db.users[n]={hash:bcrypt.hashSync(p,10),likes:String(n).toLowerCase()==="admin"?9999:0};res.json({sid:makeSession(n,"member",String(n).toLowerCase()==="admin"?9999:0)});
 });
 app.post("/api/login",(req,res)=>{
  const n=clean(req.body.name),p=String(req.body.password||"");
- if(!db.users[n]||!bcrypt.compareSync(p,db.users[n].hash))return res.status(401).json({error:"الاسم أو الباسورد غير صحيح"});
- res.json({sid:makeSession(n,"member",String(n).toLowerCase()==="admin"?9999:0)});
+ const storedName=Object.keys(db.users).find(x=>x.toLowerCase()===n.toLowerCase());
+ if(!storedName||!bcrypt.compareSync(p,db.users[storedName].hash))return res.status(401).json({error:"الاسم أو الباسورد غير صحيح"});
+ res.json({sid:makeSession(storedName,"member",storedName.toLowerCase()==="admin"?9999:0)});
 });
 app.post("/api/guest",(req,res)=>{
  const n=clean(req.body.name);
  // تنظيف أسماء الضيوف القديمة التي لم تعد لها جلسة فعلية
  db.guests=db.guests.filter(g=>Object.values(db.sessions).some(x=>x.type==="guest"&&x.name===g));
- if(!n||db.users[n]||Object.values(db.sessions).some(x=>x.name===n))return res.status(409).json({error:"الاسم مستخدم، اختر اسمًا آخر"});
+ const key=n.toLowerCase();
+ if(!n||Object.keys(db.users).some(x=>x.toLowerCase()===key)||Object.values(db.sessions).some(x=>String(x.name||'').toLowerCase()===key))return res.status(409).json({error:"الاسم مستخدم، اختر اسمًا آخر"});
  db.guests.push(n);
  res.json({sid:makeSession(n,"guest",0)});
 });
