@@ -169,12 +169,12 @@
 .wallInput .wallCompose textarea{height:42px!important;min-height:42px!important;max-height:42px!important;width:100%!important;box-sizing:border-box!important;border-radius:6px!important;}
 /* Members: status bar attached to the left edge of the photo, then a separate badge beside the photo. */
 .member{grid-template-columns:6px 54px 34px minmax(0,1fr) 52px!important;column-gap:0!important;align-items:center!important;min-height:62px!important;direction:ltr!important;}
-.member .memberStatusBar{grid-column:1!important;width:6px!important;height:54px!important;align-self:center!important;border-radius:3px 0 0 3px!important;display:block!important;}
+.member .memberStatusBar{grid-column:1!important;grid-row:1!important;width:6px!important;height:54px!important;align-self:center!important;border-radius:3px 0 0 3px!important;display:block!important;margin:0!important;}
 .member .memberStatusBar.statusOpen{background:#58bf61!important;}
 .member .memberStatusBar.statusClosed{background:#df5555!important;}
 .member .memberStatusBar.statusOffline{background:#aaa!important;}
 .member>img{grid-column:2!important;grid-row:1!important;width:54px!important;height:54px!important;object-fit:cover!important;margin:0!important;}
-.member .memberBadge{grid-column:3!important;grid-row:1!important;width:30px!important;height:30px!important;display:grid!important;place-items:center!important;border-radius:7px!important;font-size:20px!important;line-height:1!important;background:#f4f4f4!important;border:1px solid #ccc!important;justify-self:start!important;margin-left:6px!important;}
+.member .memberBadge{grid-column:3!important;grid-row:1!important;width:28px!important;height:28px!important;display:grid!important;place-items:center!important;border-radius:7px!important;font-size:18px!important;line-height:1!important;background:#f4f4f4!important;border:1px solid #ccc!important;justify-self:start!important;margin:0!important;}
 .member .memberBadge.emptyBadge{visibility:hidden!important;}
 .member .memberBadge.giftBlack{background:#111!important;color:#fff!important;border-color:#111!important;}
 .member .memberBadge.giftWhite{background:#fff!important;color:#111!important;border-color:#aaa!important;}
@@ -240,7 +240,9 @@ async function openPrivate(name){privateUnread[name]=0;updatePrivateButton();con
 function maximizePrivate(){document.querySelector('#layer .privateOverlay')?.classList.toggle('privateMax')}
 function sendPrivate(){const text=document.getElementById('privateText')?.value.trim();if(!text)return;socket.emit('private-message',{to:privateTo,text});document.getElementById('privateText').value=''}
 function addPrivate(m){const b=document.getElementById('privateBody');if(!b)return;const mine=key(m.from)===key(me.name);const prof=mine?(me.profile||{}):privatePeerProfile;const av=avatarFor(prof);b.insertAdjacentHTML('beforeend',`<div class="pmsg ${mine?'me':''}"><div class="pmsgHead"><img src="${esc(av)}"><b>${esc(m.fromDisplayName||m.from)}</b></div><div>${esc(m.text||'')}</div></div>`);b.scrollTop=b.scrollHeight}
-function addPrivateMedia(m){const b=document.getElementById('privateBody');if(!b)return;const mine=key(m.from)===key(me.name);const prof=mine?(me.profile||{}):privatePeerProfile;const av=avatarFor(prof);const med=m.media.mime.startsWith('image/')?`<img src="${esc(m.media.url)}">`:m.media.mime.startsWith('video/')?`<video src="${esc(m.media.url)}" controls></video>`:`<audio src="${esc(m.media.url)}" controls></audio>`;b.insertAdjacentHTML('beforeend',`<div class="pmsg ${mine?'me':''}"><div class="pmsgHead"><img src="${esc(av)}"><b>${esc(m.fromDisplayName||m.from)}</b></div><div>${med}</div></div>`);b.scrollTop=b.scrollHeight}
+function addPrivateMedia(m){const b=document.getElementById('privateBody');if(!b)return;const mine=key(m.from)===key(me.name);const prof=mine?(me.profile||{}):privatePeerProfile;const av=avatarFor(prof);const url=String(m.media?.url||'');const mime=String(m.media?.mime||'');let med='';if(mime.startsWith('image/')){med=`<button type="button" class="privateMediaThumb imageThumb" data-media-type="image" data-media-url="${esc(url)}" onclick="openPrivateMediaFrom(this)" aria-label="فتح الصورة"><img src="${esc(url)}" alt="صورة مرسلة" loading="lazy"></button>`}else if(mime.startsWith('video/')){med=`<button type="button" class="privateMediaThumb videoThumb" data-media-type="video" data-media-url="${esc(url)}" onclick="openPrivateMediaFrom(this)" aria-label="تشغيل الفيديو"><span class="videoPlayIcon">▶</span><span>فيديو · اضغط للتشغيل</span></button>`}else if(mime.startsWith('audio/')){med=`<audio class="privateAudio" src="${esc(url)}" controls preload="metadata"></audio>`}b.insertAdjacentHTML('beforeend',`<div class="pmsg ${mine?'me':''}"><div class="pmsgHead"><img src="${esc(av)}"><b>${esc(m.fromDisplayName||m.from)}</b></div><div class="privateMediaArea">${med}</div></div>`);b.scrollTop=b.scrollHeight}
+function openPrivateMediaFrom(el){const type=el?.dataset?.mediaType,url=el?.dataset?.mediaUrl;if(!type||!url)return;openPrivateMediaViewer(type,url)}
+function openPrivateMediaViewer(type,url){const chat=document.querySelector('.chat');if(!chat)return;document.querySelector('.privateMediaViewer')?.remove();const modal=document.createElement('div');modal.className='privateMediaViewer';modal.innerHTML=type==='image'?`<div class="privateMediaFrame imageFrame"><button class="privateMediaClose" type="button" aria-label="إغلاق">×</button><img class="privateMediaFullImage" src="${esc(url)}" alt="الصورة المرسلة"></div>`:`<div class="privateMediaFrame videoFrame"><div class="privateMediaTitle">مشاهدة الفيديو<button class="privateMediaClose" type="button" aria-label="إغلاق">×</button></div><video class="privateMediaFullVideo" src="${esc(url)}" controls playsinline preload="metadata"></video></div>`;chat.appendChild(modal);modal.addEventListener('click',e=>{if(e.target===modal||e.target.closest('.privateMediaClose')){modal.querySelector('video')?.pause();modal.remove()}})}
 function sharePrivate(){if(me.likes<500&&!me.admin)return toast('الإرسال والوسائط تفتح عند 500 إعجاب');const f=document.createElement('input');f.type='file';f.accept='image/*,video/*,audio/*';f.onchange=async()=>{const fd=new FormData();fd.append('file',f.files[0]);fd.append('to',privateTo);fd.append('scope','private');try{const j=await api('/api/media',{method:'POST',body:fd});addPrivateMedia(j)}catch(e){toast(e.message)}};f.click()}
 async function openProfile(name){const s=await api('/api/state');const x=(s.online||[]).find(u=>key(u.name)===key(name))||{name,likes:0,level:1,profile:{}};layer(`<div class="profileOverlay"><div class="profileTop"><img src="${esc(avatarFor(x.profile))}"><b>${esc(displayFor(x))}</b><button class="close" style="width:40px;height:38px;font-size:22px" onclick="closeLayer()">×</button></div><img class="profilePhoto" src="${esc(avatarFor(x.profile))}"><div class="profileInfo"><div style="font-weight:900">${esc(x.profile?.status||'متصل الآن')}</div><div>${esc(x.profile?.bio||'عضو في دردشة ريماز عراقية')}</div><div class="badge">مستوى ${x.level} · ${x.likes||0} ♥</div></div><div class="profileGrid"><button onclick="sendLike('${esc(x.name)}')" class="likeBig">♥${x.likes}</button><button onclick="tryPrivate('${esc(x.name)}')">✉ محادثة خاصة</button><button onclick="notifyUser('${esc(x.name)}')">✉ تنبيه</button><button onclick="ignoreUser('${esc(x.name)}')" class="ignore">⛔ تجاهل</button></div></div>`,'profile')}
 async function sendLike(n){try{const j=await api('/api/like',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:n})});toast('تم الإعجاب ♥ '+j.likes);if(activeOverlay==='memberProfile'||activeOverlay==='profile')openMemberProfile(n)}catch(e){showBlockModal(e.message,'تنبيه')}}
@@ -295,7 +297,7 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 .roomsHead .close{order:0}.roomsHead span{order:1}
 /* member rows: flag/count right, photo left, name beside photo */
 .member{direction:ltr!important;grid-template-columns:58px minmax(0,1fr) 62px!important}
-.member img{grid-column:1!important;grid-row:1!important}
+.member img{grid-column:2!important;grid-row:1!important;width:54px!important;height:54px!important;object-fit:cover!important;margin:0!important;}
 .memberMain{grid-column:2!important;text-align:left!important;direction:rtl!important}
 .memberLikes{grid-column:3!important;text-align:right!important;padding-right:5px}
 /* private list follows the same visual order */
@@ -327,4 +329,58 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 .settings .srow:nth-child(-n+4) .slabel{text-align:right!important;direction:rtl!important}
 .settings .srow:nth-child(-n+4) .svalue{direction:ltr!important}
 .settings .srow:nth-child(-n+4) .svalue input,.settings .srow:nth-child(-n+4) .svalue select{width:100%!important}
+</style>
+
+<style id="rimaz-user-alignment-media-v2">
+/* Overlay: starts at the very top of the room and ends exactly above the bottom navigation. */
+#layer{position:absolute;inset:0;z-index:20;pointer-events:none;}
+#layer>.overlay,#layer>.privateOverlay{pointer-events:auto;top:0!important;bottom:39px!important;height:auto!important;max-height:none!important;}
+@media(max-width:650px){#layer>.overlay,#layer>.privateOverlay{top:0!important;bottom:39px!important;height:auto!important;}}
+/* Keep names compact without changing the approved left/right message layout. */
+.msghead{font-size:14px!important;gap:5px!important;line-height:1.15!important;}
+.msgtext{font-size:15px!important;line-height:1.32!important;}
+.presence .presenceName{font-size:14px!important;line-height:1.15!important;}
+.presence .presenceText{font-size:13px!important;}
+.member{grid-template-columns:6px 54px 30px minmax(0,1fr) 48px!important;column-gap:1px!important;}
+.memberName{font-size:12px!important;font-weight:700!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+.memberSub{font-size:10px!important;line-height:1.2!important;}
+.memberMain{grid-column:4!important;grid-row:1!important;padding:3px 5px!important;min-width:0!important;}
+.member .memberBadge{grid-column:3!important;grid-row:1!important;}
+.memberLikes{grid-column:5!important;grid-row:1!important;}
+.memberLikes{font-size:9px!important;padding-right:3px!important;}
+.privateListOverlay .memberName{font-size:12px!important;}
+.pmsgHead b{font-size:12px!important;font-weight:800!important;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.wallText{font-size:15px!important;line-height:1.35!important;}
+.wallPostMain .wallText b{font-size:13px!important;font-weight:800!important;}
+/* Compact media thumbnails open into a modest square viewer; videos retain playback controls. */
+.privateMediaArea{margin-top:5px!important;direction:ltr!important;text-align:left!important;}
+.privateMediaThumb{display:flex;align-items:center;justify-content:center;gap:8px;width:108px;height:108px;max-width:100%;padding:0;border:1px solid #bbb;border-radius:7px;background:#f1f1f1;color:#111;overflow:hidden;cursor:pointer;}
+.privateMediaThumb.imageThumb img{display:block;width:100%;height:100%;object-fit:cover;}
+.privateMediaThumb.videoThumb{flex-direction:column;background:linear-gradient(145deg,#181818,#3a3a3a);color:#fff;font-size:11px;font-weight:800;}
+.videoPlayIcon{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:#df5555;color:#fff;font-size:20px;padding-left:3px;}
+.privateAudio{max-width:100%;width:250px;height:38px;}
+.privateMediaViewer{position:absolute;inset:0;z-index:300;background:#000b;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;}
+.privateMediaFrame{position:relative;width:min(320px,86vw);aspect-ratio:1/1;max-height:68%;background:#111;border:1px solid #555;border-radius:9px;overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 28px #0009;}
+.privateMediaFrame.imageFrame{background:#111;}
+.privateMediaFullImage{display:block;width:100%;height:100%;object-fit:contain;}
+.privateMediaClose{position:absolute;z-index:2;top:6px;right:6px;width:30px;height:30px;border:0;border-radius:5px;background:#df5555;color:#fff;font-size:25px;line-height:1;font-weight:900;}
+.videoFrame{flex-direction:column;aspect-ratio:auto;max-height:70%;height:auto;min-height:190px;}
+.privateMediaTitle{height:38px;min-height:38px;width:100%;box-sizing:border-box;padding:0 42px 0 10px;display:flex;align-items:center;background:#111;color:#fff;font-size:13px;font-weight:800;}
+.privateMediaFullVideo{display:block;width:100%;height:auto;max-height:280px;object-fit:contain;background:#000;}
+@media(max-width:400px){.privateMediaFrame{width:min(280px,84vw);}.privateMediaFullVideo{max-height:230px;}}
+</style>
+
+<style id="rimaz-exact-two-layout-fixes">
+/* Overlay touches the room's top edge and stops exactly at the top of the bottom bar. */
+#layer{position:absolute!important;inset:0!important;z-index:20!important;pointer-events:none!important;}
+#layer>.overlay,#layer>.privateOverlay{position:absolute!important;top:0!important;bottom:39px!important;height:auto!important;max-height:none!important;pointer-events:auto!important;}
+/* Presence strip, photo, admin badge and name are four distinct adjacent columns. */
+.member{display:grid!important;direction:ltr!important;grid-template-columns:6px 54px 29px minmax(0,1fr) 46px!important;column-gap:1px!important;min-height:58px!important;align-items:center!important;overflow:hidden!important;}
+.member .memberStatusBar{grid-column:1!important;grid-row:1!important;width:6px!important;height:54px!important;align-self:center!important;margin:0!important;border-radius:3px 0 0 3px!important;display:block!important;}
+.member>img{grid-column:2!important;grid-row:1!important;width:54px!important;height:54px!important;object-fit:cover!important;margin:0!important;align-self:center!important;}
+.member .memberBadge{grid-column:3!important;grid-row:1!important;width:27px!important;height:27px!important;margin:0!important;justify-self:start!important;align-self:center!important;display:grid!important;place-items:center!important;font-size:17px!important;line-height:1!important;}
+.member .memberMain{grid-column:4!important;grid-row:1!important;min-width:0!important;padding:2px 3px!important;direction:rtl!important;text-align:right!important;overflow:hidden!important;}
+.member .memberName{font-size:12px!important;font-weight:700!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;overflow-wrap:normal!important;}
+.member .memberSub{font-size:10px!important;line-height:1.15!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+.member .memberLikes{grid-column:5!important;grid-row:1!important;min-width:0!important;padding:0 2px!important;text-align:center!important;font-size:9px!important;}
 </style>
