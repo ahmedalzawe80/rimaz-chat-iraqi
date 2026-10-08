@@ -45,6 +45,7 @@ const sessions = new Map(); // sid -> {name,type,created}
 for (const [sid,s] of Object.entries(db.sessions||{})) sessions.set(sid,s);
 const roomSockets = new Map();
 const socketUsers = new Map();
+const guestDisconnectTimers = new Map();
 
 function cleanName(v){ return String(v||'').trim().replace(/\s+/g,' ').slice(0,32); }
 function keyName(n){ return cleanName(n).toLowerCase(); }
@@ -281,6 +282,7 @@ app.post('/api/media',requireAuth,upload.single('file'),(req,res)=>{
 
 io.on('connection',socket=>{
   socket.on('join',({sid,room='public'}={})=>{
+    const pendingGuestCleanup=guestDisconnectTimers.get(sid); if(pendingGuestCleanup){clearTimeout(pendingGuestCleanup);guestDisconnectTimers.delete(sid);}
     const u=sessionUser(sid); if(!u)return;
     socket.data.sid=sid; socket.data.user={...u,room}; socketUsers.set(sid,{...u,room});
     if(roomBanned(u.name,room)){socketUsers.delete(sid);socket.emit('join-error',{error:'أنت محظور من هذه الغرفة'});return;}
@@ -293,7 +295,22 @@ io.on('connection',socket=>{
   socket.on('call-offer',d=>{const u=socket.data.user;if(!u||!canMedia(u)||!d?.to)return;const target=[...socketUsers.entries()].find(([,x])=>keyName(x.name)===keyName(d.to));if(!target)return socket.emit('error-msg',{error:'المستخدم غير متصل'});if(!canMedia(target[1]))return socket.emit('error-msg',{error:'الاتصال يحتاج 500 إعجاب للطرفين'});io.sockets.sockets.get(target[0])?.emit('call-offer',{from:u.name,offer:d.offer,video:!!d.video});});
   socket.on('call-answer',d=>{const u=socket.data.user;if(!u||!canMedia(u)||!d?.to)return;const target=[...socketUsers.entries()].find(([,x])=>keyName(x.name)===keyName(d.to));if(target)io.sockets.sockets.get(target[0])?.emit('call-answer',{from:u.name,answer:d.answer,video:!!d.video});});
   socket.on('ice',d=>{const u=socket.data.user;if(!u||!d?.to)return;const target=[...socketUsers.entries()].find(([,x])=>keyName(x.name)===keyName(d.to));if(target)io.sockets.sockets.get(target[0])?.emit('ice',{from:u.name,candidate:d.candidate});});
-  socket.on('disconnect',()=>{const sid=socket.data.sid,u=socket.data.user,room=socket.data.user&&socket.data.user.room;if(sid)socketUsers.delete(sid);if(room)roomSockets.get(room)?.delete(sid);if(u&&room){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',text:'',at:Date.now(),profile:profile(u.name)};addMessage(pm);io.to(room).emit('message',pm);}emitState();});
+  socket.on('disconnect',()=>{
+    const sid=socket.data.sid,u=socket.data.user,room=socket.data.user&&socket.data.user.room;
+    if(sid)socketUsers.delete(sid);
+    if(room)roomSockets.get(room)?.delete(sid);
+    if(u&&room){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',text:'',at:Date.now(),profile:profile(u.name)};addMessage(pm);io.to(room).emit('message',pm);}
+    if(sid&&u?.type==='guest'){
+      const timer=setTimeout(()=>{
+        guestDisconnectTimers.delete(sid);
+        const stillOnline=[...socketUsers.values()].some(x=>keyName(x.name)===keyName(u.name));
+        if(!stillOnline){delete db.guests[u.name];delete db.profiles[u.name];sessions.delete(sid);delete db.sessions[sid];save();}
+        emitState();
+      },25000);
+      guestDisconnectTimers.set(sid,timer);
+    }
+    emitState();
+  });
 });
 
 app.get(/.*/,(req,res)=>res.sendFile(path.join(ROOT,'index.html')));
