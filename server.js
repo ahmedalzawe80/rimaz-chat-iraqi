@@ -33,12 +33,13 @@ const defaults = () => ({
     { id:'voice', name:'غرفة الصوت', desc:'مايك ..', kind:'voice', capacity:50, mics:8, owner:'admin' }
   ],
   roomBans:{}, roomMutes:{}, roomKicks:{},
-  wallLikes:{}, wallComments:{}
+  wallLikes:{}, wallComments:{}, roles:{}
 });
 
 let db;
 try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { db = defaults(); }
 for (const [k,v] of Object.entries(defaults())) if (db[k] === undefined) db[k] = v;
+db.roles = db.roles || {};
 function save(){ fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); }
 
 const sessions = new Map(); // sid -> {name,type,created}
@@ -48,13 +49,17 @@ const socketUsers = new Map();
 
 function cleanName(v){ return String(v||'').trim().replace(/\s+/g,' ').slice(0,32); }
 function keyName(n){ return cleanName(n).toLowerCase(); }
-function isAdmin(u){
-  if (!u || u.type !== 'member') return false;
-  const n = keyName(u.name);
-  const owner = keyName(process.env.ADMIN_NAME || 'admin');
-  return n === 'admin' || n === owner;
+function ownerName(){ return keyName(process.env.ADMIN_NAME || 'admin'); }
+function roleOf(nameOrUser){
+  const n=keyName(typeof nameOrUser==='string'?nameOrUser:nameOrUser?.name);
+  if(!n) return 'member';
+  if(n==='admin' || n===ownerName()) return 'owner';
+  return db.roles[n] || 'member';
 }
-function getUser(name){ return db.users[cleanName(name)] || null; }
+function isOwner(u){ return !!u && u.type==='member' && roleOf(u)==='owner'; }
+function isAdmin(u){ return !!u && u.type==='member' && ['owner','admin'].includes(roleOf(u)); }
+function isStaff(u){ return !!u && u.type==='member' && ['owner','admin','super'].includes(roleOf(u)); }
+function getUser(name){ return db.users[cleanName(name)] || Object.entries(db.users).find(([k])=>keyName(k)===keyName(name))?.[1] || null; }
 function userLikes(u){ if (!u) return 0; if (isAdmin(u)) return 999999; return Number(getUser(u.name)?.likes ?? db.guests[u.name]?.likes ?? u.likes ?? 0); }
 function level(l){ l=Number(l)||0; return l>=500?3:l>=400?2:1; }
 function canNotice(u){ return isAdmin(u) || userLikes(u)>=400; }
@@ -76,10 +81,11 @@ function makeSession(name,type){
 function requireAuth(req,res,next){
   const u=sessionUser(req.get('x-session')); if(!u)return res.status(401).json({error:'يجب تسجيل الدخول'}); req.user=u; next();
 }
-function requireAdmin(req,res,next){ requireAuth(req,res,()=>isAdmin(req.user)?next():res.status(403).json({error:'صلاحية الادمن فقط'})); }
+function requireAdmin(req,res,next){ requireAuth(req,res,()=>isAdmin(req.user)?next():res.status(403).json({error:'صلاحية الأدمن فقط'})); }
+function requireStaff(req,res,next){ requireAuth(req,res,()=>isStaff(req.user)?next():res.status(403).json({error:'صلاحية الإدارة أو السوبر فقط'})); }
 function emitState(){ io.emit('live-state', {online:getOnlineUsers(), rooms:db.rooms}); }
 function getOnlineUsers(){
-  const arr=[]; for(const [sid,u] of sessions){ if(socketUsers.has(sid)) arr.push({...u,displayName:displayName(u.name),likes:userLikes(u),level:level(userLikes(u)),profile:profile(u.name)}); }
+  const arr=[]; for(const [sid,u] of sessions){ if(socketUsers.has(sid)) arr.push({...u,displayName:displayName(u.name),likes:userLikes(u),level:level(userLikes(u)),role:roleOf(u.name),profile:profile(u.name)}); }
   const seen=new Set(); return arr.filter(x=>{const k=keyName(x.name); if(seen.has(k))return false; seen.add(k); return true;});
 }
 function onlineInRoom(room){
@@ -125,7 +131,7 @@ app.post('/api/logout',requireAuth,(req,res)=>{ const sid=req.get('x-session'); 
 
 app.get('/api/state',requireAuth,(req,res)=>{
   const u=req.user; const likes=userLikes(u); const rooms=db.rooms.map(r=>({...r,online:onlineInRoom(r.id)}));
-  res.json({user:{...u,likes,level:level(likes),admin:isAdmin(u),profile:profile(u.name),notice:canNotice(u),media:canMedia(u)}, rooms, online:getOnlineUsers().map(x=>({name:x.name,type:x.type,likes:x.likes,level:x.level,profile:x.profile}))});
+  res.json({user:{...u,likes,level:level(likes),admin:isStaff(u),ownerAdmin:isOwner(u),role:roleOf(u),profile:profile(u.name),notice:canNotice(u),media:canMedia(u)}, rooms, online:getOnlineUsers().map(x=>({name:x.name,type:x.type,likes:x.likes,level:x.level,profile:x.profile}))});
 });
 app.get('/api/history',requireAuth,(req,res)=>{ const room=String(req.query.room||'public'); res.json(db.messages.filter(x=>x.room===room).slice(-200)); });
 app.get('/api/wall',requireAuth,(req,res)=>res.json(db.wall.slice(-100).reverse()));
@@ -153,18 +159,36 @@ app.post('/api/like',requireAuth,(req,res)=>{
   if(l===500)notify(to,{type:'unlock',text:'مبروك، تم فتح الصور والفيديو والصوت والاتصال عند 500 إعجاب'});
   io.emit('likes-changed',{name:to,likes:l,level:level(l)}); res.json({ok:true,likes:l,level:level(l)});
 });
-app.post('/api/admin/grant-like',requireAdmin,(req,res)=>{const n=cleanName(req.body.name), amount=Math.max(1,Math.min(100000,Number(req.body.amount)||1)),u=db.users[n];if(!u)return res.status(404).json({error:'العضو غير موجود'});u.likes=Number(u.likes||0)+amount;save();io.emit('likes-changed',{name:n,likes:u.likes,level:level(u.likes)});res.json({ok:true,likes:u.likes});});
-app.post('/api/admin/reset-likes',requireAdmin,(req,res)=>{const n=cleanName(req.body.name),u=db.users[n];if(!u)return res.status(404).json({error:'العضو غير موجود'});u.likes=0;save();io.emit('likes-changed',{name:n,likes:0,level:1});res.json({ok:true});});
+app.post('/api/admin/grant-like',requireStaff,(req,res)=>{const n=cleanName(req.body.name), amount=Math.max(1,Math.min(100000,Number(req.body.amount)||1)),u=getUser(n),g=db.guests[n];if(!u&&!g)return res.status(404).json({error:'العضو غير موجود'});const likes=u?(u.likes=Number(u.likes||0)+amount):(g.likes=Number(g.likes||0)+amount);save();io.emit('likes-changed',{name:n,likes,level:level(likes)});res.json({ok:true,likes,temporary:!u});});
+app.post('/api/admin/gift',requireStaff,(req,res)=>{
+  const target=cleanName(req.body.name), gift=String(req.body.gift||'').trim();
+  const allowed=['درع أسود','درع أبيض','درع فضي','وردة'];
+  if(!target||!getUser(target))return res.status(404).json({error:'العضو غير موجود'});
+  if(!allowed.includes(gift))return res.status(400).json({error:'الهدية غير متاحة'});
+  const p=profile(target); p.gifts=Array.isArray(p.gifts)?p.gifts:[];
+  p.gifts.unshift({type:gift,from:req.user.name,at:Date.now()}); p.gifts=p.gifts.slice(0,100);
+  save(); emitState(); res.json({ok:true,gift});
+});
+app.post('/api/admin/gift-vip',requireAdmin,(req,res)=>{
+  if(!['owner','admin'].includes(roleOf(req.user)))return res.status(403).json({error:'إعطاء VIP للأدمن والمالك فقط'});
+  const target=cleanName(req.body.name), targetUser=getUser(target);
+  if(!targetUser)return res.status(404).json({error:'العضو غير موجود'});
+  const p=profile(target); p.vipUntil=Date.now()+24*60*60*1000;
+  save(); emitState(); res.json({ok:true,vipUntil:p.vipUntil});
+});
+app.post('/api/admin/reset-likes',requireAdmin,(req,res)=>{if(!isOwner(req.user))return res.status(403).json({error:'تصفير اللايكات للمالك الأساسي فقط'});const n=cleanName(req.body.name),u=getUser(n);if(!u)return res.status(404).json({error:'العضو غير موجود'});u.likes=0;save();io.emit('likes-changed',{name:n,likes:0,level:1});res.json({ok:true});});
 app.post('/api/admin/broadcast',requireAdmin,(req,res)=>{const text=String(req.body.text||'').trim();if(!text)return res.status(400).json({error:'النص فارغ'});io.emit('admin-notice',{text,from:req.user.name});res.json({ok:true});});
 app.delete('/api/admin/message/:id',requireAdmin,(req,res)=>{const id=req.params.id;db.messages=db.messages.filter(x=>x.id!==id);save();io.emit('message-deleted',{id});res.json({ok:true});});
-app.get('/api/admin/data',requireAdmin,(req,res)=>res.json({users:Object.entries(db.users).map(([name,u])=>({name,likes:u.likes||0,level:level(u.likes||0),profile:profile(name)})),guests:Object.keys(db.guests),rooms:db.rooms,messages:db.messages.slice(-100).reverse()}));
+app.get('/api/admin/data',requireAdmin,(req,res)=>res.json({users:Object.entries(db.users).map(([name,u])=>({name,likes:u.likes||0,level:level(u.likes||0),role:roleOf(name),vip:!!profile(name).vipUntil&&profile(name).vipUntil>Date.now(),profile:profile(name)})),guests:Object.entries(db.guests).map(([name,g])=>({name,likes:g.likes||0,level:level(g.likes||0),role:'guest',vip:!!profile(name).vipUntil&&profile(name).vipUntil>Date.now(),profile:profile(name)})),rooms:db.rooms,messages:db.messages.slice(-100).reverse(),ownerAdmin:isOwner(req.user),role:roleOf(req.user)}));
+app.post('/api/admin/role',requireAdmin,(req,res)=>{const target=cleanName(req.body.name),role=String(req.body.role||'');if(!target||!getUser(target))return res.status(404).json({error:'العضو غير موجود'});if(keyName(target)===ownerName()||keyName(target)==='admin')return res.status(400).json({error:'لا يمكن تغيير رتبة مالك الموقع'});if(role==='admin'){if(!isOwner(req.user))return res.status(403).json({error:'فقط مالك الموقع يستطيع تعيين أدمن'});db.roles[keyName(target)]='admin';}else if(role==='super'){db.roles[keyName(target)]='super';}else if(role==='member'){if(!isOwner(req.user))return res.status(403).json({error:'فقط مالك الموقع يستطيع إزالة رتبة الإدارة'});delete db.roles[keyName(target)];}else return res.status(400).json({error:'الرتبة غير صحيحة'});save();emitState();res.json({ok:true,role:roleOf(target)});});
+
 app.post('/api/admin/room',requireAdmin,(req,res)=>{const name=cleanName(req.body.name),kind=req.body.kind==='voice'?'voice':req.body.kind==='private'?'private':'public';if(!name)return res.status(400).json({error:'اسم الغرفة مطلوب'});const id='r_'+crypto.randomBytes(5).toString('hex');db.rooms.push({id,name,desc:String(req.body.desc||'غرفة جديدة'),kind,capacity:Math.max(2,Number(req.body.capacity)||50),mics:kind==='voice'?Math.max(1,Number(req.body.mics)||8):0,owner:req.user.name});save();emitState();res.json({ok:true});});
 app.delete('/api/admin/room/:id',requireAdmin,(req,res)=>{if(['public','voice'].includes(req.params.id))return res.status(400).json({error:'الغرفة الأساسية لا تحذف'});db.rooms=db.rooms.filter(r=>r.id!==req.params.id);save();emitState();res.json({ok:true});});
 function roomAction(type,req,res){const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});db[type][room]=db[type][room]||[];if(type==='roomMutes'||type==='roomBans'){if(!db[type][room].includes(name))db[type][room].push(name);}else db[type][room]=db[type][room].filter(x=>x!==name);save();for(const [sid,u] of socketUsers){if(keyName(u.name)===name&&u.room===room&&type==='roomKicks'){const s=io.sockets.sockets.get(sid);s?.leave(room);roomSockets.get(room)?.delete(sid);s?.emit('kicked',{room});}}emitState();res.json({ok:true});}
-app.post('/api/admin/kick',(req,res)=>{requireAdmin(req,res,()=>{const room=String(req.body.room||'public'),name=keyName(req.body.name);for(const [sid2,u2] of socketUsers){if(keyName(u2.name)===name&&u2.room===room){const so=io.sockets.sockets.get(sid2);so?.leave(room);roomSockets.get(room)?.delete(sid2);so?.emit('kicked',{room});}}emitState();res.json({ok:true});});});
-app.post('/api/admin/mute',(req,res)=>{requireAdmin(req,res,()=>roomAction('roomMutes',req,res));});
-app.post('/api/admin/ban',(req,res)=>{requireAdmin(req,res,()=>roomAction('roomBans',req,res));});
-app.post('/api/admin/unban',(req,res)=>{requireAdmin(req,res,()=>{const room=String(req.body.room||'public'),name=keyName(req.body.name);db.roomBans[room]=(db.roomBans[room]||[]).filter(x=>x!==name);save();res.json({ok:true});});});
+app.post('/api/admin/kick',(req,res)=>{requireStaff(req,res,()=>{const room=String(req.body.room||'public'),name=keyName(req.body.name);for(const [sid2,u2] of socketUsers){if(keyName(u2.name)===name&&u2.room===room){const so=io.sockets.sockets.get(sid2);so?.leave(room);roomSockets.get(room)?.delete(sid2);so?.emit('kicked',{room});}}emitState();res.json({ok:true});});});
+app.post('/api/admin/mute',(req,res)=>{requireStaff(req,res,()=>roomAction('roomMutes',req,res));});
+app.post('/api/admin/ban',(req,res)=>{requireStaff(req,res,()=>roomAction('roomBans',req,res));});
+app.post('/api/admin/unban',(req,res)=>{requireStaff(req,res,()=>{const room=String(req.body.room||'public'),name=keyName(req.body.name);db.roomBans[room]=(db.roomBans[room]||[]).filter(x=>x!==name);save();res.json({ok:true});});});
 
 app.post('/api/profile',requireAuth,(req,res)=>{
   const u=req.user,p=profile(u.name);
