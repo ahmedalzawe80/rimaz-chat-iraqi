@@ -114,6 +114,22 @@
 .presence .presenceText{font-size:14px!important}
 .presence .notice{background:#111!important;color:#fff!important;padding:2px 6px!important}
 .roombar{display:none!important;height:0!important;min-height:0!important}
+
+/* FINAL WALL ALIGNMENT — preserve approved sizes */
+.wallPost{direction:ltr!important;text-align:left!important}
+.wallPost .wallText{text-align:left!important;direction:ltr!important}
+.wallPost .wallActions{justify-content:flex-end!important;direction:ltr!important}
+.wallPost .wallActions button{font-size:11px!important;padding:3px 8px!important}
+.wallInput{direction:ltr!important}
+.wallCompose{direction:rtl!important;grid-template-columns:46px minmax(0,1fr) 30px 46px!important;gap:3px!important}
+.wallCompose button{height:30px!important;font-size:9px!important}
+.wallCompose .smile{font-size:17px!important}
+.wallCompose textarea,.wallInput textarea{height:30px!important;min-height:30px!important;max-height:30px!important;padding:4px 7px!important;font-size:14px!important}
+/* Make settings controls slightly smaller without changing their arrangement */
+.settings .save{height:35px!important;min-height:35px!important;font-size:12px!important}
+.settings .plain,.settings .danger{height:34px!important;min-height:34px!important;font-size:12px!important}
+.settings .slabel{font-size:12px!important}
+.settings .svalue input,.settings .svalue select{height:25px!important;font-size:12px!important}
 </style>
 </head><body><div id="app"></div>
 <script>
