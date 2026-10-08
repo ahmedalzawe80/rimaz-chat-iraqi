@@ -141,6 +141,24 @@
 .presence .notice{background:#111!important;color:#fff!important;padding:2px 6px!important}
 .roombar{display:none!important;height:0!important;min-height:0!important}
 </style>
+
+<style id="rimaz-requested-overlay-final">
+/* Requested overlay alignment: one shared half-screen panel for settings/wall/rooms/private. */
+.overlay,.privateOverlay{top:29px!important;height:calc(100% - 66px)!important;width:60%!important;max-width:none!important;}
+@media(max-width:650px){.overlay,.privateOverlay{top:29px!important;height:calc(100% - 68px)!important;width:72%!important;max-width:none!important;}}
+/* All shared overlay headers: title left, close button right. */
+.overlayHead{direction:ltr!important;justify-content:space-between!important;}
+.overlayHead>span{order:1!important;text-align:left!important;direction:rtl!important;}
+.overlayHead>.close{order:2!important;}
+.roomsHead{direction:ltr!important;justify-content:space-between!important;}
+.roomsHead>span{order:1!important;text-align:left!important;}
+.roomsHead>.close{order:2!important;}
+/* Wall composer: wide rectangular writing field, not a square. */
+.wallCompose{grid-template-columns:58px minmax(0,1fr) 38px 38px!important;gap:3px!important;align-items:center!important;}
+.wallCompose textarea{height:40px!important;min-height:40px!important;width:100%!important;resize:none!important;border:1px solid #aaa!important;border-radius:4px!important;padding:6px 8px!important;line-height:1.3!important;}
+.wallCompose button{height:40px!important;}
+.wallInput{padding:5px!important;}
+</style>
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},privatePeerProfile={};
@@ -179,7 +197,7 @@ async function openMemberProfile(name){const a=await api('/api/members');const u
 async function openMembers(){const a=await api('/api/members');layer(`<div class="overlay membersOverlay"><div class="overlayHead membersHead"><span>المتواجدين</span><button class="close" onclick="closeLayer()">×</button></div><div class="overlayBody"><div style="padding:5px"><input id="memberSearch" style="width:100%;height:38px;border:1px solid #aaa;padding:5px" placeholder="... البحث" oninput="filterMembers()"></div><div id="memberList">${memberRows(a)}</div></div></div>`,'members')}
 function memberRows(a){return a.map(x=>{const online=x.online!==false;const open=x.profile?.privateOpen!==false;const dot=online?(open?'statusOpen':'statusClosed'):'statusOffline';return `<div class="member row" data-name="${esc(displayFor(x))}" onclick="openMemberProfile('${esc(x.name)}')"><img src="${esc(avatarFor(x.profile))}"><div class="memberMain"><div class="memberName"><span class="statusDot ${dot}"></span>${esc(displayFor(x))} ${x.name.toLowerCase()==='admin'?'👑':''}</div><div class="memberSub">${esc(online?(x.profile?.status||'متصل الآن'):'غير متصل')} · مستوى ${x.level}</div></div><div class="memberLikes">${x.likes} ♥<br><span class="flag">${x.type==='guest'?'👤':'🇮🇶'}</span></div></div>`}).join('')||'<div class="empty">لا يوجد متواجدون</div>'}
 function filterMembers(){const q=key(memberSearch.value);document.querySelectorAll('#memberList .member').forEach(x=>x.style.display=key(x.dataset.name).includes(q)?'grid':'none')}
-async function openRooms(){const s=await api('/api/state');rooms=s.rooms;layer(`<div class="overlay roomsOverlay"><div class="overlayHead roomsHead"><span>غرف الدردشة: ${rooms.reduce((n,r)=>n+(r.online||0),0)}</span><button class="close" onclick="closeLayer()">×</button></div><div class="overlayBody"><button class="newRoom" onclick="toast('إنشاء الغرف من لوحة الادارة فقط')">+ غرفة جديدة</button>${rooms.map(r=>`<div class="room" onclick="reenterRoom('${esc(r.id)}')"><img src="${esc(avatarFor({}))}"><div><div class="roomName">${esc(r.name)}</div><div class="roomDesc">${esc(r.desc||'غرفة عامة ..')}</div></div><div class="count ${r.kind==='voice'?'voice':''}">${r.kind==='voice'?'🎙️':'♟'}${r.online||0}/${r.capacity}</div></div>`).join('')}</div></div>`,'rooms')}
+async function openRooms(){const s=await api('/api/state');rooms=s.rooms;layer(`<div class="overlay roomsOverlay"><div class="overlayHead roomsHead"><button class="close" onclick="closeLayer()">×</button><span>غرف الدردشة: ${rooms.reduce((n,r)=>n+(r.online||0),0)}</span></div><div class="overlayBody"><button class="newRoom" onclick="toast('إنشاء الغرف من لوحة الادارة فقط')">+ غرفة جديدة</button>${rooms.map(r=>`<div class="room" onclick="reenterRoom('${esc(r.id)}')"><img src="${esc(avatarFor({}))}"><div><div class="roomName">${esc(r.name)}</div><div class="roomDesc">${esc(r.desc||'غرفة عامة ..')}</div></div><div class="count ${r.kind==='voice'?'voice':''}">${r.kind==='voice'?'🎙️':'♟'}${r.online||0}/${r.capacity}</div></div>`).join('')}</div></div>`,'rooms')}
 async function openWall(){const w=await api('/api/wall');layer(`<div class="overlay">${head('الحائط')}<div class="overlayBody wallOverlayBody"><div id="wallPosts" class="wallPosts">${w.map(wallCard).join('')}</div><div class="wallInput"><div class="wallCompose"><button onclick="postWall()">إرسال ➤</button><textarea id="wallText" placeholder="اكتب منشورك..."></textarea><button class="smile" onclick="emojiPicker('wall')">🙂</button><button onclick="wallMedia()">📎</button></div></div></div></div>`,'wall')}
 function wallCard(p){let m='';if(p.media)m=p.media.mime.startsWith('image/')?`<img src="${esc(p.media.url)}" class="wallMedia">`:`<video src="${esc(p.media.url)}" class="wallMedia" controls></video>`;return `<div class="wallPost"><img class="wallAvatar" onclick="openMemberProfile('${esc(p.from)}')" src="${esc(avatarFor(p.profile||{}))}"><div class="wallPostMain"><div class="wallText"><b onclick="openMemberProfile('${esc(p.from)}')" style="cursor:pointer">${esc(p.displayName||p.from)}</b><div>${esc(p.text||'')}</div>${m}</div><div class="wallActions"><button onclick="wallLike('${p.id}')">♥${p.likes||''}</button><button onclick="toast('التعليقات متاحة داخل المنشور')">💬</button></div></div></div>`}
 async function postWall(){const text=document.getElementById('wallText')?.value.trim();if(!text)return toast('اكتب شيئاً أولاً');try{await api('/api/wall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});toast('تم النشر');openWall()}catch(e){toast(e.message)}}
