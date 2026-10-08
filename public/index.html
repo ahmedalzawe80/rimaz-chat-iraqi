@@ -118,10 +118,7 @@ function memberAdminActions(name){
 }
 async function openMemberProfile(name){try{const s=await api('/api/state');const u=(s.online||[]).find(x=>key(x.name)===key(name));if(!u){toast('العضو غير متصل');return;}const p=u.profile||{};const dn=displayFor(u)||name;layer(`<div class="profileOverlay"><div class="profileTop"><img src="${esc(avatarFor(p))}"><b>${esc(dn)}</b><button class="close" style="width:28px;height:28px;font-size:22px" onclick="closeLayer()">×</button></div><img class="profilePhoto" src="${esc(avatarFor(p))}" onerror="this.style.display='none'"><div class="profileInfo"><div style="font-size:12px;color:#777">${esc(p.status||'متصل الآن')}</div><div style="margin-top:4px"><span class="likeBig">♥ ${u.likes||0}</span> · مستوى ${u.level||1}</div></div><div class="profileGrid"><button onclick="sendLike('${esc(name)}');openMemberProfile('${esc(name)}')">♥ إعجاب</button><button onclick="notifyUser('${esc(name)}')">✉ تنبيه</button><button onclick="openPrivate('${esc(name)}')">💬 مراسلة خاصة</button><button onclick="ignoreUser('${esc(name)}')" class="ignore">⛔ تجاهل</button></div>${memberAdminActions(name)}</div>`,'memberProfile')}catch(e){toast(e.message)}}
 async function sendGift(name){
-  const gift=prompt('اختر الهدية: درع أسود
-درع أبيض
-درع فضي
-وردة');
+  const gift=prompt('اختر الهدية: درع أسود\nدرع أبيض\nدرع فضي\nوردة');
   if(!gift)return;
   try{await api('/api/admin/gift',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,gift})});toast('تم إرسال '+gift);openMemberProfile(name)}catch(e){toast(e.message)}
 }
