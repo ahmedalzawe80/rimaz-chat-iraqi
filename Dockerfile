@@ -1,7 +1,7 @@
-FROM node:22-alpine
+FROM node:20-bookworm-slim
 WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
 COPY . .
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["node", "server.js"]
