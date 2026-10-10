@@ -23,9 +23,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(UP_DIR, { maxAge: '7d' }));
 app.use(express.static(path.join(ROOT, 'public')));
 // Serve the approved single-file UI at the site root without changing its design.
-app.get('/', (req, res) => {
-  res.sendFile(path.join(ROOT, 'public', 'index.html'));
-});
+app.get('/', (req, res) => res.sendFile(path.join(ROOT, 'index.html')));
+
 const defaults = () => ({
   users: {}, guests: {}, sessions: {}, messages: [], wall: [], notifications: {}, announcements: [],
   profiles: {}, lastLike: {}, permissionOverrides: {},
@@ -323,8 +322,5 @@ io.on('connection',socket=>{
   });
 });
 
-app.get(/.*/, (req, res, next) => {
-  res.sendFile(path.join(ROOT, 'public', 'index.html'), err => {
-    if (err) next(err);
-  });
-});
+app.get(/.*/,(req,res)=>res.sendFile(path.join(ROOT,'index.html')));
+server.listen(PORT,()=>console.log(`Rimaz server listening on ${PORT}`));
