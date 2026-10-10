@@ -24,8 +24,14 @@ app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(UP_DIR, { maxAge: '7d' }));
 app.use(express.static(path.join(ROOT, 'public')));
-// Serve the approved single-file UI at the site root without changing its design.
-app.get('/', (req, res) => res.sendFile(path.join(ROOT, 'index.html')));
+// Serve the existing UI from public/ (the repository's current layout).
+app.get('/', (req, res, next) => {
+  res.sendFile(path.join(ROOT, 'public', 'index.html'), err => { if (err) next(err); });
+});
+// SPA fallback: serve the same existing UI for client-side routes, without changing its design.
+app.get(/.*/, (req, res, next) => {
+  res.sendFile(path.join(ROOT, 'public', 'index.html'), err => { if (err) next(err); });
+});
 
 const defaults = () => ({
   users: {}, guests: {}, sessions: {}, messages: [], wall: [], notifications: {}, announcements: [],
