@@ -323,8 +323,8 @@ io.on('connection',socket=>{
   });
 });
 
-app.get(/.*/,(req,res,next)=>{
-  res.sendFile(path.join(ROOT,'public','index.html'), err => {
+app.get(/.*/, (req, res, next) => {
+  res.sendFile(path.join(ROOT, 'public', 'index.html'), err => {
     if (err) next(err);
   });
 });
