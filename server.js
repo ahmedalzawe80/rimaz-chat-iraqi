@@ -321,5 +321,4 @@ io.on('connection',socket=>{
   });
 });
 
-app.get(/.*/,(req,res)=>res.sendFile(path.join(ROOT,'index.html')));
-server.listen(PORT,()=>console.log(`Rimaz server listening on ${PORT}`));
+app.get(/.*/,(req,res)=>res.sendFile(path.join(ROOT,'public','index.html')));
