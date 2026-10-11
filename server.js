@@ -185,10 +185,13 @@ app.post('/api/like',requireAuth,(req,res)=>{
   db.lastLike[k]=now;
   if(target) target.likes=Number(target.likes||0)+1; else guestTarget.likes=Number(guestTarget.likes||0)+1; save(); const l=target?target.likes:guestTarget.likes;
   const likeText=`لقد استلمت إعجاب من ${displayName(from.name)}`;
-  notify(canonical,{type:'like-received',from:from.name,text:likeText,likes:l});
-  if(l===400)notify(canonical,{type:'unlock',text:'مبروك، تم فتح التنبيهات عند 400 إعجاب'});
-  if(l===500)notify(canonical,{type:'unlock',text:'مبروك، تم فتح الصور والفيديو والصوت والاتصال عند 500 إعجاب'});
-  emitToUser(canonical,'like-received',{from:from.name,text:likeText,likes:l});
+  // الإعجاب يُحفظ دائمًا، لكن إشعار المستلم يحترم إعداد إغلاق التنبيهات.
+  if(profile(canonical).notificationsOpen!==false){
+    notify(canonical,{type:'like-received',from:from.name,text:likeText,likes:l});
+    if(l===400)notify(canonical,{type:'unlock',text:'مبروك، تم فتح التنبيهات عند 400 إعجاب'});
+    if(l===500)notify(canonical,{type:'unlock',text:'مبروك، تم فتح الصور والفيديو والصوت والاتصال عند 500 إعجاب'});
+    emitToUser(canonical,'like-received',{from:from.name,text:likeText,likes:l});
+  }
   io.emit('likes-changed',{name:canonical,likes:l,level:level(l)}); res.json({ok:true,likes:l,level:level(l)});
 });
 app.post('/api/admin/grant-like',requireAdmin,(req,res)=>{const n=accountKey(req.body.name),amount=Math.max(1,Math.min(100000,Number(req.body.amount)||1)),u=getUser(n),g=getGuest(n);if(!u&&!g)return res.status(404).json({error:'المستخدم غير موجود'});if(u)u.likes=Number(u.likes||0)+amount;else g.likes=Number(g.likes||0)+amount;const likes=Number((u||g).likes||0);save();io.emit('likes-changed',{name:n,likes,level:level(likes)});res.json({ok:true,likes});});
