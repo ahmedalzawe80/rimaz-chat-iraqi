@@ -13,6 +13,7 @@ const io = new Server(server, { maxHttpBufferSize: 12 * 1024 * 1024 });
 
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = __dirname;
+const INDEX_FILE = require('fs').existsSync(require('path').join(ROOT, 'index.html')) ? require('path').join(ROOT, 'index.html') : require('path').join(ROOT, 'public', 'index.html');
 const DATA_DIR = process.env.DATA_DIR || (fs.existsSync('/data') ? '/data/rimaz' : path.join('/tmp', 'rimaz-data'));
 const UP_DIR = path.join(DATA_DIR, 'uploads');
 const DB_FILE = path.join(DATA_DIR, 'data.json');
@@ -25,7 +26,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(UP_DIR, { maxAge: '7d' }));
 app.use(express.static(path.join(ROOT, 'public')));
 // Serve the approved single-file UI at the site root without changing its design.
-app.get('/', (req, res) => res.sendFile(path.join(ROOT, 'index.html')));
+app.get('/', (req, res) => res.sendFile(INDEX_FILE));
 
 const defaults = () => ({
   users: {}, guests: {}, sessions: {}, messages: [], wall: [], notifications: {}, announcements: [],
@@ -331,5 +332,5 @@ io.on('connection',socket=>{
   });
 });
 
-app.get(/.*/,(req,res)=>res.sendFile(path.join(ROOT,'index.html')));
+app.get(/.*/,(req,res)=>res.sendFile(INDEX_FILE));
 server.listen(PORT,()=>console.log(`Rimaz server listening on ${PORT}`));
