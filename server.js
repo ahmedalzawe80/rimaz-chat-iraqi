@@ -13,7 +13,9 @@ const io = new Server(server, { maxHttpBufferSize: 12 * 1024 * 1024 });
 
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = __dirname;
-const INDEX_FILE = require('fs').existsSync(require('path').join(ROOT, 'index.html')) ? require('path').join(ROOT, 'index.html') : require('path').join(ROOT, 'public', 'index.html');
+const INDEX_CANDIDATES = [path.join(ROOT, 'index.html'), path.join(ROOT, 'public', 'index.html')];
+const INDEX_FILE = INDEX_CANDIDATES.find(file => fs.existsSync(file));
+if (!INDEX_FILE) console.error('FATAL: index.html is missing. Expected /app/index.html or /app/public/index.html');
 const DATA_DIR = process.env.DATA_DIR || (fs.existsSync('/data') ? '/data/rimaz' : path.join('/tmp', 'rimaz-data'));
 const UP_DIR = path.join(DATA_DIR, 'uploads');
 const DB_FILE = path.join(DATA_DIR, 'data.json');
@@ -26,7 +28,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(UP_DIR, { maxAge: '7d' }));
 app.use(express.static(path.join(ROOT, 'public')));
 // Serve the approved single-file UI at the site root without changing its design.
-app.get('/', (req, res) => res.sendFile(INDEX_FILE));
+app.get('/', (req, res) => { if (!INDEX_FILE) return res.status(500).send('Rimaz setup error: index.html is missing from the deployment package.'); res.sendFile(INDEX_FILE); });
 
 const defaults = () => ({
   users: {}, guests: {}, sessions: {}, messages: [], wall: [], notifications: {}, announcements: [],
@@ -335,5 +337,5 @@ io.on('connection',socket=>{
   });
 });
 
-app.get(/.*/,(req,res)=>res.sendFile(INDEX_FILE));
+app.get(/.*/,(req,res)=>{ if (!INDEX_FILE) return res.status(500).send('Rimaz setup error: index.html is missing from the deployment package.'); res.sendFile(INDEX_FILE); });
 server.listen(PORT,()=>console.log(`Rimaz server listening on ${PORT}`));
