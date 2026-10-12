@@ -324,7 +324,7 @@ io.on('connection',socket=>{
     const sid=socket.data.sid,u=socket.data.user,room=socket.data.user&&socket.data.user.room;
     if(sid)socketUsers.delete(sid);
     if(room)roomSockets.get(room)?.delete(sid);
-    if(u&&room){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',text:'',at:Date.now(),profile:profile(u.name)};addMessage(pm);io.to(room).emit('message',pm);}
+    if(u&&room){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'chat-leave',text:'',at:Date.now(),profile:profile(u.name)};addMessage(pm);io.to(room).emit('message',pm);}
     if(sid&&u?.type==='guest'){
       const timer=setTimeout(()=>{
         guestDisconnectTimers.delete(sid);
