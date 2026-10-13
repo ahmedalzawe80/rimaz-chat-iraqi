@@ -307,6 +307,22 @@
 .msg img.avatar{width:38px!important;height:38px!important;min-width:38px!important;max-width:38px!important;min-height:38px!important;max-height:38px!important;flex:0 0 38px!important;object-fit:cover!important;}
 .wallPosts .wallPost img.wallAvatar{width:38px!important;height:38px!important;min-width:38px!important;max-width:38px!important;min-height:38px!important;max-height:38px!important;flex:0 0 38px!important;object-fit:cover!important;}
 </style>
+
+<style id="rimaz-unified-avatar-name-fix">
+/* توحيد قياس الصور وتقليل المساحة التي يستهلكها الاسم في العام والجدار */
+.msg{grid-template-columns:44px minmax(0,1fr) 38px!important;}
+.msg .avatar{width:40px!important;height:40px!important;min-width:40px!important;max-width:40px!important;min-height:40px!important;max-height:40px!important;object-fit:cover!important;align-self:start!important;}
+.presence{grid-template-columns:44px minmax(0,1fr) 38px!important;}
+.presence .presenceAvatar{width:40px!important;height:40px!important;min-width:40px!important;max-width:40px!important;min-height:40px!important;max-height:40px!important;object-fit:cover!important;}
+.wallPost{grid-template-columns:44px minmax(0,1fr)!important;gap:5px!important;}
+.wallPosts .wallPost img.wallAvatar{width:40px!important;height:40px!important;min-width:40px!important;max-width:40px!important;min-height:40px!important;max-height:40px!important;flex:0 0 40px!important;object-fit:cover!important;}
+.wallPostMain{min-width:0!important;width:100%!important;max-width:100%!important;overflow-wrap:anywhere!important;}
+.wallPostMain .wallText{min-width:0!important;max-width:100%!important;overflow-wrap:anywhere!important;}
+.wallPostMain .wallText>b{display:block!important;width:fit-content!important;max-width:100%!important;overflow-wrap:anywhere!important;}
+.msghead{min-width:0!important;max-width:100%!important;overflow-wrap:anywhere!important;}
+.msghead>span{min-width:0!important;max-width:100%!important;overflow-wrap:anywhere!important;}
+@media(max-width:520px){.msg{grid-template-columns:42px minmax(0,1fr) 32px!important}.msg .avatar{width:38px!important;height:38px!important;min-width:38px!important;max-width:38px!important;min-height:38px!important;max-height:38px!important}.presence{grid-template-columns:42px minmax(0,1fr) 32px!important}.presence .presenceAvatar{width:38px!important;height:38px!important;min-width:38px!important;max-width:38px!important;min-height:38px!important;max-height:38px!important}.wallPost{grid-template-columns:42px minmax(0,1fr)!important}.wallPosts .wallPost img.wallAvatar{width:38px!important;height:38px!important;min-width:38px!important;max-width:38px!important;min-height:38px!important;max-height:38px!important;flex-basis:38px!important}}
+</style>
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={};
