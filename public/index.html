@@ -569,6 +569,34 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 @media(max-width:600px){.member,.privateListOverlay .member{grid-template-columns:5px 54px minmax(0,1fr) 24px 64px!important}.member>img,.privateListOverlay .member>img{width:54px!important;height:54px!important}.member .memberBadge,.privateListOverlay .member .memberBadge{width:22px!important;height:22px!important;font-size:14px!important}}
 </style>
 
+
+<style id="rimaz-user-final-small-adjustments">
+/* Keep the approved public-chat size; make private-contact photos just a little larger. */
+.privateListOverlay .member>img{width:50px!important;height:50px!important;min-width:50px!important;max-width:50px!important;min-height:50px!important;max-height:50px!important;object-fit:cover!important;}
+.privateListOverlay .member{grid-template-columns:6px 52px 26px minmax(0,1fr) 58px!important;column-gap:1px!important;}
+.privateListOverlay .member .memberMain{grid-column:4!important;min-width:0!important;}
+.privateListOverlay .member .memberBadge{grid-column:3!important;width:24px!important;height:24px!important;}
+.privateListOverlay .member .privateContactDelete{grid-column:5!important;max-width:56px!important;}
+/* Wall: compact avatar/name column so the actual post gets the room. */
+.wallPost{grid-template-columns:44px minmax(0,1fr)!important;gap:5px!important;}
+.wallPosts .wallPost img.wallAvatar,.wallAvatar{width:44px!important;height:44px!important;min-width:44px!important;max-width:44px!important;min-height:44px!important;max-height:44px!important;flex:0 0 44px!important;object-fit:cover!important;}
+.wallPostMain{min-width:0!important;max-width:100%!important;}
+.wallPostMain .wallText>b{display:inline-block!important;max-width:48%!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;vertical-align:bottom!important;}
+/* Online list only: align name to the top edge of the avatar and put saved status directly below it. */
+.membersOverlay .member .memberMain{align-self:start!important;justify-self:stretch!important;grid-row:1!important;padding-top:3px!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:flex-start!important;gap:2px!important;overflow:hidden!important;}
+.membersOverlay .member .memberName{display:block!important;align-self:flex-start!important;line-height:1.15!important;min-height:14px!important;white-space:nowrap!important;}
+.membersOverlay .member .memberSub{display:block!important;visibility:visible!important;opacity:1!important;align-self:flex-start!important;line-height:1.15!important;max-width:100%!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+/* Admin rows also show status in the online list; only hide like/level details. */
+.membersOverlay .member.adminMember .memberSub{display:block!important;visibility:visible!important;opacity:1!important;}
+.membersOverlay .member.adminMember .memberLikes{display:none!important;}
+@media(max-width:600px){
+ .privateListOverlay .member{grid-template-columns:5px 52px 24px minmax(0,1fr) 56px!important;}
+ .privateListOverlay .member>img{width:50px!important;height:50px!important;min-width:50px!important;max-width:50px!important;min-height:50px!important;max-height:50px!important;}
+ .wallPost{grid-template-columns:44px minmax(0,1fr)!important;}
+ .wallPosts .wallPost img.wallAvatar,.wallAvatar{width:44px!important;height:44px!important;min-width:44px!important;max-width:44px!important;min-height:44px!important;max-height:44px!important;}
+}
+</style>
+
 </body></html>
 <style id="rimaz-user-latest-final">
 /* latest user alignment — preserve approved sizes, only mirror requested areas */
