@@ -79,48 +79,6 @@
 .wallCompose{grid-template-columns:52px minmax(0,1fr) 34px 34px!important;gap:3px!important}
 .wallCompose textarea{min-width:0!important}
 .privateContactDelete{grid-column:6!important;grid-row:1!important;justify-self:stretch!important;align-self:center!important;width:calc(100% - 5px)!important;min-width:0!important;height:42px!important;background:#df5555!important;color:#fff!important;border:1px solid #111!important;padding:5px 2px!important;font-weight:900!important;white-space:nowrap!important;font-size:13px!important;border-radius:0!important;box-sizing:border-box!important;margin:0 3px 0 2px!important}
-
-/* RIMAZ member layout harmonization: public room remains untouched. */
-/* Use the public-room avatar size (54px) as the reference in other member lists. */
-.membersOverlay .member, .privateListOverlay .member{
-  grid-template-columns: 6px 54px 27px minmax(0,1fr) 46px !important;
-  column-gap: 0 !important; min-height: 62px !important; align-items:center !important;
-}
-.membersOverlay .member>img, .privateListOverlay .member>img{
-  grid-column:2 !important; grid-row:1 !important; width:54px !important; height:54px !important;
-  min-width:54px !important; max-width:54px !important; min-height:54px !important; max-height:54px !important;
-  object-fit:cover !important; margin:0 !important;
-}
-.membersOverlay .member .memberBadge, .privateListOverlay .member .memberBadge{
-  grid-column:3 !important; grid-row:1 !important; width:25px !important; height:25px !important;
-  justify-self:center !important; align-self:center !important; margin:0 !important;
-}
-.membersOverlay .member .memberMain, .privateListOverlay .member .memberMain{
-  grid-column:4 !important; grid-row:1 !important; min-width:0 !important; margin:0 !important; padding:2px 4px !important;
-}
-.membersOverlay .member .memberName, .privateListOverlay .member .memberName{
-  display:flex !important; align-items:center !important; gap:4px !important; min-width:0 !important;
-  font-size:15px !important; line-height:1.2 !important; white-space:nowrap !important; overflow:hidden !important;
-  text-overflow:ellipsis !important;
-}
-.membersOverlay .member .memberSub, .privateListOverlay .member .memberSub{
-  display:block !important; font-size:12px !important; line-height:1.2 !important; white-space:nowrap !important;
-  overflow:hidden !important; text-overflow:ellipsis !important;
-}
-/* Wall author avatar uses the same 54px footprint; no change to public chat messages. */
-.wallPosts .wallPost{grid-template-columns:54px minmax(0,1fr) !important; gap:6px !important;}
-.wallPosts .wallPost img.wallAvatar, .wallPosts .wallAvatar{
-  width:54px !important; height:54px !important; min-width:54px !important; max-width:54px !important;
-  min-height:54px !important; max-height:54px !important; flex:0 0 54px !important; object-fit:cover !important;
-}
-.wallPostMain{min-width:0 !important; max-width:100% !important;}
-@media(max-width:600px){
- .membersOverlay .member, .privateListOverlay .member{grid-template-columns:5px 54px 25px minmax(0,1fr) 38px !important; min-height:60px !important;}
- .membersOverlay .member>img, .privateListOverlay .member>img{width:54px !important;height:54px !important;min-width:54px !important;max-width:54px !important;min-height:54px !important;max-height:54px !important;}
- .membersOverlay .member .memberName, .privateListOverlay .member .memberName{font-size:14px !important;}
- .wallPosts .wallPost{grid-template-columns:54px minmax(0,1fr) !important;}
-}
-
 </style><style id="rimaz-final-overrides">
 /* final reference alignment */
 .messages{direction:ltr}.msg{grid-template-columns:76px minmax(0,1fr) 58px;direction:ltr}.msgbody{text-align:left}.msghead{justify-content:flex-start}.msgtext{text-align:left}.time{text-align:right;direction:rtl;padding-right:7px}.presence{direction:ltr;text-align:left;display:grid;grid-template-columns:76px minmax(0,1fr) 58px;align-items:center;padding:4px 0}.presence .presenceAvatar{width:68px;height:68px;object-fit:cover;grid-column:1;grid-row:1 / span 2}.presence .presenceBody{grid-column:2}.presence .presenceTime{grid-column:3;text-align:right;color:#777;font-size:12px;padding-right:7px}.presence .presenceName{display:block;font-size:18px;font-weight:900}.presence .presenceText{font-size:16px}.presence .notice{background:#111;color:#fff;padding:3px 7px;border-radius:1px}.bottom{grid-template-columns:repeat(7,1fr)}.bottom button{font-size:12px}.bottom .exitRoom{background:#0c0c0c}.settings .plain{background:#fff;color:#111}.settings .toggle{background:#fff;color:#111}.settings .toggle.on{background:#fff;color:#111}.settings .toggle.off{background:#f5f5f5;color:#555}.avatarThumb{width:38px;height:38px;object-fit:cover;vertical-align:middle;border:1px solid #bbb;margin-left:7px}.defaultAvatar{width:38px;height:38px;display:inline-grid;place-items:center;background:#fff;border:1px solid #bbb;font-size:9px;font-weight:900;color:#222;vertical-align:middle;margin-left:7px}.adminPanel .adminCard,.adminPanel .adminUser{font-size:13px}.adminPanel button{font-size:10px;min-height:27px;height:auto;padding:4px 5px;line-height:1.15;white-space:normal;overflow-wrap:anywhere}.adminPanel .adminGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.adminPanel .adminUser{grid-template-columns:minmax(0,1fr) 56px 56px}.adminPanel .adminUser button{padding:3px;font-size:10px}.adminPanel h3{font-size:15px}.statusDot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-left:4px}.statusOpen{background:#58bf61}.statusClosed{background:#df5555}.statusOffline{background:#aaa}.rz-keyboard-safe{scroll-margin-bottom:150px}
@@ -870,4 +828,32 @@ sid='';localStorage.removeItem('rimaz_sid');login();
  .privateListOverlay .member>img{width:48px!important;height:48px!important;}
  .privateListOverlay .member .memberName,.membersOverlay .member .memberName,.wallPostMain .wallText>b{font-size:15px!important;}
 }
+</style>
+
+
+<style id="rimaz-reference-match-reviewed-v1">
+/* Reference-matched member lists only. Deliberately does not target public-room messages/presence. */
+.membersOverlay .member,.privateListOverlay .member{display:grid!important;grid-template-columns:5px 46px 25px minmax(0,1fr) 46px!important;column-gap:1px!important;min-height:54px!important;height:auto!important;align-items:center!important;padding:2px 3px!important;direction:ltr!important;overflow:hidden!important;}
+.membersOverlay .member .memberStatusBar,.privateListOverlay .member .memberStatusBar{grid-column:1!important;grid-row:1!important;}
+.membersOverlay .member .memberAvatarStack,.privateListOverlay .member .memberAvatarStack{grid-column:2!important;grid-row:1!important;width:46px!important;height:46px!important;min-width:46px!important;position:relative!important;display:block!important;overflow:visible!important;}
+.membersOverlay .member .memberAvatarStack img,.privateListOverlay .member .memberAvatarStack img,.membersOverlay .member>img,.privateListOverlay .member>img{display:block!important;width:46px!important;height:46px!important;min-width:46px!important;max-width:46px!important;min-height:46px!important;max-height:46px!important;object-fit:cover!important;margin:0!important;}
+.membersOverlay .member .memberBadge,.privateListOverlay .member .memberBadge{grid-column:3!important;grid-row:1!important;width:22px!important;height:22px!important;min-width:22px!important;font-size:14px!important;line-height:1!important;justify-self:center!important;align-self:center!important;margin:0!important;z-index:2!important;}
+.membersOverlay .member .memberMain,.privateListOverlay .member .memberMain{grid-column:4!important;grid-row:1!important;min-width:0!important;width:100%!important;margin:0!important;padding:1px 3px!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:center!important;gap:2px!important;overflow:hidden!important;direction:rtl!important;text-align:left!important;}
+.membersOverlay .member .memberName,.privateListOverlay .member .memberName{display:block!important;max-width:100%!important;font-size:13px!important;font-weight:800!important;line-height:1.15!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+.membersOverlay .member .memberSub,.privateListOverlay .member .memberSub{display:block!important;max-width:100%!important;font-size:10px!important;line-height:1.15!important;color:#777!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;visibility:visible!important;opacity:1!important;}
+.membersOverlay .member .memberLikes{display:none!important;}
+.privateListOverlay .member .privateContactDelete{grid-column:5!important;grid-row:1!important;width:auto!important;max-width:44px!important;min-width:0!important;height:27px!important;padding:2px 3px!important;font-size:9px!important;white-space:nowrap!important;overflow:hidden!important;}
+/* Wall author row: compact and consistent; no status/last-message line is introduced. */
+.wallPosts .wallPost{display:grid!important;grid-template-columns:69px minmax(0,1fr)!important;gap:5px!important;align-items:start!important;padding:4px 5px!important;min-height:0!important;direction:ltr!important;}
+.wallPosts .wallPost .wallAvatarStack{grid-column:1!important;grid-row:1!important;width:69px!important;height:46px!important;min-width:69px!important;position:relative!important;display:block!important;overflow:visible!important;}
+.wallPosts .wallPost img.wallAvatar{display:block!important;width:46px!important;height:46px!important;min-width:46px!important;max-width:46px!important;min-height:46px!important;max-height:46px!important;object-fit:cover!important;margin:0!important;}
+.wallPosts .wallPost .wallAvatarStack .memberBadge{position:absolute!important;top:0!important;right:0!important;width:21px!important;height:21px!important;min-width:21px!important;font-size:13px!important;z-index:2!important;}
+.wallPosts .wallPost .wallPostMain{grid-column:2!important;grid-row:1!important;min-width:0!important;width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;direction:rtl!important;text-align:left!important;}
+.wallPosts .wallPost .wallAuthorLine{display:flex!important;align-items:center!important;gap:4px!important;min-height:20px!important;margin:0!important;padding:0!important;line-height:1.15!important;}
+.wallPosts .wallPost .wallAuthorLine b{display:inline-block!important;width:auto!important;max-width:100%!important;font-size:13px!important;font-weight:800!important;line-height:1.15!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+.wallPosts .wallPost .wallText{margin:1px 0 0!important;padding:0!important;font-size:14px!important;line-height:1.3!important;overflow-wrap:anywhere!important;}
+.wallPosts .wallPost .wallMedia{max-width:100%!important;max-height:180px!important;margin:4px auto!important;}
+.wallPosts .wallPost .wallActions{display:flex!important;gap:2px!important;justify-content:flex-end!important;margin-top:3px!important;min-height:24px!important;}
+.wallPosts .wallPost .wallActions button{padding:2px 7px!important;min-height:24px!important;font-size:11px!important;}
+@media(max-width:600px){.membersOverlay .member,.privateListOverlay .member{grid-template-columns:4px 44px 22px minmax(0,1fr) 43px!important;min-height:52px!important;padding:2px!important;}.membersOverlay .member .memberAvatarStack,.privateListOverlay .member .memberAvatarStack,.membersOverlay .member .memberAvatarStack img,.privateListOverlay .member .memberAvatarStack img,.membersOverlay .member>img,.privateListOverlay .member>img{width:44px!important;height:44px!important;min-width:44px!important;max-width:44px!important;min-height:44px!important;max-height:44px!important;}.membersOverlay .member .memberBadge,.privateListOverlay .member .memberBadge{width:20px!important;height:20px!important;min-width:20px!important;font-size:13px!important;}.privateListOverlay .member .privateContactDelete{max-width:41px!important;font-size:8px!important;}.wallPosts .wallPost{grid-template-columns:66px minmax(0,1fr)!important;gap:4px!important;padding:4px!important;}.wallPosts .wallPost .wallAvatarStack{width:66px!important;height:44px!important;min-width:66px!important;}.wallPosts .wallPost img.wallAvatar{width:44px!important;height:44px!important;min-width:44px!important;max-width:44px!important;min-height:44px!important;max-height:44px!important;}}
 </style>
