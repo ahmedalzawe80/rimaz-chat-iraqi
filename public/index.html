@@ -695,3 +695,23 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 .adminMember .memberName{display:flex!important;align-items:center!important;justify-content:flex-start!important;direction:ltr!important;text-align:left!important;gap:5px!important;white-space:nowrap!important;}
 .privateListOverlay .adminMember .memberMain{grid-column:4!important;}
 </style>
+
+
+<style id="rimaz-one-avatar-name-status-final-v4">
+/* One shared avatar size, based on the online-members row; matching name column widths across views. */
+.msg{grid-template-columns:58px minmax(0,1fr) 42px!important;align-items:start!important;}
+.msg .avatar,.presence .presenceAvatar,.member>img,.privateListOverlay .member>img,.wallPost img.wallAvatar,.room>img,.room .roomAvatar,.rlAvatar{width:54px!important;height:54px!important;min-width:54px!important;max-width:54px!important;min-height:54px!important;max-height:54px!important;object-fit:cover!important;box-sizing:border-box!important;}
+.presence{grid-template-columns:58px minmax(0,1fr) 42px!important;align-items:start!important;}
+.wallPost{grid-template-columns:58px minmax(0,1fr)!important;gap:4px!important;align-items:start!important;}
+.wallPostMain,.msgbody,.presenceBody,.memberMain{min-width:0!important;max-width:100%!important;}
+.member{grid-template-columns:6px 54px minmax(0,1fr) 27px 42px!important;column-gap:2px!important;}
+.member .memberMain{grid-column:3!important;min-width:0!important;}
+.member .memberName{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+.member .memberSub{display:block!important;font-size:12px!important;line-height:1.2!important;white-space:normal!important;overflow-wrap:anywhere!important;}
+.privateListOverlay .member{grid-template-columns:6px 54px minmax(0,1fr) 27px 62px!important;column-gap:2px!important;}
+.privateListOverlay .member .memberMain{grid-column:3!important;min-width:0!important;}
+.privateListOverlay .member .memberName{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+.privateListOverlay .member .memberSub,.privateListOverlay .member .memberLikes{display:none!important;}
+.wallPostMain{grid-column:2!important;overflow-wrap:anywhere!important;}
+@media(max-width:600px){.msg{grid-template-columns:58px minmax(0,1fr) 36px!important}.presence{grid-template-columns:58px minmax(0,1fr) 36px!important}.member,.privateListOverlay .member{grid-template-columns:6px 54px minmax(0,1fr) 25px 58px!important}.wallPost{grid-template-columns:58px minmax(0,1fr)!important}}
+</style>
