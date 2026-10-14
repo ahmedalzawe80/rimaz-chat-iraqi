@@ -752,3 +752,40 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 .adminMember .memberName{display:flex!important;align-items:center!important;justify-content:flex-start!important;direction:ltr!important;text-align:left!important;gap:5px!important;white-space:nowrap!important;}
 .privateListOverlay .adminMember .memberMain{grid-column:4!important;}
 </style>
+
+<style id="rimaz-latest-spacing-and-name-final">
+/* Keep member names readable and consistent across all chat surfaces. */
+.member .memberName,
+.privateListOverlay .member .memberName,
+.wallPostMain .wallText > b,
+.msghead,
+.presence .presenceName {
+  font-size:15px!important;
+  font-weight:800!important;
+  line-height:1.2!important;
+}
+/* Online list: name/status sit at the top, close to the crown, with status visible for admin too. */
+.membersOverlay .member{grid-template-columns:6px 54px 25px minmax(0,1fr) 46px!important;column-gap:1px!important;}
+.membersOverlay .member .memberBadge{grid-column:3!important;width:24px!important;height:24px!important;font-size:15px!important;justify-self:start!important;}
+.membersOverlay .member .memberMain{grid-column:4!important;align-self:start!important;padding:3px 1px!important;margin:0!important;}
+.membersOverlay .member .memberName{display:block!important;font-size:15px!important;font-weight:800!important;line-height:1.2!important;white-space:nowrap!important;}
+.membersOverlay .member .memberSub{display:block!important;font-size:12px!important;line-height:1.2!important;white-space:nowrap!important;visibility:visible!important;opacity:1!important;}
+.membersOverlay .member.adminMember .memberSub{display:block!important;visibility:visible!important;opacity:1!important;}
+/* Private contacts: slightly enlarge the photo and move the crown a little farther right. */
+.privateListOverlay .member{grid-template-columns:6px 50px 31px minmax(0,1fr) 56px!important;column-gap:0!important;}
+.privateListOverlay .member>img{grid-column:2!important;width:48px!important;height:48px!important;min-width:48px!important;max-width:48px!important;min-height:48px!important;max-height:48px!important;}
+.privateListOverlay .member .memberBadge{grid-column:3!important;width:25px!important;height:25px!important;font-size:15px!important;justify-self:center!important;margin-left:2px!important;}
+.privateListOverlay .member .memberMain{grid-column:4!important;margin:0 2px!important;padding:2px!important;min-width:0!important;}
+.privateListOverlay .member .memberName{font-size:15px!important;font-weight:800!important;gap:5px!important;}
+/* Wall: keep the name's own width tight so it doesn't appear to occupy the whole row. */
+.wallPost{grid-template-columns:44px minmax(0,1fr)!important;gap:5px!important;}
+.wallPosts .wallPost img.wallAvatar,.wallAvatar{width:44px!important;height:44px!important;min-width:44px!important;max-width:44px!important;min-height:44px!important;max-height:44px!important;flex:0 0 44px!important;}
+.wallPostMain{min-width:0!important;max-width:100%!important;}
+.wallPostMain .wallText>b{display:table!important;width:max-content!important;max-width:100%!important;font-size:15px!important;font-weight:800!important;line-height:1.2!important;}
+@media(max-width:600px){
+ .membersOverlay .member{grid-template-columns:6px 54px 25px minmax(0,1fr) 46px!important;}
+ .privateListOverlay .member{grid-template-columns:5px 50px 30px minmax(0,1fr) 54px!important;}
+ .privateListOverlay .member>img{width:48px!important;height:48px!important;}
+ .privateListOverlay .member .memberName,.membersOverlay .member .memberName,.wallPostMain .wallText>b{font-size:15px!important;}
+}
+</style>
