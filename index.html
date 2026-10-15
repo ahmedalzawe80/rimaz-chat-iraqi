@@ -307,6 +307,36 @@
 .msg img.avatar{width:38px!important;height:38px!important;min-width:38px!important;max-width:38px!important;min-height:38px!important;max-height:38px!important;flex:0 0 38px!important;object-fit:cover!important;}
 .wallPosts .wallPost img.wallAvatar{width:38px!important;height:38px!important;min-width:38px!important;max-width:38px!important;min-height:38px!important;max-height:38px!important;flex:0 0 38px!important;object-fit:cover!important;}
 </style>
+
+<style id="rimaz-layout-alignment-hotfix-v2">
+/* Align member rows like the supplied reference: avatar, badge and name on one line; status beneath name. */
+.member,.privateListOverlay .member{direction:ltr!important;grid-template-columns:5px 54px 28px minmax(0,1fr) 60px!important;column-gap:3px!important;align-items:center!important;min-height:66px!important;height:auto!important;overflow:visible!important;}
+.member>img,.privateListOverlay .member>img{grid-column:2!important;grid-row:1!important;width:54px!important;height:54px!important;align-self:center!important;}
+.member .memberBadge,.privateListOverlay .member .memberBadge{grid-column:3!important;grid-row:1!important;align-self:start!important;margin-top:2px!important;}
+.member .memberMain,.privateListOverlay .member .memberMain{grid-column:4!important;grid-row:1!important;direction:ltr!important;text-align:left!important;align-self:center!important;min-width:0!important;padding:2px 3px!important;}
+.member .memberName,.privateListOverlay .member .memberName{display:block!important;direction:ltr!important;text-align:left!important;line-height:1.25!important;white-space:nowrap!important;}
+.member .memberSub{display:block!important;direction:ltr!important;text-align:left!important;margin-top:4px!important;white-space:normal!important;line-height:1.2!important;}
+.privateListOverlay .member .privateLastMessage{display:block!important;direction:ltr!important;text-align:left!important;margin-top:4px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+.privateListOverlay .member .privateContactDelete{grid-column:5!important;grid-row:1!important;justify-self:stretch!important;width:100%!important;max-width:none!important;min-width:0!important;height:34px!important;font-size:12px!important;margin:0!important;padding:2px!important;}
+.member.adminMember .memberSub,.privateListOverlay .member.adminMember .memberSub{display:block!important;}
+.msg{grid-template-columns:54px minmax(0,1fr) 42px!important;align-items:start!important;}
+.msg .avatar{grid-column:1!important;grid-row:1!important;width:50px!important;height:50px!important;object-fit:cover!important;}
+.msg .msgbody{grid-column:2!important;grid-row:1!important;min-width:0!important;}
+.msg .msghead{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:6px!important;flex-wrap:nowrap!important;direction:ltr!important;}
+.msg .msghead .memberBadge{flex:0 0 auto!important;}
+.msg .msgtext{display:block!important;clear:both!important;}
+.presence{display:grid!important;grid-template-columns:54px minmax(0,1fr) 42px!important;align-items:center!important;}
+.presence .presenceBody{grid-column:2!important;grid-row:1!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;gap:4px!important;min-width:0!important;}
+.presence .presenceName,.presence .presenceText{display:block!important;position:static!important;max-width:100%!important;white-space:normal!important;line-height:1.25!important;}
+.wallPost{display:grid!important;grid-template-columns:54px minmax(0,1fr)!important;direction:ltr!important;align-items:start!important;gap:8px!important;}
+.wallAvatar{grid-column:1!important;grid-row:1!important;width:54px!important;height:54px!important;object-fit:cover!important;}
+.wallPostMain{grid-column:2!important;grid-row:1!important;min-width:0!important;direction:rtl!important;text-align:right!important;}
+.rimazUnifiedName{display:flex!important;flex-direction:row!important;align-items:center!important;justify-content:flex-start!important;gap:6px!important;direction:rtl!important;}
+.rimazUnifiedName .rimazRoleBadge{display:inline-flex!important;align-items:center!important;flex:0 0 auto!important;}
+.rimazUnifiedName b{display:inline-block!important;min-width:0!important;white-space:nowrap!important;}
+@media(max-width:600px){.member,.privateListOverlay .member{grid-template-columns:4px 48px 25px minmax(0,1fr) 48px!important;column-gap:2px!important;min-height:60px!important}.member>img,.privateListOverlay .member>img{width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important}.member .memberBadge,.privateListOverlay .member .memberBadge{width:23px!important;height:23px!important;min-width:23px!important;font-size:14px!important}.privateListOverlay .member .privateContactDelete{height:30px!important;font-size:10px!important}.msg{grid-template-columns:48px minmax(0,1fr) 36px!important}.msg .avatar{width:44px!important;height:44px!important}.presence{grid-template-columns:48px minmax(0,1fr) 36px!important}.wallPost{grid-template-columns:48px minmax(0,1fr)!important}.wallAvatar{width:48px!important;height:48px!important}}
+</style>
+
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={};
