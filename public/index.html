@@ -307,51 +307,6 @@
 .msg img.avatar{width:38px!important;height:38px!important;min-width:38px!important;max-width:38px!important;min-height:38px!important;max-height:38px!important;flex:0 0 38px!important;object-fit:cover!important;}
 .wallPosts .wallPost img.wallAvatar{width:38px!important;height:38px!important;min-width:38px!important;max-width:38px!important;min-height:38px!important;max-height:38px!important;flex:0 0 38px!important;object-fit:cover!important;}
 </style>
-
-<style id="rimaz-unified-avatar-name-fix">
-/* توحيد قياس الصور وتقليل المساحة التي يستهلكها الاسم في العام والجدار */
-.msg{grid-template-columns:44px minmax(0,1fr) 38px!important;}
-.msg .avatar{width:40px!important;height:40px!important;min-width:40px!important;max-width:40px!important;min-height:40px!important;max-height:40px!important;object-fit:cover!important;align-self:start!important;}
-.presence{grid-template-columns:44px minmax(0,1fr) 38px!important;}
-.presence .presenceAvatar{width:40px!important;height:40px!important;min-width:40px!important;max-width:40px!important;min-height:40px!important;max-height:40px!important;object-fit:cover!important;}
-.wallPost{grid-template-columns:44px minmax(0,1fr)!important;gap:5px!important;}
-.wallPosts .wallPost img.wallAvatar{width:40px!important;height:40px!important;min-width:40px!important;max-width:40px!important;min-height:40px!important;max-height:40px!important;flex:0 0 40px!important;object-fit:cover!important;}
-.wallPostMain{min-width:0!important;width:100%!important;max-width:100%!important;overflow-wrap:anywhere!important;}
-.wallPostMain .wallText{min-width:0!important;max-width:100%!important;overflow-wrap:anywhere!important;}
-.wallPostMain .wallText>b{display:block!important;width:fit-content!important;max-width:100%!important;overflow-wrap:anywhere!important;}
-.msghead{min-width:0!important;max-width:100%!important;overflow-wrap:anywhere!important;}
-.msghead>span{min-width:0!important;max-width:100%!important;overflow-wrap:anywhere!important;}
-@media(max-width:520px){.msg{grid-template-columns:42px minmax(0,1fr) 32px!important}.msg .avatar{width:38px!important;height:38px!important;min-width:38px!important;max-width:38px!important;min-height:38px!important;max-height:38px!important}.presence{grid-template-columns:42px minmax(0,1fr) 32px!important}.presence .presenceAvatar{width:38px!important;height:38px!important;min-width:38px!important;max-width:38px!important;min-height:38px!important;max-height:38px!important}.wallPost{grid-template-columns:42px minmax(0,1fr)!important}.wallPosts .wallPost img.wallAvatar{width:38px!important;height:38px!important;min-width:38px!important;max-width:38px!important;min-height:38px!important;max-height:38px!important;flex-basis:38px!important}}
-</style>
-
-<style id="rimaz-precise-latest-layout-fix">
-/* Reference: the online-member row defines avatar scale and name spacing. */
-/* Public messages: slightly smaller avatar; keep text column flexible. */
-.msg{grid-template-columns:42px minmax(0,1fr) 34px!important;column-gap:5px!important;}
-.msg .avatar{width:38px!important;height:38px!important;min-width:38px!important;max-width:38px!important;min-height:38px!important;max-height:38px!important;object-fit:cover!important;}
-/* Online members: show only the saved status directly under the name. */
-.member .memberSub{display:block!important;min-width:0!important;max-width:100%!important;white-space:normal!important;overflow-wrap:anywhere!important;font-size:11px!important;line-height:1.25!important;}
-.member .memberLikes{display:none!important;}
-.member{grid-template-columns:5px 54px 24px minmax(0,1fr)!important;column-gap:4px!important;}
-.member>img{grid-column:2!important;width:54px!important;height:54px!important;object-fit:cover!important;}
-.member .memberBadge{grid-column:3!important;grid-row:1!important;width:24px!important;height:24px!important;justify-self:center!important;}
-.member .memberMain{grid-column:4!important;grid-row:1!important;min-width:0!important;}
-.member .memberName{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
-.member.adminMember .memberSub{display:block!important;}
-/* Private contacts: photo, crown, name and delete button each get a stable column. */
-.privateListOverlay .member{grid-template-columns:5px 54px 26px minmax(0,1fr) 64px!important;column-gap:4px!important;direction:ltr!important;}
-.privateListOverlay .member>img{grid-column:2!important;width:54px!important;height:54px!important;object-fit:cover!important;}
-.privateListOverlay .member .memberBadge{grid-column:3!important;grid-row:1!important;width:24px!important;height:24px!important;justify-self:center!important;}
-.privateListOverlay .member .memberMain{grid-column:4!important;grid-row:1!important;min-width:0!important;text-align:left!important;direction:ltr!important;}
-.privateListOverlay .member .memberName{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
-.privateListOverlay .member .privateContactDelete{grid-column:5!important;grid-row:1!important;max-width:64px!important;}
-/* Wall: same 54px reference avatar and a flexible name/content column. */
-.wallPost{display:grid!important;grid-template-columns:54px minmax(0,1fr)!important;gap:6px!important;align-items:start!important;}
-.wallPosts .wallPost img.wallAvatar,.wallAvatar{grid-column:1!important;width:54px!important;height:54px!important;min-width:54px!important;max-width:54px!important;min-height:54px!important;max-height:54px!important;object-fit:cover!important;flex:0 0 54px!important;}
-.wallPostMain{grid-column:2!important;min-width:0!important;width:100%!important;max-width:100%!important;overflow-wrap:anywhere!important;}
-.wallPostMain .wallText,.wallPostMain .wallText>b{min-width:0!important;max-width:100%!important;overflow-wrap:anywhere!important;}
-@media(max-width:600px){.msg{grid-template-columns:42px minmax(0,1fr) 32px!important}.msg .avatar{width:38px!important;height:38px!important}.privateListOverlay .member{grid-template-columns:5px 54px 24px minmax(0,1fr) 58px!important}.privateListOverlay .member .privateContactDelete{max-width:58px!important;font-size:11px!important;padding:3px 4px!important}.wallPost{grid-template-columns:54px minmax(0,1fr)!important}.wallPosts .wallPost img.wallAvatar,.wallAvatar{width:54px!important;height:54px!important}}
-</style>
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={};
@@ -435,7 +390,7 @@ function head(t){return `<div class="overlayHead"><span>${t}</span><button class
 async function openMemberProfile(name){const a=await api('/api/members');const u=a.find(x=>key(x.name)===key(name));if(!u)return;const p=u.profile||{};const dn=displayFor(u)||name;layer(`<div class="profileOverlay"><div class="profileTop"><img class="profileTopAvatar" src="${esc(avatarFor(p))}" alt=""><b>${esc(dn)}</b><button type="button" class="close" style="width:28px;height:28px;font-size:22px" onclick="closeLayer()">×</button></div><img class="profilePhoto" src="${esc(avatarFor(p))}" onerror="this.style.display='none'"><div class="profileInfo"><div style="font-size:12px;color:#777"><span class="statusDot ${u.online?(p.privateOpen===false?'statusClosed':'statusOpen'):'statusOffline'}"></span>${esc(u.online?(p.status||'متصل الآن'):'غير متصل')}</div>${u.vip?'<div style="margin-top:4px">👑 VIP</div>':''}</div><div class="profileGrid"><div class="memberProfileMetaRow" style="grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 8px 5px;direction:ltr;box-sizing:border-box"><span class="memberProfileCountry" title="دولة المستخدم" style="display:inline-flex;align-items:center;gap:4px;min-width:0;font-size:12px;font-weight:900;color:#111;white-space:nowrap">${countryFlag(u.countryCode||p.countryCode||p.country||'IQ')} <span>${esc(countryName(u.countryCode||p.countryCode||p.country||'IQ'))}</span></span><div class="memberProfileRoomName" style="justify-self:end;margin-right:0;margin-left:auto;max-width:72%;width:max-content;box-sizing:border-box;text-align:right;padding:4px 12px;font-size:12px;line-height:1.35;font-weight:900;color:#fff;background:#111;border:1px solid #333;border-radius:6px;overflow-wrap:anywhere">الغرفة: ${esc((rooms.find(r=>String(r.id)===String(u.room)||String(r.name)===String(u.room))||{}).name||(u.room?String(u.room):'غير موجود في غرفة'))}</div></div><button type="button" class="memberProfileLikeButton" onclick="sendLike('${esc(name)}')"><span class="memberProfileHeart">♥</span><span class="memberProfileLikeCount">${Number(u.likes)||0}</span></button><button type="button" onclick="notifyUser('${esc(name)}')">✉ تنبيه</button><button type="button" onclick="openPrivate('${esc(name)}')"><span style="display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;white-space:normal">💬 مراسلة<br>خاصة</span></button><button type="button" class="ignore" onclick="ignoreUser('${esc(name)}')">${u.ignoredByMe?'↩ إلغاء التجاهل':'⛔ تجاهل'}</button>${me.staff&&key(name)!==key(me.name)?`<button type="button" onclick="memberAdminMenu('${esc(name)}')">🛠 إدارة</button>`:''}</div></div>`,'memberProfile')}
 
 async function openMembers(){const a=await api('/api/members');layer(`<div class="overlay membersOverlay"><div class="overlayHead membersHead"><span>المتواجدين</span><button class="close" onclick="closeLayer()">×</button></div><div class="overlayBody"><div style="padding:5px"><input id="memberSearch" style="width:100%;height:38px;border:1px solid #aaa;padding:5px" placeholder="... البحث" oninput="filterMembers()"></div><div id="memberList">${memberRows(a)}</div></div></div>`,'members')}
-function memberRows(a){const onlineUsers=a.filter(x=>x.online===true);const roomUsers=currentRoom?onlineUsers.filter(x=>String(x.room||'')===String(currentRoom)):[];const allRows=list=>list.map(x=>{const online=x.online!==false;const dot=memberStatusClass(x);return `<div class="member row ${String(x.name||'').toLowerCase()==='admin'?'adminMember':''}" data-name="${esc(displayFor(x))}" onclick="openMemberProfile('${esc(x.name)}')"><span class="memberStatusBar ${dot}" title="${online?(x.profile?.privateOpen===false?'الخاص مغلق':'الخاص مفتوح'):'غير موجود'}"></span><img src="${esc(avatarFor(x.profile))}">${memberBadge(x)}<div class="memberMain"><div class="memberName">${esc(displayFor(x))} ${x.name.toLowerCase()==='admin'?'👑':''}</div><div class="memberSub">${esc(online?(x.profile?.status||'متصل الآن'):'غير متصل')}</div></div><div class="memberLikes">${String(x.name||'').toLowerCase()==='admin'?'':`${x.likes} ♥<br><span class="flag">${x.type==='guest'?'👤':'🇮🇶'}</span>`}</div></div>`}).join('');if(currentRoom){const roomRows=allRows(roomUsers);const roomUserNames=new Set(roomUsers.map(x=>key(x.name)));const otherOnlineUsers=onlineUsers.filter(x=>!roomUserNames.has(key(x.name)));const allOnlineRows=allRows(otherOnlineUsers);return `${roomRows||'<div class="empty">لا يوجد أعضاء في هذه الغرفة</div>'}<div class="memberSectionBar">المتواجدين في الدردشة</div>${allOnlineRows||'<div class="empty">لا يوجد متواجدون</div>'}`}return allRows(onlineUsers)||'<div class="empty">لا يوجد متواجدون</div>'}
+function memberRows(a){const onlineUsers=a.filter(x=>x.online===true);const roomUsers=currentRoom?onlineUsers.filter(x=>String(x.room||'')===String(currentRoom)):[];const allRows=list=>list.map(x=>{const online=x.online!==false;const dot=memberStatusClass(x);return `<div class="member row ${String(x.name||'').toLowerCase()==='admin'?'adminMember':''}" data-name="${esc(displayFor(x))}" onclick="openMemberProfile('${esc(x.name)}')"><span class="memberStatusBar ${dot}" title="${online?(x.profile?.privateOpen===false?'الخاص مغلق':'الخاص مفتوح'):'غير موجود'}"></span><img src="${esc(avatarFor(x.profile))}">${memberBadge(x)}<div class="memberMain"><div class="memberName">${esc(displayFor(x))} ${x.name.toLowerCase()==='admin'?'👑':''}</div><div class="memberSub">${String(x.name||'').toLowerCase()==='admin'?'':`${esc(online?(x.profile?.status||'متصل الآن'):'غير متصل')} · مستوى ${x.level}`}</div></div><div class="memberLikes">${String(x.name||'').toLowerCase()==='admin'?'':`${x.likes} ♥<br><span class="flag">${x.type==='guest'?'👤':'🇮🇶'}</span>`}</div></div>`}).join('');if(currentRoom){const roomRows=allRows(roomUsers);const roomUserNames=new Set(roomUsers.map(x=>key(x.name)));const otherOnlineUsers=onlineUsers.filter(x=>!roomUserNames.has(key(x.name)));const allOnlineRows=allRows(otherOnlineUsers);return `${roomRows||'<div class="empty">لا يوجد أعضاء في هذه الغرفة</div>'}<div class="memberSectionBar">المتواجدين في الدردشة</div>${allOnlineRows||'<div class="empty">لا يوجد متواجدون</div>'}`}return allRows(onlineUsers)||'<div class="empty">لا يوجد متواجدون</div>'}
 function filterMembers(){const q=key(memberSearch.value);document.querySelectorAll('#memberList .member').forEach(x=>x.style.display=key(x.dataset.name).includes(q)?'grid':'none')}
 async function openRooms(){const s=await api('/api/state');rooms=s.rooms;layer(`<div class="overlay roomsOverlay"><div class="overlayHead roomsHead"><button class="close" onclick="closeLayer()">×</button><span>غرف الدردشة: ${rooms.reduce((n,r)=>n+(r.online||0),0)}</span></div><div class="overlayBody"><button class="newRoom" onclick="toast('إنشاء الغرف من لوحة الادارة فقط')">+ غرفة جديدة</button>${rooms.map(r=>`<div class="room" onclick="reenterRoom('${esc(r.id)}')"><img src="${esc(avatarFor({}))}"><div><div class="roomName">${esc(r.name)}</div><div class="roomDesc">${esc(r.desc||'غرفة عامة ..')}</div></div><div class="count ${r.kind==='voice'?'voice':''}">${r.kind==='voice'?'🎙️':'♟'}${r.online||0}/${r.capacity}</div></div>`).join('')}</div></div>`,'rooms')}
 async function openWall(){wallUnread=0;updateWallButton();const [w,members]=await Promise.all([api('/api/wall'),api('/api/members')]);const byName=new Map(members.map(u=>[key(u.name),u]));const posts=w.map(p=>{const u=byName.get(key(p.from));return {...p,profile:u?.profile||p.profile||{},displayName:u?(displayFor(u)||p.from):(p.displayName||p.from)}});layer(`<div class="overlay">${head('الحائط')}<div class="overlayBody wallOverlayBody"><div id="wallPosts" class="wallPosts">${posts.map(wallCard).join('')}</div><div class="wallInput"><div class="wallCompose"><button onclick="postWall()">إرسال ➤</button><textarea id="wallText" placeholder="اكتب منشورك..."></textarea><button class="smile" onclick="emojiPicker('wall')">🙂</button><button onclick="wallMedia()">📎</button></div></div></div></div>`,'wall')}
@@ -567,34 +522,6 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 .privateListOverlay .member .privateContactDelete{grid-column:5!important;grid-row:1!important;}
 .msg .avatar,.presence .presenceAvatar,.member>img,.privateListOverlay .member>img,.wallAvatar,.room>img,.room .roomAvatar,.rlAvatar{width:54px!important;height:54px!important;object-fit:cover!important;}
 @media(max-width:600px){.member,.privateListOverlay .member{grid-template-columns:5px 54px minmax(0,1fr) 24px 64px!important}.member>img,.privateListOverlay .member>img{width:54px!important;height:54px!important}.member .memberBadge,.privateListOverlay .member .memberBadge{width:22px!important;height:22px!important;font-size:14px!important}}
-</style>
-
-
-<style id="rimaz-user-final-small-adjustments">
-/* Keep the approved public-chat size; make private-contact photos just a little larger. */
-.privateListOverlay .member>img{width:50px!important;height:50px!important;min-width:50px!important;max-width:50px!important;min-height:50px!important;max-height:50px!important;object-fit:cover!important;}
-.privateListOverlay .member{grid-template-columns:6px 52px 26px minmax(0,1fr) 58px!important;column-gap:1px!important;}
-.privateListOverlay .member .memberMain{grid-column:4!important;min-width:0!important;}
-.privateListOverlay .member .memberBadge{grid-column:3!important;width:24px!important;height:24px!important;}
-.privateListOverlay .member .privateContactDelete{grid-column:5!important;max-width:56px!important;}
-/* Wall: compact avatar/name column so the actual post gets the room. */
-.wallPost{grid-template-columns:44px minmax(0,1fr)!important;gap:5px!important;}
-.wallPosts .wallPost img.wallAvatar,.wallAvatar{width:44px!important;height:44px!important;min-width:44px!important;max-width:44px!important;min-height:44px!important;max-height:44px!important;flex:0 0 44px!important;object-fit:cover!important;}
-.wallPostMain{min-width:0!important;max-width:100%!important;}
-.wallPostMain .wallText>b{display:inline-block!important;max-width:48%!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;vertical-align:bottom!important;}
-/* Online list only: align name to the top edge of the avatar and put saved status directly below it. */
-.membersOverlay .member .memberMain{align-self:start!important;justify-self:stretch!important;grid-row:1!important;padding-top:3px!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:flex-start!important;gap:2px!important;overflow:hidden!important;}
-.membersOverlay .member .memberName{display:block!important;align-self:flex-start!important;line-height:1.15!important;min-height:14px!important;white-space:nowrap!important;}
-.membersOverlay .member .memberSub{display:block!important;visibility:visible!important;opacity:1!important;align-self:flex-start!important;line-height:1.15!important;max-width:100%!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
-/* Admin rows also show status in the online list; only hide like/level details. */
-.membersOverlay .member.adminMember .memberSub{display:block!important;visibility:visible!important;opacity:1!important;}
-.membersOverlay .member.adminMember .memberLikes{display:none!important;}
-@media(max-width:600px){
- .privateListOverlay .member{grid-template-columns:5px 52px 24px minmax(0,1fr) 56px!important;}
- .privateListOverlay .member>img{width:50px!important;height:50px!important;min-width:50px!important;max-width:50px!important;min-height:50px!important;max-height:50px!important;}
- .wallPost{grid-template-columns:44px minmax(0,1fr)!important;}
- .wallPosts .wallPost img.wallAvatar,.wallAvatar{width:44px!important;height:44px!important;min-width:44px!important;max-width:44px!important;min-height:44px!important;max-height:44px!important;}
-}
 </style>
 
 </body></html>
@@ -751,41 +678,4 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 .adminMember .memberMain{grid-column:4!important;min-width:0!important;}
 .adminMember .memberName{display:flex!important;align-items:center!important;justify-content:flex-start!important;direction:ltr!important;text-align:left!important;gap:5px!important;white-space:nowrap!important;}
 .privateListOverlay .adminMember .memberMain{grid-column:4!important;}
-</style>
-
-<style id="rimaz-latest-spacing-and-name-final">
-/* Keep member names readable and consistent across all chat surfaces. */
-.member .memberName,
-.privateListOverlay .member .memberName,
-.wallPostMain .wallText > b,
-.msghead,
-.presence .presenceName {
-  font-size:15px!important;
-  font-weight:800!important;
-  line-height:1.2!important;
-}
-/* Online list: name/status sit at the top, close to the crown, with status visible for admin too. */
-.membersOverlay .member{grid-template-columns:6px 54px 25px minmax(0,1fr) 46px!important;column-gap:1px!important;}
-.membersOverlay .member .memberBadge{grid-column:3!important;width:24px!important;height:24px!important;font-size:15px!important;justify-self:start!important;}
-.membersOverlay .member .memberMain{grid-column:4!important;align-self:start!important;padding:3px 1px!important;margin:0!important;}
-.membersOverlay .member .memberName{display:block!important;font-size:15px!important;font-weight:800!important;line-height:1.2!important;white-space:nowrap!important;}
-.membersOverlay .member .memberSub{display:block!important;font-size:12px!important;line-height:1.2!important;white-space:nowrap!important;visibility:visible!important;opacity:1!important;}
-.membersOverlay .member.adminMember .memberSub{display:block!important;visibility:visible!important;opacity:1!important;}
-/* Private contacts: slightly enlarge the photo and move the crown a little farther right. */
-.privateListOverlay .member{grid-template-columns:6px 50px 31px minmax(0,1fr) 56px!important;column-gap:0!important;}
-.privateListOverlay .member>img{grid-column:2!important;width:48px!important;height:48px!important;min-width:48px!important;max-width:48px!important;min-height:48px!important;max-height:48px!important;}
-.privateListOverlay .member .memberBadge{grid-column:3!important;width:25px!important;height:25px!important;font-size:15px!important;justify-self:center!important;margin-left:2px!important;}
-.privateListOverlay .member .memberMain{grid-column:4!important;margin:0 2px!important;padding:2px!important;min-width:0!important;}
-.privateListOverlay .member .memberName{font-size:15px!important;font-weight:800!important;gap:5px!important;}
-/* Wall: keep the name's own width tight so it doesn't appear to occupy the whole row. */
-.wallPost{grid-template-columns:44px minmax(0,1fr)!important;gap:5px!important;}
-.wallPosts .wallPost img.wallAvatar,.wallAvatar{width:44px!important;height:44px!important;min-width:44px!important;max-width:44px!important;min-height:44px!important;max-height:44px!important;flex:0 0 44px!important;}
-.wallPostMain{min-width:0!important;max-width:100%!important;}
-.wallPostMain .wallText>b{display:table!important;width:max-content!important;max-width:100%!important;font-size:15px!important;font-weight:800!important;line-height:1.2!important;}
-@media(max-width:600px){
- .membersOverlay .member{grid-template-columns:6px 54px 25px minmax(0,1fr) 46px!important;}
- .privateListOverlay .member{grid-template-columns:5px 50px 30px minmax(0,1fr) 54px!important;}
- .privateListOverlay .member>img{width:48px!important;height:48px!important;}
- .privateListOverlay .member .memberName,.membersOverlay .member .memberName,.wallPostMain .wallText>b{font-size:15px!important;}
-}
 </style>
