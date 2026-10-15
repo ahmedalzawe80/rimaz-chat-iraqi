@@ -307,6 +307,31 @@
 .msg img.avatar{width:38px!important;height:38px!important;min-width:38px!important;max-width:38px!important;min-height:38px!important;max-height:38px!important;flex:0 0 38px!important;object-fit:cover!important;}
 .wallPosts .wallPost img.wallAvatar{width:38px!important;height:38px!important;min-width:38px!important;max-width:38px!important;min-height:38px!important;max-height:38px!important;flex:0 0 38px!important;object-fit:cover!important;}
 </style>
+
+<style id="rimaz-no-tags-avatar-name-only">
+/* User request: remove all role/gift tags; show avatar directly beside name in every section. */
+.member{
+  grid-template-columns:6px 54px minmax(0,1fr) auto!important;
+  column-gap:6px!important;
+  align-items:center!important;
+}
+.member .memberStatusBar{grid-column:1!important;grid-row:1!important;}
+.member>img{grid-column:2!important;grid-row:1!important;}
+.member .memberMain{grid-column:3!important;grid-row:1!important;min-width:0!important;margin:0!important;}
+.member .memberLikes{grid-column:4!important;grid-row:1!important;}
+.privateListOverlay .member{
+  grid-template-columns:6px 48px minmax(0,1fr) 66px!important;
+  column-gap:6px!important;
+}
+.privateListOverlay .member .memberMain{grid-column:3!important;}
+.privateListOverlay .member .privateContactDelete{grid-column:4!important;justify-self:center!important;}
+.privateListOverlay .member .memberBadge{display:none!important;}
+.rimazUnifiedName{display:flex!important;align-items:center!important;gap:0!important;}
+.rimazRoleBadge,.memberBadge{display:none!important;}
+.wallPost{grid-template-columns:54px minmax(0,1fr)!important;column-gap:8px!important;}
+.wallPostMain{min-width:0!important;}
+</style>
+
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={};
@@ -368,7 +393,7 @@ async function doGuest(){try{const j=await api('/api/guest',{method:'POST',heade
 async function boot(){try{const s=await api('/api/state');me=s.user;rooms=s.rooms;currentRoom='public';notifications=await api('/api/notifications');const privateContacts=await api('/api/private/contacts');privateContacts.forEach(x=>{privateUnread[key(x.name)]=Number(x.unread)||0});renderChat();updatePrivateButton();connect();}catch(e){sid='';localStorage.removeItem('rimaz_sid');login()}}
 function displayFor(x){return x?.displayName||x?.profile?.displayName||x?.name||''}
 function avatarFor(p){return p?.avatar||'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="#fff"/><text x="50" y="43" text-anchor="middle" font-family="Tahoma" font-size="15" font-weight="700" fill="#111">دردشة</text><text x="50" y="62" text-anchor="middle" font-family="Tahoma" font-size="18" font-weight="900" fill="#111">ريماز</text></svg>`)}
-function memberBadge(x){if(x?.role==='owner'||x?.role==='admin')return '<span class="memberBadge roleAdmin" title="مالك الدردشة">👑</span>';if(x?.role==='super')return '<span class="memberBadge roleSuper" title="سوبر">⭐</span>';if(x?.role==='banner')return '<span class="memberBadge roleBanner" title="بنر">🛡️</span>';if(x?.vip)return '<span class="memberBadge roleVip" title="VIP">👑</span>';const gifts=x?.profile?.gifts||[];const g=gifts[0]?.gift||'';if(g.includes('أسود'))return '<span class="memberBadge giftBlack" title="درع أسود">🛡️</span>';if(g.includes('أبيض'))return '<span class="memberBadge giftWhite" title="درع أبيض">🛡️</span>';if(g.includes('فضي'))return '<span class="memberBadge giftSilver" title="درع فضي">🛡️</span>';if(g.includes('وردة'))return '<span class="memberBadge giftRose" title="وردة">🌹</span>';return '<span class="memberBadge emptyBadge" aria-hidden="true"></span>'}
+function memberBadge(x){return ''}
 function memberStatusClass(x){const online=x?.online!==false;const open=x?.profile?.privateOpen!==false;return online?(open?'statusOpen':'statusClosed'):'statusOffline'}
 function avatarLabel(p){return p?.avatar?`<img class="avatarThumb" src="${esc(p.avatar)}">`:`<span class="defaultAvatar">دردشة ريماز</span>`}
 function refreshRoomBar(){const r=rooms.find(x=>x.id===currentRoom)||{name:'الغرفة العامة'};const n=document.querySelector('.roomName');if(n)n.textContent=r.name}
@@ -394,7 +419,7 @@ function memberRows(a){const onlineUsers=a.filter(x=>x.online===true);const room
 function filterMembers(){const q=key(memberSearch.value);document.querySelectorAll('#memberList .member').forEach(x=>x.style.display=key(x.dataset.name).includes(q)?'grid':'none')}
 async function openRooms(){const s=await api('/api/state');rooms=s.rooms;layer(`<div class="overlay roomsOverlay"><div class="overlayHead roomsHead"><button class="close" onclick="closeLayer()">×</button><span>غرف الدردشة: ${rooms.reduce((n,r)=>n+(r.online||0),0)}</span></div><div class="overlayBody"><button class="newRoom" onclick="toast('إنشاء الغرف من لوحة الادارة فقط')">+ غرفة جديدة</button>${rooms.map(r=>`<div class="room" onclick="reenterRoom('${esc(r.id)}')"><img src="${esc(avatarFor({}))}"><div><div class="roomName">${esc(r.name)}</div><div class="roomDesc">${esc(r.desc||'غرفة عامة ..')}</div></div><div class="count ${r.kind==='voice'?'voice':''}">${r.kind==='voice'?'🎙️':'♟'}${r.online||0}/${r.capacity}</div></div>`).join('')}</div></div>`,'rooms')}
 async function openWall(){wallUnread=0;updateWallButton();const [w,members]=await Promise.all([api('/api/wall'),api('/api/members')]);const byName=new Map(members.map(u=>[key(u.name),u]));const posts=w.map(p=>{const u=byName.get(key(p.from));return {...p,profile:u?.profile||p.profile||{},role:u?.role||p.role,vip:u?.vip||p.vip,displayName:u?(displayFor(u)||p.from):(p.displayName||p.from)}});layer(`<div class="overlay">${head('الحائط')}<div class="overlayBody wallOverlayBody"><div id="wallPosts" class="wallPosts">${posts.map(wallCard).join('')}</div><div class="wallInput"><div class="wallCompose"><button onclick="postWall()">إرسال ➤</button><textarea id="wallText" placeholder="اكتب منشورك..."></textarea><button class="smile" onclick="emojiPicker('wall')">🙂</button><button onclick="wallMedia()">📎</button></div></div></div></div>`,'wall')}
-function wallCard(p){let m='';if(p.media)m=p.media.mime.startsWith('image/')?`<img src="${esc(p.media.url)}" class="wallMedia">`:`<video src="${esc(p.media.url)}" class="wallMedia" controls></video>`;return `<div class="wallPost"><img class="wallAvatar" onclick="openMemberProfile('${esc(p.from)}')" src="${esc(avatarFor(p.profile||{}))}"><div class="wallPostMain"><div class="wallText"><div class="rimazUnifiedName"><span class="rimazRoleBadge">${memberBadge(p)}</span><b onclick="openMemberProfile('${esc(p.from)}')" style="cursor:pointer">${esc(p.displayName||p.from)}</b></div><div>${esc(p.text||'')}</div>${m}</div><div class="wallActions"><button onclick="wallLike('${p.id}')">♥${p.likes||''}</button><button onclick="toast('التعليقات متاحة داخل المنشور')">💬</button></div></div></div>`}
+function wallCard(p){let m='';if(p.media)m=p.media.mime.startsWith('image/')?`<img src="${esc(p.media.url)}" class="wallMedia">`:`<video src="${esc(p.media.url)}" class="wallMedia" controls></video>`;return `<div class="wallPost"><img class="wallAvatar" onclick="openMemberProfile('${esc(p.from)}')" src="${esc(avatarFor(p.profile||{}))}"><div class="wallPostMain"><div class="wallText"><div class="rimazUnifiedName"><b onclick="openMemberProfile('${esc(p.from)}')" style="cursor:pointer">${esc(p.displayName||p.from)}</b></div><div>${esc(p.text||'')}</div>${m}</div><div class="wallActions"><button onclick="wallLike('${p.id}')">♥${p.likes||''}</button><button onclick="toast('التعليقات متاحة داخل المنشور')">💬</button></div></div></div>`}
 async function postWall(){const text=document.getElementById('wallText')?.value.trim();if(!text)return toast('اكتب شيئاً أولاً');try{await api('/api/wall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});toast('تم النشر');openWall()}catch(e){toast(e.message)}}
 async function wallMedia(kind){const f=document.createElement('input');f.type='file';f.accept=kind==='image'?'image/*':'video/*';f.onchange=async()=>{const fd=new FormData();fd.append('file',f.files[0]);fd.append('scope','wall');try{await api('/api/media',{method:'POST',body:fd});openWall()}catch(e){toast(e.message)}};f.click()}
 async function wallLike(id){try{const j=await api('/api/wall/like',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});toast('♥ '+j.likes);openWall()}catch(e){toast(e.message)}}
