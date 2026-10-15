@@ -592,6 +592,23 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 .msghead{align-items:center!important;flex-wrap:wrap!important;}
 </style>
 
+
+<style id="rimaz-restore-original-card-width-final">
+/* Keep the underlying public chat at its original full width; panels overlay from the right without resizing it. */
+@media(max-width:650px){
+  #layer>.overlay, #layer>.privateOverlay{
+    position:absolute!important; right:0!important; left:auto!important;
+    width:72%!important; max-width:520px!important; min-width:0!important;
+    box-sizing:border-box!important;
+    border-left:2px solid #555!important;
+    box-shadow:-3px 0 8px rgba(0,0,0,.22)!important;
+  }
+  #layer>.overlay{top:0!important; bottom:39px!important; height:auto!important; max-height:none!important;}
+  #layer>.privateOverlay{top:0!important; bottom:39px!important; height:auto!important; max-height:none!important;}
+  #layer>.privateOverlay.privateMax{right:0!important;left:auto!important;width:72%!important;top:0!important;bottom:39px!important;height:auto!important;}
+}
+</style>
+
 </body></html>
 <style id="rimaz-user-latest-final">
 /* latest user alignment — preserve approved sizes, only mirror requested areas */
