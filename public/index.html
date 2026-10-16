@@ -338,18 +338,14 @@
 </style>
 
 
-<style id="rimaz-wall-compact-only-v1">
-/* Wall only: reduce each post's vertical footprint; leave other chat/list layouts untouched. */
-.wallPosts .wallPost{padding:4px 6px!important;grid-template-columns:42px minmax(0,1fr)!important;gap:6px!important;}
-.wallPosts .wallPost>.wallAvatar{width:42px!important;height:42px!important;min-width:42px!important;max-width:42px!important;min-height:42px!important;max-height:42px!important;}
-.wallPosts .wallPostMain{min-width:0!important;}
-.wallPosts .wallPost .rimazUnifiedName{min-height:22px!important;margin-bottom:2px!important;gap:5px!important;}
-.wallPosts .wallPost .rimazUnifiedName .memberBadge{width:21px!important;height:21px!important;font-size:15px!important;}
-.wallPosts .wallPost .rimazUnifiedName b{font-size:14px!important;line-height:1.15!important;}
-.wallPosts .wallPost .wallText{font-size:13px!important;line-height:1.25!important;}
-.wallPosts .wallPost .wallActions{margin-top:2px!important;gap:3px!important;}
-.wallPosts .wallPost .wallActions button{min-height:21px!important;padding:2px 6px!important;font-size:10px!important;}
-.wallPosts .wallPost .wallMedia{max-height:150px!important;margin:4px auto!important;}
+
+<style id="rimaz-wall-spacing-only-v2">
+/* Spacing-only wall adjustment: keep avatar, crown, name, text, media and buttons at their existing sizes. */
+.wallPosts .wallPost{padding:2px 4px!important;margin:0!important;}
+.wallPosts .wallPost .rimazUnifiedName{margin-top:0!important;margin-bottom:2px!important;}
+.wallPosts .wallPost .wallText{margin-top:0!important;margin-bottom:0!important;}
+.wallPosts .wallPost .wallActions{margin-top:2px!important;}
+.wallPosts .wallPost .wallMedia{margin-top:3px!important;margin-bottom:3px!important;}
 </style>
 </head><body><div id="app"></div>
 <script>
