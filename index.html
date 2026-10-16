@@ -366,6 +366,12 @@
   align-self:flex-start!important;
 }
 </style>
+
+<style id="rimaz-online-status-same-size-as-name-final-v1">
+#layer .membersOverlay .member .memberSub { font-size:15px!important; line-height:1.25!important; }
+@media(max-width:600px){#layer .membersOverlay .member .memberSub{font-size:15px!important;line-height:1.25!important;}}
+</style>
+
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={};
