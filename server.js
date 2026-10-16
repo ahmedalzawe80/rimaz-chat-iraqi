@@ -16,19 +16,10 @@ const ROOT = __dirname;
 const INDEX_CANDIDATES = [path.join(ROOT, 'index.html'), path.join(ROOT, 'public', 'index.html')];
 const INDEX_FILE = INDEX_CANDIDATES.find(file => fs.existsSync(file));
 if (!INDEX_FILE) console.error('FATAL: index.html is missing. Expected /app/index.html or /app/public/index.html');
-let DATA_DIR = process.env.DATA_DIR || (fs.existsSync('/data') ? '/data/rimaz' : path.join('/tmp', 'rimaz-data'));
-let UP_DIR = path.join(DATA_DIR, 'uploads');
-let DB_FILE = path.join(DATA_DIR, 'data.json');
-// Some hosting containers provide a DATA_DIR whose parent does not exist.
-// Fall back to a writable temporary directory instead of crashing at startup.
-try { fs.mkdirSync(UP_DIR, { recursive: true }); }
-catch (err) {
-  console.error(`Cannot create data directory ${UP_DIR}: ${err.message}. Falling back to /tmp/rimaz-data`);
-  DATA_DIR = path.join('/tmp', 'rimaz-data');
-  UP_DIR = path.join(DATA_DIR, 'uploads');
-  DB_FILE = path.join(DATA_DIR, 'data.json');
-  fs.mkdirSync(UP_DIR, { recursive: true });
-}
+const DATA_DIR = process.env.DATA_DIR || (fs.existsSync('/data') ? '/data/rimaz' : path.join('/tmp', 'rimaz-data'));
+const UP_DIR = path.join(DATA_DIR, 'uploads');
+const DB_FILE = path.join(DATA_DIR, 'data.json');
+fs.mkdirSync(UP_DIR, { recursive: true });
 
 app.disable('x-powered-by');
 app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','SAMEORIGIN');res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');res.setHeader('Permissions-Policy','camera=(self), microphone=(self), geolocation=()');if(req.path.startsWith('/api/'))res.setHeader('Cache-Control','no-store');next();});
