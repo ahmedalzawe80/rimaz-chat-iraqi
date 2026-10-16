@@ -653,6 +653,13 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 #layer .privateOverlay .privateHeadTitle b{display:block!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;font-size:14px!important;line-height:1.2!important;}
 #layer .privateOverlay .privateHeadName small{display:block!important;width:100%!important;text-align:left!important;direction:rtl!important;font-size:10px!important;line-height:1.2!important;}
 </style>
+
+<style id="rimaz-online-status-visible-final-v2">
+/* Online members only: restore status line under each name; do not affect private conversation previews. */
+#layer .membersOverlay .member .memberSub,
+#layer .membersOverlay .adminMember .memberSub { display:block!important; visibility:visible!important; opacity:1!important; height:auto!important; min-height:initial!important; max-height:none!important; margin-top:3px!important; margin-bottom:0!important; padding:0!important; line-height:1.3!important; overflow:visible!important; }
+</style>
+
 </body></html>
 <style id="rimaz-user-latest-final">
 /* latest user alignment — preserve approved sizes, only mirror requested areas */
