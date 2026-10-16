@@ -84,7 +84,7 @@ function profile(name){
   const p=db.profiles[name];
   if(!p.displayName) p.displayName=cleanName(name);
   // Never let the old automatic status survive as a default. Custom statuses remain untouched.
-  if(!p.status || p.status==='متصل الآن') p.status=defaultStatus(name);
+  if(!p.status || p.status==='متصل الآن' || p.status==='زائر جديد' || p.status==='غير مسجل' || p.status==='عضو جديد') p.status=defaultStatus(name);
   if(!p.fontColor) p.fontColor=p.nameColor||'#222222';
   return p;
 }
@@ -92,7 +92,7 @@ function profile(name){
 let statusMigrated=false;
 for (const name of Object.keys(db.profiles||{})) {
   const p=db.profiles[name];
-  if(p && p.status==='متصل الآن'){ p.status=defaultStatus(name); statusMigrated=true; }
+  if(p && (!p.status || p.status==='متصل الآن' || p.status==='زائر جديد' || p.status==='غير مسجل' || p.status==='عضو جديد')) { const next=defaultStatus(name); if(p.status!==next){p.status=next; statusMigrated=true;} }
 }
 if(statusMigrated) save();
 function displayName(name){ return profile(name).displayName || cleanName(name); }
