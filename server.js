@@ -78,14 +78,22 @@ function level(l){ l=Number(l)||0; return l>=500?3:l>=400?2:1; }
 function canNotice(u){ return isStaff(u) || userLikes(u)>=400; }
 function canMedia(u){ return isStaff(u) || userLikes(u)>=500; }
 function vipActive(name){ const p=profile(name); if(p.vipUntil&&p.vipUntil>Date.now()) return true; if(p.vipUntil){delete p.vipUntil; save();} return false; }
+function defaultStatus(name){ return getGuest(name) ? 'زائر جديد' : 'عضو جديد'; }
 function profile(name){
-  if (!db.profiles[name]) db.profiles[name]={displayName:cleanName(name),avatar:'',status:'متصل الآن',bio:'عضو في دردشة ريماز عراقية',nameColor:'#222222',fontColor:'#222222',bgColor:'#ffffff',privateOpen:true,notificationsOpen:true};
+  if (!db.profiles[name]) db.profiles[name]={displayName:cleanName(name),avatar:'',status:defaultStatus(name),bio:'عضو في دردشة ريماز عراقية',nameColor:'#222222',fontColor:'#222222',bgColor:'#ffffff',privateOpen:true,notificationsOpen:true};
   const p=db.profiles[name];
   if(!p.displayName) p.displayName=cleanName(name);
-  if(!p.status) p.status='متصل الآن';
+  if(!p.status) p.status=defaultStatus(name);
   if(!p.fontColor) p.fontColor=p.nameColor||'#222222';
   return p;
 }
+// Migrate the old automatic status to the new type-specific default, while keeping custom statuses.
+let statusMigrated=false;
+for (const name of Object.keys(db.profiles||{})) {
+  const p=db.profiles[name];
+  if(p && p.status==='متصل الآن'){ p.status=defaultStatus(name); statusMigrated=true; }
+}
+if(statusMigrated) save();
 function displayName(name){ return profile(name).displayName || cleanName(name); }
 function sessionUser(sid){ const s=sessions.get(sid); if(!s)return null; const role=roleOf(s); return {...s, role, owner:isOwner(s), admin:isAdmin(s), staff:isStaff(s), vip:vipActive(s.name), likes:isAdmin(s)?999999:userLikes(s)}; }
 function makeSession(name,type){
@@ -167,13 +175,16 @@ app.post('/api/guest',(req,res)=>{
   if(globalBanned(n,requestClientIp(req)))return res.status(403).json({error:'عنوان الإنترنت محظور من الدردشة، حاول بعد انتهاء 5 دقائق'});
   const taken=Object.keys(db.users).some(x=>keyName(x)===keyName(n)) || Object.keys(db.guests).some(x=>keyName(x)===keyName(n));
   if(taken)return res.status(409).json({error:'الاسم مستخدم، اختر اسماً آخر'});
-  db.guests[n]={likes:0,created:Date.now()}; const sid=makeSession(n,'guest'); save(); res.json({sid,user:sessionUser(sid)});
+  db.guests[n]={likes:0,created:Date.now()}; const gp=profile(n); gp.status='زائر جديد'; const sid=makeSession(n,'guest'); save(); res.json({sid,user:sessionUser(sid)});
 });
 app.post('/api/logout',requireAuth,(req,res)=>{ const sid=req.get('x-session'); const u=sessions.get(sid); if(u?.type==='guest'){delete db.guests[u.name];delete db.profiles[u.name];} sessions.delete(sid); delete db.sessions[sid]; save(); res.json({ok:true}); });
 
-app.get('/api/public-online',(req,res)=>{ const users=getOnlineUsers().map(u=>({name:u.name,displayName:u.displayName,avatar:u.profile?.avatar||'',status:u.profile?.status||'متصل الآن'})); res.set('Cache-Control','no-store'); res.json({users}); });
+app.get('/api/public-online',(req,res)=>{ const users=getOnlineUsers().map(u=>({name:u.name,type:u.type,displayName:u.displayName,avatar:u.profile?.avatar||'',status:u.profile?.status||defaultStatus(u.name)})); res.set('Cache-Control','no-store'); res.json({users}); });
 app.get('/api/state',requireAuth,(req,res)=>{
-  const u=req.user; const likes=userLikes(u); const rooms=db.rooms.map(r=>({...r,online:onlineInRoom(r.id)}));
+  const u=req.user;
+  // A guest starts each fresh app entry with the default status; registered members keep their saved status.
+  if(u.type==='guest' && req.query.entry==='1'){ const p=profile(u.name); p.status='زائر جديد'; save(); }
+  const likes=userLikes(u); const rooms=db.rooms.map(r=>({...r,online:onlineInRoom(r.id)}));
   res.json({user:{...u,likes,level:level(likes),admin:isAdmin(u),owner:isOwner(u),staff:isStaff(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name),notice:canNotice(u),media:canMedia(u)}, rooms, online:getOnlineUsers().map(x=>({name:x.name,type:x.type,likes:x.likes,level:x.level,profile:x.profile,online:true,role:x.role||roleOf(x),admin:isAdmin(x),vip:vipActive(x.name)}))});
 });
 app.get('/api/history',requireAuth,(req,res)=>{ const room=String(req.query.room||'public'); res.json(db.messages.filter(x=>x.room===room).slice(-200)); });
@@ -302,7 +313,7 @@ app.post('/api/profile',requireAuth,(req,res)=>{
     if(!dn)return res.status(400).json({error:'الاسم المزخرف لا يمكن أن يكون فارغاً'});
     p.displayName=dn;
   }
-  if(req.body.status!==undefined)p.status=String(req.body.status).slice(0,100)||'متصل الآن';
+  if(req.body.status!==undefined)p.status=String(req.body.status).slice(0,100)||defaultStatus(u.name);
   if(req.body.bio!==undefined)p.bio=String(req.body.bio).slice(0,300);
   if(req.body.nameColor!==undefined)p.nameColor=String(req.body.nameColor).slice(0,20);
   if(req.body.fontColor!==undefined)p.fontColor=String(req.body.fontColor).slice(0,20);
