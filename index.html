@@ -708,6 +708,13 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 
 
 
+
+<style id="rimaz-status-label-position-fix-v16">
+/* Keep the status directly below the display name, in the same text column, not floated to the right. */
+.member .memberMain,.privateListOverlay .member .memberMain{display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:center!important;gap:2px!important;direction:rtl!important;text-align:right!important;position:static!important;transform:none!important;}
+.member .memberName,.privateListOverlay .member .memberName{align-self:stretch!important;width:100%!important;text-align:right!important;margin:0!important;}
+.member .memberSub{display:block!important;position:static!important;float:none!important;align-self:stretch!important;width:100%!important;max-width:100%!important;grid-column:auto!important;grid-row:auto!important;margin:1px 0 0!important;padding:0!important;transform:none!important;direction:rtl!important;text-align:right!important;line-height:1.2!important;}
+</style>
 </body></html>
 <style id="rimaz-user-latest-final">
 /* latest user alignment — preserve approved sizes, only mirror requested areas */
