@@ -48,7 +48,7 @@ const defaults = () => ({
     { id:'love', name:'غرفة الحب', desc:'غرفة خاصة ..', kind:'private', capacity:100, mics:0, owner:'admin' },
     { id:'voice', name:'غرفة الصوت', desc:'مايك ..', kind:'voice', capacity:50, mics:8, owner:'admin' }
   ],
-  roomBans:{}, roomMutes:{}, roomKicks:{},
+  roomBans:{}, roomMutes:{}, roomKicks:{}, globalBans:{},
   wallLikes:{}, wallComments:{}, privateMessages:[], privateHidden:{}, privateRead:{}, ignored:{}
 });
 
@@ -125,6 +125,8 @@ function roomBanned(name,room){
   return active.some(item=>typeof item==='string'?keyName(item)===n:(item&&keyName(item.name)===n));
 }
 function roomMuted(name,room){ return Array.isArray(db.roomMutes[room]) && db.roomMutes[room].includes(keyName(name)); }
+function globalBanned(name){ const n=keyName(name), item=(db.globalBans||{})[n]; if(!item)return false; if(Number(item.until||0)<=Date.now()){delete db.globalBans[n];save();return false;} return true; }
+function removeFromChat(name, banned){ const n=keyName(name); for(const so of io.sockets.sockets.values()){ const sid2=so.data?.sid, u2=so.data?.user||socketUsers.get(sid2); if(!u2||keyName(u2.name)!==n)continue; const oldRoom=u2.room||''; if(oldRoom){so.leave(oldRoom);roomSockets.get(oldRoom)?.delete(sid2);} if(so.data?.user)so.data.user.room=''; if(socketUsers.get(sid2))socketUsers.get(sid2).room=''; so.emit('kicked',{global:true,banned:!!banned,room:oldRoom}); } emitState(); }
 function safeMessage(m){ return {...m, text:String(m.text||'').slice(0,2000)}; }
 function addMessage(m){ db.messages.push(m); if(db.messages.length>1000)db.messages.splice(0,db.messages.length-1000); save(); }
 function notify(name,item){
@@ -215,6 +217,8 @@ app.post('/api/admin/member-action',(req,res)=>{requireAuth(req,res,()=>{
   const actor=req.user,n=accountKey(req.body.name),action=String(req.body.action||''),room=String(req.body.room||'public');
   if(!n)return res.status(400).json({error:'الاسم مطلوب'});
   if(!isStaff(actor))return res.status(403).json({error:'صلاحية الإدارة والسوبر فقط'});
+  if(action==='global-kick'){ removeFromChat(n,false); return res.json({ok:true}); }
+  if(action==='global-ban'){ db.globalBans=db.globalBans||{}; const until=Date.now()+5*60*1000; db.globalBans[keyName(n)]={name:keyName(n),until}; save(); removeFromChat(n,true); return res.json({ok:true,until}); }
   const target=getUser(n)||getGuest(n);
   if(!target && !['kick','ban','mute'].includes(action))return res.status(404).json({error:'المستخدم غير موجود'});
   if(action==='grant-like'&&!isAdmin(actor))return res.status(403).json({error:'زيادة اللايكات للمالك والإداري فقط'});
@@ -319,6 +323,7 @@ io.on('connection',socket=>{
     const pendingGuestCleanup=guestDisconnectTimers.get(sid); if(pendingGuestCleanup){clearTimeout(pendingGuestCleanup);guestDisconnectTimers.delete(sid);}
     const u=sessionUser(sid); if(!u)return;
     socket.data.sid=sid; socket.data.user={...u,room}; socketUsers.set(sid,{...u,room});
+    if(globalBanned(u.name)){socketUsers.delete(sid);socket.data.user=null;socket.emit('join-error',{error:'أنت محظور من الدردشة، حاول بعد انتهاء 5 دقائق'});return;}
     if(roomBanned(u.name,room)){socketUsers.delete(sid);socket.emit('join-error',{error:'أنت محظور من هذه الغرفة'});return;}
     socket.join(room); if(!roomSockets.has(room))roomSockets.set(room,new Set());roomSockets.get(room).add(sid);
     socket.emit('history',{room,items:db.messages.filter(x=>x.room===room).slice(-200).map(x=>{const account=getUser(x.from)||getGuest(x.from);return {...x,role:account?roleOf(account):(x.role||'member'),vip:vipActive(x.from)};})}); const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'join',text:'',at:Date.now(),profile:profile(u.name)}; addMessage(pm); io.to(room).emit('message',pm); emitState();
