@@ -78,7 +78,7 @@ function level(l){ l=Number(l)||0; return l>=500?3:l>=400?2:1; }
 function canNotice(u){ return isStaff(u) || userLikes(u)>=400; }
 function canMedia(u){ return isStaff(u) || userLikes(u)>=500; }
 function vipActive(name){ const p=profile(name); if(p.vipUntil&&p.vipUntil>Date.now()) return true; if(p.vipUntil){delete p.vipUntil; save();} return false; }
-function defaultStatus(name){ return getGuest(name) ? 'زائر جديد' : 'عضو جديد'; }
+function defaultStatus(name){ return getGuest(name) ? '(غير مسجل)' : '(عضو جديد)'; }
 function profile(name){
   if (!db.profiles[name]) db.profiles[name]={displayName:cleanName(name),avatar:'',status:defaultStatus(name),bio:'عضو في دردشة ريماز عراقية',nameColor:'#222222',fontColor:'#222222',bgColor:'#ffffff',privateOpen:true,notificationsOpen:true};
   const p=db.profiles[name];
@@ -176,7 +176,7 @@ app.post('/api/guest',(req,res)=>{
   if(globalBanned(n,requestClientIp(req)))return res.status(403).json({error:'عنوان الإنترنت محظور من الدردشة، حاول بعد انتهاء 5 دقائق'});
   const taken=Object.keys(db.users).some(x=>keyName(x)===keyName(n)) || Object.keys(db.guests).some(x=>keyName(x)===keyName(n));
   if(taken)return res.status(409).json({error:'الاسم مستخدم، اختر اسماً آخر'});
-  db.guests[n]={likes:0,created:Date.now()}; const gp=profile(n); gp.status='زائر جديد'; const sid=makeSession(n,'guest'); save(); res.json({sid,user:sessionUser(sid)});
+  db.guests[n]={likes:0,created:Date.now()}; const gp=profile(n); gp.status='(غير مسجل)'; const sid=makeSession(n,'guest'); save(); res.json({sid,user:sessionUser(sid)});
 });
 app.post('/api/logout',requireAuth,(req,res)=>{ const sid=req.get('x-session'); const u=sessions.get(sid); if(u?.type==='guest'){delete db.guests[u.name];delete db.profiles[u.name];} sessions.delete(sid); delete db.sessions[sid]; save(); res.json({ok:true}); });
 
@@ -184,7 +184,7 @@ app.get('/api/public-online',(req,res)=>{ const users=getOnlineUsers().map(u=>({
 app.get('/api/state',requireAuth,(req,res)=>{
   const u=req.user;
   // A guest starts each fresh app entry with the default status; registered members keep their saved status.
-  if(u.type==='guest' && req.query.entry==='1'){ const p=profile(u.name); p.status='زائر جديد'; save(); }
+  if(u.type==='guest' && req.query.entry==='1'){ const p=profile(u.name); p.status='(غير مسجل)'; save(); }
   const likes=userLikes(u); const rooms=db.rooms.map(r=>({...r,online:onlineInRoom(r.id)}));
   res.json({user:{...u,likes,level:level(likes),admin:isAdmin(u),owner:isOwner(u),staff:isStaff(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name),notice:canNotice(u),media:canMedia(u)}, rooms, online:getOnlineUsers().map(x=>({name:x.name,type:x.type,likes:x.likes,level:x.level,profile:x.profile,online:true,role:x.role||roleOf(x),admin:isAdmin(x),vip:vipActive(x.name)}))});
 });
