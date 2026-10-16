@@ -145,18 +145,22 @@ const upload = multer({
 
 app.post('/api/register',(req,res)=>{
   const n=cleanName(req.body.name), p=String(req.body.password||'');
+  if(n && globalBanned(n))return res.status(403).json({error:'أنت محظور من الدردشة، حاول بعد انتهاء 5 دقائق'});
   if(!n||!p)return res.status(400).json({error:'الاسم والباسورد مطلوبان'});
   if(p.length<3)return res.status(400).json({error:'الباسورد 3 أحرف على الأقل'});
   if(db.users[n]||Object.keys(db.users).some(x=>keyName(x)===keyName(n)))return res.status(409).json({error:'الاسم مستخدم مسبقاً'});
   db.users[n]={hash:bcrypt.hashSync(p,10),likes:keyName(n)==='admin'?999999:0,created:Date.now()}; profile(n); const sid=makeSession(n,'member'); save(); res.json({sid,user:sessionUser(sid)});
 });
 app.post('/api/login',(req,res)=>{
-  const n=cleanName(req.body.name), p=String(req.body.password||''); const u=db.users[n] || Object.entries(db.users).find(([k])=>keyName(k)===keyName(n))?.[1];
+  const n=cleanName(req.body.name), p=String(req.body.password||'');
+  if(n && globalBanned(n))return res.status(403).json({error:'أنت محظور من الدردشة، حاول بعد انتهاء 5 دقائق'});
+  const u=db.users[n] || Object.entries(db.users).find(([k])=>keyName(k)===keyName(n))?.[1];
   if(!u || !bcrypt.compareSync(p,u.hash))return res.status(401).json({error:'الاسم أو الباسورد غير صحيح'});
   const real=Object.keys(db.users).find(k=>keyName(k)===keyName(n))||n; const sid=makeSession(real,'member'); res.json({sid,user:sessionUser(sid)});
 });
 app.post('/api/guest',(req,res)=>{
   const n=cleanName(req.body.name); if(!n)return res.status(400).json({error:'اكتب اسم الزائر'});
+  if(globalBanned(n))return res.status(403).json({error:'أنت محظور من الدردشة، حاول بعد انتهاء 5 دقائق'});
   const taken=Object.keys(db.users).some(x=>keyName(x)===keyName(n)) || Object.keys(db.guests).some(x=>keyName(x)===keyName(n));
   if(taken)return res.status(409).json({error:'الاسم مستخدم، اختر اسماً آخر'});
   db.guests[n]={likes:0,created:Date.now()}; const sid=makeSession(n,'guest'); save(); res.json({sid,user:sessionUser(sid)});
