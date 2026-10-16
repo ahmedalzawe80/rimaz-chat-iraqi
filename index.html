@@ -349,6 +349,23 @@
 .wallPosts .wallPost .wallActions{margin-top:2px!important;}
 .wallPosts .wallPost .wallMedia{margin-top:3px!important;margin-bottom:3px!important;}
 </style>
+
+<style id="rimaz-private-last-message-left-final-fix-2026">
+/* Final override: only the last-message preview in the private conversation list. */
+#layer .privateListOverlay .member .memberMain .privateLastMessage{
+  direction:ltr!important;
+  text-align:left!important;
+  text-align-last:left!important;
+  unicode-bidi:plaintext!important;
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  margin-left:0!important;
+  margin-right:auto!important;
+  justify-self:start!important;
+  align-self:flex-start!important;
+}
+</style>
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={};
