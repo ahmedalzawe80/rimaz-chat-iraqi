@@ -574,6 +574,42 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 @media(max-width:600px){:root{--rimaz-member-avatar:48px;--rimaz-member-row:58px;--rimaz-member-badge:23px}.member,.privateListOverlay .member{grid-template-columns:4px var(--rimaz-member-avatar) 25px minmax(0,1fr) 48px!important;column-gap:1px!important}.member>img,.privateListOverlay .member>img{width:var(--rimaz-member-avatar)!important;height:var(--rimaz-member-avatar)!important;min-width:var(--rimaz-member-avatar)!important}.member .memberName,.privateListOverlay .member .memberName{font-size:13px!important}.member .memberSub{font-size:12px!important}.privateListOverlay .member .privateContactDelete{width:45px!important;max-width:45px!important;font-size:9px!important}.privateListOverlay .member .privateLastMessage{font-size:11px!important}.presence .presenceText{font-size:16px!important}}
 </style>
 
+<style id="rimaz-mobile-overlay-repair-2026">
+/* Mobile repair: overlays occupy the usable viewport instead of exposing a broken strip of the page underneath. */
+@media(max-width:650px){
+ #layer .overlay,#layer .privateOverlay{position:absolute!important;left:0!important;right:0!important;width:100%!important;max-width:none!important;top:0!important;bottom:39px!important;height:auto!important;box-sizing:border-box!important;border-left:0!important;border-right:0!important;border-radius:0!important;overflow:hidden!important;}
+ #layer .overlayBody,#layer .privateBody{min-height:0!important;overflow:auto!important;}
+ #layer .privateOverlay.privateMax{left:0!important;right:0!important;width:100%!important;top:0!important;bottom:39px!important;height:auto!important;}
+ #layer .overlayHead,#layer .privateHead{min-height:48px!important;height:48px!important;box-sizing:border-box!important;font-size:20px!important;}
+ #layer .membersOverlay .member,#layer .privateListOverlay .member{grid-template-columns:5px 54px 30px minmax(0,1fr) 64px!important;min-height:66px!important;}
+ #layer .membersOverlay .member .memberName,#layer .privateListOverlay .member .memberName{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+}
+/* Keep message identity, badge and status aligned consistently. */
+.presence .presenceBody{min-width:0!important;align-self:center!important;padding:3px 5px!important;}
+.presence .presenceName{display:flex!important;align-items:center!important;gap:5px!important;line-height:1.25!important;overflow-wrap:anywhere!important;}
+.presence .presenceText{display:block!important;line-height:1.35!important;overflow-wrap:anywhere!important;}
+.msgbody{min-width:0!important;overflow-wrap:anywhere!important;}
+.msghead{align-items:center!important;flex-wrap:wrap!important;}
+</style>
+
+
+<style id="rimaz-restore-original-card-width-final">
+/* Keep the underlying public chat at its original full width; panels overlay from the right without resizing it. */
+@media(max-width:650px){
+  #layer>.overlay, #layer>.privateOverlay{
+    position:absolute!important; right:0!important; left:auto!important;
+    width:72%!important; max-width:520px!important; min-width:0!important;
+    box-sizing:border-box!important;
+    border-left:2px solid #555!important;
+    box-shadow:-3px 0 8px rgba(0,0,0,.22)!important;
+  }
+  #layer>.overlay{top:0!important; bottom:39px!important; height:auto!important; max-height:none!important;}
+  #layer>.privateOverlay{top:0!important; bottom:39px!important; height:auto!important; max-height:none!important;}
+  #layer>.privateOverlay.privateMax{right:0!important;left:auto!important;width:72%!important;top:0!important;bottom:39px!important;height:auto!important;}
+}
+</style>
+
+
 <style id="rimaz-final-status-and-private-header-fix">
 /* Keep online status under every displayed member name, including admin. */
 .member .memberSub{display:block!important;visibility:visible!important;}
@@ -766,4 +802,36 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 .presence .presenceName{font-size:17px!important;line-height:1.2!important}
 .presence .presenceText{font-size:16px!important;line-height:1.25!important}
 @media(max-width:600px){.member,.privateListOverlay .member{grid-template-columns:4px 48px 27px minmax(0,1fr) 48px!important;min-height:60px!important;column-gap:2px!important}.member>img,.privateListOverlay .member>img{width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important}.member .memberBadge,.privateListOverlay .member .memberBadge{width:24px!important;height:24px!important;min-width:24px!important;font-size:15px!important}.member .memberName,.privateListOverlay .member .memberName{font-size:15px!important}.member .memberSub,.privateListOverlay .member .privateLastMessage{font-size:14px!important}.privateListOverlay .member .privateContactDelete{width:45px!important;max-width:45px!important;font-size:10px!important}.wallAvatar{width:48px!important;height:48px!important}.wallPost{grid-template-columns:48px minmax(0,1fr)!important}.presence .presenceText{font-size:16px!important}}
+</style>
+<style id="rimaz-approved-top-alignment-v2">
+/* Approved layout: avatar on the left; badge first, then name on the same top line; detail directly below. */
+.member,.privateListOverlay .member{align-items:start!important;min-height:66px!important;}
+.member>img,.privateListOverlay .member>img{grid-row:1 / span 2!important;align-self:start!important;margin-top:0!important;}
+.member .memberBadge,.privateListOverlay .member .memberBadge{grid-row:1!important;align-self:start!important;justify-self:center!important;margin-top:1px!important;}
+.member .memberMain,.privateListOverlay .member .memberMain{grid-row:1 / span 2!important;align-self:start!important;padding-top:0!important;}
+.member .memberName,.privateListOverlay .member .memberName{min-height:27px!important;display:flex!important;align-items:flex-start!important;line-height:1.25!important;}
+.member .memberSub,.privateListOverlay .member .privateLastMessage{margin-top:0!important;padding-top:2px!important;line-height:1.25!important;}
+/* Keep the badge and username at the top edge in public messages too. */
+.msg{align-items:start!important;}
+.msg .avatar{grid-row:1!important;align-self:start!important;}
+.msg .msgbody{align-self:start!important;padding-top:3px!important;}
+.msg .msghead{align-items:flex-start!important;justify-content:flex-start!important;gap:6px!important;line-height:1.2!important;}
+.msg .msghead .badge,.msg .msghead .memberBadge,.msg .msghead .rimazRoleBadge{align-self:flex-start!important;margin-top:0!important;}
+/* Wall posts use the same avatar / badge / name top alignment as the public chat. */
+.wallPost{align-items:start!important;}
+.wallPost>.wallAvatar{grid-column:1!important;grid-row:1!important;align-self:start!important;}
+.wallPost .wallPostMain{grid-column:2!important;grid-row:1!important;align-self:start!important;}
+.wallPost .rimazUnifiedName{justify-content:flex-start!important;align-items:flex-start!important;gap:6px!important;margin-top:0!important;}
+.wallPost .rimazUnifiedName .rimazRoleBadge{flex:0 0 auto!important;margin:0!important;align-self:flex-start!important;}
+.wallPost .rimazUnifiedName b{align-self:flex-start!important;margin:0!important;line-height:1.25!important;}
+@media(max-width:600px){
+ .member,.privateListOverlay .member{grid-template-columns:4px 48px 27px minmax(0,1fr) 48px!important;min-height:60px!important;column-gap:2px!important;}
+ .member>img,.privateListOverlay .member>img{width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;}
+ .member .memberBadge,.privateListOverlay .member .memberBadge{width:24px!important;height:24px!important;min-width:24px!important;font-size:15px!important;}
+ .member .memberMain,.privateListOverlay .member .memberMain{padding:0 3px!important;}
+ .member .memberName,.privateListOverlay .member .memberName{font-size:15px!important;min-height:23px!important;}
+ .member .memberSub,.privateListOverlay .member .privateLastMessage{font-size:13px!important;}
+ .wallPost{grid-template-columns:48px minmax(0,1fr)!important;gap:6px!important;}
+ .wallAvatar{width:48px!important;height:48px!important;}
+}
 </style>
