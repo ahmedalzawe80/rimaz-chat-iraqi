@@ -401,7 +401,21 @@ const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid
 const EMOJIS='😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🤩 🥳 😏 😒 😞 😔 😟 😕 🙁 ☹️ 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😱 😨 😰 😥 😓 🤗 🤔 🫡 🤭 🤫 🤥 😶 😐 😑 😬 🙄 😯 😦 😧 😮 😲 🥱 😴 🤤 😪 😵 🤐 🤑 🤠 😈 👿 👹 👺 🤡 💩 👻 💀 ☠️ 👽 👾 🤖 🎃 😺 😸 😹 😻 😼 😽 🙀 😿 😾 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❤️‍🔥 💕 💞 💓 💗 💖 💘 💝 💟 💋 👍 👎 👌 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ ✋ 🤚 🖐️ 🖖 👋 🤏 💪 🙏 👏 🙌 🫶 🤝 💅 👀 👁️ 🧠 🔥 ⭐ 🌟 ✨ 💫 💥 🎉 🎊 🌹 🌷 🌸 🌺 🌻 🦋 🕊️ ☀️ 🌙 ⚡ 💎 👑 🥀 🥰'.split(' ');
 function esc(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 async function api(url,opt={}){opt.headers={...(opt.headers||{}),'x-session':sid};let r=await fetch(url,opt);let j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'حدث خطأ');return j}
-function toast(t){const x=document.getElementById('toast');if(!x)return;x.textContent=t;x.style.display='block';clearTimeout(x._t);x._t=setTimeout(()=>x.style.display='none',2600)}
+
+function toast(t){
+let x=document.getElementById('toast');
+if(!x){
+x=document.createElement('div');
+x.id='toast';
+Object.assign(x.style,{position:'fixed',left:'16px',right:'16px',bottom:'24px',zIndex:'999999',padding:'14px',background:'#202124',color:'#fff',borderRadius:'12px',fontSize:'15px',textAlign:'center',display:'none',direction:'rtl',boxShadow:'0 4px 18px #0005'});
+document.body.appendChild(x);
+}
+x.textContent=t;
+x.style.display='block';
+clearTimeout(x._t);
+x._t=setTimeout(()=>x.style.display='none',5000);
+}
+
 function login(){
 app.innerHTML=`<div class="login rimazLogin"><header class="rlTop"><div class="rlBrand"><span class="rlHeartLogo" aria-label="دردشة ريماز"><span><b>دردشة</b><em>ريماز</em></span></span><div class="rlBrandTag"><small>محادثات · تواصل · أصدقاء</small></div></div><div class="rlTopTools"><span>⚙ الإعدادات</span><span>؟ مساعدة</span></div></header>
 <section class="rlHero"><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=900&q=85" alt="صورة فتاة للترحيب"><div class="rlHeroCopy"><h1>دردشة <strong>ريماز</strong><br>عراقية</h1><p>أهلاً وسهلاً بك في ريماز ♡</p><small>مكانك للتعارف وتكوين الصداقات</small><div class="rlFlag"><span>الله أكبر</span></div></div></section>
