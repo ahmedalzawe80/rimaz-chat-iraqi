@@ -136,6 +136,11 @@ const DEFAULT_ROLE_PERMISSIONS = {
   'admin-shield':['panel_access','users_view','moderation','messages_delete','gifts','announcements','rooms_manage','vip','profile_edit','avatar_delete','grant_likes'],
   member:[]
 };
+// Migrate legacy rank profiles that were saved with only the first two basic permissions.
+// Preserve any profile that already contains a richer custom selection.
+let rankPermissionMigrationChanged=false;
+for(const rank of RANK_PERMISSION_PROFILES){const saved=db.rolePermissions[rank];if(!Array.isArray(saved)||saved.filter(p=>p!=='panel_access').length<=1){db.rolePermissions[rank]=[...(DEFAULT_ROLE_PERMISSIONS[rank]||[])];rankPermissionMigrationChanged=true;}}
+if(rankPermissionMigrationChanged) save();
 function hasPermission(user, permission){
   if(isOwner(user)) return true;
   if(PROTECTED_ROLE_PERMISSIONS.includes(permission)) return false;
