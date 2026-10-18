@@ -410,7 +410,7 @@ app.innerHTML=`<div class="login rimazLogin"><header class="rlTop"><div class="r
 <button id="tabIn" onclick="loginMode('in')"><span>♟</span> دخول عضو</button>
 <button id="tabNew" onclick="loginMode('new')"><span>♟✚</span> تسجيل عضو</button></div>
 <div id="loginForm" class="loginForm rlForm"></div>
-<div class="rlSpecial"><button id="tabHidden" onclick="loginMode('hidden')">🛡 دخول السوبر والإداري</button><button id="tabGhost" onclick="loginMode('ghost')">👻 دخول الشبح</button></div>
+<div class="rlSpecial"><button id="tabHidden" onclick="loginMode('hidden')">🛡 دخول السوبر والإداري</button><button id="tabGhost" onclick="loginMode('ghost')">👻 دخول الشبح</button><button onclick="loginMode('ownerSetup')">🔐 تهيئة حساب المالك لأول مرة</button></div>
 </section>
 <section class="rlOnline"><div class="rlOnlineHead"><span>👥 المتواجدين الآن</span><b><span id="rlOnlineCount">—</span></b></div><div id="rlOnlineList" class="rlOnlineList"><div class="rlOnlineEmpty">جارٍ تحميل المتواجدين…</div></div><div class="rlOnlineFoot">قائمة للعرض فقط — سجّل دخولك للمشاركة بالدردشة</div></section>
 <footer class="rlFooter"><span>دردشة ريماز عراقية</span><span>♥ أهلاً بكم</span></footer></div>`;
@@ -427,6 +427,8 @@ if(mode==='guest'){
 f.innerHTML=`<input id="ln" autocomplete="nickname" placeholder="اكتب اسم الزائر (اسم فريد)" aria-label="اسم الزائر"><button class="primary guest" onclick="doGuest()">دخول زائر ←</button>`;
 }else if(mode==='in'||mode==='new'){
 f.innerHTML=`<input id="ln" autocomplete="username" placeholder="${mode==='new'?'اختر اسم عضو غير مستخدم':'اكتب اسم العضو'}" aria-label="اسم العضو"><input id="lp" type="password" autocomplete="${mode==='new'?'new-password':'current-password'}" placeholder="اكتب كلمة المرور" aria-label="كلمة المرور"><button class="primary" onclick="${mode==='new'?'doRegister()':'doLogin()'}">${mode==='new'?'تسجيل (عضو جديد)':'دخول عضو'} ←</button>`;
+}else if(mode==='ownerSetup'){
+f.innerHTML=`<div class="rlPrivateNote">تهيئة لمرة واحدة فقط. تحتاج رمز التهيئة الذي تضبطه الاستضافة؛ لا تشارك الرمز مع أحد.</div><input id="ln" value="owner" autocomplete="username" aria-label="اسم المالك" readonly><input id="ownerToken" type="password" autocomplete="off" placeholder="رمز التهيئة لمرة واحدة" aria-label="رمز التهيئة"><input id="lp" type="password" autocomplete="new-password" placeholder="كلمة مرور المالك (12 حرفاً على الأقل)" aria-label="كلمة مرور المالك"><button class="primary" onclick="doOwnerSetup()">إنشاء حساب المالك والدخول ←</button>`;
 }else{
 f.innerHTML=`<div class="rlPrivateNote">${mode==='ghost'?'دخول الشبح مخصص لمالك الموقع فقط':'الدخول المخفي مخصص للسوبر والإداري المخوّل'}</div><input id="ln" autocomplete="username" placeholder="اسم الحساب" aria-label="اسم الحساب"><input id="lp" type="password" autocomplete="current-password" placeholder="كلمة المرور" aria-label="كلمة المرور"><button class="primary" onclick="doPrivilegedLogin('${mode}')">${mode==='ghost'?'دخول الشبح':'دخول مخفي'} ←</button>`;
 }
@@ -451,6 +453,7 @@ list.innerHTML=users.length?users.map(u=>`<div class="rlOnlineMember"><div class
 }catch(e){list.innerHTML='<div class="rlOnlineEmpty">قائمة المتواجدين غير متاحة حالياً</div>';}
 }
 async function doRegister(){try{const j=await api('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:ln.value,password:lp.value})});sid=j.sid;localStorage.setItem('rimaz_sid',sid);await boot()}catch(e){toast(e.message)}}
+async function doOwnerSetup(){try{const j=await api('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'owner',password:lp.value,bootstrapToken:document.getElementById('ownerToken').value})});sid=j.sid;localStorage.setItem('rimaz_sid',sid);await boot()}catch(e){toast(e.message)}}
 async function doLogin(){try{const j=await api('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:ln.value,password:lp.value})});sid=j.sid;localStorage.setItem('rimaz_sid',sid);await boot()}catch(e){toast(e.message)}}
 async function doGuest(){try{const j=await api('/api/guest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:ln.value})});sid=j.sid;localStorage.setItem('rimaz_sid',sid);await boot()}catch(e){toast(e.message)}}
 async function boot(){try{const s=await api('/api/state?entry=1');me=s.user;rooms=s.rooms;currentRoom='public';notifications=await api('/api/notifications');const privateContacts=await api('/api/private/contacts');privateContacts.forEach(x=>{privateUnread[key(x.name)]=Number(x.unread)||0});renderChat();updatePrivateButton();connect();}catch(e){sid='';localStorage.removeItem('rimaz_sid');login()}}
