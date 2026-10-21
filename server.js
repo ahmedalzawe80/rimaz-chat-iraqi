@@ -159,12 +159,23 @@ for(const rank of RANK_PERMISSION_PROFILES){
 if(rankPermissionMigrationChanged) save();
 function hasPermission(user, permission){
   if(isOwner(user)) return true;
-  if(PROTECTED_ROLE_PERMISSIONS.includes(permission)){ const pp=user?.name?profile(user.name):null; const rr=pp&&pp.rank&&(!pp.rankUntil||Number(pp.rankUntil)>Date.now())?pp.rank:null; const profileKey=rr&&RANK_BASE_ROLE[rr]?rr:roleOf(user); const custom=Array.isArray(db.rolePermissions?.[profileKey])?db.rolePermissions[profileKey]:null; const defaults=DEFAULT_ROLE_PERMISSIONS[profileKey]||[]; return roleOf(user)==='admin' && (custom===null?defaults.includes(permission):custom.includes(permission)); }
-  const p=user?.name?profile(user.name):null;
-  const rank=p&&p.rank&&!p.rankUntil? p.rank : (p&&p.rank&&Number(p.rankUntil)>Date.now()?p.rank:null);
-  const rankRole=rank&&RANK_BASE_ROLE[rank]?rank:null;
   const role=roleOf(user);
-  if(!rankRole&&!['admin','super','banner'].includes(role)) return false;
+  const p=user?.name?profile(user.name):null;
+  const rank=p&&p.rank&&(!p.rankUntil||Number(p.rankUntil)>Date.now())?p.rank:null;
+  const rankRole=rank&&RANK_BASE_ROLE[rank]?rank:null;
+  // The named admin account keeps its admin baseline even if it wears a visual rank.
+  // A custom rank may add permissions; it must not silently remove the admin panel tabs.
+  if(role==='admin'){
+    const adminCustom=Array.isArray(db.rolePermissions?.admin)?db.rolePermissions.admin:null;
+    const adminDefaults=DEFAULT_ROLE_PERMISSIONS.admin||[];
+    const rankCustom=rankRole&&Array.isArray(db.rolePermissions?.[rankRole])?db.rolePermissions[rankRole]:null;
+    const rankDefaults=rankRole?(DEFAULT_ROLE_PERMISSIONS[rankRole]||[]):[];
+    const adminAllowed=adminCustom===null?adminDefaults:adminCustom;
+    const rankAllowed=rankRole?(rankCustom===null?rankDefaults:rankCustom):[];
+    return adminAllowed.includes(permission)||rankAllowed.includes(permission);
+  }
+  if(PROTECTED_ROLE_PERMISSIONS.includes(permission)) return false;
+  if(!rankRole&&!['super','banner'].includes(role)) return false;
   if(permission==='panel_access') return true;
   const profileKey=rankRole||role;
   const custom=db.rolePermissions&&Array.isArray(db.rolePermissions[profileKey])?db.rolePermissions[profileKey]:null;
@@ -379,7 +390,7 @@ app.post('/api/admin/unmute',requireAdmin,(req,res)=>{const room=String(req.body
 function roomAction(type,req,res){
   const room=String(req.body.room||'public'),name=keyName(req.body.name);
   if(!name)return res.status(400).json({error:'الاسم مطلوب'});
-  if(isOwner({name,role:(getUser(name)||getGuest(name)||{}).role})||name===keyName(process.env.ADMIN_NAME||'admin'))return res.status(403).json({error:'حساب صاحب الموقع محمي'});
+  if((isOwner({name,role:(getUser(name)||getGuest(name)||{}).role})||name===keyName(process.env.OWNER_NAME||'owner'))&&!isOwner(req.user))return res.status(403).json({error:'حساب صاحب الموقع محمي ولا يحق للإداري اتخاذ إجراء عليه'});
   db[type][room]=db[type][room]||[];
   if(type==='roomMutes'){
     if(!db[type][room].includes(name))db[type][room].push(name);
@@ -401,7 +412,7 @@ function roomAction(type,req,res){
   emitState();res.json({ok:true});
 }
 
-app.post('/api/admin/kick',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'moderation'))return res.status(403).json({error:'ما عندك صلاحية الإشراف'});const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});if(isOwner({name,role:(getUser(name)||getGuest(name)||{}).role})||name===keyName(process.env.ADMIN_NAME||'admin'))return res.status(403).json({error:'حساب صاحب الموقع محمي'});for(const [sid2,u2] of socketUsers){if(keyName(u2.name)===name&&u2.room===room){const so=socketBySession(sid2);so?.leave(room);roomSockets.get(room)?.delete(sid2);so?.emit('kicked',{room});}}emitState();res.json({ok:true});});});
+app.post('/api/admin/kick',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'moderation'))return res.status(403).json({error:'ما عندك صلاحية الإشراف'});const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});if((isOwner({name,role:(getUser(name)||getGuest(name)||{}).role})||name===keyName(process.env.OWNER_NAME||'owner'))&&!isOwner(req.user))return res.status(403).json({error:'حساب صاحب الموقع محمي ولا يحق للإداري اتخاذ إجراء عليه'});for(const [sid2,u2] of socketUsers){if(keyName(u2.name)===name&&u2.room===room){const so=socketBySession(sid2);so?.leave(room);roomSockets.get(room)?.delete(sid2);so?.emit('kicked',{room});}}emitState();res.json({ok:true});});});
 app.post('/api/admin/mute',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'moderation'))return res.status(403).json({error:'ما عندك صلاحية الإشراف'});roomAction('roomMutes',req,res);});});
 app.post('/api/admin/ban',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'moderation'))return res.status(403).json({error:'ما عندك صلاحية الإشراف'});roomAction('roomBans',req,res);});});
 app.post('/api/admin/unban',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'moderation'))return res.status(403).json({error:'ما عندك صلاحية الإشراف'});const room=String(req.body.room||'public'),name=keyName(req.body.name);db.roomBans[room]=(db.roomBans[room]||[]).filter(x=>typeof x==='string'?x!==name:keyName(x?.name)!==name);save();res.json({ok:true});});});
