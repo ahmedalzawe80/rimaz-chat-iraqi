@@ -1059,12 +1059,12 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 @media(max-width:600px){.rimazChatNotice,.rimazWelcomeNotice{width:min(46%,190px)!important;max-width:190px!important;margin-right:0!important;margin-left:auto!important}}
 </style>
 
-<style id="rimaz-announcement-left-edge-final-v9">
-/* Keep the approved compact card and right edge; extend the left-side accent to the far left without widening the card. */
-.rimazChatNotice,.rimazWelcomeNotice{position:relative!important;isolation:isolate!important;}
-.rimazChatNotice::before,.rimazWelcomeNotice::before{content:""!important;position:absolute!important;top:-1px!important;bottom:-1px!important;left:calc(-1 * (100vw - 190px) / 2)!important;width:calc((100vw - 190px) / 2)!important;max-width:calc(100vw - 190px)!important;background:inherit!important;z-index:-1!important;pointer-events:none!important;}
+<style id="rimaz-announcement-left-edge-final-v10">
+/* Keep the compact card anchored to the right; extend only its background/accent fill all the way to the left edge. */
+.rimazChatNotice,.rimazWelcomeNotice{position:relative!important;isolation:isolate!important;overflow:visible!important;}
+.rimazChatNotice::before,.rimazWelcomeNotice::before{content:""!important;position:absolute!important;top:-1px!important;bottom:-1px!important;left:calc(-1 * (100vw - 190px))!important;width:calc(100vw - 190px)!important;max-width:none!important;background:inherit!important;z-index:-1!important;pointer-events:none!important;}
 .announcementFixedLabel{display:inline-block!important;background:#1649c7!important;color:#fff!important;font-weight:900!important;padding:2px 7px!important;border-radius:2px!important;margin-inline-end:5px!important}
-@media(max-width:600px){.rimazChatNotice::before,.rimazWelcomeNotice::before{left:calc(-1 * (100vw - min(46vw,190px)) / 2)!important;width:calc((100vw - min(46vw,190px)) / 2)!important;}}
+@media(max-width:600px){.rimazChatNotice::before,.rimazWelcomeNotice::before{left:calc(-1 * (100vw - min(46vw,190px)))!important;width:calc(100vw - min(46vw,190px))!important;max-width:none!important;}}
 </style>
 
 <style>
