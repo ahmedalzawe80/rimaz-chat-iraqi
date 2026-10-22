@@ -1,0 +1,10 @@
+Changes in this build:
+- Announcement/welcome cards restyled to compact right-aligned pale-blue cards with publisher avatar, name, rank, text and timestamp.
+- Automatic separate welcome card sent on joining a room.
+- Timed announcements expire after five minutes; expiry is cleaned at server startup and by timer.
+- Room creation options explicitly distinguish public written, private written, and voice rooms.
+- Restored the top room bar, hidden by older CSS overrides, and added per-room raised-mic status with server-side 30-like gate and room-specific speaker state.
+
+Limitations:
+- This project does not currently implement live audio streaming/WebRTC voice rooms; the mic control here tracks raised-mic/speaker status only. Do not treat it as a working live voice-call system.
+- Runtime smoke test could not be completed in this environment because npm dependencies are not installed (express missing). JavaScript syntax checks pass.
