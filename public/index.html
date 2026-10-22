@@ -456,6 +456,42 @@
  .rimazChatNotice::before,.rimazWelcomeNotice::before{right:calc(-1 * (100vw - min(40vw,160px)))!important;width:calc(100vw - min(40vw,160px))!important;left:auto!important;}
 }
 </style>
+
+<style id="rimaz-notice-final-left-time-right-v15">
+/* Final winning rules: prevent later legacy rules from re-anchoring notices to the right. */
+.rimazChatNotice,.rimazWelcomeNotice{
+  position:relative!important; box-sizing:border-box!important;
+  width:min(40%,160px)!important; max-width:160px!important; min-width:0!important;
+  margin:6px auto 6px 0!important; padding:7px 8px 25px!important;
+  direction:ltr!important; text-align:left!important;
+  border:0!important; border-right:7px solid #3797d5!important; border-left:0!important;
+  overflow:visible!important; isolation:isolate!important;
+}
+.rimazChatNotice::before,.rimazWelcomeNotice::before{
+  content:""!important; position:absolute!important; top:0!important; bottom:0!important;
+  left:auto!important; right:calc(-1 * (100vw - min(40vw,160px)))!important;
+  width:calc(100vw - min(40vw,160px))!important; max-width:none!important;
+  background:#eaf5ff!important; border-top:1px solid #b7d9f7!important;
+  border-bottom:1px solid #b7d9f7!important; z-index:0!important; pointer-events:none!important;
+}
+.rimazChatNotice>*,.rimazWelcomeNotice>*{position:relative!important;z-index:1!important;}
+.rimazChatNotice .noticeAuthor,.rimazWelcomeNotice .noticeAuthor{direction:ltr!important;text-align:left!important;justify-content:flex-start!important;}
+.rimazChatNotice>div:not(.noticeAuthor),.rimazWelcomeNotice>div:not(.noticeAuthor){
+  display:block!important;width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;
+  direction:ltr!important;text-align:left!important;text-indent:0!important;
+}
+.rimazChatNotice>small,.rimazWelcomeNotice>small{
+  display:block!important;position:absolute!important;right:8px!important;bottom:6px!important;
+  width:auto!important;max-width:calc(100vw - 180px)!important;margin:0!important;padding:0!important;
+  direction:ltr!important;text-align:right!important;white-space:nowrap!important;
+  border:0!important;font-size:11px!important;color:#648398!important;z-index:2!important;
+}
+@media(max-width:600px){
+ .rimazChatNotice,.rimazWelcomeNotice{width:min(40%,160px)!important;max-width:160px!important;margin:5px auto 5px 0!important;padding:6px 7px 24px!important;}
+ .rimazChatNotice::before,.rimazWelcomeNotice::before{right:calc(-1 * (100vw - min(40vw,160px)))!important;width:calc(100vw - min(40vw,160px))!important;left:auto!important;}
+}
+</style>
+
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={},privatePeerUser=null;
