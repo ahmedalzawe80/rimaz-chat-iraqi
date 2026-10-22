@@ -1038,19 +1038,20 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 #layer .privateOverlay .pmsg .privateMediaArea{margin:5px 0 0 54px!important;direction:ltr!important;text-align:left!important;}
 @media(max-width:650px){#layer .privateOverlay .privateHead{grid-template-columns:20px 4px 42px minmax(0,1fr) auto!important;gap:4px!important;height:56px!important;min-height:56px!important;flex-basis:56px!important;padding:4px!important;}#layer .privateOverlay .privateHead .privateHeadAvatar{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;}#layer .privateOverlay .privateHead .privateHeadTitle .memberBadge{min-width:21px!important;height:21px!important;min-height:21px!important;font-size:15px!important;}#layer .privateOverlay .privateHead .privateHeadTitle b{font-size:13px!important;}#layer .privateOverlay .privateHead .privateHeadActions button{width:26px!important;height:28px!important;min-width:26px!important;}#layer .privateOverlay .pmsgHead{grid-template-columns:42px minmax(0,1fr)!important;gap:7px!important;min-height:42px!important;}#layer .privateOverlay .pmsgHead>img{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;}#layer .privateOverlay .pmsgTitle .memberBadge{min-width:22px!important;height:22px!important;min-height:22px!important;font-size:15px!important;}#layer .privateOverlay .pmsgTitle b{font-size:14px!important;}#layer .privateOverlay .pmsg .privateMediaArea{margin-left:49px!important;}}
 </style>
-<style id="rimaz-repair-final-overrides-v2">
-/* Room toolbar is exclusively for voice rooms; refreshRoomBar controls its visibility. */
+<style id="rimaz-repair-final-overrides-v3">
+/* Voice-room toolbar remains controlled by the existing room logic. */
 .roombar{display:none!important}
 .roombar[aria-hidden="false"]{display:grid!important}
-/* Same compact fixed-width layout for every announcement/welcome card. */
-.rimazChatNotice{display:block!important;width:min(78%,340px)!important;max-width:340px!important;min-width:0!important;box-sizing:border-box!important;margin:6px auto 6px -8px!important;padding:7px 9px!important;direction:ltr!important;text-align:left!important;background:#eaf5ff!important;border:0!important;border-left:0!important;border-right:0!important;border-radius:3px!important;box-shadow:none!important;overflow-wrap:anywhere!important}
+/* Compact, consistent announcement/welcome card. Keep the right stripe at the card edge. */
+.rimazChatNotice,.rimazWelcomeNotice{display:block!important;width:min(62%,270px)!important;max-width:270px!important;min-width:0!important;box-sizing:border-box!important;margin:6px auto 6px -12px!important;padding:8px 10px!important;direction:ltr!important;text-align:left!important;background:#eaf5ff!important;border:0!important;border-right:5px solid #3797d5!important;border-radius:3px!important;box-shadow:none!important;overflow-wrap:anywhere!important}
 .rimazChatNotice .noticeAuthor{direction:ltr!important;justify-content:flex-start!important}
 .rimazChatNotice .noticeAuthor>b{direction:ltr!important;justify-content:flex-start!important;text-align:left!important}
 .rimazChatNotice>div{direction:ltr!important;text-align:left!important}
-.rimazChatNotice>small{display:block!important;width:100%!important;direction:ltr!important;text-align:left!important;margin-top:5px!important}
+/* Timestamp explicitly at the far left under the announcement. */
+.rimazChatNotice>small{display:block!important;width:100%!important;direction:ltr!important;text-align:left!important;margin-top:5px!important;padding-left:0!important;font-size:11px!important}
 .rimazChatNotice .noticeRank{display:inline-block!important}
-.rimazWelcomeNotice{width:min(78%,340px)!important;max-width:340px!important;background:#f0f8ff!important}
-@media(max-width:600px){.rimazChatNotice,.rimazWelcomeNotice{width:78%!important;max-width:340px!important;margin-left:-8px!important;margin-right:auto!important}}
+.rimazWelcomeNotice{background:#f0f8ff!important;border-right-color:#3797d5!important}
+@media(max-width:600px){.rimazChatNotice,.rimazWelcomeNotice{width:min(62%,270px)!important;max-width:270px!important;margin-left:-12px!important;margin-right:auto!important}}
 </style>
 
 <style>.announcementFixedLabel{display:inline-block!important;background:#1649c7!important;color:#fff!important;font-weight:900!important;padding:2px 7px!important;border-radius:2px!important;margin-inline-end:5px!important}</style>
