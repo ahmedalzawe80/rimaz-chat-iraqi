@@ -405,6 +405,29 @@
 .rimazChatNotice{border-right:5px solid #3797d5!important;border-left:0!important;}
 .rimazChatNotice>small{direction:ltr!important;text-align:left!important;}
 </style>
+
+<style id="rimaz-notice-message-text-left-fix-v13">
+/* Align the announcement MESSAGE BODY to the left edge; keep card/edge geometry unchanged. */
+.rimazChatNotice > div:not(.noticeAuthor),
+.rimazWelcomeNotice > div:not(.noticeAuthor){
+  display:block!important;
+  box-sizing:border-box!important;
+  width:100%!important;
+  max-width:100%!important;
+  margin-left:0!important;
+  margin-right:auto!important;
+  padding-left:0!important;
+  padding-right:0!important;
+  direction:ltr!important;
+  text-align:left!important;
+  text-indent:0!important;
+  justify-self:start!important;
+  align-self:flex-start!important;
+}
+.rimazChatNotice > div:not(.noticeAuthor) *,
+.rimazWelcomeNotice > div:not(.noticeAuthor) *{text-align:left!important;}
+</style>
+
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={},privatePeerUser=null;
