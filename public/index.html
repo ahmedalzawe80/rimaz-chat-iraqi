@@ -396,6 +396,15 @@
 <style id="rimaz-rank-icons-final">.member .memberBadge.rankStarRed{color:#e12636!important;background:#fff!important;border-color:#e12636!important;font-size:22px!important}.member .memberBadge.rankStarWhite{color:#e8edf2!important;background:#6c7782!important;border-color:#cbd4dc!important;text-shadow:0 0 1px #222!important;font-size:22px!important}.member .memberBadge.rankStarBlack{color:#25222d!important;background:#eee!important;border-color:#3b3545!important;font-size:22px!important}.member .memberBadge.rankCrownSilver{color:#9ba7b1!important;background:#f6f8fa!important;border-color:#9ba7b1!important}.member .memberBadge.rankCrownGold{color:#d49b00!important;background:#fff8df!important;border-color:#d49b00!important}.member .memberBadge.rankAdminShield{color:#d49b00!important;background:#fff8df!important;border-color:#bd8a00!important;font-size:20px!important}.memberBadge .rankIconSvg{display:block!important;width:21px!important;height:21px!important;min-width:21px!important;min-height:21px!important;overflow:visible!important}.member .memberBadge .rankIconSvg{display:block!important;width:21px!important;height:21px!important;min-width:21px!important;min-height:21px!important;overflow:visible!important}.member .memberBadge.rankCrownGold{color:#d49b00!important}.member .memberBadge.rankCrownSilver{color:#9ba7b1!important}.member .memberBadge.rankAdminShield{color:#d49b00!important}
 .rimazChatNotice{background:#eaf5ff!important;border-color:#b7d9f7!important;border-right-color:#3b91d6!important;color:#193b58!important}.rimazChatNotice>b{color:#216aa5!important}.rimazChatNotice .noticeRank{display:inline-block;margin-right:6px;color:#47789e;font-weight:700;font-size:11px}.rimazWelcomeNotice{background:#f0f8ff!important;border-right-color:#6bb3e8!important}
 </style>
+
+<style id="rimaz-announcement-left-edge-real-fix-v11">
+/* Keep the announcement card narrow and right-anchored; make its left extension visible instead of hiding it behind the chat panel. */
+.rimazChatNotice,.rimazWelcomeNotice{position:relative!important;isolation:isolate!important;width:min(46%,190px)!important;max-width:190px!important;min-width:0!important;margin-right:0!important;margin-left:auto!important;overflow:visible!important;}
+.rimazChatNotice::before,.rimazWelcomeNotice::before{content:""!important;position:absolute!important;top:0!important;bottom:0!important;left:calc(-1 * (100vw - min(46vw,190px)))!important;width:calc(100vw - min(46vw,190px))!important;max-width:none!important;background:#eaf5ff!important;border-top:1px solid #b7d9f7!important;border-bottom:1px solid #b7d9f7!important;z-index:0!important;pointer-events:none!important;}
+.rimazChatNotice>* ,.rimazWelcomeNotice>*{position:relative!important;z-index:1!important;}
+.rimazChatNotice{border-right:5px solid #3797d5!important;border-left:0!important;}
+.rimazChatNotice>small{direction:ltr!important;text-align:left!important;}
+</style>
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={},privatePeerUser=null;
@@ -1057,14 +1066,6 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 .rimazChatNotice .noticeRank{display:inline-block!important}
 .rimazWelcomeNotice{background:#f0f8ff!important}
 @media(max-width:600px){.rimazChatNotice,.rimazWelcomeNotice{width:min(46%,190px)!important;max-width:190px!important;margin-right:0!important;margin-left:auto!important}}
-</style>
-
-<style id="rimaz-announcement-left-edge-final-v10">
-/* Keep the compact card anchored to the right; extend only its background/accent fill all the way to the left edge. */
-.rimazChatNotice,.rimazWelcomeNotice{position:relative!important;isolation:isolate!important;overflow:visible!important;}
-.rimazChatNotice::before,.rimazWelcomeNotice::before{content:""!important;position:absolute!important;top:-1px!important;bottom:-1px!important;left:calc(-1 * (100vw - 190px))!important;width:calc(100vw - 190px)!important;max-width:none!important;background:inherit!important;z-index:-1!important;pointer-events:none!important;}
-.announcementFixedLabel{display:inline-block!important;background:#1649c7!important;color:#fff!important;font-weight:900!important;padding:2px 7px!important;border-radius:2px!important;margin-inline-end:5px!important}
-@media(max-width:600px){.rimazChatNotice::before,.rimazWelcomeNotice::before{left:calc(-1 * (100vw - min(46vw,190px)))!important;width:calc(100vw - min(46vw,190px))!important;max-width:none!important;}}
 </style>
 
 <style>
