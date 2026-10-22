@@ -760,50 +760,67 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 
 
 
-<style id="rimaz-announcement-layout-clean-v18">
-/* Clean, isolated layout for admin announcements and welcome notices only. */
+<style id="rimaz-announcement-layout-single-source-v18">
+/* One clean layout for welcome and announcement cards only; normal .msg rows are untouched. */
 .rimazChatNotice,
 .rimazWelcomeNotice {
-  display:block!important; position:relative!important; box-sizing:border-box!important;
-  width:calc(100% - 8px)!important; max-width:560px!important; min-width:0!important;
-  margin:6px 4px 6px auto!important; padding:6px 8px!important;
-  direction:ltr!important; text-align:left!important;
-  background:#eaf5ff!important; color:#193b58!important;
-  border:1px solid #b7d9f7!important; border-left:5px solid #3797d5!important; border-right:0!important;
-  border-radius:2px!important; box-shadow:none!important; overflow:hidden!important; overflow-wrap:anywhere!important;
+  display:block !important;
+  position:relative !important;
+  box-sizing:border-box !important;
+  width:calc(100% - 8px) !important;
+  max-width:560px !important;
+  min-width:0 !important;
+  margin:1px auto 1px 4px !important;
+  padding:4px 10px !important;
+  direction:ltr !important;
+  text-align:left !important;
+  background:#eaf5ff !important;
+  color:#193b58 !important;
+  border:1px solid #b7d9f7 !important;
+  border-right:5px solid #3797d5 !important;
+  border-left:0 !important;
+  border-radius:2px !important;
+  box-shadow:none !important;
+  overflow:hidden !important;
+  overflow-wrap:break-word !important;
 }
 .rimazChatNotice::before,.rimazWelcomeNotice::before{content:none!important;display:none!important}
-.rimazChatNotice>* ,.rimazWelcomeNotice>*{min-width:0!important}
+.rimazChatNotice>*,.rimazWelcomeNotice>*{min-width:0!important}
 .rimazChatNotice .noticeAuthor,.rimazWelcomeNotice .noticeAuthor{
-  display:flex!important; flex-direction:row!important; align-items:center!important; justify-content:flex-start!important;
-  flex-wrap:nowrap!important; gap:8px!important; width:100%!important; margin:0 0 4px!important;
-  direction:ltr!important; text-align:left!important;
+  display:flex!important;flex-direction:row!important;align-items:center!important;
+  justify-content:flex-start!important;flex-wrap:nowrap!important;gap:7px!important;
+  width:100%!important;margin:0 0 2px!important;direction:ltr!important;text-align:left!important;
 }
 .rimazChatNotice .noticeAuthor img,.rimazWelcomeNotice .noticeAuthor img{
-  display:block!important; width:34px!important; height:34px!important; min-width:34px!important;
-  flex:0 0 34px!important; object-fit:cover!important; border-radius:3px!important;
+  display:block!important;width:34px!important;height:34px!important;min-width:34px!important;
+  flex:0 0 34px!important;object-fit:cover!important;border-radius:3px!important;
 }
 .rimazChatNotice .noticeAuthor>b,.rimazWelcomeNotice .noticeAuthor>b{
-  display:flex!important; flex:1 1 auto!important; flex-direction:row!important; align-items:center!important;
-  justify-content:flex-start!important; flex-wrap:wrap!important; gap:5px!important; min-width:0!important;
-  margin:0!important; font-size:16px!important; font-weight:900!important; line-height:1.25!important;
-  overflow-wrap:break-word!important; word-break:normal!important; text-align:left!important;
+  display:flex!important;flex:1 1 auto!important;flex-direction:row!important;align-items:center!important;
+  justify-content:flex-start!important;flex-wrap:wrap!important;gap:5px!important;min-width:0!important;
+  margin:0!important;font-size:16px!important;font-weight:900!important;line-height:1.2!important;
+  color:#193b58!important;overflow-wrap:normal!important;word-break:normal!important;
 }
-.rimazChatNotice .noticeRank,.rimazWelcomeNotice .noticeRank{display:inline-block!important;flex:0 0 auto!important;white-space:nowrap!important;margin:0!important}
+.rimazWelcomeNotice .noticeAuthor>b{color:#d71920!important;font-weight:900!important}
+.rimazChatNotice .noticeRank,.rimazWelcomeNotice .noticeRank{
+  display:inline-block!important;flex:0 0 auto!important;white-space:nowrap!important;margin:0!important;
+}
+.rimazWelcomeNotice .noticeRank{color:#d71920!important;font-weight:900!important}
+.rimazChatNotice .announcementFixedLabel{display:inline-block!important;background:#1649c7!important;color:#fff!important;font-weight:900!important;padding:2px 7px!important;border-radius:2px!important;margin:0 0 0 2px!important}
 .rimazChatNotice>div:not(.noticeAuthor),.rimazWelcomeNotice>div:not(.noticeAuthor){
-  display:block!important; width:100%!important; max-width:100%!important; margin:0!important; padding:0!important;
-  direction:rtl!important; text-align:left!important; font-size:17px!important; font-weight:700!important;
-  line-height:1.35!important; overflow-wrap:anywhere!important; word-break:normal!important; white-space:normal!important;
+  display:block!important;width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;
+  direction:ltr!important;text-align:left!important;font-size:18px!important;font-weight:700!important;
+  line-height:1.3!important;overflow-wrap:break-word!important;word-break:normal!important;white-space:normal!important;
 }
 .rimazChatNotice>small,.rimazWelcomeNotice>small{
-  display:block!important; width:100%!important; margin:3px 0 0!important; padding:0!important;
-  direction:ltr!important; text-align:left!important; font-size:11px!important; line-height:1.2!important; border:0!important;
+  display:block!important;width:100%!important;margin:2px 0 0!important;padding:0!important;
+  direction:ltr!important;text-align:left!important;font-size:11px!important;line-height:1.2!important;border:0!important;
 }
 @media(max-width:600px){
- .rimazChatNotice,.rimazWelcomeNotice{width:calc(100% - 8px)!important;max-width:none!important;margin:5px 4px 5px auto!important;padding:6px 7px!important}
- .rimazChatNotice .noticeAuthor img,.rimazWelcomeNotice .noticeAuthor img{width:32px!important;height:32px!important;min-width:32px!important;flex-basis:32px!important}
- .rimazChatNotice .noticeAuthor>b,.rimazWelcomeNotice .noticeAuthor>b{font-size:16px!important}
- .rimazChatNotice>div:not(.noticeAuthor),.rimazWelcomeNotice>div:not(.noticeAuthor){font-size:17px!important;font-weight:700!important;line-height:1.35!important}
+  .rimazChatNotice,.rimazWelcomeNotice{width:calc(100% - 8px)!important;max-width:none!important;margin:1px auto 1px 4px!important;padding:4px 8px!important}
+  .rimazChatNotice .noticeAuthor img,.rimazWelcomeNotice .noticeAuthor img{width:32px!important;height:32px!important;min-width:32px!important;flex-basis:32px!important}
+  .rimazChatNotice .noticeAuthor>b,.rimazWelcomeNotice .noticeAuthor>b{font-size:15px!important}
+  .rimazChatNotice>div:not(.noticeAuthor),.rimazWelcomeNotice>div:not(.noticeAuthor){font-size:17px!important;line-height:1.3!important}
 }
 </style>
 </body></html>
