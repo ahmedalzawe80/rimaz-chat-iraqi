@@ -428,6 +428,34 @@
 .rimazWelcomeNotice > div:not(.noticeAuthor) *{text-align:left!important;}
 </style>
 
+
+<style id="rimaz-notice-left-layout-v14">
+/* Announcement and welcome cards start at the LEFT; timestamp sits at the RIGHT. */
+.rimazChatNotice,.rimazWelcomeNotice{
+  box-sizing:border-box!important; width:min(40%,160px)!important; max-width:160px!important; min-width:0!important;
+  margin:6px auto 6px 0!important; padding:7px 8px!important;
+  direction:ltr!important; text-align:left!important;
+}
+.rimazChatNotice::before,.rimazWelcomeNotice::before{
+  left:auto!important; right:calc(-1 * (100vw - min(40vw,160px)))!important;
+  width:calc(100vw - min(40vw,160px))!important;
+  top:0!important; bottom:0!important;
+  border-top:1px solid #b7d9f7!important; border-bottom:1px solid #b7d9f7!important;
+  background:#eaf5ff!important;
+}
+.rimazChatNotice>div:not(.noticeAuthor),.rimazWelcomeNotice>div:not(.noticeAuthor){
+  display:block!important; width:100%!important; margin:0!important; padding:0!important;
+  direction:ltr!important; text-align:left!important; text-indent:0!important;
+}
+.rimazChatNotice>small,.rimazWelcomeNotice>small{
+  display:block!important; width:100%!important; margin-top:5px!important; padding:0!important;
+  direction:ltr!important; text-align:right!important;
+}
+@media(max-width:600px){
+ .rimazChatNotice,.rimazWelcomeNotice{width:min(40%,160px)!important;max-width:160px!important;margin:5px auto 5px 0!important;padding:6px 7px!important;}
+ .rimazChatNotice::before,.rimazWelcomeNotice::before{right:calc(-1 * (100vw - min(40vw,160px)))!important;width:calc(100vw - min(40vw,160px))!important;left:auto!important;}
+}
+</style>
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={},privatePeerUser=null;
