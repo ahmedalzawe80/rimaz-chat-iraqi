@@ -1,10 +1,7 @@
-Changes in this build:
-- Announcement/welcome cards restyled to compact right-aligned pale-blue cards with publisher avatar, name, rank, text and timestamp.
-- Automatic separate welcome card sent on joining a room.
-- Timed announcements expire after five minutes; expiry is cleaned at server startup and by timer.
-- Room creation options explicitly distinguish public written, private written, and voice rooms.
-- Restored the top room bar, hidden by older CSS overrides, and added per-room raised-mic status with server-side 30-like gate and room-specific speaker state.
-
-Limitations:
-- This project does not currently implement live audio streaming/WebRTC voice rooms; the mic control here tracks raised-mic/speaker status only. Do not treat it as a working live voice-call system.
-- Runtime smoke test could not be completed in this environment because npm dependencies are not installed (express missing). JavaScript syntax checks pass.
+RIMAZ CHAT - V7 USER FEEDBACK PATCH
+- Kept the existing welcome message behavior/order unchanged.
+- Announcement and welcome cards use one compact consistent width (max 270px), timestamp aligned left, and a thicker right accent stripe at the card edge.
+- A joining client receives an empty chat history, so old messages are not replayed after entering/re-entering a room.
+- Temporary presence events (join/leave) are emitted live but are not stored as room messages. When the last connected socket leaves a room, that room's stored public messages are cleaned; user accounts, profiles, settings, welcome-message settings, and announcement registry are preserved.
+- Checked server.js and the inline browser script with Node syntax checks.
+- Deployment behavior has not been tested against the live Deplexo service.
