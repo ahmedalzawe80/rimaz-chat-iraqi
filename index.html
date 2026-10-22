@@ -773,6 +773,15 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 .roombar .roomStatus{display:block!important;grid-column:1;grid-row:1;font-size:11px!important;text-align:center!important;color:#176a9e!important;}
 @media(max-width:600px){.rimazChatNotice{width:92%!important;margin:5px auto 5px 3px!important;padding:6px 8px!important}.roombar{grid-template-columns:40px minmax(0,1fr) 72px!important;}}
 </style>
+
+<style id="rimaz-announcement-compact-bold-v12">
+/* Keep the announcement card narrower, retain left-aligned content, and thicken its right edge. */
+.rimazChatNotice,.rimazWelcomeNotice{box-sizing:border-box!important;width:min(40%,160px)!important;max-width:160px!important;min-width:0!important;margin:6px 0 6px auto!important;padding:7px 8px!important;direction:ltr!important;text-align:left!important;border-right:7px solid #3797d5!important;border-left:0!important;overflow-wrap:anywhere!important;}
+.rimazChatNotice::before,.rimazWelcomeNotice::before{left:calc(-1 * (100vw - min(40vw,160px)))!important;width:calc(100vw - min(40vw,160px))!important;top:0!important;bottom:0!important;border-top:1px solid #b7d9f7!important;border-bottom:1px solid #b7d9f7!important;background:#eaf5ff!important;}
+.rimazChatNotice .noticeAuthor,.rimazChatNotice .noticeAuthor>b,.rimazChatNotice>div,.rimazChatNotice>small{direction:ltr!important;text-align:left!important;justify-content:flex-start!important;}
+.rimazChatNotice>small{display:block!important;width:100%!important;margin-top:4px!important;padding:0!important;border:0!important;}
+@media(max-width:600px){.rimazChatNotice,.rimazWelcomeNotice{width:min(40%,160px)!important;max-width:160px!important;margin:5px 0 5px auto!important;padding:6px 7px!important;border-right-width:7px!important}.rimazChatNotice::before,.rimazWelcomeNotice::before{left:calc(-1 * (100vw - min(40vw,160px)))!important;width:calc(100vw - min(40vw,160px))!important;}}
+</style>
 </body></html>
 <style id="rimaz-user-latest-final">
 /* latest user alignment — preserve approved sizes, only mirror requested areas */
