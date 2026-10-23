@@ -1,9 +1,9 @@
-RIMAZ CHAT - VERSION 24 PATCH
-- Base: RIMAZ_CHAT_V23_ROOM_LOCK_COLORS.zip.
-- Kept welcome and announcement behavior unchanged.
-- Kept server-side bcrypt password verification for locked rooms and admin lock/unlock endpoints.
-- Preserved the administration room migration and black/red room themes.
-- Fixed data-directory handling: do not silently fall back to ephemeral /tmp storage; when Deplexo persistent /data exists but a legacy configured path fails, use /data/rimaz. If no writable storage path exists, startup fails clearly instead of silently creating a fresh-looking empty chat.
-- Kept both root and public index.html synchronized.
-- Validation: node --check server.js and inline browser script passed; archive contents checked.
-- Not tested against the live Deplexo service. Before deploying, confirm Deplexo persistent storage is mounted at /data; do not delete or overwrite the live data volume.
+RIMAZ CHAT - V7 USER FEEDBACK PATCH
+- Kept the existing welcome message behavior/order unchanged.
+- Announcement and welcome cards use one compact consistent width (max 270px), timestamp aligned left, and a thicker right accent stripe at the card edge.
+- A joining client receives an empty chat history, so old messages are not replayed after entering/re-entering a room.
+- Temporary presence events (join/leave) are emitted live but are not stored as room messages. When the last connected socket leaves a room, that room's stored public messages are cleaned; user accounts, profiles, settings, welcome-message settings, and announcement registry are preserved.
+- Checked server.js and the inline browser script with Node syntax checks.
+- Deployment behavior has not been tested against the live Deplexo service.
+
+V20: announcement/welcome-only rendering updated. Announcement identity line is avatar + rank badge + name; plain blue إعلان label below without background; text follows label; time aligned right. Consolidated V19 announcement CSS into one scoped style block and removed duplicated rimaz-user-latest-final blocks. Normal message renderer unchanged.
