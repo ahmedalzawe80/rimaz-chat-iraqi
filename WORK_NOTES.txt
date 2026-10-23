@@ -1,9 +1,9 @@
-RIMAZ CHAT - VERSION 24 PATCH
-- Base: RIMAZ_CHAT_V23_ROOM_LOCK_COLORS.zip.
-- Kept welcome and announcement behavior unchanged.
-- Kept server-side bcrypt password verification for locked rooms and admin lock/unlock endpoints.
-- Preserved the administration room migration and black/red room themes.
-- Fixed data-directory handling: do not silently fall back to ephemeral /tmp storage; when Deplexo persistent /data exists but a legacy configured path fails, use /data/rimaz. If no writable storage path exists, startup fails clearly instead of silently creating a fresh-looking empty chat.
-- Kept both root and public index.html synchronized.
-- Validation: node --check server.js and inline browser script passed; archive contents checked.
-- Not tested against the live Deplexo service. Before deploying, confirm Deplexo persistent storage is mounted at /data; do not delete or overwrite the live data volume.
+RIMAZ V32 - TWO FIXES ONLY
+
+Base: V30/V31 project (the user-confirmed live baseline is V30).
+1) Room count badge keeps V30 size and colors and is positioned at the top-right of each room card.
+2) Room message input is disabled while joining and is enabled only after the server emits room-joined. The server emits room-joined only after session, room, password, and ban checks pass.
+
+Checks performed: server JavaScript syntax; inline browser JavaScript syntax; index.html/public/index.html exact match; ZIP integrity; static verification of password check before room-joined.
+Not performed: deployment/browser visual test against the live Deplexo instance.
+Persistent /data storage is not modified by this archive.

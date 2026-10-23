@@ -1,5 +1,7 @@
-Version 24 validation
+V32 validation
 - node --check server.js: PASS
-- node --check extracted inline index.html script: PASS
-- root index.html and public/index.html identical: PASS
-- Live Deplexo integration test: NOT RUN
+- inline JavaScript extracted from index.html and node --check: PASS
+- index.html and public/index.html byte-for-byte identical: PASS
+- ZIP integrity: PASS
+- room password check precedes room-joined success event: PASS (static inspection)
+- live browser/deployment test: NOT PERFORMED
