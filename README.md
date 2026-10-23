@@ -1,19 +1,12 @@
-# دردشة ريماز عراقية — بناء جديد مستقل
+# دردشة ريماز عراقية — Version 24
 
-هذه حزمة مصدر أولية مستقلة مبنية من الصفر، ولا تعتمد على ملفات Rimaz القديمة. الواجهة عربية ومتجاوبة، وتحتوي عرض الموجودين قبل الدخول بوضع التصفح فقط، دخول زائر، تسجيل/دخول حساب باسم وكلمة مرور، رسائل الغرفة العامة عبر Socket.IO، انتقال الغرف الأساسية، الإعجابات مع مهلة 10 ثوانٍ، الخاص النصي، الحائط، وحفظ إعدادات فتح الخاص والتنبيهات للحساب المسجل.
+Built from `RIMAZ_CHAT_V23_ROOM_LOCK_COLORS.zip`. This patch preserves the V23 room-lock UI/server verification and the agreed room themes, while correcting the storage-directory fallback so the server does not silently switch to ephemeral `/tmp` storage.
 
-## التشغيل محلياً
-- يتطلب Node.js 20 أو أحدث.
-- من داخل المجلد: `npm install`
-- ثم: `npm start`
-- افتح `http://localhost:3000`
-- فحص الصحة: `http://localhost:3000/health`
+## Important for Deplexo
+- Ensure persistent storage is mounted at `/data`.
+- Do not delete the existing persistent data volume.
+- Do not overwrite the live `data.json` with the small default `data.json` included in this source archive.
+- This package passed Node syntax checks; it has **not** been integration-tested against the live Deplexo deployment.
 
-## قبل النشر العام
-هذه ليست بعد نسخة إطلاق إنتاجية مكتملة. يجب إكمال واختبار رفع الصور والفيديو، WebRTC للصوت/الكاميرا، واجهة التسجيل/الملفات الشخصية بالكامل، لوحة المالك والإدارة، صلاحيات الإدارة الآمنة، وإكمال الحائط والإشعارات حسب متطلبات المشروع. غرفة المايك موجودة كوجهة واجهة لكنها لا توفر اتصالاً صوتياً حقيقياً بعد. بيانات الحسابات تحفظ في `data/users.json` ويجب توفير قرص دائم في الاستضافة.
-
-## قواعد السلامة الوظيفية
-- قائمة الموجودين متاحة للقراءة قبل الدخول؛ قبل الدخول لا يمكن إرسال رسالة أو إعجاب أو فتح خاص. الخادم يرفض أحداث التفاعل ما لم يتم الدخول.
-- الغرفة العامة نصية فقط؛ الرسائل العامة لا تقبل الإرسال في غرفة المايك.
-- الإعجاب الذاتي ممنوع، والإعجاب مقيّد بمهلة 10 ثوانٍ على الخادم.
-- لا ترفع هذه الحزمة فوق موقع قائم قبل الاختبار في بيئة منفصلة.
+## Run locally
+`npm install` then `npm start`.

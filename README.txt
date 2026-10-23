@@ -1,13 +1,6 @@
-Rimaz Iraqi Chat — reviewed patch package
+دردشة ريماز عراقية — نسخة 24
 
-Files:
-- server.js
-- public/index.html (supplied UI preserved)
-- package.json
+تعتمد هذه النسخة على V23 مع إصلاح اختيار مسار البيانات حتى لا ينتقل التطبيق بصمت إلى /tmp وتختفي البيانات بعد إعادة التشغيل. على Deplexo تأكد أن التخزين الدائم مربوط على /data.
 
-Important:
-- This package does not include or overwrite data.json.
-- Set DATA_DIR to your persistent data directory in deployment.
-- The server stores data at DATA_DIR/data.json and uploads at DATA_DIR/uploads.
-- Run npm install, then npm start.
-- Syntax was checked locally; full end-to-end testing requires running the app with your deployment environment and existing data.
+التشغيل: npm install ثم npm start.
+لا تحذف مجلد البيانات الحالي ولا تستبدل بيانات الاستضافة بملف data.json الموجود داخل الحزمة (ملف الحزمة افتراضي صغير فقط).

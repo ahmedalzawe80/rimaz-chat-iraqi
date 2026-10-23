@@ -1,2 +1,5 @@
-node --check server.js: PASS
-index.html copied without intentional visual edits.
+Version 24 validation
+- node --check server.js: PASS
+- node --check extracted inline index.html script: PASS
+- root index.html and public/index.html identical: PASS
+- Live Deplexo integration test: NOT RUN
