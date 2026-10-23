@@ -1,0 +1,2 @@
+node --check server.js: PASS
+index.html copied without intentional visual edits.
