@@ -1,0 +1,7 @@
+RIMAZ CHAT V25 - FINAL CHECKLIST
+- node --check server.js: PASS
+- Inline JavaScript syntax in index.html: PASS
+- index.html and public/index.html identical: PASS
+- Server-side room message authorization: PASS (requires authenticated socket user to be in the exact room and Socket.IO room membership, and target room must exist)
+- Live Deplexo integration test: NOT RUN; deploy and test on hosting before assuming production behavior.
+- Existing persistent data/volume must be preserved. Do not delete /data or replace production data.json.
