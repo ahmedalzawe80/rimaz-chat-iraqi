@@ -1,0 +1,5 @@
+RIMAZ V34 - RESTORED ORIGINAL ROOM COMPOSER BEHAVIOR
+
+Based on V32 (preserves approved room-count badge size/colors/position and existing features). Restores the previous immediate composer activation on join. Room-password validation remains server-side and runs before socket.data.user is set or the socket joins the room. Sending messages is also server-checked against authenticated room membership; a failed join disables the composer again via join-error.
+
+Checks: server syntax, both inline browser scripts syntax, identical index.html/public/index.html, ZIP integrity. Not live-tested on Deplexo. Do not replace persistent /data or environment variables.
