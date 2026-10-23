@@ -779,6 +779,23 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 .rimazWelcomeNotice{padding-top:3px!important;padding-bottom:3px!important;margin-top:1px!important;margin-bottom:1px!important}
 @media(max-width:600px){.rimazChatNotice,.rimazWelcomeNotice{width:calc(100% - 8px)!important;max-width:none!important;margin:1px auto 1px 4px!important;padding:3px 7px!important}.rimazChatNotice .noticeAuthor>img,.rimazWelcomeNotice .noticeAuthor>img{width:30px!important;height:30px!important;min-width:30px!important;flex-basis:30px!important}.rimazChatNotice .noticeContent>b,.rimazWelcomeNotice .noticeContent>b{font-size:15px!important}.rimazChatNotice .noticeText,.rimazWelcomeNotice .noticeText{font-size:16px!important;line-height:1.18!important}}
 </style>
+
+<style id="rimaz-v30-room-badge-fix">
+/* Keep room cards neutral; style only the small person/count badge on the right. */
+.room{grid-template-columns:52px minmax(0,1fr) 48px!important;min-height:58px!important;background:#faf8fa!important;color:#222!important;gap:4px!important;padding:3px 5px!important;box-sizing:border-box!important}
+.room img{width:44px!important;height:44px!important;max-width:44px!important;max-height:44px!important;object-fit:cover!important}
+.room .roomName{font-size:15px!important;line-height:1.2!important;color:inherit!important}
+.room .roomDesc{font-size:11px!important;line-height:1.2!important;color:#777!important}
+.room .roomLockMark{font-size:12px!important}
+.room .count{width:42px!important;min-width:42px!important;max-width:42px!important;min-height:32px!important;padding:4px 2px!important;margin:0!important;justify-self:end!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:2px!important;flex-wrap:wrap!important;box-sizing:border-box!important;border-radius:5px!important;background:#c91624!important;color:#fff!important;font-size:11px!important;line-height:1.05!important;white-space:normal!important}
+.room.room-theme-black .count{background:#111!important;color:#fff!important}
+.room.room-theme-red .count{background:#c91624!important;color:#fff!important}
+.room.room-theme-black,.room.room-theme-red{background:#faf8fa!important;color:#222!important}
+.room.room-theme-black .roomName,.room.room-theme-red .roomName{color:#222!important}
+.room.room-theme-black .roomDesc,.room.room-theme-red .roomDesc{color:#777!important}
+.room .count img,.room .count svg,.room .count i{width:12px!important;height:12px!important;max-width:12px!important;max-height:12px!important;font-size:12px!important}
+@media(max-width:650px){.room{grid-template-columns:44px minmax(0,1fr) 40px!important;min-height:50px!important;padding:3px!important;gap:3px!important}.room img{width:38px!important;height:38px!important;max-width:38px!important;max-height:38px!important}.room .roomName{font-size:13px!important}.room .roomDesc{font-size:10px!important}.room .count{width:36px!important;min-width:36px!important;max-width:36px!important;min-height:28px!important;font-size:10px!important;padding:3px 1px!important}}
+</style>
 </body></html>
 <style id="rimaz-user-latest-final">
 /* latest user alignment — preserve approved sizes, only mirror requested areas */
