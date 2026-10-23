@@ -510,9 +510,22 @@ io.on('connection',socket=>{
     const u=sessionUser(sid); if(!u)return;
     const targetRoom=db.rooms.find(r=>r.id===room); if(!targetRoom){socket.emit('join-error',{error:'الغرفة غير موجودة'});return;}
     if(targetRoom.passwordHash&&!bcrypt.compareSync(String(password||''),targetRoom.passwordHash)){socket.emit('join-error',{error:'الغرفة مقفلة؛ أدخل الباسورد الصحيح'});return;} 
+    // Validate access before changing the active room, then move this socket atomically.
+    if(globalBanned(u.name,socketClientIp(socket))){socket.emit('join-error',{error:'عنوان الإنترنت محظور من الدردشة، حاول بعد انتهاء 5 دقائق'});return;}
+    if(roomBanned(u.name,room)){socket.emit('join-error',{error:'أنت محظور من هذه الغرفة'});return;}
+    const previousRoom=socket.data.user?.room||socketUsers.get(sid)?.room||'';
+    if(previousRoom && previousRoom!==room){
+      socket.leave(previousRoom);
+      roomSockets.get(previousRoom)?.delete(sid);
+      voiceSpeakers.get(previousRoom)?.delete(sid);
+      const leaveNotice={id:crypto.randomUUID(),room:previousRoom,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',exitKind:'room',text:'',at:Date.now(),profile:profile(u.name)};
+      io.to(previousRoom).emit('message',leaveNotice);
+      emitVoiceState(previousRoom);
+      const oldMembers=roomSockets.get(previousRoom)||new Set();
+      for(const memberSid of [...oldMembers]){const active=socketUsers.get(memberSid);if(!active||active.room!==previousRoom)oldMembers.delete(memberSid);}
+      if(oldMembers.size===0)roomSockets.delete(previousRoom);
+    }
     socket.data.sid=sid; socket.data.user={...u,room}; socketUsers.set(sid,{...u,room});
-    if(globalBanned(u.name,socketClientIp(socket))){socketUsers.delete(sid);socket.data.user=null;socket.emit('join-error',{error:'عنوان الإنترنت محظور من الدردشة، حاول بعد انتهاء 5 دقائق'});return;}
-    if(roomBanned(u.name,room)){socketUsers.delete(sid);socket.emit('join-error',{error:'أنت محظور من هذه الغرفة'});return;}
     socket.join(room); if(!roomSockets.has(room))roomSockets.set(room,new Set());roomSockets.get(room).add(sid);
     socket.emit('room-joined',{room});
     socket.emit('history',{room,items:db.messages.filter(m=>m.room===room&&m.type==='announcement'&&(!m.announcementId||(db.announcements||[]).some(a=>String(a.id)===String(m.announcementId))))}); const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'join',text:'',at:Date.now(),profile:profile(u.name)}; io.to(room).emit('message',pm); for(const item of (db.welcomeMessages||[]).filter(x=>x.enabled!==false&&String(x.text||'').trim())){const welcome={id:'welcome-'+crypto.randomUUID(),room,from:'شات ريماز',displayName:item.title||'الترحيب',type:'welcome',text:item.text,at:Date.now(),profile:{nameColor:'#2877b9',bgColor:'#eaf5ff'}};socket.emit('message',welcome);} emitState(); const joinedRoom=db.rooms.find(r=>r.id===room); if(joinedRoom?.kind==='voice')emitVoiceState(room);
