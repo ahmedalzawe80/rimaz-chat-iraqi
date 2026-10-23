@@ -207,8 +207,11 @@ function hasPermission(user, permission){
     const adminDefaults=DEFAULT_ROLE_PERMISSIONS.admin||[];
     const rankCustom=rankRole&&Array.isArray(db.rolePermissions?.[rankRole])?db.rolePermissions[rankRole]:null;
     const rankDefaults=rankRole?(DEFAULT_ROLE_PERMISSIONS[rankRole]||[]):[];
-    const adminAllowed=adminCustom===null?adminDefaults:adminCustom;
-    const rankAllowed=rankRole?(rankCustom===null?rankDefaults:rankCustom):[];
+    // Keep the full built-in admin baseline even when legacy/custom settings
+    // contain only a partial list. Custom settings may add permissions, not
+    // accidentally remove essential admin panel access. Owner remains unrestricted.
+    const adminAllowed=[...new Set([...adminDefaults,...(adminCustom||[])])];
+    const rankAllowed=rankRole?[...new Set([...(rankDefaults||[]),...(rankCustom||[])])]:[];
     return adminAllowed.includes(permission)||rankAllowed.includes(permission);
   }
   if(PROTECTED_ROLE_PERMISSIONS.includes(permission)) return false;
