@@ -1,8 +1,0 @@
-RIMAZ CHAT V35.2 — focused cleanup based on V35.1
-
-Changes:
-1. Corrected the announcement text layout rule so the blue "إعلان" label and announcement text share one row; the label stays fixed at the left while the text occupies the remaining space and wraps as needed.
-2. Corrected server room switching: after access checks pass, the socket leaves its previous room, removes its previous room membership and voice-speaker state, broadcasts one room-leave presence event, then joins the target room and updates its active room session.
-3. Kept the existing announcement persistence/expiry implementation and admin controls unchanged. No database data or deployment environment was modified.
-
-Validation performed locally: Node syntax check, inline JavaScript syntax checks, mirrored HTML equality, and ZIP integrity. This package has not been tested on the live Deplexo deployment.
