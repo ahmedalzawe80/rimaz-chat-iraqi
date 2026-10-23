@@ -487,7 +487,7 @@ function key(x){return String(x||'').trim().toLowerCase()}
 function joinRoom(room){if(!room)return;currentRoom=room;refreshRoomBar();const input=document.getElementById('msgInput');if(input){input.disabled=false;input.placeholder='اكتب رسالتك هنا';}socket?.emit('join',{sid,room});}
 function addPresence(d){if(currentRoom!==d.room)return;const box=document.getElementById('msgs');if(!box)return;const p=d.profile||{};const isJoin=d.action==='join';const roomName=(rooms.find(r=>r.id===d.room)||{}).name||'الغرفة العامة';const t=new Date(d.at||Date.now()).toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'});const phrase=isJoin?`<span class="notice">${esc(roomName)}</span> هذا المستخدم قد دخل`:(d.exitKind==='chat'?'(هذا المستخدم قد غادر الدردشة)':'(هذا المستخدم قد غادر الغرفة)');box.insertAdjacentHTML('beforeend',`<div class="presence"><img class="presenceAvatar" onclick="openMemberProfile('${esc(d.name)}')" src="${esc(avatarFor(p))}"><div class="presenceBody"><span class="presenceName" data-from="${esc(d.name)}" onclick="openMemberProfile('${esc(d.name)}')" style="color:${esc(p.nameColor||'#111')}">${esc(d.displayName||d.name)}</span><span class="presenceText" style="font-weight:700">${phrase}</span></div><div class="presenceTime">${t}</div></div>`);box.scrollTop=box.scrollHeight}
 
-function addMessage(m){if(m?.type==='presence'){addPresence({name:m.from,displayName:m.displayName||m.from,profile:m.profile||{},action:m.presenceAction||'join',exitKind:m.exitKind,room:m.room,at:m.at});return;}const box=document.getElementById('msgs');if(!box)return;if(m?.type==='announcement'||m?.type==='welcome'){const row=document.createElement('div');row.className='rimazChatNotice'+(m.type==='welcome'?' rimazWelcomeNotice':'');row.dataset.messageId=String(m.id||'');const who=m.type==='welcome'?'شات ريماز':(m.displayName||m.from||'الإدارة');const rank=m.type==='welcome'?'ترحيب':(m.role==='owner'?'صاحب الموقع':m.role==='admin'?'إداري':m.role==='banner'?'بنر':m.role==='super'?'سوبر':'الإدارة');row.innerHTML=`<div class="noticeAuthor"><img src="${esc(avatarFor(m.profile||{}))}" alt=""><b>${m.type==='announcement'?'<small class=\"noticeRank announcementFixedLabel\">إعلان</small> ':''}${esc(who)} <small class="noticeRank">${esc(rank)}</small></b></div><div>${esc(m.text||'')}</div><small>${new Date(m.at||Date.now()).toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'})}${m.duration==='5m'?' · ينتهي بعد 5 دقائق':''}</small>`;box.appendChild(row);box.scrollTop=box.scrollHeight;return;}const p=m.profile||{};let content=esc(m.text||'');if(m.media){content=m.media.mime.startsWith('image/')?`<img src="${esc(m.media.url)}" class="wallMedia">`:m.media.mime.startsWith('video/')?`<video src="${esc(m.media.url)}" class="wallMedia" controls></video>`:`<audio src="${esc(m.media.url)}" controls></audio>`}const messageRole=m.role||p.role||(key(m.from)===key(me?.name)?(me?.role||(me?.owner?'owner':me?.admin?'admin':null)):null);const messageBadge=memberBadge({...m,...p,role:messageRole,name:m.from,from:m.from,vip:m.vip??p.vip});box.insertAdjacentHTML('beforeend',`<div class="msg" data-from="${esc(m.from||'')}" data-message-id="${esc(m.id||'')}"><img class="avatar" onclick="openMemberProfile('${esc(m.from)}')" src="${esc(avatarFor(p))}"><div class="msgbody"><div class="msghead" style="color:${esc(p.nameColor||'#222')}">${messageBadge}<span onclick="openMemberProfile('${esc(m.from)}')">${esc(m.displayName||p.displayName||m.from)}</span> ${m.likes>=500?'<span class="badge">500+</span>':''}</div><div class="msgtext" style="background:${esc(p.bgColor||'#fff')}">${content}</div></div><div class="time">${new Date(m.at).toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'})}</div></div>`);box.scrollTop=box.scrollHeight}
+function addMessage(m){if(m?.type==='presence'){addPresence({name:m.from,displayName:m.displayName||m.from,profile:m.profile||{},action:m.presenceAction||'join',exitKind:m.exitKind,room:m.room,at:m.at});return;}const box=document.getElementById('msgs');if(!box)return;if(m?.type==='announcement'||m?.type==='welcome'){const row=document.createElement('div');row.className='rimazChatNotice'+(m.type==='welcome'?' rimazWelcomeNotice':'');row.dataset.messageId=String(m.id||'');const who=m.type==='welcome'?'شات ريماز':(m.displayName||m.from||'الإدارة');const rank=m.type==='welcome'?'ترحيب':(m.role==='owner'?'صاحب الموقع':m.role==='banner'?'بنر':m.role==='super'?'سوبر':'');const rankHtml=m.type==='welcome'?`<small class="noticeRank">ترحيب شات ريماز</small>`:(rank?`<small class="noticeRank">${esc(rank)}</small>`:'');const badges=memberBadge({...m,...(m.profile||{}),name:m.from,from:m.from,role:m.role});row.innerHTML=`<div class="noticeAuthor"><img src="${esc(avatarFor(m.profile||{}))}" alt=""><div class="noticeContent"><b>${m.type==='announcement'?'<small class="noticeRank announcementFixedLabel">إعلان</small> ':''}${esc(who)} ${m.type==='announcement'&&m.profile?.rank?badges:''}${rankHtml}</b><div class="noticeText">${esc(m.text||'')}</div></div></div><small>${new Date(m.at||Date.now()).toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'})}${m.duration==='5m'?' · ينتهي بعد 5 دقائق':''}</small>`;box.appendChild(row);box.scrollTop=box.scrollHeight;return;}const p=m.profile||{};let content=esc(m.text||'');if(m.media){content=m.media.mime.startsWith('image/')?`<img src="${esc(m.media.url)}" class="wallMedia">`:m.media.mime.startsWith('video/')?`<video src="${esc(m.media.url)}" class="wallMedia" controls></video>`:`<audio src="${esc(m.media.url)}" controls></audio>`}const messageRole=m.role||p.role||(key(m.from)===key(me?.name)?(me?.role||(me?.owner?'owner':me?.admin?'admin':null)):null);const messageBadge=memberBadge({...m,...p,role:messageRole,name:m.from,from:m.from,vip:m.vip??p.vip});box.insertAdjacentHTML('beforeend',`<div class="msg" data-from="${esc(m.from||'')}" data-message-id="${esc(m.id||'')}"><img class="avatar" onclick="openMemberProfile('${esc(m.from)}')" src="${esc(avatarFor(p))}"><div class="msgbody"><div class="msghead" style="color:${esc(p.nameColor||'#222')}">${messageBadge}<span onclick="openMemberProfile('${esc(m.from)}')">${esc(m.displayName||p.displayName||m.from)}</span> ${m.likes>=500?'<span class="badge">500+</span>':''}</div><div class="msgtext" style="background:${esc(p.bgColor||'#fff')}">${content}</div></div><div class="time">${new Date(m.at).toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'})}</div></div>`);box.scrollTop=box.scrollHeight}
 
 function sendPublic(){const text=document.getElementById('msgInput')?.value.trim();if(!text)return;socket.emit('send-message',{room:currentRoom,text});document.getElementById('msgInput').value=''}
 function layer(html,name){activeOverlay=name;document.getElementById('layer').innerHTML=html}
@@ -760,68 +760,21 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 
 
 
-<style id="rimaz-announcement-layout-single-source-v18">
-/* One clean layout for welcome and announcement cards only; normal .msg rows are untouched. */
-.rimazChatNotice,
-.rimazWelcomeNotice {
-  display:block !important;
-  position:relative !important;
-  box-sizing:border-box !important;
-  width:calc(100% - 8px) !important;
-  max-width:560px !important;
-  min-width:0 !important;
-  margin:1px auto 1px 4px !important;
-  padding:4px 10px !important;
-  direction:ltr !important;
-  text-align:left !important;
-  background:#eaf5ff !important;
-  color:#193b58 !important;
-  border:1px solid #b7d9f7 !important;
-  border-right:5px solid #3797d5 !important;
-  border-left:0 !important;
-  border-radius:2px !important;
-  box-shadow:none !important;
-  overflow:hidden !important;
-  overflow-wrap:break-word !important;
-}
+<style id="rimaz-announcement-layout-single-source-v19">
+/* Welcome and announcement cards only. Normal member messages are not targeted. */
+.rimazChatNotice,.rimazWelcomeNotice{display:block!important;position:relative!important;box-sizing:border-box!important;width:calc(100% - 8px)!important;max-width:560px!important;min-width:0!important;margin:1px auto 1px 4px!important;padding:4px 10px!important;direction:ltr!important;text-align:left!important;background:#eaf5ff!important;color:#193b58!important;border:1px solid #b7d9f7!important;border-right:5px solid #3797d5!important;border-left:0!important;border-radius:2px!important;box-shadow:none!important;overflow:hidden!important;overflow-wrap:break-word!important}
 .rimazChatNotice::before,.rimazWelcomeNotice::before{content:none!important;display:none!important}
-.rimazChatNotice>*,.rimazWelcomeNotice>*{min-width:0!important}
-.rimazChatNotice .noticeAuthor,.rimazWelcomeNotice .noticeAuthor{
-  display:flex!important;flex-direction:row!important;align-items:center!important;
-  justify-content:flex-start!important;flex-wrap:nowrap!important;gap:7px!important;
-  width:100%!important;margin:0 0 2px!important;direction:ltr!important;text-align:left!important;
-}
-.rimazChatNotice .noticeAuthor img,.rimazWelcomeNotice .noticeAuthor img{
-  display:block!important;width:34px!important;height:34px!important;min-width:34px!important;
-  flex:0 0 34px!important;object-fit:cover!important;border-radius:3px!important;
-}
-.rimazChatNotice .noticeAuthor>b,.rimazWelcomeNotice .noticeAuthor>b{
-  display:flex!important;flex:1 1 auto!important;flex-direction:row!important;align-items:center!important;
-  justify-content:flex-start!important;flex-wrap:wrap!important;gap:5px!important;min-width:0!important;
-  margin:0!important;font-size:16px!important;font-weight:900!important;line-height:1.2!important;
-  color:#193b58!important;overflow-wrap:normal!important;word-break:normal!important;
-}
-.rimazWelcomeNotice .noticeAuthor>b{color:#d71920!important;font-weight:900!important}
-.rimazChatNotice .noticeRank,.rimazWelcomeNotice .noticeRank{
-  display:inline-block!important;flex:0 0 auto!important;white-space:nowrap!important;margin:0!important;
-}
-.rimazWelcomeNotice .noticeRank{color:#d71920!important;font-weight:900!important}
-.rimazChatNotice .announcementFixedLabel{display:inline-block!important;background:#1649c7!important;color:#fff!important;font-weight:900!important;padding:2px 7px!important;border-radius:2px!important;margin:0 0 0 2px!important}
-.rimazChatNotice>div:not(.noticeAuthor),.rimazWelcomeNotice>div:not(.noticeAuthor){
-  display:block!important;width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;
-  direction:ltr!important;text-align:left!important;font-size:18px!important;font-weight:700!important;
-  line-height:1.3!important;overflow-wrap:break-word!important;word-break:normal!important;white-space:normal!important;
-}
-.rimazChatNotice>small,.rimazWelcomeNotice>small{
-  display:block!important;width:100%!important;margin:2px 0 0!important;padding:0!important;
-  direction:ltr!important;text-align:left!important;font-size:11px!important;line-height:1.2!important;border:0!important;
-}
-@media(max-width:600px){
-  .rimazChatNotice,.rimazWelcomeNotice{width:calc(100% - 8px)!important;max-width:none!important;margin:1px auto 1px 4px!important;padding:4px 8px!important}
-  .rimazChatNotice .noticeAuthor img,.rimazWelcomeNotice .noticeAuthor img{width:32px!important;height:32px!important;min-width:32px!important;flex-basis:32px!important}
-  .rimazChatNotice .noticeAuthor>b,.rimazWelcomeNotice .noticeAuthor>b{font-size:15px!important}
-  .rimazChatNotice>div:not(.noticeAuthor),.rimazWelcomeNotice>div:not(.noticeAuthor){font-size:17px!important;line-height:1.3!important}
-}
+.rimazChatNotice .noticeAuthor,.rimazWelcomeNotice .noticeAuthor{display:flex!important;flex-direction:row!important;align-items:flex-start!important;justify-content:flex-start!important;flex-wrap:nowrap!important;gap:7px!important;width:100%!important;margin:0!important;direction:ltr!important;text-align:left!important}
+.rimazChatNotice .noticeAuthor>img,.rimazWelcomeNotice .noticeAuthor>img{display:block!important;width:34px!important;height:34px!important;min-width:34px!important;flex:0 0 34px!important;object-fit:cover!important;border-radius:3px!important}
+.rimazChatNotice .noticeContent,.rimazWelcomeNotice .noticeContent{display:flex!important;flex:1 1 auto!important;flex-direction:column!important;align-items:flex-start!important;min-width:0!important;margin:0!important;padding:0!important}
+.rimazChatNotice .noticeContent>b,.rimazWelcomeNotice .noticeContent>b{display:flex!important;flex:0 0 auto!important;flex-direction:row!important;align-items:center!important;justify-content:flex-start!important;flex-wrap:wrap!important;gap:4px!important;min-width:0!important;margin:0 0 1px!important;font-size:16px!important;font-weight:900!important;line-height:1.15!important;color:#193b58!important;overflow-wrap:normal!important;word-break:normal!important}
+.rimazWelcomeNotice .noticeContent>b{color:#bd2631!important;font-weight:900!important}
+.rimazChatNotice .noticeRank,.rimazWelcomeNotice .noticeRank{display:inline-block!important;flex:0 0 auto!important;white-space:nowrap!important;margin:0!important;font-size:inherit!important;font-weight:900!important}
+.rimazWelcomeNotice .noticeRank{color:#bd2631!important}
+.rimazChatNotice .announcementFixedLabel{background:#1649c7!important;color:#fff!important;font-weight:900!important;padding:2px 7px!important;border-radius:2px!important;margin:0 2px 0 0!important}
+.rimazChatNotice .noticeText,.rimazWelcomeNotice .noticeText{display:block!important;width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;direction:ltr!important;text-align:left!important;font-size:18px!important;font-weight:700!important;line-height:1.25!important;overflow-wrap:break-word!important;word-break:normal!important;white-space:normal!important;color:#193b58!important}
+.rimazChatNotice>small,.rimazWelcomeNotice>small{display:block!important;width:100%!important;margin:2px 0 0!important;padding:0!important;direction:ltr!important;text-align:left!important;font-size:11px!important;line-height:1.15!important;border:0!important}
+@media(max-width:600px){.rimazChatNotice,.rimazWelcomeNotice{width:calc(100% - 8px)!important;max-width:none!important;margin:1px auto 1px 4px!important;padding:4px 8px!important}.rimazChatNotice .noticeAuthor>img,.rimazWelcomeNotice .noticeAuthor>img{width:32px!important;height:32px!important;min-width:32px!important;flex-basis:32px!important}.rimazChatNotice .noticeContent>b,.rimazWelcomeNotice .noticeContent>b{font-size:15px!important}.rimazChatNotice .noticeText,.rimazWelcomeNotice .noticeText{font-size:17px!important;line-height:1.25!important}}
 </style>
 </body></html>
 <style id="rimaz-user-latest-final">
@@ -1097,7 +1050,6 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 #layer .privateOverlay .pmsg .privateMediaArea{margin:5px 0 0 54px!important;direction:ltr!important;text-align:left!important;}
 @media(max-width:650px){#layer .privateOverlay .privateHead{grid-template-columns:20px 4px 42px minmax(0,1fr) auto!important;gap:4px!important;height:56px!important;min-height:56px!important;flex-basis:56px!important;padding:4px!important;}#layer .privateOverlay .privateHead .privateHeadAvatar{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;}#layer .privateOverlay .privateHead .privateHeadTitle .memberBadge{min-width:21px!important;height:21px!important;min-height:21px!important;font-size:15px!important;}#layer .privateOverlay .privateHead .privateHeadTitle b{font-size:13px!important;}#layer .privateOverlay .privateHead .privateHeadActions button{width:26px!important;height:28px!important;min-width:26px!important;}#layer .privateOverlay .pmsgHead{grid-template-columns:42px minmax(0,1fr)!important;gap:7px!important;min-height:42px!important;}#layer .privateOverlay .pmsgHead>img{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;}#layer .privateOverlay .pmsgTitle .memberBadge{min-width:22px!important;height:22px!important;min-height:22px!important;font-size:15px!important;}#layer .privateOverlay .pmsgTitle b{font-size:14px!important;}#layer .privateOverlay .pmsg .privateMediaArea{margin-left:49px!important;}}
 </style>
-
 
 
 <style>
