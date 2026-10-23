@@ -5,5 +5,3 @@ RIMAZ CHAT - V7 USER FEEDBACK PATCH
 - Temporary presence events (join/leave) are emitted live but are not stored as room messages. When the last connected socket leaves a room, that room's stored public messages are cleaned; user accounts, profiles, settings, welcome-message settings, and announcement registry are preserved.
 - Checked server.js and the inline browser script with Node syntax checks.
 - Deployment behavior has not been tested against the live Deplexo service.
-
-V20: announcement/welcome-only rendering updated. Announcement identity line is avatar + rank badge + name; plain blue إعلان label below without background; text follows label; time aligned right. Consolidated V19 announcement CSS into one scoped style block and removed duplicated rimaz-user-latest-final blocks. Normal message renderer unchanged.
