@@ -16,18 +16,32 @@ const ROOT = __dirname;
 const INDEX_CANDIDATES = [path.join(ROOT, 'index.html'), path.join(ROOT, 'public', 'index.html')];
 const INDEX_FILE = INDEX_CANDIDATES.find(file => fs.existsSync(file));
 if (!INDEX_FILE) console.error('FATAL: index.html is missing. Expected /app/index.html or /app/public/index.html');
-let DATA_DIR = process.env.DATA_DIR || (fs.existsSync('/data') ? '/data/rimaz' : path.join('/tmp', 'rimaz-data'));
+// Prefer persistent hosting storage. Never silently fall back to /tmp: that can
+// make existing accounts appear to disappear after a restart/redeploy.
+let DATA_DIR = process.env.DATA_DIR || (fs.existsSync('/data') ? '/data/rimaz' : path.join(ROOT, 'data'));
+// A legacy deployment may still have DATA_DIR=/app/data, which is not the
+// persistent mount on Deplexo. If the mount exists and the configured path
+// cannot be created, use the persistent mount rather than ephemeral storage.
 let UP_DIR = path.join(DATA_DIR, 'uploads');
 let DB_FILE = path.join(DATA_DIR, 'data.json');
-// Some hosting containers provide a DATA_DIR whose parent does not exist.
-// Fall back to a writable temporary directory instead of crashing at startup.
 try { fs.mkdirSync(UP_DIR, { recursive: true }); }
 catch (err) {
-  console.error(`Cannot create data directory ${UP_DIR}: ${err.message}. Falling back to /tmp/rimaz-data`);
-  DATA_DIR = path.join('/tmp', 'rimaz-data');
-  UP_DIR = path.join(DATA_DIR, 'uploads');
-  DB_FILE = path.join(DATA_DIR, 'data.json');
-  fs.mkdirSync(UP_DIR, { recursive: true });
+  if (fs.existsSync('/data')) {
+    const persistentDir = '/data/rimaz';
+    try {
+      fs.mkdirSync(path.join(persistentDir, 'uploads'), { recursive: true });
+      console.error(`Cannot create configured data directory ${DATA_DIR}: ${err.message}. Using persistent mount ${persistentDir}.`);
+      DATA_DIR = persistentDir;
+      UP_DIR = path.join(DATA_DIR, 'uploads');
+      DB_FILE = path.join(DATA_DIR, 'data.json');
+    } catch (persistentErr) {
+      console.error(`Cannot initialize persistent data directory ${persistentDir}: ${persistentErr.message}`);
+      throw persistentErr;
+    }
+  } else {
+    console.error(`Cannot initialize data directory ${DATA_DIR}: ${err.message}`);
+    throw err;
+  }
 }
 
 app.disable('x-powered-by');
