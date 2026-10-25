@@ -282,7 +282,6 @@ function globalBanned(name,ip){ const n=keyName(name), item=(db.globalBans||{})[
 function removeFromChat(name, banned){ const n=keyName(name); for(const so of io.sockets.sockets.values()){ const sid2=so.data?.sid, u2=so.data?.user||socketUsers.get(sid2); if(!u2||keyName(u2.name)!==n)continue; const oldRoom=u2.room||''; if(oldRoom){so.leave(oldRoom);roomSockets.get(oldRoom)?.delete(sid2);} if(so.data?.user)so.data.user.room=''; if(socketUsers.get(sid2))socketUsers.get(sid2).room=''; so.emit('kicked',{global:true,banned:!!banned,room:oldRoom}); } emitState(); }
 function safeMessage(m){ return {...m, text:String(m.text||'').slice(0,2000)}; }
 function addMessage(m){ if(m?.type==='presence')return; db.messages.push(m); if(db.messages.length>1000)db.messages.splice(0,db.messages.length-1000); save(); }
-function announcementMessage(item,room){return {id:String(item.id)+'-'+String(room.id),announcementId:item.id,room:room.id,from:item.from,displayName:displayName(item.from),role:item.role,type:'announcement',text:item.text,at:item.at,duration:item.duration,profile:profile(item.from)};}
 function notify(name,item){
   name=accountKey(name); if(!db.notifications[name])db.notifications[name]=[];
   db.notifications[name].unshift({...item,id:crypto.randomUUID(),at:Date.now()});
@@ -411,25 +410,7 @@ app.post('/api/admin/member-action',(req,res)=>{requireAuth(req,res,()=>{
   if(action==='mute'){db.roomMutes[room]=Array.isArray(db.roomMutes[room])?db.roomMutes[room]:[];const kn=keyName(n);if(!db.roomMutes[room].includes(kn))db.roomMutes[room].push(kn);save();emitToUser(n,'error-msg',{error:'تم كتمك في هذه الغرفة'});emitState();return res.json({ok:true});}
   return res.status(400).json({error:'إجراء غير معروف'});
 });});
-app.post('/api/admin/broadcast',requireAdmin,(req,res)=>{
-  const text=String(req.body.text||'').trim();
-  if(!text)return res.status(400).json({error:'نص الإعلان فارغ'});
-  const duration=req.body.duration==='5m'?'5m':'permanent';
-  const item={id:crypto.randomUUID(),text:text.slice(0,2000),from:req.user.name,role:roleOf(req.user),at:Date.now(),duration};
-  db.announcements=Array.isArray(db.announcements)?db.announcements:[];
-  db.announcements.unshift(item);
-  db.announcements=db.announcements.slice(0,100);
-  // Persist one canonical announcement; room-specific messages are generated from this record.
-  // This prevents a room's announcement history from disappearing if its message list is cleaned.
-  for(const room of db.rooms){
-    const message=announcementMessage(item,room);
-    addMessage(message);
-    io.to(room.id).emit('message',message);
-  }
-  save();
-  if(duration==='5m')scheduleAnnouncementExpiry(item);
-  res.json({ok:true,announcement:item});
-});
+app.post('/api/admin/broadcast',requireAdmin,(req,res)=>{const text=String(req.body.text||'').trim();if(!text)return res.status(400).json({error:'نص الإعلان فارغ'});const duration=req.body.duration==='5m'?'5m':'permanent';const item={id:crypto.randomUUID(),text:text.slice(0,2000),from:req.user.name,role:roleOf(req.user),at:Date.now(),duration};db.announcements=Array.isArray(db.announcements)?db.announcements:[];db.announcements.unshift(item);db.announcements=db.announcements.slice(0,100);for(const room of db.rooms){const message={id:item.id+'-' + room.id,announcementId:item.id,room:room.id,from:item.from,displayName:displayName(item.from),role:item.role,type:'announcement',text:item.text,at:item.at,duration:item.duration,profile:profile(item.from)};addMessage(message);io.to(room.id).emit('message',message);}save();if(duration==='5m')scheduleAnnouncementExpiry(item);res.json({ok:true,announcement:item});});
 app.delete('/api/admin/announcement/:id',requireAdmin,(req,res)=>{const id=String(req.params.id);const existed=(db.announcements||[]).some(x=>x.id===id);db.announcements=(db.announcements||[]).filter(x=>x.id!==id);const removed=db.messages.filter(m=>String(m.id||'').startsWith(id+'-'));db.messages=db.messages.filter(m=>!String(m.id||'').startsWith(id+'-'));for(const m of removed)io.emit('message-deleted',{id:m.id});save();res.json({ok:true,removedMessages:removed.length,existed});});
 app.delete('/api/admin/message/:id',requireAdmin,(req,res)=>{const id=req.params.id;db.messages=db.messages.filter(x=>x.id!==id);save();io.emit('message-deleted',{id});res.json({ok:true});});
 app.patch('/api/admin/profile/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);if(isOwner({name:n,role:(getUser(n)||getGuest(n)||{}).role})&&!isOwner(req.user))return res.status(403).json({error:'ملف صاحب الموقع محمي من الإداريين'});if(!getUser(n)&&!getGuest(n))return res.status(404).json({error:'العضو غير موجود'});const p=profile(n);if(req.body.displayName!==undefined){const dn=cleanName(req.body.displayName);if(!dn)return res.status(400).json({error:'الزخرفة لا يمكن أن تكون فارغة'});p.displayName=dn;}if(req.body.nameColor!==undefined){const c=String(req.body.nameColor||'');if(!/^#[0-9a-fA-F]{6}$/.test(c))return res.status(400).json({error:'لون الاسم غير صحيح'});p.nameColor=c;}if(req.body.fontColor!==undefined){const c=String(req.body.fontColor||'');if(!/^#[0-9a-fA-F]{6}$/.test(c))return res.status(400).json({error:'لون الخط غير صحيح'});p.fontColor=c;}if(req.body.bgColor!==undefined){const c=String(req.body.bgColor||'');if(!/^#[0-9a-fA-F]{6}$/.test(c))return res.status(400).json({error:'لون الخلفية غير صحيح'});p.bgColor=c;}save();io.emit('profile-changed',{name:n,profile:p,displayName:p.displayName||cleanName(n)});res.json({ok:true,profile:p,displayName:p.displayName||cleanName(n)});});
@@ -533,23 +514,21 @@ io.on('connection',socket=>{
     if(globalBanned(u.name,socketClientIp(socket))){socket.emit('join-error',{error:'عنوان الإنترنت محظور من الدردشة، حاول بعد انتهاء 5 دقائق'});return;}
     if(roomBanned(u.name,room)){socket.emit('join-error',{error:'أنت محظور من هذه الغرفة'});return;}
     const previousRoom=socket.data.user?.room||socketUsers.get(sid)?.room||'';
-    const oldRooms=new Set([...socket.rooms].filter(roomId=>roomId!==socket.id&&roomId!==room&&db.rooms.some(r=>r.id===roomId)));
-    if(previousRoom&&previousRoom!==room)oldRooms.add(previousRoom);
-    for(const oldRoom of oldRooms){
-      socket.leave(oldRoom);
-      roomSockets.get(oldRoom)?.delete(sid);
-      voiceSpeakers.get(oldRoom)?.delete(sid);
-      const leaveNotice={id:crypto.randomUUID(),room:oldRoom,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',exitKind:'room',text:'',at:Date.now(),profile:profile(u.name)};
-      io.to(oldRoom).emit('message',leaveNotice);
-      emitVoiceState(oldRoom);
-      const oldMembers=roomSockets.get(oldRoom)||new Set();
-      for(const memberSid of [...oldMembers]){const active=socketUsers.get(memberSid);if(!active||active.room!==oldRoom)oldMembers.delete(memberSid);}
-      if(oldMembers.size===0)roomSockets.delete(oldRoom);
+    if(previousRoom && previousRoom!==room){
+      socket.leave(previousRoom);
+      roomSockets.get(previousRoom)?.delete(sid);
+      voiceSpeakers.get(previousRoom)?.delete(sid);
+      const leaveNotice={id:crypto.randomUUID(),room:previousRoom,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',exitKind:'room',text:'',at:Date.now(),profile:profile(u.name)};
+      io.to(previousRoom).emit('message',leaveNotice);
+      emitVoiceState(previousRoom);
+      const oldMembers=roomSockets.get(previousRoom)||new Set();
+      for(const memberSid of [...oldMembers]){const active=socketUsers.get(memberSid);if(!active||active.room!==previousRoom)oldMembers.delete(memberSid);}
+      if(oldMembers.size===0)roomSockets.delete(previousRoom);
     }
     socket.data.sid=sid; socket.data.user={...u,room}; socketUsers.set(sid,{...u,room});
     socket.join(room); if(!roomSockets.has(room))roomSockets.set(room,new Set());roomSockets.get(room).add(sid);
     socket.emit('room-joined',{room});
-    socket.emit('history',{room,items:(db.announcements||[]).filter(a=>a&&(!a.duration||a.duration!=='5m'||Number(a.at)+300000>Date.now())).map(a=>announcementMessage(a,targetRoom))}); const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'join',text:'',at:Date.now(),profile:profile(u.name)}; io.to(room).emit('message',pm); for(const item of (db.welcomeMessages||[]).filter(x=>x.enabled!==false&&String(x.text||'').trim())){const welcome={id:'welcome-'+crypto.randomUUID(),room,from:'شات ريماز',displayName:item.title||'الترحيب',type:'welcome',text:item.text,at:Date.now(),profile:{nameColor:'#2877b9',bgColor:'#eaf5ff'}};socket.emit('message',welcome);} emitState(); const joinedRoom=db.rooms.find(r=>r.id===room); if(joinedRoom?.kind==='voice')emitVoiceState(room);
+    socket.emit('history',{room,items:db.messages.filter(m=>m.room===room&&m.type==='announcement'&&(!m.announcementId||(db.announcements||[]).some(a=>String(a.id)===String(m.announcementId))))}); const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'join',text:'',at:Date.now(),profile:profile(u.name)}; io.to(room).emit('message',pm); for(const item of (db.welcomeMessages||[]).filter(x=>x.enabled!==false&&String(x.text||'').trim())){const welcome={id:'welcome-'+crypto.randomUUID(),room,from:'شات ريماز',displayName:item.title||'الترحيب',type:'welcome',text:item.text,at:Date.now(),profile:{nameColor:'#2877b9',bgColor:'#eaf5ff'}};socket.emit('message',welcome);} emitState(); const joinedRoom=db.rooms.find(r=>r.id===room); if(joinedRoom?.kind==='voice')emitVoiceState(room);
   });
   socket.on('request-mic',({room,raised}={})=>{const u=socket.data.user;if(!u||!room||u.room!==room)return;const r=db.rooms.find(x=>x.id===room);if(!r||r.kind!=='voice')return socket.emit('error-msg',{error:'هذا الخيار متاح بالغرف الصوتية فقط'});if(raised){if(userLikes(u)<30&&!isOwner(u)&&!isAdmin(u))return socket.emit('error-msg',{error:'تحتاج إلى 30 إعجاباً على الأقل لرفع المايك'});const speakers=voiceSpeakers.get(room)||new Map();if(speakers.size>=Math.max(1,Number(r.mics)||8)&&!speakers.has(socket.data.sid))return socket.emit('error-msg',{error:'اكتمل عدد المايكات في هذه الغرفة'});speakers.set(socket.data.sid,{name:u.name,displayName:displayName(u.name),at:Date.now()});voiceSpeakers.set(room,speakers);}else{voiceSpeakers.get(room)?.delete(socket.data.sid);}emitVoiceState(room);});
   socket.on('leave-room',({room}={})=>{const u=socket.data.user,sid=socket.data.sid;if(!u||!room)return;socket.leave(room);roomSockets.get(room)?.delete(sid);voiceSpeakers.get(room)?.delete(sid);emitVoiceState(room);if(socketUsers.get(sid))socketUsers.get(sid).room='';if(socket.data.user)socket.data.user.room='';const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',exitKind:'room',text:'',at:Date.now(),profile:profile(u.name)};io.to(room).emit('message',pm);{const members=roomSockets.get(room)||new Set();for(const memberSid of [...members]){const active=socketUsers.get(memberSid);if(!active||active.room!==room)members.delete(memberSid);}if(members.size===0){roomSockets.delete(room);db.messages=db.messages.filter(m=>m.room!==room||m.type==='announcement');try{save()}catch(e){console.error('Room history cleanup failed:',e.message)}}}emitState();});
