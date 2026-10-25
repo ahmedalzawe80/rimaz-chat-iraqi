@@ -508,11 +508,11 @@ io.on('connection',socket=>{
   socket.on('join',({sid,room='public',password=''}={})=>{
     const pendingGuestCleanup=guestDisconnectTimers.get(sid); if(pendingGuestCleanup){clearTimeout(pendingGuestCleanup);guestDisconnectTimers.delete(sid);}
     const u=sessionUser(sid); if(!u)return;
-    const targetRoom=db.rooms.find(r=>r.id===room); if(!targetRoom){socket.emit('join-error',{error:'الغرفة غير موجودة'});return;}
-    if(targetRoom.passwordHash&&!bcrypt.compareSync(String(password||''),targetRoom.passwordHash)){socket.emit('join-error',{error:'الغرفة مقفلة؛ أدخل الباسورد الصحيح'});return;} 
+    const targetRoom=db.rooms.find(r=>r.id===room); if(!targetRoom){socket.emit('join-error',{room,error:'الغرفة غير موجودة'});return;}
+    if(targetRoom.passwordHash&&!bcrypt.compareSync(String(password||''),targetRoom.passwordHash)){socket.emit('join-error',{room,error:'الغرفة مقفلة؛ أدخل الباسورد الصحيح'});return;} 
     // Validate access before changing the active room, then move this socket atomically.
-    if(globalBanned(u.name,socketClientIp(socket))){socket.emit('join-error',{error:'عنوان الإنترنت محظور من الدردشة، حاول بعد انتهاء 5 دقائق'});return;}
-    if(roomBanned(u.name,room)){socket.emit('join-error',{error:'أنت محظور من هذه الغرفة'});return;}
+    if(globalBanned(u.name,socketClientIp(socket))){socket.emit('join-error',{room,error:'عنوان الإنترنت محظور من الدردشة، حاول بعد انتهاء 5 دقائق'});return;}
+    if(roomBanned(u.name,room)){socket.emit('join-error',{room,error:'أنت محظور من هذه الغرفة'});return;}
     const previousRoom=socket.data.user?.room||socketUsers.get(sid)?.room||'';
     if(previousRoom && previousRoom!==room){
       socket.leave(previousRoom);
