@@ -327,7 +327,7 @@ app.post('/api/guest',(req,res)=>{
   if(taken)return res.status(409).json({error:'الاسم مستخدم، اختر اسماً آخر'});
   db.guests[n]={likes:0,created:Date.now()}; const gp=profile(n); gp.status='(غير مسجل)'; const sid=makeSession(n,'guest'); save(); res.json({sid,user:sessionUser(sid)});
 });
-app.post('/api/logout',requireAuth,(req,res)=>{ const sid=req.get('x-session'); const u=sessions.get(sid); if(u?.type==='guest'){delete db.guests[u.name];delete db.profiles[u.name];} sessions.delete(sid); delete db.sessions[sid]; save(); res.json({ok:true}); });
+app.post('/api/logout',requireAuth,(req,res)=>{ const sid=req.get('x-session'); const u=sessions.get(sid); const name=u?.name||req.user?.name; if(name){ /* Clear this user's persisted room navigation notices so they do not reappear in a later session; preserve chat text and shared announcements. */ db.messages=(db.messages||[]).filter(m=>!(m?.type==='presence'&&keyName(m.from)===keyName(name))); } if(u?.type==='guest'){delete db.guests[u.name];delete db.profiles[u.name];} sessions.delete(sid); delete db.sessions[sid]; save(); res.json({ok:true}); });
 
 app.get('/api/public-online',(req,res)=>{ const users=getOnlineUsers().map(u=>({name:u.name,type:u.type,displayName:u.displayName,avatar:u.profile?.avatar||'',status:u.profile?.status||defaultStatus(u.name)})); res.set('Cache-Control','no-store'); res.json({users}); });
 app.get('/api/state',requireAuth,(req,res)=>{
