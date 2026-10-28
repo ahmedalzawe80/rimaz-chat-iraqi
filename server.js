@@ -90,14 +90,14 @@ try { save(); } catch(e) { console.error('Could not persist welcome-message defa
 const expiredAnnouncementIds=new Set((db.announcements||[]).filter(a=>a&&a.duration==='5m'&&Number(a.at)+300000<=Date.now()).map(a=>String(a.id)));
 if(expiredAnnouncementIds.size){db.announcements=(db.announcements||[]).filter(a=>!expiredAnnouncementIds.has(String(a.id)));db.messages=(db.messages||[]).filter(m=>![...expiredAnnouncementIds].some(id=>String(m.id||'').startsWith(id+'-')));try{fs.writeFileSync(DB_FILE,JSON.stringify(db,null,2))}catch(e){console.error('Could not clean expired announcements:',e.message)}}
 // Normalize legacy saved role permissions at startup so old arrays cannot invert rank hierarchy.
-const ROLE_PERMISSION_CEILINGS={super:['panel_access','users_view'],banner:['panel_access','users_view','moderation','messages_delete','gifts','announcements'],admin:Object.keys({panel_access:1,users_view:1,moderation:1,messages_delete:1,gifts:1,announcements:1,rooms_manage:1,vip:1,profile_edit:1,avatar_delete:1,grant_likes:1,role_assign:1,rank_assign:1,permission_manage:1,member_ip:1,reset_likes:1,room_move:1,wall_stop:1,wall_clear:1,wall_delete_user:1,welcome_manage:1})};
+const ROLE_PERMISSION_CEILINGS={super:['panel_access','users_view'],banner:['panel_access','users_view','moderation','messages_delete','gifts','announcements'],admin:Object.keys({panel_access:1,users_view:1,moderation:1,kick_room:1,ban_room:1,mute_room:1,global_kick:1,global_ban:1,messages_delete:1,gifts:1,announcements:1,announcement_post:1,announcement_delete:1,rooms_manage:1,vip:1,profile_edit:1,avatar_delete:1,grant_likes:1,role_assign:1,rank_assign:1,permission_manage:1,member_ip:1,reset_likes:1,room_move:1,wall_stop:1,wall_restart:1,wall_clear:1,wall_delete_user:1,welcome_manage:1})};
 const RANK_PERMISSION_PROFILES=['admin-full','super-red','super-white','super-black','crown-silver','crown-gold','admin-shield'];
 const RANK_BASE_ROLE={'admin-full':'admin','super-red':'super','super-white':'super','super-black':'super','crown-silver':'banner','crown-gold':'banner','admin-shield':'admin'};
 const PROTECTED_ROLE_PERMISSIONS=[]; // Admin has full operational permissions; owner protection is enforced on protected targets server-side.
 db.rolePermissions=db.rolePermissions||{};
 db.rolePermissionMeta=db.rolePermissionMeta||{customized:{}};
 db.rolePermissionMeta.customized=db.rolePermissionMeta.customized||{};
-for(const role of Object.keys(ROLE_PERMISSION_CEILINGS)) if(Array.isArray(db.rolePermissions[role])) db.rolePermissions[role]=[...new Set(['panel_access',...db.rolePermissions[role].filter(p=>Object.hasOwn({panel_access:1,users_view:1,moderation:1,messages_delete:1,gifts:1,announcements:1,rooms_manage:1,vip:1,profile_edit:1,avatar_delete:1,grant_likes:1,role_assign:1,rank_assign:1,permission_manage:1,member_ip:1,reset_likes:1,room_move:1,wall_stop:1,wall_clear:1,wall_delete_user:1,welcome_manage:1},p))])];
+for(const role of Object.keys(ROLE_PERMISSION_CEILINGS)) if(Array.isArray(db.rolePermissions[role])) db.rolePermissions[role]=[...new Set(['panel_access',...db.rolePermissions[role].filter(p=>Object.hasOwn({panel_access:1,users_view:1,moderation:1,kick_room:1,ban_room:1,mute_room:1,global_kick:1,global_ban:1,messages_delete:1,gifts:1,announcements:1,announcement_post:1,announcement_delete:1,rooms_manage:1,vip:1,profile_edit:1,avatar_delete:1,grant_likes:1,role_assign:1,rank_assign:1,permission_manage:1,member_ip:1,reset_likes:1,room_move:1,wall_stop:1,wall_restart:1,wall_clear:1,wall_delete_user:1,welcome_manage:1},p))])];
 function save(){ fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); }
 function scheduleAnnouncementExpiry(item){if(!item||item.duration!=='5m'||!item.id)return;const delay=Math.max(0,Number(item.at||Date.now())+300000-Date.now());setTimeout(()=>{const id=String(item.id);db.announcements=(db.announcements||[]).filter(a=>String(a.id)!==id);const removed=(db.messages||[]).filter(m=>String(m.id||'').startsWith(id+'-'));db.messages=(db.messages||[]).filter(m=>!String(m.id||'').startsWith(id+'-'));for(const m of removed)io.emit('message-deleted',{id:m.id});try{save()}catch(e){console.error('Announcement expiry save failed:',e.message)}},delay).unref?.();}
 for(const item of (db.announcements||[])) scheduleAnnouncementExpiry(item);
@@ -159,12 +159,12 @@ function requireAuth(req,res,next){
   const u=sessionUser(req.get('x-session')); if(!u)return res.status(401).json({error:'يجب تسجيل الدخول'}); req.user=u; next();
 }
 const PERMISSION_CATALOG = {
-  panel_access:'فتح لوحة التحكم', users_view:'عرض الأعضاء', moderation:'الطرد والحظر والكتم',
-  messages_delete:'حذف الرسائل', rooms_manage:'إدارة الغرف', announcements:'نشر وحذف الإعلانات',
+  panel_access:'فتح لوحة التحكم', users_view:'عرض الأعضاء', kick_room:'طرد من الغرفة', ban_room:'حظر من الغرفة', mute_room:'كتم العضو', global_kick:'طرد خارج الدردشة', global_ban:'حظر خارج الدردشة', moderation:'صلاحية إشراف عامة (توافق قديم)',
+  messages_delete:'حذف الرسائل', rooms_manage:'إدارة الغرف', announcement_post:'نشر الإعلانات', announcement_delete:'حذف الإعلانات', announcements:'صلاحية إعلانات عامة (توافق قديم)',
   gifts:'إرسال الهدايا', vip:'منح VIP', profile_edit:'تعديل ألوان الملف الشخصي',
   avatar_delete:'حذف الصور', grant_likes:'منح اللايكات', role_assign:'تغيير المناصب الإدارية',
   rank_assign:'منح الشارات ومدتها', permission_manage:'تعديل صلاحيات الرتب', member_ip:'عرض IP',
-  reset_likes:'تصفير اللايكات', room_move:'نقل عضو بين الغرف', wall_stop:'إيقاف وتشغيل الحائط', wall_clear:'حذف جميع منشورات الحائط', wall_delete_user:'حذف منشورات عضو محدد من الحائط', welcome_manage:'إدارة رسائل الترحيب'
+  reset_likes:'تصفير اللايكات', room_move:'نقل عضو بين الغرف', wall_stop:'إيقاف الحائط', wall_restart:'تشغيل الحائط', wall_clear:'حذف جميع منشورات الحائط', wall_delete_user:'حذف منشورات عضو محدد من الحائط', welcome_manage:'إدارة رسائل الترحيب'
 };
 // Permissions are tiered: super < banner < admin. Existing saved custom arrays
 // are intersected with each role's ceiling so old settings cannot invert hierarchy.
@@ -177,10 +177,10 @@ const DEFAULT_ROLE_PERMISSIONS = {
   'admin-full':[...ALL_PERMISSION_KEYS],
   'admin-shield':without('role_assign','rank_assign','permission_manage','reset_likes'),
   'crown-gold':without('role_assign','rank_assign','permission_manage','member_ip','reset_likes','grant_likes'),
-  'crown-silver':without('role_assign','rank_assign','permission_manage','member_ip','reset_likes','grant_likes','wall_stop','wall_clear','wall_delete_user'),
-  'super-black':without('role_assign','rank_assign','permission_manage','member_ip','reset_likes','grant_likes','wall_stop','wall_clear','wall_delete_user','room_move'),
-  'super-white':without('role_assign','rank_assign','permission_manage','member_ip','reset_likes','grant_likes','wall_stop','wall_clear','wall_delete_user','room_move','moderation'),
-  'super-red':without('role_assign','rank_assign','permission_manage','member_ip','reset_likes','grant_likes','wall_stop','wall_clear','wall_delete_user','room_move','moderation','avatar_delete'),
+  'crown-silver':without('role_assign','rank_assign','permission_manage','member_ip','reset_likes','grant_likes','wall_stop','wall_restart','wall_clear','wall_delete_user'),
+  'super-black':without('role_assign','rank_assign','permission_manage','member_ip','reset_likes','grant_likes','wall_stop','wall_restart','wall_clear','wall_delete_user','room_move'),
+  'super-white':without('role_assign','rank_assign','permission_manage','member_ip','reset_likes','grant_likes','wall_stop','wall_restart','wall_clear','wall_delete_user','room_move','moderation'),
+  'super-red':without('role_assign','rank_assign','permission_manage','member_ip','reset_likes','grant_likes','wall_stop','wall_restart','wall_clear','wall_delete_user','room_move','moderation','avatar_delete'),
   member:[]
 };
 // Migrate legacy rank profiles that were saved with only the first two basic permissions.
@@ -232,12 +232,12 @@ function permissionForAdminPath(req){
  if(p==='/api/admin/rank')return 'rank_assign';
  if(p==='/api/admin/permissions')return 'permission_manage';
  if(p.startsWith('/api/admin/member-ip/'))return 'member_ip';
- if(p==='/api/admin/reset-likes')return 'reset_likes';
+ if(p==='/api/admin/reset-likes')return 'reset_likes'; if(p==='/api/admin/unban')return 'ban_room'; if(p==='/api/admin/unmute')return 'mute_room';
  if(p==='/api/admin/grant-like')return 'grant_likes';
- if(p==='/api/admin/broadcast'||p.startsWith('/api/admin/announcement/'))return 'announcements';
+ if(p==='/api/admin/broadcast')return 'announcement_post'; if(p.startsWith('/api/admin/announcement/'))return 'announcement_delete';
  if(p.startsWith('/api/admin/message/'))return 'messages_delete';
  if(p==='/api/admin/move-member')return 'room_move';
- if(p.startsWith('/api/admin/wall/control')){const a=String(req.body?.action||'');return a==='stop'||a==='restart'?'wall_stop':a==='clear'?'wall_clear':a==='delete-user'?'wall_delete_user':'wall_stop';}
+ if(p.startsWith('/api/admin/wall/control')){const a=String(req.body?.action||'');return a==='stop'?'wall_stop':a==='restart'?'wall_restart':a==='clear'?'wall_clear':a==='delete-user'?'wall_delete_user':'wall_stop';}
  if(p.startsWith('/api/admin/room'))return 'rooms_manage';
  if(p.startsWith('/api/admin/profile/'))return 'profile_edit';
  if(p.startsWith('/api/admin/avatar/'))return 'avatar_delete';
@@ -392,7 +392,7 @@ app.post('/api/admin/member-action',(req,res)=>{requireAuth(req,res,()=>{
   const actor=req.user,n=accountKey(req.body.name),action=String(req.body.action||''),room=String(req.body.room||'public');
   if(!n)return res.status(400).json({error:'الاسم مطلوب'});
   if((isOwnerName(n)||isOwner({name:n,role:(getUser(n)||getGuest(n)||{}).role})) && !isOwner(actor)) return res.status(403).json({error:'حساب صاحب الموقع محمي ولا يمكن للإداري طرده أو حظره أو تعديل لايكاته'});
-  const actionPermission=({'global-kick':'moderation','global-ban':'moderation','kick':'moderation','ban':'moderation','mute':'moderation','grant-like':'grant_likes','reset-likes':'reset_likes','grant-admin':'role_assign','grant-super':'role_assign','grant-banner':'role_assign','grant-vip':'vip','gift':'gifts'})[action]||'moderation';if(!hasPermission(actor,actionPermission))return res.status(403).json({error:'ما عندك صلاحية لهذا الإجراء'});
+  const actionPermission=({'global-kick':'global_kick','global-ban':'global_ban','kick':'kick_room','ban':'ban_room','mute':'mute_room','grant-like':'grant_likes','reset-likes':'reset_likes','grant-admin':'role_assign','grant-super':'role_assign','grant-banner':'role_assign','grant-vip':'vip','gift':'gifts'})[action]||'moderation';if(!hasPermission(actor,actionPermission))return res.status(403).json({error:'ما عندك صلاحية لهذا الإجراء'});
   if(action==='global-kick'){ emitToUser(n,'admin-action-notice',{title:'🚪 طرد من الدردشة',text:'قام '+actor.name+' (admin) بطردك من الدردشة'}); removeFromChat(n,false); return res.json({ok:true}); }
   if(action==='global-ban'){ emitToUser(n,'admin-action-notice',{title:'⛔ حظر من الدردشة',text:'قام '+actor.name+' (admin) بحظرك من الدردشة لمدة 5 دقائق'}); db.globalBans=db.globalBans||{}; db.globalIpBans=db.globalIpBans||{}; const until=Date.now()+5*60*1000; const targetIps=new Set(); for(const so of io.sockets.sockets.values()){const sid2=so.data?.sid,u2=so.data?.user||socketUsers.get(sid2);if(u2&&keyName(u2.name)===keyName(n)){const ip=socketClientIp(so);if(ip)targetIps.add(ip);}} db.globalBans[keyName(n)]={name:keyName(n),until}; for(const ip of targetIps)db.globalIpBans[ip]={ip,name:keyName(n),until}; save(); removeFromChat(n,true); return res.json({ok:true,until,ipCount:targetIps.size}); }
   const target=getUser(n)||getGuest(n);
@@ -438,7 +438,7 @@ app.delete('/api/admin/room/:id/image',requireAdmin,clearRoomImage);
 app.post('/api/admin/room/:id/image/delete',requireAdmin,clearRoomImage);
 app.patch('/api/admin/room/:id',requireAdmin,(req,res)=>{const r=db.rooms.find(x=>x.id===req.params.id);if(!r)return res.status(404).json({error:'الغرفة غير موجودة'});if(req.body.name!==undefined)r.name=cleanName(req.body.name)||r.name;if(req.body.desc!==undefined)r.desc=String(req.body.desc).slice(0,200);if(req.body.capacity!==undefined)r.capacity=Math.max(2,Math.min(1000,Number(req.body.capacity)||r.capacity));if(req.body.mics!==undefined&&r.kind==='voice')r.mics=Math.max(1,Math.min(50,Number(req.body.mics)||r.mics));save();emitState();res.json({ok:true,room:r});});
 app.delete('/api/admin/room/:id',requireAdmin,(req,res)=>{if(['public','voice'].includes(req.params.id))return res.status(400).json({error:'الغرفة الأساسية محمية ولا تحذف'});db.rooms=db.rooms.filter(r=>r.id!==req.params.id);delete db.roomBans[req.params.id];delete db.roomMutes[req.params.id];save();emitState();res.json({ok:true});});
-app.post('/api/admin/unmute',requireAdmin,(req,res)=>{const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});db.roomMutes[room]=(db.roomMutes[room]||[]).filter(x=>keyName(x)!==name);save();res.json({ok:true});});
+app.post('/api/admin/unmute',(req,res,next)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'mute_room'))return res.status(403).json({error:'ما عندك صلاحية رفع الكتم'});const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});db.roomMutes[room]=(db.roomMutes[room]||[]).filter(x=>keyName(x)!==name);save();res.json({ok:true});});});
 function roomAction(type,req,res){
   const room=String(req.body.room||'public'),name=keyName(req.body.name);
   if(!name)return res.status(400).json({error:'الاسم مطلوب'});
@@ -464,10 +464,10 @@ function roomAction(type,req,res){
   emitState();res.json({ok:true});
 }
 
-app.post('/api/admin/kick',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'moderation'))return res.status(403).json({error:'ما عندك صلاحية الإشراف'});const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});if((isOwner({name,role:(getUser(name)||getGuest(name)||{}).role})||name===keyName(process.env.OWNER_NAME||'owner'))&&!isOwner(req.user))return res.status(403).json({error:'حساب صاحب الموقع محمي ولا يحق للإداري اتخاذ إجراء عليه'});for(const [sid2,u2] of socketUsers){if(keyName(u2.name)===name&&u2.room===room){const so=socketBySession(sid2);so?.leave(room);roomSockets.get(room)?.delete(sid2);so?.emit('kicked',{room});}}emitState();res.json({ok:true});});});
-app.post('/api/admin/mute',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'moderation'))return res.status(403).json({error:'ما عندك صلاحية الإشراف'});roomAction('roomMutes',req,res);});});
-app.post('/api/admin/ban',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'moderation'))return res.status(403).json({error:'ما عندك صلاحية الإشراف'});roomAction('roomBans',req,res);});});
-app.post('/api/admin/unban',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'moderation'))return res.status(403).json({error:'ما عندك صلاحية الإشراف'});const room=String(req.body.room||'public'),name=keyName(req.body.name);db.roomBans[room]=(db.roomBans[room]||[]).filter(x=>typeof x==='string'?x!==name:keyName(x?.name)!==name);save();res.json({ok:true});});});
+app.post('/api/admin/kick',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'kick_room'))return res.status(403).json({error:'ما عندك صلاحية الطرد'});const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});if((isOwner({name,role:(getUser(name)||getGuest(name)||{}).role})||name===keyName(process.env.OWNER_NAME||'owner'))&&!isOwner(req.user))return res.status(403).json({error:'حساب صاحب الموقع محمي ولا يحق للإداري اتخاذ إجراء عليه'});for(const [sid2,u2] of socketUsers){if(keyName(u2.name)===name&&u2.room===room){const so=socketBySession(sid2);so?.leave(room);roomSockets.get(room)?.delete(sid2);so?.emit('kicked',{room});}}emitState();res.json({ok:true});});});
+app.post('/api/admin/mute',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'mute_room'))return res.status(403).json({error:'ما عندك صلاحية الكتم'});roomAction('roomMutes',req,res);});});
+app.post('/api/admin/ban',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'ban_room'))return res.status(403).json({error:'ما عندك صلاحية الحظر'});roomAction('roomBans',req,res);});});
+app.post('/api/admin/unban',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'ban_room'))return res.status(403).json({error:'ما عندك صلاحية رفع الحظر'});const room=String(req.body.room||'public'),name=keyName(req.body.name);db.roomBans[room]=(db.roomBans[room]||[]).filter(x=>typeof x==='string'?x!==name:keyName(x?.name)!==name);save();res.json({ok:true});});});
 
 app.post('/api/ignore',requireAuth,(req,res)=>{const n=cleanName(req.body.name);if(!n||keyName(n)===keyName(req.user.name))return res.status(400).json({error:'اسم غير صحيح'});db.ignored=db.ignored||{};const me=keyName(req.user.name),other=keyName(n);db.ignored[me]=Array.isArray(db.ignored[me])?db.ignored[me]:[];const i=db.ignored[me].findIndex(x=>keyName(x)===other);if(i>=0)db.ignored[me].splice(i,1);else db.ignored[me].push(other);save();res.json({ok:true,ignored:i<0});});
 app.post('/api/profile',requireAuth,(req,res)=>{
