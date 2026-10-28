@@ -115,7 +115,7 @@ const guestDisconnectTimers = new Map();
 
 function cleanName(v){ return String(v||'').trim().replace(/\s+/g,' ').slice(0,32); }
 function keyName(n){ return cleanName(n).toLowerCase(); }
-function isOwnerName(name){ const n=keyName(name); return n==='owner' || (!!process.env.OWNER_NAME && n===keyName(process.env.OWNER_NAME)); }
+function isOwnerName(name){ const n=keyName(name); if(n==='owner'||(!!process.env.OWNER_NAME&&n===keyName(process.env.OWNER_NAME)))return true; const userEntry=Object.entries(db.users||{}).find(([k])=>keyName(k)===n); if(userEntry&&String(userEntry[1]?.role||'')==='owner')return true; const guestEntry=Object.entries(db.guests||{}).find(([k])=>keyName(k)===n); return !!(guestEntry&&String(guestEntry[1]?.role||'')==='owner'); }
 function roleOf(u){ if(!u)return 'member'; const n=keyName(u.name); if(isOwnerName(n))return 'owner'; if(n==='admin' || n===keyName(process.env.ADMIN_NAME||'admin'))return 'admin'; const valid=['member','super','banner','admin']; const member=getUser(u.name); if(member){const r=String(member.role||u.role||'member');return valid.includes(r)?r:'member';} const guest=getGuest(u.name); if(guest){const r=String(guest.role||u.role||'member');return valid.includes(r)?r:'member';} const r=String(u.role||'member'); return valid.includes(r)?r:'member'; }
 function canMessageClosedPrivate(u){if(!u)return false;if(isOwner(u))return true;const role=roleOf(u);if(role==='admin')return true;const p=profile(u.name);return p?.rank==='admin-shield'&&(!p.rankUntil||Number(p.rankUntil)>Date.now());}
 function isOwner(u){return roleOf(u)==='owner'}
@@ -159,8 +159,8 @@ function requireAuth(req,res,next){
   const u=sessionUser(req.get('x-session')); if(!u)return res.status(401).json({error:'يجب تسجيل الدخول'}); req.user=u; next();
 }
 const PERMISSION_CATALOG = {
-  panel_access:'فتح لوحة التحكم', users_view:'عرض الأعضاء', kick_room:'طرد من الغرفة', ban_room:'حظر من الغرفة', mute_room:'كتم العضو', global_kick:'طرد خارج الدردشة', global_ban:'حظر خارج الدردشة', moderation:'صلاحية إشراف عامة (توافق قديم)',
-  messages_delete:'حذف الرسائل', rooms_manage:'إدارة الغرف', announcement_post:'نشر الإعلانات', announcement_delete:'حذف الإعلانات', announcements:'صلاحية إعلانات عامة (توافق قديم)',
+  panel_access:'فتح لوحة التحكم', users_view:'عرض الأعضاء', kick_room:'طرد من الغرفة', ban_room:'حظر من الغرفة', mute_room:'كتم العضو', global_kick:'طرد خارج الدردشة', global_ban:'حظر خارج الدردشة',
+  messages_delete:'حذف الرسائل', rooms_manage:'إدارة الغرف', announcement_post:'نشر الإعلانات', announcement_delete:'حذف الإعلانات',
   gifts:'إرسال الهدايا', vip:'منح VIP', profile_edit:'تعديل ألوان الملف الشخصي',
   avatar_delete:'حذف الصور', grant_likes:'منح اللايكات', role_assign:'تغيير المناصب الإدارية',
   rank_assign:'منح الشارات ومدتها', permission_manage:'تعديل صلاحيات الرتب', member_ip:'عرض IP',
@@ -169,18 +169,31 @@ const PERMISSION_CATALOG = {
 // Permissions are tiered: super < banner < admin. Existing saved custom arrays
 // are intersected with each role's ceiling so old settings cannot invert hierarchy.
 const ALL_PERMISSION_KEYS=Object.keys(PERMISSION_CATALOG);
+// Migrate saved bundled permissions to independent controls without losing existing access.
+let splitPermissionMigrationChanged=false;
+for(const [role, saved] of Object.entries(db.rolePermissions||{})){
+  if(!Array.isArray(saved)) continue;
+  const next=new Set(saved);
+  if(next.has('moderation')) { for(const k of ['kick_room','ban_room','mute_room','global_kick','global_ban']) next.add(k); next.delete('moderation'); }
+  if(next.has('announcements')) { next.add('announcement_post'); next.add('announcement_delete'); next.delete('announcements'); }
+  // The old wall toggle controlled both stopping and restarting.
+  if(next.has('wall_stop')) next.add('wall_restart');
+  const value=[...next];
+  if(JSON.stringify(value.slice().sort())!==JSON.stringify(saved.slice().sort())) { db.rolePermissions[role]=value; splitPermissionMigrationChanged=true; }
+}
+if(splitPermissionMigrationChanged) save();
 const without=(...blocked)=>ALL_PERMISSION_KEYS.filter(p=>!blocked.includes(p));
 const DEFAULT_ROLE_PERMISSIONS = {
   super:['panel_access','users_view'], banner:['panel_access','users_view'],
   // Admin receives the full permission catalog; owner protection is enforced by target-level server checks.
   admin:[...ALL_PERMISSION_KEYS],
   'admin-full':[...ALL_PERMISSION_KEYS],
-  'admin-shield':without('role_assign','rank_assign','permission_manage','reset_likes'),
-  'crown-gold':without('role_assign','rank_assign','permission_manage','member_ip','reset_likes','grant_likes'),
-  'crown-silver':without('role_assign','rank_assign','permission_manage','member_ip','reset_likes','grant_likes','wall_stop','wall_restart','wall_clear','wall_delete_user'),
-  'super-black':without('role_assign','rank_assign','permission_manage','member_ip','reset_likes','grant_likes','wall_stop','wall_restart','wall_clear','wall_delete_user','room_move'),
-  'super-white':without('role_assign','rank_assign','permission_manage','member_ip','reset_likes','grant_likes','wall_stop','wall_restart','wall_clear','wall_delete_user','room_move','moderation'),
-  'super-red':without('role_assign','rank_assign','permission_manage','member_ip','reset_likes','grant_likes','wall_stop','wall_restart','wall_clear','wall_delete_user','room_move','moderation','avatar_delete'),
+  'admin-shield':without('rank_assign','permission_manage','reset_likes'),
+  'crown-gold':without('member_ip','rank_assign','permission_manage','reset_likes','grant_likes'),
+  'crown-silver':without('member_ip','rank_assign','permission_manage','reset_likes','grant_likes','wall_stop','wall_restart','wall_clear','wall_delete_user'),
+  'super-black':without('member_ip','rank_assign','permission_manage','reset_likes','grant_likes','wall_stop','wall_restart','wall_clear','wall_delete_user','room_move'),
+  'super-white':without('member_ip','rank_assign','permission_manage','reset_likes','grant_likes','wall_stop','wall_restart','wall_clear','wall_delete_user','room_move','global_kick','mute_room'),
+  'super-red':without('member_ip','rank_assign','permission_manage','reset_likes','grant_likes','wall_stop','wall_restart','wall_clear','wall_delete_user','room_move','global_kick','mute_room','avatar_delete'),
   member:[]
 };
 // Migrate legacy rank profiles that were saved with only the first two basic permissions.
@@ -387,7 +400,7 @@ app.post('/api/admin/reset-likes',(req,res,next)=>{requireAuth(req,res,()=>{if(!
 app.post('/api/admin/role',(req,res)=>{requireAuth(req,res,()=>{const actor=req.user,n=accountKey(req.body.name),role=String(req.body.role||'member');if(!hasPermission(actor,'role_assign'))return res.status(403).json({error:'ما عندك صلاحية تغيير الرتب'});const target=getUser(n)||getGuest(n);if(!target||isOwnerName(n)||roleOf({name:n,role:target.role})==='owner')return res.status(400).json({error:'العضو غير صحيح أو أن حساب المالك محمي'});if(!['member','super','admin','banner'].includes(role))return res.status(400).json({error:'الدور غير صحيح'});target.role=role;for(const [sid2,x] of sessions){if(keyName(x.name)===keyName(n)){x.role=role;db.sessions[sid2]=x;socketBySession(sid2)?.emit('role-changed',{name:n,role,from:actor.name});socketBySession(sid2)?.emit('admin-action-notice',{title:'🏅 تغيير المنصب',text:'قام '+actor.name+' بتغيير منصبك إلى '+({'member':'عضو','super':'سوبر','banner':'بنر','admin':'إداري'}[role])});}}for(const [sid2,x] of socketUsers){if(keyName(x.name)===keyName(n)){x.role=role;const so=socketBySession(sid2);if(so?.data?.user)so.data.user.role=role;so?.emit('role-changed',{name:n,role,from:actor.name});}}save();emitState();res.json({ok:true,role,type:getUser(n)?'member':'guest',panelAccess:['admin','super','banner'].includes(role)});});});
 app.post('/api/admin/gift',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'gifts'))return res.status(403).json({error:'ما عندك صلاحية إرسال الهدايا'});const n=accountKey(req.body.name),gift=cleanName(req.body.gift||'هدية');if(!getUser(n)&&!getGuest(n))return res.status(404).json({error:'المستخدم غير موجود'});if(isOwnerName(n))return res.status(403).json({error:'حساب صاحب الموقع محمي من الهدايا الإدارية'});const p=profile(n);p.gifts=p.gifts||[];p.gifts.unshift({gift,from:req.user.name,at:Date.now()});p.gifts=p.gifts.slice(0,30);save();emitToUser(n,'gift',{name:n,gift,from:req.user.name});emitToUser(n,'admin-action-notice',{title:'🎁 هدية جديدة',text:'أرسل لك '+req.user.name+' (admin) هدية: '+gift});io.emit('profile-changed',{name:n,profile:p});emitState();res.json({ok:true});});});
 app.post('/api/admin/gift-vip',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'vip'))return res.status(403).json({error:'ما عندك صلاحية منح VIP'});const n=accountKey(req.body.name);if(!getUser(n)&&!getGuest(n))return res.status(404).json({error:'المستخدم غير موجود'});if(isOwnerName(n)||isOwner({name:n,role:(getUser(n)||getGuest(n)).role}))return res.status(403).json({error:'حساب صاحب الموقع محمي'});const p=profile(n);p.vipUntil=Date.now()+24*60*60*1000;save();emitToUser(n,'vip-changed',{name:n,vipUntil:p.vipUntil,from:req.user.name});emitToUser(n,'admin-action-notice',{title:'👑 عضوية VIP',text:'منحك '+req.user.name+' (admin) عضوية VIP لمدة 24 ساعة'});io.emit('profile-changed',{name:n,profile:p});emitState();res.json({ok:true,vipUntil:p.vipUntil});});});
-app.post('/api/admin/move-member',requireAuth,(req,res)=>{if(!hasPermission(req.user,'room_move'))return res.status(403).json({error:'ما عندك صلاحية نقل الأعضاء بين الغرف'});const n=accountKey(req.body.name),to=String(req.body.to||'');const target=getUser(n)||getGuest(n);if(!target)return res.status(404).json({error:'العضو غير موجود'});if(isOwnerName(n)||isOwner({name:n,role:target.role}))return res.status(403).json({error:'صاحب الموقع محمي من النقل الإداري'});const room=db.rooms.find(r=>r.id===to);if(!room)return res.status(404).json({error:'الغرفة الجديدة غير موجودة'});let moved=0;for(const [sid2,u2] of socketUsers){if(keyName(u2.name)!==keyName(n))continue;const so=socketBySession(sid2);if(!so)continue;if((u2.room||'public')===to)continue;so.emit('admin-moved-room',{room:to,roomName:room.name,from:u2.room||'public'});so.emit('admin-action-notice',{title:'🔀 نقل بين الغرف',text:'تم نقلك إلى '+room.name});moved++;}emitState();return res.json({ok:true,name:n,to,room:room.name,moved});});
+app.post('/api/admin/move-member',requireAuth,(req,res)=>{if(!hasPermission(req.user,'room_move'))return res.status(403).json({error:'ما عندك صلاحية نقل الأعضاء بين الغرف'});const n=accountKey(req.body.name),to=String(req.body.to||'');const target=getUser(n)||getGuest(n);if(!target)return res.status(404).json({error:'العضو غير موجود'});if(isOwnerName(n)||isOwner({name:n,role:target.role}))return res.status(403).json({error:'صاحب الموقع محمي من النقل الإداري'});const room=db.rooms.find(r=>r.id===to);if(!room)return res.status(404).json({error:'الغرفة الجديدة غير موجودة'});const active=[...socketUsers.entries()].filter(([,u])=>keyName(u.name)===keyName(n));if(!active.length)return res.status(409).json({error:'العضو غير متصل حالياً؛ حدّث القائمة وجرب مرة ثانية'});const movable=active.filter(([,u])=>(u.room||'public')!==to);if(!movable.length)return res.status(400).json({error:'العضو موجود بالفعل في الغرفة المحددة'});let moved=0;for(const [sid2,u2] of movable){const so=socketBySession(sid2);if(!so)continue;so.emit('admin-moved-room',{room:to,roomName:room.name,from:u2.room||'public'});so.emit('admin-action-notice',{title:'🔀 نقل بين الغرف',text:'تم نقلك إلى '+room.name});moved++;}if(!moved)return res.status(409).json({error:'تعذر نقل العضو؛ حدّث القائمة وجرب مرة ثانية'});emitState();return res.json({ok:true,name:n,to,room:room.name,moved});});
 app.post('/api/admin/member-action',(req,res)=>{requireAuth(req,res,()=>{
   const actor=req.user,n=accountKey(req.body.name),action=String(req.body.action||''),room=String(req.body.room||'public');
   if(!n)return res.status(400).json({error:'الاسم مطلوب'});
