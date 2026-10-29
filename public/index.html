@@ -651,20 +651,17 @@ async function openMemberProfile(name){
     ['gifts','إرسال هدية 💎',`sendGiftDirect(${jsq(name)},'💎 هدية')`],
     ['avatar_delete','حذف صورة 🖼️',`adminDeleteAvatar(${jsq(name)})`],
     ['member_ip','كشف نكات 🔎',`showMemberIp(${jsq(name)})`],
-    ['rank_assign','بنر 🎀',`applyClassicRank(${jsq(name)},'crown-gold','البنر الذهبي')`],
-    ['ban_room','باند 🚫',`modUser('ban',${jsq(name)})`],
+    ['global_ban','باند 🚫',`modUser('global-ban',${jsq(name)})`],
     ['global_kick','طرد 🚪',`modUser('global-kick',${jsq(name)})`],
     ['kick_room','طرد من الغرفة 🚪',`modUser('kick',${jsq(name)})`]
    ];
    const secondaryRows=[
-    ['global_ban','حظر 5 دقائق ⛔',`modUser('global-ban',${jsq(name)})`],
     ['ban_room','رفع الحظر ↩',`modUser('unban',${jsq(name)})`],
     ['mute_room','رفع الكتم 🔊',`modUser('unmute',${jsq(name)})`],
     ['reset_likes','تصفير اللايكات 🧹',`resetLikes(${jsq(name)})`],
     ['vip','منح VIP 👑',`grantVip(${jsq(name)})`],
     ['panel_access','حذف رسائل الحائط 🧱',`adminDeleteWallUser(${jsq(name)})`],
-    ['profile_edit','تغيير لون العضو 🎨',`adminChangeColor(${jsq(name)})`],
-    ['room_move','نقل إلى غرفة 🏠',`moveMemberToRoom(${jsq(name)})`]
+    ['profile_edit','تغيير لون العضو 🎨',`adminChangeColor(${jsq(name)})`]
    ];
    const renderAction=([perm,label,action])=>can(perm)?`<button type="button" onclick="${action}">${label}</button>`:'';
    const mainHtml=primaryRows.map(renderAction).join('');
