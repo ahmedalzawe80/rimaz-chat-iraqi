@@ -1,13 +1,7 @@
-# Rimaz Chat v15 — Gift catalog update
+# Rimaz Chat — v16 gift image fix
 
-- The member gift picker now uses the custom gift icons cropped from the user's reference screenshot.
-- Added 53 gift-art PNGs under `public/gifts/`.
-- The picker uses an 8-column layout and places `إزالة الهدية` as the final grid tile, with Send and Cancel actions below.
-- Gift sending continues to submit the selected gift's icon/name through the existing API.
+This build fixes broken gift images by embedding the 53 reference gift PNGs directly as data URLs in both `index.html` and `public/index.html`, so the gift picker does not depend on the `/gifts/` static path or on uploading the image folder separately. An `onerror` fallback shows the gift emoji if an image cannot render.
 
-Deployment:
-1. Replace `index.html`, `public/index.html`, and `server.js` from this package as needed.
-2. Upload the complete `public/gifts/` folder as well.
-3. Keep the existing `data.json` on the live site to preserve user data.
+Deploy the full project as usual. Keep the existing production `data.json` when updating so member and room data are preserved. Do not replace the production data file with the bundled starter file.
 
-Note: the custom icons are crops from the reference screenshot, not the original high-resolution animated source assets.
+Validation performed locally: `node --check server.js`; JavaScript script syntax checked in both HTML entry points. Live deployment and server-side gift deletion have not been tested against the production website.
