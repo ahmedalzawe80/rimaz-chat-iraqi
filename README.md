@@ -1,7 +1,8 @@
-# Rimaz Chat — v16 gift image fix
+# Rimaz Chat v17
 
-This build fixes broken gift images by embedding the 53 reference gift PNGs directly as data URLs in both `index.html` and `public/index.html`, so the gift picker does not depend on the `/gifts/` static path or on uploading the image folder separately. An `onerror` fallback shows the gift emoji if an image cannot render.
+Fixes in this version:
+- Carries the exact selected gift artwork index from the picker through the server event, so gifts that share the same emoji do not turn into an older gift.
+- Stores the selected artwork index with the granted gift and shows the same artwork in the incoming gift animation and member badge.
+- Tightens gift image containment in grid tiles to reduce visual clipping.
 
-Deploy the full project as usual. Keep the existing production `data.json` when updating so member and room data are preserved. Do not replace the production data file with the bundled starter file.
-
-Validation performed locally: `node --check server.js`; JavaScript script syntax checked in both HTML entry points. Live deployment and server-side gift deletion have not been tested against the production website.
+Deployment: upload the project files and `public/gifts/` folder together. Keep your live `data.json` unchanged.
