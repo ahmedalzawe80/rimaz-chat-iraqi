@@ -25,3 +25,11 @@
 - تم التحقق من أن نماذج الإدارة موجودة في المسار الفعلي للبطاقة، وليس فقط في نافذة منفصلة.
 - لم يُجرَ اختبار حي على خادم المستخدم أو مقارنة بصرية بالبكسل؛ لذلك لا يمكن ضمان التطابق الحرفي قبل معاينة النسخة على الموقع.
 - لا تستبدل ملف البيانات الحي `data.json` بملف البيانات الافتراضي المرفق.
+
+
+## v8 changes (2026-10-29)
+- Removed the separate "حظر 5 دقائق" action; the main "باند" button now applies the existing 5-minute global ban action.
+- Removed the duplicate "بنر" action because rank assignment is available in the rank form below.
+- Removed the duplicate "نقل إلى غرفة" action because the room transfer form below already provides it.
+- Fixed the member stats API middleware so the endpoint checks the specific permission for likes or points in its handler instead of incorrectly requiring the generic panel permission first.
+- Kept `index.html` and `public/index.html` synchronized.
