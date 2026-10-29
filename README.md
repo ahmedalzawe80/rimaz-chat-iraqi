@@ -1,14 +1,20 @@
-# Rimaz Chat — Gift deletion fix
+# دردشة ريماز العراقية — تعديل بروفايل العضو
 
-This package updates the gift picker so the member-management “إرسال هدية” button opens the gift grid and, in the same panel, lists that member’s granted gifts with a delete button. Gift deletion sends a stable gift identifier/signature to the server, verifies permission and target account, saves the change, then refreshes the panel. The old “رمز الهدية / اسم داخلي / إضافة” controls are not shown in the gift picker.
+تحتوي هذه النسخة على تعديل واجهة فتح بروفايل العضو للإداري/السوبر/البنر، بحيث تفتح لوحة بيضاء ضيقة مستوحاة من الفيديو المرجعي، بترتيب: البنر والرتب، إرسال هدية، زخرفة الاسم، اللايكات، النقاط، ثم اختيار المجموعة والنقل. لم تتم إضافة أزرار «أحبك» أو «ضحكة» أو «قبلة».
 
-## Deploy carefully
-- Install dependencies with `npm install`, then run `npm start`.
-- Preserve your existing persistent data directory and `data.json`; do not replace live user data with a default file.
-- The archive intentionally omits `data.json` so it cannot overwrite your live database.
+## الملفات
+- `index.html` و `public/index.html`: نسختان متطابقتان من الواجهة.
+- `server.js`: خادم المشروع كما كان في النسخة السابقة.
+- `data.json`: ملف بيانات افتراضي مرفق؛ لا تستبدل به بيانات الموقع الحية.
 
-## Verification
-- `server.js` passed `node --check`.
-- Inline JavaScript from both copies of `index.html` passed `node --check`.
-- ZIP integrity was checked.
-- Live integration testing was not possible in this environment because project dependencies and the live server are unavailable.
+## التشغيل
+- `npm install`
+- `npm start`
+
+عند النشر، احتفظ بقاعدة البيانات/ملف البيانات الحالي ونسخة احتياطية من الموقع قبل الاستبدال.
+
+## الفحص
+- تم فحص صياغة `server.js` وJavaScript المضمّن في الواجهة باستخدام `node --check`.
+- تم التأكد من تطابق نسختي `index.html` ومن سلامة ZIP.
+- لم يُجرَ اختبار حي على الخادم أو مقارنة بصرية آلية بالبكسل؛ لذلك يلزم معاينة على الهاتف قبل اعتبار التطابق 100%.
+- صف النقاط يحافظ على الشكل المرجعي، لكن حفظ النقاط غير مدعوم من واجهة الخادم الحالية.
