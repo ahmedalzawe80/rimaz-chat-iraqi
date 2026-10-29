@@ -644,13 +644,15 @@ async function openMemberProfile(name){
   try{
    const d=await api('/api/admin/data');window.adminCachedData=d;window.adminCachedUsers=[...(d.users||[]),...(d.guests||[])];
    const can=perm=>hasClientPermission(perm);
-   // Keep the first four action rows in the exact reference order. Secondary actions follow the single Ignore button.
+   // Exact requested RTL layout: row 2 is delete photo / discover nicks / delete wall messages.
+   // Row 3 is ban / kick / kick from room. VIP, color, and ignore share the next row.
    const primaryRows=[
     ['mute_room','إسكات 🔇',`modUser('mute',${jsq(name)})`],
     ['mute_room','إسكات ح 🔇',`modUser('mute',${jsq(name)})`],
     ['gifts','إرسال هدية 💎',`sendGiftDirect(${jsq(name)},'💎 هدية')`],
     ['avatar_delete','حذف صورة 🖼️',`adminDeleteAvatar(${jsq(name)})`],
     ['member_ip','كشف نكات 🔎',`showMemberIp(${jsq(name)})`],
+    ['panel_access','حذف رسائل الحائط 🧱',`adminDeleteWallUser(${jsq(name)})`],
     ['global_ban','باند 🚫',`modUser('global-ban',${jsq(name)})`],
     ['global_kick','طرد 🚪',`modUser('global-kick',${jsq(name)})`],
     ['kick_room','طرد من الغرفة 🚪',`modUser('kick',${jsq(name)})`]
@@ -660,18 +662,17 @@ async function openMemberProfile(name){
     ['mute_room','رفع الكتم 🔊',`modUser('unmute',${jsq(name)})`],
     ['reset_likes','تصفير اللايكات 🧹',`resetLikes(${jsq(name)})`],
     ['vip','منح VIP 👑',`grantVip(${jsq(name)})`],
-    ['panel_access','حذف رسائل الحائط 🧱',`adminDeleteWallUser(${jsq(name)})`],
-    ['profile_edit','تغيير لون العضو 🎨',`adminChangeColor(${jsq(name)})`]
+    ['profile_edit','تغيير لون العضو 🎨',`adminChangeColor(${jsq(name)})`],
+    ['ignore_action','⛔ تجاهل',`ignoreUser(${jsq(name)})`]
    ];
-   const renderAction=([perm,label,action])=>can(perm)?`<button type="button" onclick="${action}">${label}</button>`:'';
-   const mainHtml=primaryRows.map(renderAction).join('');
-   const secondaryHtml=secondaryRows.map(renderAction).join('');
+   const renderAction=([perm,label,action])=>((perm==='ignore_action'||can(perm))?`<button type="button" class="${perm==='ignore_action'?'ignore':''}" onclick="${action}">${label}</button>`:'');
+   const mainHtml=primaryRows.map(renderAction).filter(Boolean).join('');
+   const secondaryHtml=secondaryRows.map(renderAction).filter(Boolean).join('');
    const roomOptions=(d.rooms||[]).map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');
    const rankOptions=RIMAZ_RANKS.filter(()=>can('rank_assign')).map(r=>`<option value="${esc(r[0])}">${esc(r[1])}</option>`).join('');
    const uAdmin=(window.adminCachedUsers||[]).find(x=>key(x.name)===key(name))||u;
    inlineAdmin=`<div class="memberProfileAdminInline" style="grid-column:1/-1;display:block;background:#fff;direction:rtl;border-top:0">
     <div class="rimazRefActionGrid">${mainHtml}</div>
-    <div class="rimazRefIgnoreRow"><button type="button" onclick="ignoreUser(${jsq(name)})">⛔ تجاهل</button></div>
     <div class="rimazRefActionGrid rimazRefSecondaryGrid">${secondaryHtml}</div>
     <div class="rimazRefForms">
      ${can('profile_edit')?`<div class="rimazRefFormRow"><label for="classicDecorName">الزخرفة</label><input id="classicDecorName" value="${esc(displayFor(uAdmin)||name)}" aria-label="زخرفة الاسم"><button type="button" onclick="saveClassicMemberName(${jsq(name)})">تغيير</button></div>`:''}
@@ -744,7 +745,7 @@ function memberAdminMenu(n){
  const ranks=RIMAZ_RANKS.filter(r=>can('rank_assign'));const gifts=RIMAZ_GIFTS;
  const rankGrid=ranks.map(r=>`<button type="button" title="${esc(r[1])}" aria-label="${esc(r[1])}" onclick="chooseRankDirect(${jsq(n)},${jsq(r[0])},${jsq(r[1])},Math.max(0,Number(document.getElementById('classicRankDuration')?.value)||0))">${esc(r[1].split(' ')[0]||'♛')}</button>`).join('');
  const giftGrid=can('gifts')?gifts.map(g=>`<button type="button" title="${esc(g[1])}" aria-label="${esc(g[1])}" onclick="sendGiftDirect(${jsq(n)},${jsq(g[0]+' '+g[1])})">${esc(g[0])}</button>`).join(''):'';
- const actions=[['mute_room',`<button onclick="modUser('mute',${jsq(n)})">إسكات 🔇</button><button onclick="modUser('mute',${jsq(n)})">إسكات ح 🔇</button>`],['avatar_delete',`<button onclick="adminDeleteAvatar(${jsq(n)})">حذف صورة 🖼️</button>`],['profile_edit',`<button onclick="adminChangeColor(${jsq(n)})">تغيير لون العضو 🎨</button>`],['panel_access',`<button onclick="adminDeleteWallUser(${jsq(n)})">حذف رسائل الحائط 🧱</button>`],['kick_room',`<button onclick="modUser('kick',${jsq(n)})">طرد من الغرفة 🚪</button>`],['ban_room',`<button onclick="modUser('ban',${jsq(n)})">باند ⛔</button><button onclick="modUser('unban',${jsq(n)})">رفع الحظر ↩</button>`],['global_kick',`<button onclick="modUser('global-kick',${jsq(n)})">طرد 🚪</button>`],['global_ban',`<button onclick="modUser('global-ban',${jsq(n)})">حظر 5 دقائق 🚫</button>`],['reset_likes',`<button onclick="resetLikes(${jsq(n)})">تصفير اللايكات 🧹</button>`],['vip',`<button onclick="grantVip(${jsq(n)})">منح VIP 👑</button>`],['room_move',`<button onclick="showMemberIp(${jsq(n)})">عرض IP 🔎</button><button onclick="moveMemberToRoom(${jsq(n)})">نقل إلى غرفة 🏠</button>`]];
+ const actions=[['mute_room',`<button onclick="modUser('mute',${jsq(n)})">إسكات 🔇</button><button onclick="modUser('mute',${jsq(n)})">إسكات ح 🔇</button>`],['avatar_delete',`<button onclick="adminDeleteAvatar(${jsq(n)})">حذف صورة 🖼️</button>`],['profile_edit',`<button onclick="adminChangeColor(${jsq(n)})">تغيير لون العضو 🎨</button>`],['panel_access',`<button onclick="adminDeleteWallUser(${jsq(n)})">حذف رسائل الحائط 🧱</button>`],['kick_room',`<button onclick="modUser('kick',${jsq(n)})">طرد من الغرفة 🚪</button>`],['ban_room',`<button onclick="modUser('ban',${jsq(n)})">باند ⛔</button><button onclick="modUser('unban',${jsq(n)})">رفع الحظر ↩</button>`],['global_kick',`<button onclick="modUser('global-kick',${jsq(n)})">طرد 🚪</button>`],['global_ban',`<button onclick="modUser('global-ban',${jsq(n)})">حظر 5 دقائق 🚫</button>`],['reset_likes',`<button onclick="resetLikes(${jsq(n)})">تصفير اللايكات 🧹</button>`],['room_move',`<button onclick="showMemberIp(${jsq(n)})">عرض IP 🔎</button><button onclick="moveMemberToRoom(${jsq(n)})">نقل إلى غرفة 🏠</button>`],['vip',`<button onclick="grantVip(${jsq(n)})">منح VIP 👑</button>`]];
  const actionHtml=actions.filter(([p])=>can(p)).map(([,h])=>h).join('');
  const html=`<div class="memberClassicShade" onclick="if(event.target===this)closeLayer()"><section class="memberClassicPanel rimazAdminReplica" role="dialog" aria-modal="true" aria-label="بروفايل العضو وإدارته">
  <div class="memberClassicTitle">إدارة العضو <button type="button" onclick="closeLayer()" style="float:left;border:0;background:#df5555;color:white;width:25px;height:23px">×</button></div>
