@@ -515,6 +515,24 @@
 #layer .rimazAdminReplica .memberClassicGroup{padding:6px!important}
 @media(max-width:520px){#layer .rimazAdminReplica{width:92%!important;height:94%!important}#layer .rimazMainActions button{font-size:11px!important;min-height:36px!important}}
 </style>
+
+<style id="rimaz-profile-admin-reference-precision-v7">
+#layer .profileOverlay{max-height:calc(100dvh - 30px)!important;overflow-y:auto!important;overscroll-behavior:contain!important}
+#layer .rimazRefActionGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;padding:5px;background:#fff}
+#layer .rimazRefActionGrid button,#layer .rimazRefIgnoreRow button{min-width:0;min-height:38px;padding:4px 2px;border:1px solid #eee;border-radius:0;background:#fff;color:#333;font:700 12px Tahoma,Arial,sans-serif;white-space:normal;overflow-wrap:anywhere}
+#layer .rimazRefIgnoreRow{padding:0 5px 5px;background:#fff}
+#layer .rimazRefIgnoreRow button{width:calc(33.333% - 2px);color:#b52645}
+#layer .rimazRefSecondaryGrid{border-top:1px solid #ddd}
+#layer .rimazRefForms{border-top:1px solid #aaa;background:#fff;color:#222;font-family:Tahoma,Arial,sans-serif}
+#layer .rimazRefFormRow{display:grid;grid-template-columns:68px minmax(0,1fr) 66px;gap:4px;align-items:center;padding:5px;border-bottom:1px solid #bbb;min-height:43px}
+#layer .rimazRefFormRow label,#layer .rimazRefGroup>label{font-size:12px;color:#b33;font-weight:700;white-space:normal}
+#layer .rimazRefFormRow input,#layer .rimazRefGroup input,#layer .rimazRefGroup select{box-sizing:border-box;width:100%;min-width:0;height:30px;border:1px solid #aaa;border-radius:0;background:#fff;color:#222;padding:3px 5px;font:13px Tahoma,Arial,sans-serif}
+#layer .rimazRefFormRow button,#layer .rimazRefGroup button{height:31px;border:1px solid #496779;border-radius:0;background:#365d70;color:#fff;padding:3px 5px;font:700 12px Tahoma,Arial,sans-serif;white-space:nowrap}
+#layer .rimazRefGroup{display:grid;grid-template-columns:1fr;gap:5px;padding:7px 6px;border-bottom:1px solid #aaa}
+#layer .rimazRefGroup small{font-size:11px;color:#666}
+#layer .memberProfileAdminInline .rimazRefActionGrid button:active,#layer .rimazRefIgnoreRow button:active{background:#eaf2f6}
+@media(max-width:520px){#layer .profileOverlay{width:84%!important;right:8%!important;max-width:360px!important}#layer .rimazRefActionGrid button,#layer .rimazRefIgnoreRow button{font-size:11px;min-height:36px}#layer .rimazRefFormRow{grid-template-columns:60px minmax(0,1fr) 59px;gap:3px}}
+</style>
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={},privatePeerUser=null;
@@ -626,31 +644,46 @@ async function openMemberProfile(name){
   try{
    const d=await api('/api/admin/data');window.adminCachedData=d;window.adminCachedUsers=[...(d.users||[]),...(d.guests||[])];
    const can=perm=>hasClientPermission(perm);
-   const items=[
-    ['mute_room','🔇 إسكات',`modUser('mute',${jsq(name)})`],
-    ['mute_room','🔇 إسكات ح',`modUser('mute',${jsq(name)})`],
-    ['gifts','💎 إرسال هدية',`sendGift(${jsq(name)})`],
-    ['avatar_delete','🖼 حذف صورة',`adminDeleteAvatar(${jsq(name)})`],
-    ['member_ip','🔎 كشف نكات',`showMemberIp(${jsq(name)})`],
-    ['rank_assign','🎀 بنر',`openMemberProfileAdminReference(${jsq(name)})`],
-    ['ban_room','🚫 باند',`modUser('ban',${jsq(name)})`],
-    ['global_kick','🚪 طرد',`modUser('global-kick',${jsq(name)})`],
-    ['kick_room','🚪 طرد من الغرفة',`modUser('kick',${jsq(name)})`],
-    ['ignore','⛔ تجاهل',`ignoreUser(${jsq(name)})`],
-    ['reset_likes','🧹 تصفير اللايكات',`resetLikes(${jsq(name)})`],
-    ['global_ban','⛔ حظر 5 دقائق',`modUser('global-ban',${jsq(name)})`],
-    ['ban_room','↩ رفع الحظر',`modUser('unban',${jsq(name)})`],
-    ['mute_room','🔊 رفع الكتم',`modUser('unmute',${jsq(name)})`],
-    ['vip','👑 منح VIP',`grantVip(${jsq(name)})`],
-    ['panel_access','🧱 حذف رسائل الحائط',`adminDeleteWallUser(${jsq(name)})`],
-    ['profile_edit','🎨 تغيير لون العضو',`adminChangeColor(${jsq(name)})`],
-    ['room_move','🏠 نقل إلى غرفة',`moveMemberToRoom(${jsq(name)})`],
-    ['profile_edit','✨ زخرفة الاسم',`adminDecorateName(${jsq(name)})`],
-    ['rank_assign','🏅 تغيير الرتبة / المدة بالأيام',`openMemberProfileAdminReference(${jsq(name)})`]
+   // Keep the first four action rows in the exact reference order. Secondary actions follow the single Ignore button.
+   const primaryRows=[
+    ['mute_room','إسكات 🔇',`modUser('mute',${jsq(name)})`],
+    ['mute_room','إسكات ح 🔇',`modUser('mute',${jsq(name)})`],
+    ['gifts','إرسال هدية 💎',`sendGiftDirect(${jsq(name)},'💎 هدية')`],
+    ['avatar_delete','حذف صورة 🖼️',`adminDeleteAvatar(${jsq(name)})`],
+    ['member_ip','كشف نكات 🔎',`showMemberIp(${jsq(name)})`],
+    ['rank_assign','بنر 🎀',`applyClassicRank(${jsq(name)},'crown-gold','البنر الذهبي')`],
+    ['ban_room','باند 🚫',`modUser('ban',${jsq(name)})`],
+    ['global_kick','طرد 🚪',`modUser('global-kick',${jsq(name)})`],
+    ['kick_room','طرد من الغرفة 🚪',`modUser('kick',${jsq(name)})`]
    ];
-   const visibleItems=items.filter(([perm])=>can(perm));
-   const firstRows=visibleItems.map(([perm,label,action])=>`<button type="button" onclick="${action}" style="min-width:0;min-height:42px;padding:5px 3px;border:1px solid #e5e5e5;background:#fff;color:#222;font-size:12px;font-weight:700;white-space:normal">${label}</button>`).join('');
-   inlineAdmin=`<div class="memberProfileAdminInline" style="grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:7px;background:#fff;direction:rtl;border-top:0">${firstRows}</div>`;
+   const secondaryRows=[
+    ['global_ban','حظر 5 دقائق ⛔',`modUser('global-ban',${jsq(name)})`],
+    ['ban_room','رفع الحظر ↩',`modUser('unban',${jsq(name)})`],
+    ['mute_room','رفع الكتم 🔊',`modUser('unmute',${jsq(name)})`],
+    ['reset_likes','تصفير اللايكات 🧹',`resetLikes(${jsq(name)})`],
+    ['vip','منح VIP 👑',`grantVip(${jsq(name)})`],
+    ['panel_access','حذف رسائل الحائط 🧱',`adminDeleteWallUser(${jsq(name)})`],
+    ['profile_edit','تغيير لون العضو 🎨',`adminChangeColor(${jsq(name)})`],
+    ['room_move','نقل إلى غرفة 🏠',`moveMemberToRoom(${jsq(name)})`]
+   ];
+   const renderAction=([perm,label,action])=>can(perm)?`<button type="button" onclick="${action}">${label}</button>`:'';
+   const mainHtml=primaryRows.map(renderAction).join('');
+   const secondaryHtml=secondaryRows.map(renderAction).join('');
+   const roomOptions=(d.rooms||[]).map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');
+   const rankOptions=RIMAZ_RANKS.filter(()=>can('rank_assign')).map(r=>`<option value="${esc(r[0])}">${esc(r[1])}</option>`).join('');
+   const uAdmin=(window.adminCachedUsers||[]).find(x=>key(x.name)===key(name))||u;
+   inlineAdmin=`<div class="memberProfileAdminInline" style="grid-column:1/-1;display:block;background:#fff;direction:rtl;border-top:0">
+    <div class="rimazRefActionGrid">${mainHtml}</div>
+    <div class="rimazRefIgnoreRow"><button type="button" onclick="ignoreUser(${jsq(name)})">⛔ تجاهل</button></div>
+    <div class="rimazRefActionGrid rimazRefSecondaryGrid">${secondaryHtml}</div>
+    <div class="rimazRefForms">
+     ${can('profile_edit')?`<div class="rimazRefFormRow"><label for="classicDecorName">الزخرفة</label><input id="classicDecorName" value="${esc(displayFor(uAdmin)||name)}" aria-label="زخرفة الاسم"><button type="button" onclick="saveClassicMemberName(${jsq(name)})">تغيير</button></div>`:''}
+     ${can('grant_likes')?`<div class="rimazRefFormRow"><label for="classicLikeAmount">♥ اللايكات</label><input id="classicLikeAmount" type="number" min="0" max="1000000" value="${Number(uAdmin.likes)||0}" aria-label="عدد اللايكات"><button type="button" onclick="saveClassicMemberStats(${jsq(name)},'likes')">✔ حفظ</button></div>`:''}
+     <div class="rimazRefFormRow"><label for="classicPointsAmount">النقاط</label><input id="classicPointsAmount" type="number" min="0" max="1000000" value="${Number(uAdmin.points)||0}" aria-label="النقاط"><button type="button" onclick="saveClassicMemberStats(${jsq(name)},'points')">✔ حفظ</button></div>
+     ${can('rank_assign')?`<div class="rimazRefGroup"><label for="classicRankChoice">الرتبة</label><select id="classicRankChoice"><option value="">اختر الرتبة</option>${rankOptions}</select><label for="classicRankDuration">المدة بالأيام</label><input id="classicRankDuration" type="number" min="0" max="36500" value="0" placeholder="0 = دائمة"><button type="button" onclick="saveClassicSelectedRank(${jsq(name)})">✔ حفظ</button><small>0 = رتبة دائمة</small></div>`:''}
+     ${can('room_move')?`<div class="rimazRefGroup"><label for="classicRoomSearch">المجموعة</label><input id="classicRoomSearch" placeholder="البحث في الصلاحيات" oninput="filterClassicRooms()"><select id="classicRoomChoice"><option value="">[اختر الغرفة]</option>${roomOptions}</select><label for="classicRoomPassword">كلمة المرور (اختياري)</label><input id="classicRoomPassword" type="password" placeholder="كلمة المرور (اختياري)"><button type="button" onclick="moveClassicMember(${jsq(name)})">نقل</button></div>`:''}
+    </div>
+   </div>`;
   }catch(e){toast('تعذر تحميل صلاحيات الإدارة: '+e.message)}
  }
  layer(`<div class="profileOverlay"><div class="profileTop"><img class="profileTopAvatar" src="${esc(avatarFor(p))}" alt=""><b>${esc(dn)}</b><button type="button" class="close" style="width:28px;height:28px;font-size:22px" onclick="closeLayer()">×</button></div><img class="profilePhoto" src="${esc(avatarFor(p))}" onerror="this.style.display='none'"><div class="profileInfo"><div style="font-size:12px;color:#777"><span class="statusDot ${u.online?(p.privateOpen===false?'statusClosed':'statusOpen'):'statusOffline'}"></span>${esc(u.online?(p.status||(u.type==='guest'?'(غير مسجل)':'(عضو جديد)')):'غير متصل')}</div>${u.vip?'<div style="margin-top:4px">👑 VIP</div>':''}</div><div class="profileGrid"><div class="memberProfileMetaRow" style="grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 8px 5px;direction:ltr;box-sizing:border-box"><span class="memberProfileCountry" title="دولة المستخدم" style="display:inline-flex;align-items:center;gap:4px;min-width:0;font-size:12px;font-weight:900;color:#111;white-space:nowrap">${countryFlag(u.countryCode||p.countryCode||p.country||'IQ')} <span>${esc(countryName(u.countryCode||p.countryCode||p.country||'IQ'))}</span></span><div class="memberProfileRoomName" style="justify-self:end;margin-right:0;margin-left:auto;max-width:72%;width:max-content;box-sizing:border-box;text-align:right;padding:4px 12px;font-size:12px;line-height:1.35;font-weight:900;color:#fff;background:#365d70;border:1px solid #496779;border-radius:0;overflow-wrap:anywhere">الغرفة: ${esc((rooms.find(r=>String(r.id)===String(u.room)||String(r.name)===String(u.room))||{}).name||(u.room?String(u.room):'غير موجود في غرفة'))}</div></div><button type="button" class="memberProfileLikeButton" onclick="sendLike('${esc(name)}')"><span class="memberProfileHeart">♥</span><span class="memberProfileLikeCount">${Number(u.likes)||0}</span></button><button type="button" onclick="notifyUser('${esc(name)}')">✉ تنبيه</button><button type="button" onclick="openPrivate('${esc(name)}')"><span style="display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;white-space:normal">💬 محادثة<br>خاصة</span></button>${me.staff&&key(name)!==key(me.name)?inlineAdmin:''}</div></div>`,'memberProfile')
@@ -728,9 +761,30 @@ function memberAdminMenu(n){
  <div class="memberClassicGroup"><label>المجموعة / الغرفة</label><input id="classicRoomSearch" placeholder="البحث في الغرف" oninput="filterClassicRooms()"><select id="classicRoomChoice" style="width:100%;height:29px;margin-top:4px;border:1px solid #aaa;background:#fff"><option value="">اختر الغرفة</option>${(window.adminCachedData?.rooms||[]).map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('')}</select><label style="margin-top:8px">كلمة المرور (اختياري)</label><input id="classicRoomPassword" type="password" placeholder="كلمة المرور إن وجدت"><button class="memberClassicBtn" style="width:100%;margin-top:4px" onclick="moveClassicMember(${jsq(n)})">نقل إلى غرفة</button></div>
  </section></div>`;layer(html,'memberAdmin');
 }
+async function saveClassicMemberStats(n,field){
+ const el=document.getElementById(field==='likes'?'classicLikeAmount':'classicPointsAmount');
+ const value=Number(el?.value);
+ if(!Number.isInteger(value)||value<0||value>1000000)return toast('أدخل عدداً صحيحاً بين 0 و1000000');
+ try{const j=await api('/api/admin/member-stats/'+encodeURIComponent(n),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({field,value})});toast(field==='likes'?'تم حفظ عدد اللايكات: '+j.likes:'تم حفظ النقاط: '+j.points);await openMemberProfile(n)}catch(e){toast(e.message)}
+}
+async function saveClassicSelectedRank(n){
+ const rank=document.getElementById('classicRankChoice')?.value;
+ const days=Number(document.getElementById('classicRankDuration')?.value??0);
+ if(!rank)return toast('اختر الرتبة أولاً');
+ if(!Number.isInteger(days)||days<0||days>36500)return toast('المدة يجب أن تكون 0 أو عدد أيام صحيح');
+ const label=RIMAZ_RANKS.find(r=>r[0]===rank)?.[1]||rank;
+ if(!confirm('تأكيد منح '+label+' للعضو '+n+' لمدة '+(days===0?'دائمة':days+' يوم')+'؟'))return;
+ try{await api('/api/admin/rank',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,rank,durationDays:days})});toast('تم حفظ الرتبة والمدة');await openMemberProfile(n)}catch(e){toast(e.message)}
+}
+async function applyClassicRank(n,rank,label){
+ const days=Number(document.getElementById('classicRankDuration')?.value??0);
+ if(!Number.isInteger(days)||days<0||days>36500)return toast('المدة يجب أن تكون 0 أو عدد أيام صحيح');
+ if(!confirm('تأكيد منح '+label+' للعضو '+n+' لمدة '+(days===0?'دائمة':days+' يوم')+'؟'))return;
+ try{await api('/api/admin/rank',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,rank,durationDays:days})});toast('تم منح '+label);await openMemberProfile(n)}catch(e){toast(e.message)}
+}
 async function saveClassicMemberName(n){const value=(document.getElementById('classicDecorName')?.value||'').trim();if(!value)return toast('الزخرفة لا يمكن أن تكون فارغة');try{await api('/api/admin/profile/'+encodeURIComponent(n),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({displayName:value})});toast('تم حفظ زخرفة الاسم');const u=(window.adminCachedUsers||[]).find(x=>key(x.name)===key(n));if(u){u.displayName=value;u.profile=u.profile||{};u.profile.displayName=value}}catch(e){toast(e.message)}}
 function filterClassicRooms(){const q=(document.getElementById('classicRoomSearch')?.value||'').trim().toLowerCase();const select=document.getElementById('classicRoomChoice');if(!select)return;Array.from(select.options).forEach((o,i)=>{if(i===0)return;o.hidden=!!q&&!o.text.toLowerCase().includes(q)})}
-async function moveClassicMember(n){const to=document.getElementById('classicRoomChoice')?.value;if(!to)return toast('اختر المجموعة أولاً');try{const r=await api('/api/admin/move-member',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,to})});toast(r.moved?'تم نقل العضو إلى '+r.room:'تعذر نقل العضو')}catch(e){toast(e.message)}}
+async function moveClassicMember(n){const to=document.getElementById('classicRoomChoice')?.value;if(!to)return toast('اختر المجموعة أولاً');const password=document.getElementById('classicRoomPassword')?.value||'';try{const r=await api('/api/admin/move-member',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,to,password,enforceRoomPassword:true})});toast(r.moved?'تم نقل العضو إلى '+r.room:'تعذر نقل العضو');if(r.moved)await openMemberProfile(n)}catch(e){toast(e.message)}}
 async function openAdmin(){try{const d=await api('/api/admin/data');window.adminCachedData=d;window.currentRolePermissions=d.rolePermissions||{};window.adminCachedUsers=[...(d.users||[]),...(d.guests||[])];layer(`<div class="overlay admin">${head(me.owner?'لوحة صاحب الموقع':'لوحة المشرف')}<div class="tabs"><button class="active" onclick="adminTab('overview')">الرئيسية</button><button onclick="adminTab('users')">الأعضاء</button><button onclick="adminTab('move')">نقل زائر أو عضو</button><button onclick="adminTab('rooms')">الغرف</button><button onclick="adminTab('announcements')">الإعلانات</button><button onclick="adminTab('welcome')">رسائل الترحيب</button><button onclick="adminTab('moderation')">الحظر والكتم</button><button onclick="adminTab('messages')">الرسائل</button><button onclick="adminTab('roles')">الرتب</button><button onclick="adminTab('rankpermissions')">صلاحيات الرتب</button><button onclick="adminTab('gifts')">الهدايا</button><button onclick="adminTab('membertools')">أدوات الأعضاء</button><button onclick="adminTab('wall')">الحائط</button></div><div id="adminBody" class="overlayBody adminPanel">${adminOverview(d)}</div></div>`,'admin');filterAdminTabs()}catch(e){toast(e.message)}}
 function adminOverview(d){const all=[...(d.users||[]),...(d.guests||[])];const shortcuts=[['users_view','users','إدارة الأعضاء'],['room_move','move','نقل الأعضاء'],['rooms_manage','rooms','إنشاء / تعديل غرفة'],['announcements','announcements','نشر إعلان'],['moderation','moderation','قوائم الحظر والكتم'],['messages_delete','messages','حذف رسالة'],['gifts','gifts','الهدايا'],['vip','gifts','إدارة VIP'],['rank_assign','roles','إدارة الرتب'],['permission_manage','rankpermissions','صلاحيات الرتب'],['avatar_delete','membertools','أدوات الأعضاء']].filter(([p])=>hasClientPermission(p));return `<div class="adminCard"><h3>ملخص الموقع</h3><div class="adminGrid"><div><b>${all.length}</b><br><small>حسابات وزوار معروفون</small></div><div><b>${all.filter(x=>x.online).length}</b><br><small>متصلون الآن</small></div><div><b>${(d.rooms||[]).length}</b><br><small>غرف</small></div><div><b>${(d.messages||[]).length}</b><br><small>رسائل محفوظة بالقائمة</small></div></div></div><div class="adminCard"><h3>اختصارات الإدارة</h3><div class="adminGrid">${shortcuts.map(([p,t,label])=>`<button onclick="adminTab('${t}')">${label}</button>`).join('')||'<p>لا توجد إجراءات إدارية ممنوحة لهذه الرتبة.</p>'}</div></div><div class="adminCard"><h3>حدود الصلاحيات</h3><p>${me?.owner?'إدارة المالك. الإجراءات الحساسة محمية.':'تظهر هنا الأقسام التي تسمح بها صلاحيات رتبتك فقط.'}</p></div>`}
 function adminUsers(d){const all=[...(d.users||[]),...(d.guests||[])];window.adminCachedUsers=all;return `<div class="adminCard"><h3>إدارة اللايكات</h3><div class="adminGrid"><input id="grantName" placeholder="اسم الحساب"><input id="grantAmount" type="number" min="1" value="10"><button onclick="grantLike(grantName.value,grantAmount.value)">منح لايكات</button><button class="red" onclick="resetLikes(grantName.value)">تصفير</button></div></div><div class="adminCard"><h3>بحث عن حساب</h3><input id="adminUserSearch" placeholder="اكتب الاسم للبحث" oninput="filterAdminUsers()"><div id="adminUserRows">${adminUserRows(all)}</div></div>`}
