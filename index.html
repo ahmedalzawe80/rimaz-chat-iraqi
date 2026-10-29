@@ -624,7 +624,7 @@ async function openMemberProfile(name){
     ['ban_room','🚫 باند',`modUser('ban',${jsq(name)})`],
     ['global_kick','🚪 طرد',`modUser('global-kick',${jsq(name)})`],
     ['kick_room','🚪 طرد من الغرفة',`modUser('kick',${jsq(name)})`],
-    ['likes_grant','❤️ زيادة اللايكات',`grantLike(${jsq(name)},10)`],
+    ['ignore','⛔ تجاهل',`ignoreUser(${jsq(name)})`],
     ['reset_likes','🧹 تصفير اللايكات',`resetLikes(${jsq(name)})`],
     ['global_ban','⛔ حظر 5 دقائق',`modUser('global-ban',${jsq(name)})`],
     ['ban_room','↩ رفع الحظر',`modUser('unban',${jsq(name)})`],
@@ -632,13 +632,13 @@ async function openMemberProfile(name){
     ['vip','👑 منح VIP',`grantVip(${jsq(name)})`],
     ['panel_access','🧱 حذف رسائل الحائط',`adminDeleteWallUser(${jsq(name)})`],
     ['profile_edit','🎨 تغيير لون العضو',`adminChangeColor(${jsq(name)})`],
-    ['profile_edit','✨ زخرفة الاسم',`adminDecorateName(${jsq(name)})`],
     ['room_move','🏠 نقل إلى غرفة',`moveMemberToRoom(${jsq(name)})`],
+    ['profile_edit','✨ زخرفة الاسم',`adminDecorateName(${jsq(name)})`],
     ['rank_assign','🏅 تغيير الرتبة / المدة بالأيام',`openMemberProfileAdminReference(${jsq(name)})`]
    ];
    const visibleItems=items.filter(([perm])=>can(perm));
    const firstRows=visibleItems.map(([perm,label,action])=>`<button type="button" onclick="${action}" style="min-width:0;min-height:42px;padding:5px 3px;border:1px solid #e5e5e5;background:#fff;color:#222;font-size:12px;font-weight:700;white-space:normal">${label}</button>`).join('');
-   inlineAdmin=`<div class="memberProfileAdminInline" style="grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:7px;background:#fff;direction:rtl">${firstRows}</div>`;
+   inlineAdmin=`<div class="memberProfileAdminInline" style="grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:7px;background:#fff;direction:rtl;border-top:0">${firstRows}</div>`;
   }catch(e){toast('تعذر تحميل صلاحيات الإدارة: '+e.message)}
  }
  layer(`<div class="profileOverlay"><div class="profileTop"><img class="profileTopAvatar" src="${esc(avatarFor(p))}" alt=""><b>${esc(dn)}</b><button type="button" class="close" style="width:28px;height:28px;font-size:22px" onclick="closeLayer()">×</button></div><img class="profilePhoto" src="${esc(avatarFor(p))}" onerror="this.style.display='none'"><div class="profileInfo"><div style="font-size:12px;color:#777"><span class="statusDot ${u.online?(p.privateOpen===false?'statusClosed':'statusOpen'):'statusOffline'}"></span>${esc(u.online?(p.status||(u.type==='guest'?'(غير مسجل)':'(عضو جديد)')):'غير متصل')}</div>${u.vip?'<div style="margin-top:4px">👑 VIP</div>':''}</div><div class="profileGrid"><div class="memberProfileMetaRow" style="grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 8px 5px;direction:ltr;box-sizing:border-box"><span class="memberProfileCountry" title="دولة المستخدم" style="display:inline-flex;align-items:center;gap:4px;min-width:0;font-size:12px;font-weight:900;color:#111;white-space:nowrap">${countryFlag(u.countryCode||p.countryCode||p.country||'IQ')} <span>${esc(countryName(u.countryCode||p.countryCode||p.country||'IQ'))}</span></span><div class="memberProfileRoomName" style="justify-self:end;margin-right:0;margin-left:auto;max-width:72%;width:max-content;box-sizing:border-box;text-align:right;padding:4px 12px;font-size:12px;line-height:1.35;font-weight:900;color:#fff;background:#365d70;border:1px solid #496779;border-radius:0;overflow-wrap:anywhere">الغرفة: ${esc((rooms.find(r=>String(r.id)===String(u.room)||String(r.name)===String(u.room))||{}).name||(u.room?String(u.room):'غير موجود في غرفة'))}</div></div><button type="button" class="memberProfileLikeButton" onclick="sendLike('${esc(name)}')"><span class="memberProfileHeart">♥</span><span class="memberProfileLikeCount">${Number(u.likes)||0}</span></button><button type="button" onclick="notifyUser('${esc(name)}')">✉ تنبيه</button><button type="button" onclick="openPrivate('${esc(name)}')"><span style="display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;white-space:normal">💬 محادثة<br>خاصة</span></button>${me.staff&&key(name)!==key(me.name)?inlineAdmin:''}</div></div>`,'memberProfile')
