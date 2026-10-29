@@ -1,35 +1,7 @@
-# دردشة ريماز العراقية — تعديل بروفايل العضو
+# Rimaz Chat — v12 Gift UI and animation update
 
-تحتوي هذه النسخة على تعديل واجهة فتح بروفايل العضو للإداري/السوبر/البنر، بحيث تفتح لوحة بيضاء ضيقة مستوحاة من الفيديو المرجعي، بترتيب: البنر والرتب، إرسال هدية، زخرفة الاسم، اللايكات، النقاط، ثم اختيار المجموعة والنقل. لم تتم إضافة أزرار «أحبك» أو «ضحكة» أو «قبلة».
+Based on v11. Adds a client-side animated gift celebration when a gift is received over the existing Socket.IO `gift` event, and shows the same celebration locally after the sender's gift API request succeeds. Gift picker selection and server-side gift persistence remain on the existing `/api/admin/gift` route.
 
-## الملفات
-- `index.html` و `public/index.html`: نسختان متطابقتان من الواجهة.
-- `server.js`: خادم المشروع كما كان في النسخة السابقة.
-- `data.json`: ملف بيانات افتراضي مرفق؛ لا تستبدل به بيانات الموقع الحية.
+Files: `index.html`, `public/index.html`, `server.js`, `package.json`, `Dockerfile`, `data.json`.
 
-## التشغيل
-- `npm install`
-- `npm start`
-
-عند النشر، احتفظ بقاعدة البيانات/ملف البيانات الحالي ونسخة احتياطية من الموقع قبل الاستبدال.
-
-## تحديث v7 — إصلاح عرض بطاقة الإدارة
-- تم تعديل المسار المستخدم فعلياً عند الضغط على بطاقة العضو في الدردشة (`openMemberProfile`)، بدلاً من تعديل نافذة إدارة أخرى لا تظهر تلقائياً.
-- ترتيب الإجراءات صار: إسكات، إسكات ح، إرسال هدية؛ حذف صورة، كشف نكات، بنر؛ باند، طرد، طرد من الغرفة؛ ثم زر تجاهل منفرد، وبعده الإجراءات الإضافية.
-- أضيفت النماذج مباشرة تحت الأزرار: زخرفة الاسم، حقل اللايكات مع حفظ القيمة، النقاط مع حفظ القيمة، اختيار الرتبة والمدة بالأيام مع حفظ، ثم اختيار الغرفة وكلمة المرور الاختيارية وزر النقل.
-- أضيف مسار خادم لحفظ اللايكات/النقاط، والتحقق من كلمة مرور الغرفة عند النقل من هذه البطاقة إذا كانت الغرفة مقفلة. تبقى صلاحيات الإدارة وحماية حساب المالك مطبقة.
-- تم نسخ الواجهة نفسها إلى `index.html` و`public/index.html`.
-
-## الفحص والحدود
-- يجب فحص `server.js` وJavaScript المضمّن في الواجهة باستخدام `node --check` قبل النشر.
-- تم التحقق من أن نماذج الإدارة موجودة في المسار الفعلي للبطاقة، وليس فقط في نافذة منفصلة.
-- لم يُجرَ اختبار حي على خادم المستخدم أو مقارنة بصرية بالبكسل؛ لذلك لا يمكن ضمان التطابق الحرفي قبل معاينة النسخة على الموقع.
-- لا تستبدل ملف البيانات الحي `data.json` بملف البيانات الافتراضي المرفق.
-
-
-## v8 changes (2026-10-29)
-- Removed the separate "حظر 5 دقائق" action; the main "باند" button now applies the existing 5-minute global ban action.
-- Removed the duplicate "بنر" action because rank assignment is available in the rank form below.
-- Removed the duplicate "نقل إلى غرفة" action because the room transfer form below already provides it.
-- Fixed the member stats API middleware so the endpoint checks the specific permission for likes or points in its handler instead of incorrectly requiring the generic panel permission first.
-- Kept `index.html` and `public/index.html` synchronized.
+Deployment: replace `index.html`, `public/index.html`, and `server.js` as appropriate for your deployment; preserve the existing live `data.json` to keep user data. This build uses the existing emoji gift catalog; original custom gift artwork/animation assets were not embedded in the supplied project or demonstrably available from the video, so the celebration animation is a new approximation rather than a pixel-identical copy of the source site's gift animation.
