@@ -828,7 +828,8 @@ async function uploadSmiley(){if(!canUseChatPermission('smileys_manage'))return 
 async function deleteChatTool(type,id){if(!confirm('حذف هذا العنصر من القائمة؟'))return;try{const d=window.adminCachedData||{};const shortcuts=(d.chatShortcuts||[]).filter(x=>!(type==='shortcut'&&String(x.id)===String(id))),smileys=(d.customSmileys||[]).filter(x=>!(type==='smiley'&&String(x.id)===String(id)));await saveChatTools(shortcuts,smileys);toast('تم الحذف');adminTab(type==='shortcut'?'shortcuts':'smileys')}catch(e){toast(e.message)}}
 window.chatShortcutCache=window.chatShortcutCache||null;
 async function expandChatShortcut(input,force=false){
- if(!input||!canUseChatPermission('shortcuts_manage'))return;
+ // Keep shortcut tokens visible while composing; expand only at the send action.
+ if(!force||!input||!canUseChatPermission('shortcuts_manage'))return;
  try{
   if(!window.chatShortcutCache||!window.chatSmileyCache){const d=await api('/api/chat-tools');window.chatShortcutCache=Array.isArray(d.shortcuts)?d.shortcuts:[];window.chatSmileyCache=Array.isArray(d.smileys)?d.smileys:[];}
   if(input.isContentEditable){

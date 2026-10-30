@@ -1,16 +1,14 @@
-# Rimaz Chat – Independent Shortcuts & Smileys Permissions (v43)
+# Rimaz v45 — shortcut expansion timing
 
-This package keeps the smiley control visible according to its own permission and removes the ⚡ shortcut button from the chat composers. Shortcut management and its server-side permission checks remain available in the administration tools. It also retains independent authorization for both tool collections:
-- `shortcuts_manage`: controls shortcut-management actions; the ⚡ composer button is intentionally hidden.
-- `smileys_manage`: controls the 🙂 smiley button and smiley picker in public, private, and wall composers.
+This package is based on v44. It preserves the v44 independent shortcut/smiley permission behavior and removes automatic shortcut expansion while typing.
 
-The active session now includes its effective permission list so the client can render the correct controls immediately after login. Server-side save/upload checks remain authoritative; a user with only one permission cannot modify the other tool collection.
+## Change in v45
+- Shortcut tokens (for example `س1`) remain visible in the composer while the user types.
+- Smiley tokens (for example `ض1`) also remain visible as typed text in the composer.
+- Tokens are expanded only when the user sends the message/post, so the saved shortcut text or smiley appears in the published chat content.
+- The same send-time behavior applies to public chat, private messages, and wall posts.
 
 ## Deployment
-1. Back up the existing app files.
-2. Replace `index.html`, `public/index.html`, and `server.js` with the files in this package. Keep `package.json` and `Dockerfile` if unchanged.
-3. **Do not replace the live `data.json` file.** This package intentionally omits it.
-4. **Do not delete or replace the existing `uploads/` directory.**
-5. Restart/redeploy the application, then sign in as the owner and assign the two permissions independently in rank permissions.
+Replace `index.html`, `public/index.html`, and `server.js` with the packaged files, then restart the application. Do not replace the live `data.json` and do not delete or overwrite the existing `uploads/` directory.
 
-The root `index.html` is served first by the current server configuration; `public/index.html` is kept in sync as a fallback.
+The JavaScript syntax and ZIP integrity are checked. This package has not been live-tested on Deplexo.
