@@ -698,11 +698,16 @@ async function openMemberProfile(name){
    const mainHtml=primaryRows.map(renderAction).filter(Boolean).join('');
    const secondaryHtml=secondaryRows.map(renderAction).filter(Boolean).join('');
    const roomOptions=(d.rooms||[]).map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');
+   // Resolve the admin-side member record before reading its profile. Keeping this
+   // declaration first avoids the temporal-dead-zone ReferenceError (uAdmin).
+   const uAdmin=(window.adminCachedUsers||[]).find(x=>key(x.name)===key(name))||u;
    const currentAssignedRank=String(uAdmin.profile?.rank||'');
    const currentRankDefinition=(window.rankDefinitions||[]).find(r=>String(r.id)===currentAssignedRank);
    const currentRankLabel=currentRankDefinition?((currentRankDefinition.icon||'★')+' '+currentRankDefinition.name):rankLabel(currentAssignedRank);
-   const rankOptions=RIMAZ_RANKS.filter(()=>can('rank_assign')).map(r=>`<option value="${esc(r[0])}" ${String(r[0])===currentAssignedRank?'selected':''}>${esc(r[1])}</option>`).join('');
-   const uAdmin=(window.adminCachedUsers||[]).find(x=>key(x.name)===key(name))||u;
+   const rankOptions=(window.rankDefinitions||RIMAZ_RANKS.map(r=>({id:r[0],name:r[1],icon:''})))
+    .slice().sort((a,b)=>Number(b.level||0)-Number(a.level||0))
+    .filter(()=>can('rank_assign'))
+    .map(r=>{const id=String(r.id);const label=(r.icon?String(r.icon)+' ':'')+String(r.name||r.label||id);return `<option value="${esc(id)}" ${id===currentAssignedRank?'selected':''}>${esc(label)}</option>`}).join('');
    inlineAdmin=`<div class="memberProfileAdminInline" style="grid-column:1/-1;display:block;background:#fff;direction:rtl;border-top:0">
     <div class="rimazRefActionGrid">${mainHtml}</div>
     <div class="rimazRefActionGrid rimazRefSecondaryGrid">${secondaryHtml}</div>
