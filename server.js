@@ -75,22 +75,20 @@ let db;
 try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { db = defaults(); }
 for (const [k,v] of Object.entries(defaults())) if (db[k] === undefined) db[k] = v;
 if(!Array.isArray(db.chatShortcuts)) db.chatShortcuts=[]; if(!Array.isArray(db.customSmileys)) db.customSmileys=[];
-// One-time migration for the preloaded classic smiley gallery.
-// Older v26 deployments could persist smileysSeeded=true while the bundled
-// assets were not yet present, leaving the admin gallery at zero. Versioned
-// migration repairs that state once, while preserving any existing custom list.
+// Smiley gallery migration v2: intentionally replace all legacy smiley records
+// with the bundled visual gallery. Message shortcuts and all other user data remain untouched.
 {
   const classicDir=path.join(ROOT,'public','classic-smileys');
   let classicFiles=[];
   try { classicFiles=fs.readdirSync(classicDir).filter(f=>/^\d{3}\.png$/i.test(f)).sort(); } catch {}
   const seedVersion=Number(db.smileysSeedVersion)||0;
-  if(seedVersion<1 && Array.isArray(db.customSmileys) && db.customSmileys.length===0 && classicFiles.length){
-    db.customSmileys=classicFiles.map((f,i)=>({id:'classic-'+f.slice(0,3),icon:'/classic-smileys/'+f,name:'سمايل '+(i+1),shortcut:''}));
-    db.smileysSeedVersion=1;
+  if(seedVersion<2 && classicFiles.length){
+    db.customSmileys=classicFiles.map((f,i)=>({id:'classic-'+f.slice(0,3),icon:'/classic-smileys/'+f,name:'سمايل '+String(i+1).padStart(3,'0'),shortcut:''}));
+    db.smileysSeedVersion=2;
     db.smileysSeeded=true;
-    try { save(); console.log(`Seeded ${classicFiles.length} bundled classic smileys (migration v1).`); }
-    catch(e) { console.error('Could not persist classic smiley migration:',e.message); }
-  } else if(seedVersion>=1) {
+    try { save(); console.log(`Replaced legacy smileys with ${classicFiles.length} bundled gallery images (migration v2).`); }
+    catch(e) { console.error('Could not persist smiley gallery migration:',e.message); }
+  } else if(seedVersion>=2) {
     db.smileysSeeded=true;
   }
 }

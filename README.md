@@ -1,10 +1,9 @@
-Rimaz Chat v26 — Smileys Gallery
+# Rimaz Chat v28
 
-- Adds a preloaded grid of 300 classic-style smiley image tiles based on the reference screenshot supplied in the conversation.
-- Each tile has its own shortcut field (for example ض1) and a save button.
-- The same bundled smileys are loaded into the chat smiley picker.
-- When a saved shortcut is sent, the message displays the selected smiley image.
-- Supports additional uploaded GIF, PNG, JPG and WEBP smileys.
-- Existing chat shortcuts, likes, gifts, rooms, users and other features are retained.
+- Replaced the legacy smiley records once on first startup with the bundled classic image gallery.
+- Admin smiley tab displays a single image grid; every tile has its own shortcut field and Save button.
+- Chat, private messages and wall use the same database-backed smiley list and the same image tokens.
+- Legacy Unicode emoji picker catalogue removed; the picker now shows only the shared image gallery.
+- Existing message shortcuts, user accounts, likes, gifts and other data are preserved.
 
-Deployment: preserve the existing persistent data.json and uploads directory. The classic smiley images are bundled under public/classic-smileys. The server seeds them into an empty smiley list once; it records a seed flag so intentionally deleted items do not reappear on restart.
+Keep your production `data.json` and `uploads` folder when deploying. The one-time `smileysSeedVersion: 2` migration resets only `customSmileys` to the bundled gallery.
