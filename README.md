@@ -30,3 +30,11 @@ No chat colors, message rendering, member button layout, gifts, likes, or other 
 - Explicitly treats both the site owner and authenticated ADMIN role as authorized to grant elevated administrator rank definitions.
 - The previous owner-only error branch is absent from this server build.
 - Deploy `server.js` from this package and restart the Node process; replacing browser HTML alone cannot remove a server-side authorization response.
+
+
+## v46.9 — Member card cleanup
+- Renamed the room/group filter placeholder from the incorrect `البحث في الصلاحيات` to `البحث عن غرفة أو مجموعة` in both member-card renderers. Search behavior remains the same: it filters the room list.
+- Fixed the older/reference member-management card: Likes and Points are editable numeric fields and both Save buttons now call the existing `/api/admin/member-stats/:name` endpoint. The previous Points button only displayed a warning toast and did not save; the previous Likes button added a fixed 10 instead of saving the number shown.
+- Removed a duplicate room-transfer action from the older card; the room selector + password + Transfer form remains the single transfer workflow.
+- Kept `index.html` and `public/index.html` identical.
+- Validation: server and both inline browser scripts pass Node syntax checks; stale incorrect placeholder and no-op stat-save handlers are absent. Not live-tested on the hosted instance.
