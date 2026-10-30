@@ -1,4 +1,4 @@
-# Rimaz v46.7 — Unified Rank Selector + Daily ADMIN Authority
+# Rimaz v46.8 — Unified Rank Selector + Daily ADMIN Authority Hotfix
 
 ## What changed
 - The daily `ADMIN` account can grant the legacy `الإداري` / full administrator rank. The former owner-only rejection for administrator-rank grants has been removed. The account that owns the site remains protected as a target.
@@ -24,3 +24,9 @@ No chat colors, message rendering, member button layout, gifts, likes, or other 
 - `index.html` and `public/index.html` are byte-identical.
 - Static checks confirm the explicit owner-only rejection for granting `baseRole: admin` is gone, owner-target protection remains, and both member-card renderers use `rankChoices()`.
 - This package has not been live-tested against the hosted Deplexo instance or its production database.
+
+
+## v46.8 hotfix
+- Explicitly treats both the site owner and authenticated ADMIN role as authorized to grant elevated administrator rank definitions.
+- The previous owner-only error branch is absent from this server build.
+- Deploy `server.js` from this package and restart the Node process; replacing browser HTML alone cannot remove a server-side authorization response.
