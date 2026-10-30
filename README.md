@@ -20,3 +20,7 @@ Replace application files with this package. Keep your live `data.json` and `upl
 
 ## Smiley gallery reliability fix (v32.1)
 The admin data endpoint and chat-tools endpoint now both call `ensureSmileysGallery()`. If the saved gallery is empty, the server rebuilds the 72 embedded SVG data-URI entries and attempts to persist them. Existing non-empty custom smiley galleries and their shortcuts are preserved. The images are embedded in `server.js`; no separate image folder is required.
+
+
+## استعادة السميلات القديمة
+تتضمن هذه النسخة 300 سميل كلاسيكي PNG بقياس 40×40 مضمّنة داخل server.js. عند أول تشغيل تُستعاد الشبكة مرة واحدة، وتُنقل اختصارات السميلات القديمة بحسب رقمها، وتبقى السميلات المرفوعة يدوياً وبقية بيانات قاعدة البيانات محفوظة. تم الإبقاء على آلية الاختصارات الحالية كما هي.
