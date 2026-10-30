@@ -1,11 +1,9 @@
-# ريماز – إصلاح معرض السميلات
+# Rimaz Chat – Smiley Shortcut Fix (v36)
 
-## التعديلات في هذه النسخة
-- إزالة العبارة التعريفية من رأس نافذة السميلات.
-- إدراج السميل الكلاسيكي كصورة داخل خانة الكتابة المرئية بدل إظهار رمز `[[smiley:id]]` للمستخدم؛ يتحول إلى الرمز الداخلي فقط عند الإرسال حتى يظهر كصورة في المحادثة.
-- توحيد حجم السميل الكلاسيكي في الرسائل والخاص والحائط مع حجم إيموجي الموبايل (21px).
-- الإبقاء على شبكة المعرض الحالية وإيموجيات الموبايل كما هي.
-- تم تطبيق خانة الكتابة المرئية في العام والخاص والحائط مع الحفاظ على إرسال النصوص والاختصارات.
+This seven-file package contains the targeted smiley fixes:
+- Saved smiley shortcuts (for example `ض١`) are expanded to the selected inline smiley image before sending, rather than leaving the internal smiley token visible in the composer.
+- The smiley tiles in the admin settings grid are smaller and more compact so more items fit vertically. This styling is scoped only to the admin settings grid; the chat smiley picker and mobile emoji grid are unchanged.
 
-## تنبيه
-لا تستبدل `data.json` الحي على الاستضافة، ولا تحذف مجلد `uploads`.
+Deployment notes:
+- Keep the live `data.json` on the server; do not replace it with the starter file in this package.
+- Keep the existing `uploads` directory and its contents.

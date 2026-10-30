@@ -549,6 +549,16 @@
 .chat .emojiModal .emojiGrid .mobileEmojiBtn{font-family:"Noto Color Emoji","Apple Color Emoji",sans-serif!important;font-size:21px!important}
 @media(max-width:380px){.chat .emojiModal{right:6px!important;width:min(286px,calc(100vw - 20px))!important;max-width:calc(100vw - 20px)!important}.chat .emojiModal .emojiGrid{grid-template-columns:repeat(10,minmax(0,1fr))!important;gap:2px!important;padding:4px!important}}
 </style>
+<style id="rimaz-admin-smiley-compact-v36">
+#smileyAdminGrid.smileyAdminGrid{gap:4px!important;padding:2px!important;grid-template-columns:repeat(5,minmax(0,1fr))!important}
+#smileyAdminGrid .smileyAdminTile{padding:3px 2px!important;gap:3px!important;min-height:0!important}
+#smileyAdminGrid .smileyAdminTile img{width:27px!important;height:27px!important;max-width:27px!important;max-height:27px!important;object-fit:contain!important}
+#smileyAdminGrid .smileyAdminTile .smileyEmoji{font-size:22px!important;line-height:27px!important}
+#smileyAdminGrid .smileyAdminTile b{font-size:9px!important;line-height:1.15!important}
+#smileyAdminGrid .smileyShortcutInput{height:25px!important;min-height:25px!important;font-size:10px!important;padding:2px!important}
+#smileyAdminGrid .smileyAdminTile button{height:24px!important;min-height:24px!important;margin-top:1px!important;padding:2px!important;font-size:9px!important;line-height:1.1!important}
+@media(min-width:700px){#smileyAdminGrid.smileyAdminGrid{grid-template-columns:repeat(9,minmax(0,1fr))!important}}
+</style>
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={},privatePeerUser=null;
@@ -818,9 +828,17 @@ window.chatShortcutCache=window.chatShortcutCache||null;
 async function expandChatShortcut(input,force=false){
  if(!input||!force)return;
  try{
-  if(!window.chatShortcutCache){const d=await api('/api/chat-tools');window.chatShortcutCache=Array.isArray(d.shortcuts)?d.shortcuts:[];window.chatSmileyCache=Array.isArray(d.smileys)?d.smileys:[];}
-  if(input.isContentEditable){if(input.querySelector('img[data-smiley-id]'))return;const value=input.textContent||'',trimmed=value.trimEnd(),match=trimmed.match(/(?:^|\s)([^\s]+)$/);if(!match)return;const token=match[1],item=window.chatShortcutCache.find(x=>String(x.title||'').trim().toLowerCase()===token.toLowerCase()),smiley=(window.chatSmileyCache||[]).find(x=>String(x.shortcut||'').trim().toLowerCase()===token.toLowerCase());if(!item&&!smiley)return;input.textContent=value.slice(0,trimmed.length-token.length)+(smiley?'[[smiley:'+smiley.id+']]':String(item.text||''))+value.slice(trimmed.length);return;}
-  const value=String(input.value||''),trimmed=value.trimEnd(),match=trimmed.match(/(?:^|\s)([^\s]+)$/);if(!match)return;const token=match[1],item=window.chatShortcutCache.find(x=>String(x.title||'').trim().toLowerCase()===token.toLowerCase()),smiley=(window.chatSmileyCache||[]).find(x=>String(x.shortcut||'').trim().toLowerCase()===token.toLowerCase());if(!item&&!smiley)return;const start=trimmed.length-token.length;input.value=value.slice(0,start)+(smiley?'[[smiley:'+smiley.id+']]':String(item.text||''))+value.slice(trimmed.length);try{input.setSelectionRange(input.value.length,input.value.length)}catch{}
+  if(!window.chatShortcutCache||!window.chatSmileyCache){const d=await api('/api/chat-tools');window.chatShortcutCache=Array.isArray(d.shortcuts)?d.shortcuts:[];window.chatSmileyCache=Array.isArray(d.smileys)?d.smileys:[];}
+  if(input.isContentEditable){
+   const walker=document.createTreeWalker(input,NodeFilter.SHOW_TEXT);let lastText=null,node;while((node=walker.nextNode()))lastText=node;
+   if(!lastText)return;const value=lastText.nodeValue||'',match=value.match(/(^|\s)([^\s]+)\s*$/);if(!match)return;
+   const token=match[2],item=(window.chatShortcutCache||[]).find(x=>String(x.title||'').trim().toLowerCase()===token.toLowerCase()),smiley=(window.chatSmileyCache||[]).find(x=>String(x.shortcut||'').trim().toLowerCase()===token.toLowerCase());if(!item&&!smiley)return;
+   const before=value.slice(0,match.index)+match[1];lastText.nodeValue=before;
+   if(smiley){const img=document.createElement('img');img.src=String(smiley.icon||'');img.alt=smiley.name||'سميل';img.dataset.smileyId=String(smiley.id);img.className='composerSmiley';lastText.parentNode.insertBefore(img,lastText.nextSibling);const spacer=document.createTextNode('');img.parentNode.insertBefore(spacer,img.nextSibling);const range=document.createRange();range.setStart(spacer,0);range.collapse(true);const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);}
+   else{const text=document.createTextNode(String(item.text||''));lastText.parentNode.insertBefore(text,lastText.nextSibling);const range=document.createRange();range.selectNodeContents(input);range.collapse(false);const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);}
+   return;
+  }
+  const value=String(input.value||''),trimmed=value.trimEnd(),match=trimmed.match(/(?:^|\s)([^\s]+)$/);if(!match)return;const token=match[1],item=(window.chatShortcutCache||[]).find(x=>String(x.title||'').trim().toLowerCase()===token.toLowerCase()),smiley=(window.chatSmileyCache||[]).find(x=>String(x.shortcut||'').trim().toLowerCase()===token.toLowerCase());if(!item&&!smiley)return;const start=trimmed.length-token.length;input.value=value.slice(0,start)+(smiley?'[[smiley:'+smiley.id+']]':String(item.text||''))+value.slice(trimmed.length);try{input.setSelectionRange(input.value.length,input.value.length)}catch{}
  }catch(e){console.warn('shortcut expansion failed',e)}
 }
 async function openShortcuts(target){try{const d=await api('/api/chat-tools');const items=d.shortcuts||[];if(!items.length)return toast('ماكو اختصارات مضافة حالياً');const box=document.createElement('div');box.className='emojiModal';box.innerHTML='<div class="emojiHead"><b>⚡ الاختصارات</b><button type="button" id="shortcutClose">×</button></div><div class="emojiGrid" style="grid-template-columns:repeat(2,minmax(0,1fr))"></div>';document.querySelector('.chat')?.appendChild(box);const grid=box.querySelector('.emojiGrid');items.forEach(x=>{const b=document.createElement('button');b.type='button';b.style.fontSize='13px';b.textContent=x.title;b.title=x.text;b.addEventListener('click',()=>{const input=document.getElementById(target==='private'?'privateText':target==='wall'?'wallText':'msgInput');if(input){if(input.isContentEditable){input.focus();const sel=window.getSelection(),range=document.createRange();range.selectNodeContents(input);range.collapse(false);sel.removeAllRanges();sel.addRange(range);range.insertNode(document.createTextNode((input.textContent?' ':'')+x.text))}else input.value+=(input.value?' ':'')+x.text;input.focus()}box.remove()});grid.appendChild(b)});box.querySelector('#shortcutClose').onclick=()=>box.remove()}catch(e){toast(e.message)}}
