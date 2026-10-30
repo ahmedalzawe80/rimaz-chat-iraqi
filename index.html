@@ -1201,6 +1201,69 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 #layer .memberClassicTitle .close{background:#df5555!important;color:#fff!important;}
 </style>
 
+
+<style id="rimaz-profile-card-position-correction-v4615">
+/* Keep the country flag on the left and room label on the right,
+   directly below the profile photo. */
+#layer .profileGrid > .memberProfileMetaRow{
+  grid-column:1 / -1!important;
+  grid-row:1!important;
+  display:flex!important;
+  direction:ltr!important;
+  justify-content:space-between!important;
+  align-items:center!important;
+  width:100%!important;
+  box-sizing:border-box!important;
+}
+#layer .profileGrid > .memberProfileMetaRow .memberProfileCountry{
+  order:1!important;
+  margin-right:auto!important;
+  margin-left:0!important;
+}
+#layer .profileGrid > .memberProfileMetaRow .memberProfileRoomName{
+  order:2!important;
+  margin-left:auto!important;
+  margin-right:0!important;
+  justify-self:end!important;
+}
+/* Public member card: row 1 = likes (right), notice (middle),
+   private chat (left); ignore alone at the left of row 2. */
+#layer .profileGrid > button.memberProfileLikeButton,
+#layer .profileGrid > button.likeBig,
+#layer .profileGrid > button[onclick^="sendLike"]{
+  grid-column:1!important;
+  grid-row:2!important;
+}
+#layer .profileGrid > button[onclick^="notifyUser"]{
+  grid-column:2!important;
+  grid-row:2!important;
+}
+#layer .profileGrid > button[onclick^="openPrivate"],
+#layer .profileGrid > button[onclick^="tryPrivate"]{
+  grid-column:3!important;
+  grid-row:2!important;
+}
+#layer .profileGrid > button.ignore{
+  grid-column:3!important;
+  grid-row:3!important;
+}
+/* Keep admin top action order: likes right, notice center, private chat left. */
+#layer .memberClassicTopActions{
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  direction:rtl!important;
+}
+#layer .memberClassicTopActions > button:nth-child(1){grid-column:1!important;grid-row:1!important;}
+#layer .memberClassicTopActions > button:nth-child(2){grid-column:2!important;grid-row:1!important;}
+#layer .memberClassicTopActions > button:nth-child(3){grid-column:3!important;grid-row:1!important;}
+/* Black title strip as requested. */
+#layer .memberClassicTitle{
+  background:#000!important;
+  color:#fff!important;
+  border-bottom:1px solid #222!important;
+}
+</style>
+
 </body></html>
 <style id="rimaz-user-latest-final">
 /* latest user alignment — preserve approved sizes, only mirror requested areas */
