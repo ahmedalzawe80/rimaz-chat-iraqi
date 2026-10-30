@@ -12,3 +12,7 @@ Replace application files with this package. Keep your live `data.json` and `upl
 
 ## Validation
 `node --check server.js` and the inline browser JavaScript syntax check pass. SVG gallery contains 72 independent files. Runtime integration should be verified on the target server after deployment.
+
+
+## الإصدار 32: معرض مضمّن
+تم تضمين 72 صورة SVG داخل server.js كبيانات مضمّنة؛ لا يلزم رفع مجلد صور منفصل. عند بدء التشغيل تُزرع القائمة في قاعدة البيانات عند الحاجة. احتفظ بقاعدة بيانات الاستضافة الحالية ومجلد uploads ولا تستبدلهما بملفات تجريبية.
