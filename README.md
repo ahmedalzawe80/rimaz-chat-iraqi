@@ -16,3 +16,7 @@ Replace application files with this package. Keep your live `data.json` and `upl
 
 ## الإصدار 32: معرض مضمّن
 تم تضمين 72 صورة SVG داخل server.js كبيانات مضمّنة؛ لا يلزم رفع مجلد صور منفصل. عند بدء التشغيل تُزرع القائمة في قاعدة البيانات عند الحاجة. احتفظ بقاعدة بيانات الاستضافة الحالية ومجلد uploads ولا تستبدلهما بملفات تجريبية.
+
+
+## Smiley gallery reliability fix (v32.1)
+The admin data endpoint and chat-tools endpoint now both call `ensureSmileysGallery()`. If the saved gallery is empty, the server rebuilds the 72 embedded SVG data-URI entries and attempts to persist them. Existing non-empty custom smiley galleries and their shortcuts are preserved. The images are embedded in `server.js`; no separate image folder is required.
