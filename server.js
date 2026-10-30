@@ -75,18 +75,18 @@ let db;
 try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { db = defaults(); }
 for (const [k,v] of Object.entries(defaults())) if (db[k] === undefined) db[k] = v;
 if(!Array.isArray(db.chatShortcuts)) db.chatShortcuts=[]; if(!Array.isArray(db.customSmileys)) db.customSmileys=[];
-// Smiley gallery migration v3: replace broken sprite fragments with complete,
-// individually-drawn SVG smileys. Preserve chat text shortcuts and every other DB field.
+// Smiley gallery migration v4: replace broken sprite fragments with complete,
+// individually-drawn SVG smileys. Re-seed older v3 databases that stored an empty gallery. Preserve text shortcuts and all other DB fields.
 {
   const galleryDir=path.join(ROOT,'public','classic-smileys-v3');
   let galleryFiles=[];
   try { galleryFiles=fs.readdirSync(galleryDir).filter(f=>/^\d{3}\.svg$/i.test(f)).sort(); } catch {}
   const seedVersion=Number(db.smileysSeedVersion)||0;
-  if(seedVersion<3 && galleryFiles.length){
+  if(seedVersion<4 && galleryFiles.length){
     db.customSmileys=galleryFiles.map((f,i)=>({id:'rimaz-v3-'+f.slice(0,3),icon:'/classic-smileys-v3/'+f,name:({1:'ابتسامة',2:'ضحكة',3:'ضحك',4:'وردة',5:'قلب'}[i+1]||'سمايل '+String(i+1).padStart(2,'0')),shortcut:''}));
-    db.smileysSeedVersion=3;
+    db.smileysSeedVersion=4;
     db.smileysSeeded=true;
-    try { save(); console.log(`Installed ${galleryFiles.length} complete original smileys (migration v3).`); }
+    try { save(); console.log(`Installed ${galleryFiles.length} complete original smileys (migration v4).`); }
     catch(e) { console.error('Could not persist smiley gallery migration:',e.message); }
   } else if(seedVersion>=3) {
     db.smileysSeeded=true;
