@@ -15,3 +15,9 @@ Replace `server.js`, `index.html`, and `public/index.html` with the packaged fil
 
 ## Checks
 `node --check server.js` and inline JavaScript syntax checks pass. ZIP integrity is checked. This package has not been live-tested on Deplexo.
+
+## v46.1 — تصحيح صلاحيات حساب الإداري
+- حساب الإداري يملك صلاحيات إدارة الدردشة كاملة، بما فيها تعيين الرتب وإدارة صلاحيات الرتب وتصفير اللايكات.
+- يمكن للإداري إدارة الإضافات اليدوية لصلاحيات كل عضو بشكل مستقل عن رتبته.
+- حماية حساب صاحب الموقع تبقى على مستوى الخادم عند استهدافه بإجراءات الإدارة؛ لا يستطيع الإداري تنفيذ إجراءات عليه.
+- لا يتطلب هذا التحديث استبدال `data.json` أو مجلد `uploads`.
