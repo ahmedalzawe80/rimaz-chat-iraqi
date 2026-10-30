@@ -38,3 +38,16 @@ No chat colors, message rendering, member button layout, gifts, likes, or other 
 - Removed a duplicate room-transfer action from the older card; the room selector + password + Transfer form remains the single transfer workflow.
 - Kept `index.html` and `public/index.html` identical.
 - Validation: server and both inline browser scripts pass Node syntax checks; stale incorrect placeholder and no-op stat-save handlers are absent. Not live-tested on the hosted instance.
+
+
+## v46.10 — Member/guest profile card size only (2026-10-31)
+- On mobile, increased the profile photo/card content height from 165px to 200px to match the supplied reference proportions.
+- Kept the existing profile width, position, buttons, labels, colors, ordering, permissions, and all behavior unchanged.
+- No server, database, rank, smiley, or chat behavior changes in this build.
+
+
+## v46.11 combined profile-size and smiley fix
+- Keeps the final mobile profile-photo height at 200px.
+- Normal smiley picker is available to all visitors and members in public chat, private chat, and wall.
+- `smileys_manage` remains required for admin management/upload only, not for using smileys.
+- No button labels, ordering, colors, or unrelated features intentionally changed.
