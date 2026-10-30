@@ -1,21 +1,18 @@
-# Rimaz Chat — Gift System v20
+# Rimaz Chat — Gift System v21
 
-This build is based on the supplied `rimaz-chat-profile-inline-actions-v19.zip` project.
+Based on the supplied Rimaz v20 archive. Existing v20 gift, member, room, wall, private-message, rank, and room-transition behavior is retained.
 
-## Gift system changes
-- Rebuilt the gift picker as one consistent responsive grid.
-- Removed the old cropped PNG artwork and the old crop-based rendering logic; gifts now render as complete emoji glyphs.
-- Added 15 additional gifts to the existing 53 gifts and 9 extra gifts (77 built-in choices total).
-- Added a visible selected-gift label so the chosen item is clear before sending.
-- Kept the send/cancel controls in a fixed footer at the bottom of the picker.
-- Persisted the exact selected glyph and stable gift ID with each sent gift; the recipient animation and member badge use that same saved glyph.
-- Kept backward compatibility for existing gift records that do not yet contain `giftIcon` or `giftId`.
+## v21 additions
+- Added an administration section for message shortcuts. Admins can add and delete named shortcuts; users can insert their saved message text into public chat, private messages, and the wall composer.
+- Added an administration section for custom smileys. Admins can add and delete emoji glyphs with optional labels; custom smileys appear in the existing emoji picker for authenticated users.
+- Added a dedicated likes-management section with member balances, search, preset grant amounts, custom grant amounts, and reset. It uses the existing protected server-side like-grant/reset logic and updates member balances through the existing live event.
+- Shortcut and smiley settings are persisted in the existing `data.json` store and initialized safely for existing installations.
 
 ## Deployment
-Upload the project contents as usual. Keep the live `data.json` file and its user data unchanged when replacing the application files. No `public/gifts/` image folder is required in this build.
+Upload the project files as usual. Keep the live persistent `data.json` and its user data unchanged when replacing application files. Existing installations automatically initialize the new `chatShortcuts` and `customSmileys` arrays if absent.
 
-## Checks performed
-- Node.js syntax check passed for `server.js`.
-- Inline JavaScript syntax checks passed for both copies of `index.html`.
-- The built-in gift catalog contains 77 entries with 77 distinct IDs.
+## Validation
+- `node --check server.js` passed.
+- Inline JavaScript syntax check passed for `index.html`.
+- `public/index.html` is an exact copy of root `index.html`.
 - ZIP integrity check passed.
