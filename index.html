@@ -1180,6 +1180,27 @@ sid='';localStorage.removeItem('rimaz_sid');login();
  #layer .profileGrid .memberProfileAdminInline{grid-column:1/-1!important;min-width:0!important}
 }
 </style>
+
+<style id="rimaz-profile-card-layout-order-v4614">
+/* Restore the requested public member-card action order without changing button behavior. */
+#layer .profileGrid{
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  grid-auto-flow:row!important;
+  direction:rtl!important;
+}
+#layer .profileGrid > button:nth-child(1){grid-column:3!important;grid-row:1!important;} /* likes: visual left */
+#layer .profileGrid > button:nth-child(2){grid-column:1!important;grid-row:1!important;} /* private: visual right */
+#layer .profileGrid > button:nth-child(3){grid-column:2!important;grid-row:1!important;} /* notify: center */
+#layer .profileGrid > button:nth-child(4){grid-column:3!important;grid-row:2!important;} /* ignore: below likes on left */
+#layer .memberClassicTitle{
+  background:#000!important;
+  color:#fff!important;
+  border-bottom:1px solid #222!important;
+}
+#layer .memberClassicTitle .close{background:#df5555!important;color:#fff!important;}
+</style>
+
 </body></html>
 <style id="rimaz-user-latest-final">
 /* latest user alignment — preserve approved sizes, only mirror requested areas */
