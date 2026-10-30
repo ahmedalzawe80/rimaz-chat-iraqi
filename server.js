@@ -75,12 +75,24 @@ let db;
 try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { db = defaults(); }
 for (const [k,v] of Object.entries(defaults())) if (db[k] === undefined) db[k] = v;
 if(!Array.isArray(db.chatShortcuts)) db.chatShortcuts=[]; if(!Array.isArray(db.customSmileys)) db.customSmileys=[];
-// Seed the classic smiley gallery once from bundled image assets. The flag prevents deleted items reappearing on restart.
-if(!db.smileysSeeded){
+// One-time migration for the preloaded classic smiley gallery.
+// Older v26 deployments could persist smileysSeeded=true while the bundled
+// assets were not yet present, leaving the admin gallery at zero. Versioned
+// migration repairs that state once, while preserving any existing custom list.
+{
   const classicDir=path.join(ROOT,'public','classic-smileys');
-  let classicFiles=[];try{classicFiles=fs.readdirSync(classicDir).filter(f=>/^\d{3}\.png$/i.test(f)).sort()}catch{}
-  if(db.customSmileys.length===0 && classicFiles.length){db.customSmileys=classicFiles.map((f,i)=>({id:'classic-'+f.slice(0,3),icon:'/classic-smileys/'+f,name:'سمايل '+(i+1),shortcut:''}));}
-  db.smileysSeeded=true;
+  let classicFiles=[];
+  try { classicFiles=fs.readdirSync(classicDir).filter(f=>/^\d{3}\.png$/i.test(f)).sort(); } catch {}
+  const seedVersion=Number(db.smileysSeedVersion)||0;
+  if(seedVersion<1 && Array.isArray(db.customSmileys) && db.customSmileys.length===0 && classicFiles.length){
+    db.customSmileys=classicFiles.map((f,i)=>({id:'classic-'+f.slice(0,3),icon:'/classic-smileys/'+f,name:'سمايل '+(i+1),shortcut:''}));
+    db.smileysSeedVersion=1;
+    db.smileysSeeded=true;
+    try { save(); console.log(`Seeded ${classicFiles.length} bundled classic smileys (migration v1).`); }
+    catch(e) { console.error('Could not persist classic smiley migration:',e.message); }
+  } else if(seedVersion>=1) {
+    db.smileysSeeded=true;
+  }
 }
 
 
