@@ -241,7 +241,7 @@ for (const name of Object.keys(db.profiles||{})) {
 }
 if(statusMigrated) save();
 function displayName(name){ return profile(name).displayName || cleanName(name); }
-function sessionUser(sid){ const s=sessions.get(sid); if(!s)return null; const role=roleOf(s); return {...s, role, owner:isOwner(s), admin:isAdmin(s), staff:isStaff(s), panelAccess:isOwner(s)||hasPermission(s,'panel_access'), vip:vipActive(s.name), likes:isAdmin(s)?999999:userLikes(s)}; }
+function sessionUser(sid){ const s=sessions.get(sid); if(!s)return null; const role=roleOf(s); return {...s, role, owner:isOwner(s), admin:isAdmin(s), staff:isStaff(s), myPermissions:Object.keys(PERMISSION_CATALOG).filter(permission=>hasPermission(s,permission)), panelAccess:isOwner(s)||hasPermission(s,'panel_access'), vip:vipActive(s.name), likes:isAdmin(s)?999999:userLikes(s.name)}; }
 function makeSession(name,type){
   const sid=crypto.randomBytes(24).toString('hex');
   const s={name,type,created:Date.now()}; sessions.set(sid,s); db.sessions[sid]=s; save(); return sid;
@@ -331,7 +331,7 @@ function requirePermission(permission){return (req,res,next)=>requireAuth(req,re
 function permissionForAdminPath(req){
  const p=req.path;
  if(p==='/api/admin/data')return 'panel_access';
- if(p==='/api/admin/chat-tools')return 'chat_tools_manage';
+ if(p==='/api/admin/chat-tools')return req.method==='GET'?'shortcuts_manage':(req.body&&Array.isArray(req.body.smileys)&&req.body.smileys.length?'smileys_manage':'shortcuts_manage');
  if(p==='/api/admin/role')return 'role_assign';
  if(p==='/api/admin/rank')return 'rank_assign';
  if(p==='/api/admin/permissions')return 'permission_manage';
