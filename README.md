@@ -19,3 +19,10 @@ On first startup, the server replaces the old smiley catalog with 50 classic ite
 - The mobile emoji list contains 400 unique entries.
 - The migration preserves chat shortcuts and unrelated database fields by updating only `db.customSmileys` and its gallery version markers.
 - Live Deplexo deployment has not yet been tested.
+
+## Seven-file delivery
+This package includes the seven project files: `index.html`, `README.md`, `package.json`, `data.json`, `server.js`, `Dockerfile`, and `public/index.html`, plus the 50 SVG assets under `public/classic-smileys/`.
+
+`data.json` in this ZIP is an initial placeholder only. Keep the existing live `data.json`; do not replace it during upload. Keep the persistent `uploads/` directory as well.
+
+The picker layout uses 10 columns and a vertically scrollable compact panel positioned above the composer.
