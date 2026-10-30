@@ -1,26 +1,21 @@
-# Rimaz Chat – v29 smiley gallery rebuild
+# Rimaz Chat — clean classic + mobile smiley gallery
 
-## What changed
-- Replaced the previous cropped sprite fragments with 72 individually drawn, complete SVG smiley illustrations in `public/classic-smileys-v3/`.
-- Added a one-time startup migration (`smileysSeedVersion: 3`) that replaces the old smiley records only. Existing chat text shortcuts and all other `data.json` content are preserved.
-- Admin > السميلات shows one grid. Each tile has its own shortcut field and save button; clear the field and save to remove a shortcut.
-- The chat smiley picker uses the same database list for public chat, private messages, and wall posts.
-- Smiley shortcut tokens render as their corresponding image in public, private, and wall messages.
+## Changes
+- Rebuilt the smiley catalog from a clean slate using 50 original, individually drawn SVG classic-style smileys.
+- Classic smileys appear first in the gallery.
+- Added 400 distinct mobile emoji after the classic set.
+- Removed the old smiley-catalog migration logic and replaced it with a single version-4 migration.
+- The migration replaces only `customSmileys`; it preserves `chatShortcuts`, accounts, messages, rooms, profiles, uploads, and all other database fields.
+- Existing smiley shortcut assignments are cleared with the old catalog; the shortcut feature itself remains available for assigning new shortcuts to the new items.
+- The same gallery remains shared by public chat, private messages, wall posts, and admin.
 
 ## Deployment
-Replace application files with this package. Keep your live `data.json` and `uploads/` directory. On first startup after deployment, the server migrates only `customSmileys` to the 72 new gallery entries and saves `smileysSeedVersion: 3`; all other database fields are retained.
+Upload the changed application files and the `public/classic-smileys/` folder. **Do not overwrite the live `data.json` or the persistent `uploads/` directory.**
+On first startup, the server replaces the old smiley catalog with 50 classic items followed by 400 mobile emoji. The migration does not delete any other user or chat data.
 
 ## Validation
-`node --check server.js` and the inline browser JavaScript syntax check pass. SVG gallery contains 72 independent files. Runtime integration should be verified on the target server after deployment.
-
-
-## الإصدار 32: معرض مضمّن
-تم تضمين 72 صورة SVG داخل server.js كبيانات مضمّنة؛ لا يلزم رفع مجلد صور منفصل. عند بدء التشغيل تُزرع القائمة في قاعدة البيانات عند الحاجة. احتفظ بقاعدة بيانات الاستضافة الحالية ومجلد uploads ولا تستبدلهما بملفات تجريبية.
-
-
-## Smiley gallery reliability fix (v32.1)
-The admin data endpoint and chat-tools endpoint now both call `ensureSmileysGallery()`. If the saved gallery is empty, the server rebuilds the 72 embedded SVG data-URI entries and attempts to persist them. Existing non-empty custom smiley galleries and their shortcuts are preserved. The images are embedded in `server.js`; no separate image folder is required.
-
-
-## استعادة السميلات القديمة
-تتضمن هذه النسخة 300 سميل كلاسيكي PNG بقياس 40×40 مضمّنة داخل server.js. عند أول تشغيل تُستعاد الشبكة مرة واحدة، وتُنقل اختصارات السميلات القديمة بحسب رقمها، وتبقى السميلات المرفوعة يدوياً وبقية بيانات قاعدة البيانات محفوظة. تم الإبقاء على آلية الاختصارات الحالية كما هي.
+- `node --check server.js` passed.
+- 50 independent SVG assets are present.
+- The mobile emoji list contains 400 unique entries.
+- The migration preserves chat shortcuts and unrelated database fields by updating only `db.customSmileys` and its gallery version markers.
+- Live Deplexo deployment has not yet been tested.
