@@ -1,7 +1,7 @@
 # Rimaz Chat – Independent Shortcuts & Smileys Permissions (v43)
 
-This package updates the role-based visibility and server-side authorization for the two chat controls independently:
-- `shortcuts_manage`: controls the ⚡ shortcuts button and shortcut picker in public, private, and wall composers.
+This package keeps the smiley control visible according to its own permission and removes the ⚡ shortcut button from the chat composers. Shortcut management and its server-side permission checks remain available in the administration tools. It also retains independent authorization for both tool collections:
+- `shortcuts_manage`: controls shortcut-management actions; the ⚡ composer button is intentionally hidden.
 - `smileys_manage`: controls the 🙂 smiley button and smiley picker in public, private, and wall composers.
 
 The active session now includes its effective permission list so the client can render the correct controls immediately after login. Server-side save/upload checks remain authoritative; a user with only one permission cannot modify the other tool collection.
