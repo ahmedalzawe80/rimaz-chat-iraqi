@@ -671,7 +671,7 @@ async function openMemberProfile(name){
  let inlineAdmin='';
  if(me?.staff&&key(name)!==key(me.name)){
   try{
-   const d=await api('/api/admin/data');window.adminCachedData=d;window.adminCachedUsers=[...(d.users||[]),...(d.guests||[])];
+   const d=await api('/api/admin/data');window.adminCachedData=d;syncRankDefinitions(d);window.adminCachedUsers=[...(d.users||[]),...(d.guests||[])];
    const can=perm=>hasClientPermission(perm);
    // Exact requested RTL layout: row 2 is delete photo / discover nicks / delete wall messages.
    // Row 3 is ban / kick / kick from room. VIP, color, and ignore share the next row.
@@ -698,7 +698,10 @@ async function openMemberProfile(name){
    const mainHtml=primaryRows.map(renderAction).filter(Boolean).join('');
    const secondaryHtml=secondaryRows.map(renderAction).filter(Boolean).join('');
    const roomOptions=(d.rooms||[]).map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');
-   const rankOptions=RIMAZ_RANKS.filter(()=>can('rank_assign')).map(r=>`<option value="${esc(r[0])}">${esc(r[1])}</option>`).join('');
+   const currentAssignedRank=String(uAdmin.profile?.rank||'');
+   const currentRankDefinition=(window.rankDefinitions||[]).find(r=>String(r.id)===currentAssignedRank);
+   const currentRankLabel=currentRankDefinition?((currentRankDefinition.icon||'★')+' '+currentRankDefinition.name):rankLabel(currentAssignedRank);
+   const rankOptions=RIMAZ_RANKS.filter(()=>can('rank_assign')).map(r=>`<option value="${esc(r[0])}" ${String(r[0])===currentAssignedRank?'selected':''}>${esc(r[1])}</option>`).join('');
    const uAdmin=(window.adminCachedUsers||[]).find(x=>key(x.name)===key(name))||u;
    inlineAdmin=`<div class="memberProfileAdminInline" style="grid-column:1/-1;display:block;background:#fff;direction:rtl;border-top:0">
     <div class="rimazRefActionGrid">${mainHtml}</div>
@@ -707,7 +710,7 @@ async function openMemberProfile(name){
      ${can('profile_edit')?`<div class="rimazRefFormRow"><label for="classicDecorName">الزخرفة</label><input id="classicDecorName" value="${esc(displayFor(uAdmin)||name)}" aria-label="زخرفة الاسم"><button type="button" onclick="saveClassicMemberName(${jsq(name)})">تغيير</button></div>`:''}
      ${can('grant_likes')?`<div class="rimazRefFormRow"><label for="classicLikeAmount">♥ اللايكات</label><input id="classicLikeAmount" type="number" min="0" max="1000000" value="${Number(uAdmin.likes)||0}" aria-label="عدد اللايكات"><button type="button" onclick="saveClassicMemberStats(${jsq(name)},'likes')">✔ حفظ</button></div>`:''}
      <div class="rimazRefFormRow"><label for="classicPointsAmount">النقاط</label><input id="classicPointsAmount" type="number" min="0" max="1000000" value="${Number(uAdmin.points)||0}" aria-label="النقاط"><button type="button" onclick="saveClassicMemberStats(${jsq(name)},'points')">✔ حفظ</button></div>
-     ${can('rank_assign')?`<div class="rimazRefGroup"><label for="classicRankChoice">الرتبة</label><select id="classicRankChoice"><option value="">اختر الرتبة</option>${rankOptions}</select><label for="classicRankDuration">المدة بالأيام</label><input id="classicRankDuration" type="number" min="0" max="36500" value="0" placeholder="0 = دائمة"><button type="button" onclick="saveClassicSelectedRank(${jsq(name)})">✔ حفظ</button><small>0 = رتبة دائمة</small></div>`:''}
+     ${can('rank_assign')?`<div class="rimazRefGroup"><label for="classicRankChoice">الرتبة</label><select id="classicRankChoice"><option value="">اختر الرتبة</option>${rankOptions}</select><small>الرتبة الحالية: ${esc(currentRankLabel||'بدون رتبة')}</small><label for="classicRankDuration">المدة بالأيام</label><input id="classicRankDuration" type="number" min="0" max="36500" value="0" placeholder="0 = دائمة"><button type="button" onclick="saveClassicSelectedRank(${jsq(name)})">✔ حفظ</button><small>0 = رتبة دائمة</small></div>`:''}
      ${can('room_move')?`<div class="rimazRefGroup"><label for="classicRoomSearch">المجموعة</label><input id="classicRoomSearch" placeholder="البحث في الصلاحيات" oninput="filterClassicRooms()"><select id="classicRoomChoice"><option value="">[اختر الغرفة]</option>${roomOptions}</select><label for="classicRoomPassword">كلمة المرور (اختياري)</label><input id="classicRoomPassword" type="password" placeholder="كلمة المرور (اختياري)"><button type="button" onclick="moveClassicMember(${jsq(name)})">نقل</button></div>`:''}
     </div>
    </div>`;
