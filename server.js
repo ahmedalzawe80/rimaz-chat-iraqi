@@ -82,11 +82,14 @@ if(!Array.isArray(db.chatShortcuts)) db.chatShortcuts=[]; if(!Array.isArray(db.c
   let galleryFiles=[];
   try { galleryFiles=fs.readdirSync(galleryDir).filter(f=>/^\d{3}\.svg$/i.test(f)).sort(); } catch {}
   const seedVersion=Number(db.smileysSeedVersion)||0;
-  if(seedVersion<4 && galleryFiles.length){
+  // v5 repairs databases where the v4 marker survived but the smiley list was
+  // manually emptied. The agreed built-in gallery must never silently remain empty.
+  const galleryMissing=!Array.isArray(db.customSmileys) || db.customSmileys.length===0;
+  if(galleryFiles.length && (seedVersion<5 || galleryMissing)){
     db.customSmileys=galleryFiles.map((f,i)=>({id:'rimaz-v3-'+f.slice(0,3),icon:'/classic-smileys-v3/'+f,name:({1:'ابتسامة',2:'ضحكة',3:'ضحك',4:'وردة',5:'قلب'}[i+1]||'سمايل '+String(i+1).padStart(2,'0')),shortcut:''}));
-    db.smileysSeedVersion=4;
+    db.smileysSeedVersion=5;
     db.smileysSeeded=true;
-    try { save(); console.log(`Installed ${galleryFiles.length} complete original smileys (migration v4).`); }
+    try { save(); console.log(`Installed ${galleryFiles.length} complete original smileys (migration v5).`); }
     catch(e) { console.error('Could not persist smiley gallery migration:',e.message); }
   } else if(seedVersion>=3) {
     db.smileysSeeded=true;

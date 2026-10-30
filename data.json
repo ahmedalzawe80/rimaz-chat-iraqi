@@ -1,1 +1,3 @@
-{"users":{},"guests":[],"messages":[],"wall":[],"likes":{},"lastLike":{},"sessions":{}}
+{
+  "_note": "Initial placeholder only. Keep the existing persistent data.json on the live server; do not overwrite it with this file."
+}
