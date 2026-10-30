@@ -1,48 +1,32 @@
-# Rimaz v46 — manual member permission additions
+# Rimaz v46.4 — Rank Manager Access & Isolation Fix
 
-Based on v45. Preserves the send-time shortcut and smiley expansion behavior.
+Based on the supplied Rimaz v46.2 source and the prior v46.3 working package.
 
-## Changes in v46
-- Adds owner-controlled, per-member manual permission additions, independent of the member's assigned rank.
-- Selecting a member in **صلاحيات الرتب** opens that member's extra-permission list; save applies only to that member.
-- Removing manual selections returns the member to the permissions supplied by their rank.
-- Manual additions cannot grant rank assignment, rank-permission management, or likes reset.
-- Rank permission profile editing is restricted to the site owner. The working admin account does not receive those owner-only controls.
-- Existing `permissionOverrides` storage is used; no member data or uploads are included in this source package.
+## What changed in v46.4
+- The **إدارة الرتب** tab now exposes the rank-definition manager to both the site owner and the admin account.
+- Admins can create, edit, upload rank images for, and delete **custom ranks only**. Built-in legacy ranks remain protected from admin edits/deletion; the owner retains control of built-in ranks.
+- Custom ranks are strictly independent from chat presentation and legacy chat positions: their base role must be `member`. They do not change chat colors, button layout, member appearance, or `member/super/banner/admin` position.
+- Custom-rank permissions are applied through the existing server-side permission resolver. Privileged rank-management permissions (`permission_manage`, `rank_assign`, `role_assign`) cannot be placed inside a custom rank.
+- Existing permanent/temporary assignment behavior is preserved: `durationDays: 0` means permanent; a positive whole number expires automatically after that many days.
+- The root and fallback `public/index.html` are synchronized so the same rank-manager UI is served regardless of the hosting entry path.
 
 ## Deployment
-Replace `server.js`, `index.html`, and `public/index.html` with the packaged files, then restart the application. Do not replace the live `data.json` and do not delete or overwrite the existing `uploads/` directory.
+1. Back up the current application files and persistent data directory.
+2. Replace the packaged `server.js`, `index.html`, and `public/index.html` with these versions.
+3. Keep the live `data.json` and `uploads/` directory. Do not replace them with files from this source package.
+4. Restart the Node application and sign in again, then open **لوحة الإدارة → الرتب**.
 
-## Checks
-`node --check server.js` and inline JavaScript syntax checks pass. ZIP integrity is checked. This package has not been live-tested on Deplexo.
+## Access rules
+- Owner: can manage built-in and custom rank definitions.
+- Admin: can manage custom rank definitions only; built-in ranks are read-only.
+- Non-admin rank assignees: may only assign ranks allowed by their effective permission set. The server rejects any custom rank containing permissions the issuer does not have.
+- Custom ranks never change chat role styling/position. They only contribute their explicitly selected administrative permissions.
 
-## v46.1 — تصحيح صلاحيات حساب الإداري
-- حساب الإداري يملك صلاحيات إدارة الدردشة كاملة، بما فيها تعيين الرتب وإدارة صلاحيات الرتب وتصفير اللايكات.
-- يمكن للإداري إدارة الإضافات اليدوية لصلاحيات كل عضو بشكل مستقل عن رتبته.
-- حماية حساب صاحب الموقع تبقى على مستوى الخادم عند استهدافه بإجراءات الإدارة؛ لا يستطيع الإداري تنفيذ إجراءات عليه.
-- لا يتطلب هذا التحديث استبدال `data.json` أو مجلد `uploads`.
+## Validation performed
+- `node --check server.js` passed.
+- Inline JavaScript syntax checks for `index.html` passed.
+- Root and fallback UI files are byte-identical.
+- ZIP integrity test passed.
+- Static assertions confirmed the admin/owner access gates, custom-rank-only restrictions for admins, immutable built-in rank handling, and `0 = permanent` duration handling.
 
-## v46.3 — dynamic rank management
-- Adds a persistent rank-definition catalogue while retaining the seven existing rank IDs and their current member assignments.
-- Adds owner-only create/edit/delete controls for custom rank definitions: stable ID, display name, numeric level/order, icon, optional GIF/PNG/JPG/WEBP image, base staff class, and individual permissions.
-- Adds a unified rank-assignment selector using the saved definitions. `durationDays: 0` remains permanent; positive whole-day values expire automatically.
-- Uses the saved rank definition as the permission source for members assigned that rank. The legacy rank-permission editor now reads and writes the same definition, preventing two permission lists from drifting apart.
-- Keeps the rank system isolated from chat button layout and chat/member color styling. Rank icon/image is stored for administration and does not alter chat colors or button rendering.
-- Protects owner identity, prevents custom ranks from acquiring the admin base role or rank/permission-management capabilities, prevents deleting a rank while it is actively assigned, and blocks rank grants containing permissions the granting actor does not possess.
-- Adds upload validation for rank artwork (GIF/PNG/JPG/WEBP, max 1 MiB) and cleans up replaced image files.
-
-### Rank workflow
-1. Open **لوحة الإدارة → الرتب** as the site owner.
-2. Create a rank with a unique English ID, Arabic name, level, icon/image, base class, and permissions.
-3. Save it; the rank becomes available in the member assignment selector and member-management rank list.
-4. Select a member and rank. Enter `0` for permanent, or a positive number of days for automatic expiry.
-5. Review **سجل منح الرتب** to see who granted the rank, when, and whether it is permanent or expired.
-
-### Verification
-- `node --check server.js` passes.
-- Inline browser JavaScript syntax check passes.
-- ZIP integrity check passes after packaging.
-- Full HTTP/live deployment testing was not possible in this environment because the runtime dependencies are not installed and package installation timed out. Test on a staging deployment before replacing production files.
-
-### Deployment
-Replace `server.js`, `index.html`, and `public/index.html` with the packaged versions, then restart the application. Keep the existing `data.json` and `uploads/` directory. The startup migration adds the legacy rank definitions to the existing database without replacing accounts, messages, profiles, or uploads.
+No live Deplexo deployment or production database was available in this environment, so production behavior must still be verified on the hosted site after backup and deployment.
