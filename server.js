@@ -407,6 +407,25 @@ if(!Array.isArray(db.chatShortcuts)) db.chatShortcuts=[]; if(!Array.isArray(db.c
 }
 
 
+// Add the user's requested mobile emoji set once, without replacing existing smileys or shortcuts.
+{
+  const mobileEmojiVersion = Number(db.mobileEmojiGalleryVersion) || 0;
+  if (mobileEmojiVersion < 1) {
+    const mobileEmojis = ['😘','😢','😔','😅','😒','😂','😑','😭','😁','💪','☺️','🤣','😮‍💨','😍','💋','👌','💕','😆','💔','👍','🖕','😶','😊','😋','🤔'];
+    const existingIds = new Set((Array.isArray(db.customSmileys) ? db.customSmileys : []).map(x => String(x.id || '')));
+    const additions = mobileEmojis.map((icon, index) => ({
+      id: `rimaz-mobile-${String(index + 1).padStart(3, '0')}`,
+      icon,
+      name: `إيموجي موبايل ${index + 1}`,
+      shortcut: ''
+    })).filter(item => !existingIds.has(item.id));
+    db.customSmileys = [...(Array.isArray(db.customSmileys) ? db.customSmileys : []), ...additions];
+    db.mobileEmojiGalleryVersion = 1;
+    try { save(); console.log(`Added ${additions.length} mobile emoji; preserved existing smileys and shortcuts.`); }
+    catch (e) { console.error('Could not persist mobile emoji gallery:', e.message); }
+  }
+}
+
 // Ensure the agreed administration room exists on older saved databases.
 if(!Array.isArray(db.rooms)) db.rooms=[];
 if(!db.rooms.some(r=>r.id==='admin-room')) db.rooms.push({id:'admin-room',name:'غرفة الإدارة',desc:'غرفة الإدارة ..',kind:'private',capacity:100,mics:0,owner:'admin',theme:'black'});
