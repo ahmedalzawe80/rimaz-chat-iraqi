@@ -1,28 +1,17 @@
-# Rimaz Chat — clean classic + mobile smiley gallery
+# ريماز – إصلاح معرض السميلات (50 كلاسيكي + 400 موبايل)
 
-## Changes
-- Rebuilt the smiley catalog from a clean slate using 50 original, individually drawn SVG classic-style smileys.
-- Classic smileys appear first in the gallery.
-- Added 400 distinct mobile emoji after the classic set.
-- Removed the old smiley-catalog migration logic and replaced it with a single version-4 migration.
-- The migration replaces only `customSmileys`; it preserves `chatShortcuts`, accounts, messages, rooms, profiles, uploads, and all other database fields.
-- Existing smiley shortcut assignments are cleared with the old catalog; the shortcut feature itself remains available for assigning new shortcuts to the new items.
-- The same gallery remains shared by public chat, private messages, wall posts, and admin.
+## التعديلات
+- أول 50 عنصرًا: سميلات كلاسيكية مرسومة SVG ومضمّنة داخل `server.js` بصيغة data URI؛ لا تحتاج مجلد صور خارجيًا.
+- بعدها 400 إيموجي موبايل فعلية، محفوظة كنص Unicode وتُدرج كنص عند الاختيار، وليس كرمز `[[smiley:...]]`.
+- نافذة السميلات محددة العرض (حد أقصى 300px تقريبًا على الهاتف)، بعشرة أعمدة وارتفاع قابل للتمرير؛ لا تتمدد بعرض الشاشة.
+- تم تحديث تهيئة المعرض إلى v7: يعاد بناء قائمة السميلات فقط إلى 450 عنصرًا، مع إبقاء بقية قاعدة البيانات والرسائل والحسابات والملفات والاختصارات المستقلة كما هي.
+- نفس واجهة الاختيار تُستخدم في العام والخاص والحائط.
 
-## Deployment
-Upload the changed application files and the `public/classic-smileys/` folder. **Do not overwrite the live `data.json` or the persistent `uploads/` directory.**
-On first startup, the server replaces the old smiley catalog with 50 classic items followed by 400 mobile emoji. The migration does not delete any other user or chat data.
+## الملفات
+الحزمة تتضمن سبعة ملفات تشغيل/واجهة. `index.html` و`public/index.html` متطابقان.
 
-## Validation
-- `node --check server.js` passed.
-- 50 independent SVG assets are present.
-- The mobile emoji list contains 400 unique entries.
-- The migration preserves chat shortcuts and unrelated database fields by updating only `db.customSmileys` and its gallery version markers.
-- Live Deplexo deployment has not yet been tested.
+## مهم قبل الرفع
+**لا تستبدل `data.json` الموجود على الاستضافة بهذا الملف التجريبي.** احتفظ بقاعدة بيانات الاستضافة الحالية ومجلد `uploads/` كما هما. ارفع ملفات التطبيق فقط مع إبقاء قاعدة البيانات والملفات المرفوعة. عند أول تشغيل، الخادم يحدّث `customSmileys` وحده ويترك بقية بيانات المستخدمين والمحادثات دون مساس.
 
-## Seven-file delivery
-This package includes the seven project files: `index.html`, `README.md`, `package.json`, `data.json`, `server.js`, `Dockerfile`, and `public/index.html`, plus the 50 SVG assets under `public/classic-smileys/`.
-
-`data.json` in this ZIP is an initial placeholder only. Keep the existing live `data.json`; do not replace it during upload. Keep the persistent `uploads/` directory as well.
-
-The picker layout uses 10 columns and a vertically scrollable compact panel positioned above the composer.
+## التحقق
+تم فحص صياغة `server.js` باستخدام `node --check`، والتحقق من أن قائمة الموبايل تحتوي 400 إيموجي فريد، وأن الصور الكلاسيكية مضمّنة، وأن نافذة الهاتف تستخدم عشرة أعمدة وعرضًا محدودًا. لم يتم اختبار النشر على خادم Deplexo الفعلي من هنا.
