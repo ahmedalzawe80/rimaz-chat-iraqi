@@ -294,3 +294,19 @@ if (failures.length) {
 }
 
 
+
+// v46.27 permission-editor localization and client/server compatibility checks
+try {
+  const permissionServer = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+  const permissionHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  for (const key of ['audit_view','stats_view','chat_filter_manage','member_status_manage']) {
+    if (!permissionServer.includes(key) || !permissionHtml.includes(key)) throw new Error(`missing ${key}`);
+  }
+  for (const label of ['عرض سجل العمليات وتصديره','عرض إحصائيات الموقع','إدارة فلتر الكلمات','إدارة حالات الأعضاء']) {
+    if (!permissionHtml.includes(label)) throw new Error(`missing Arabic label ${label}`);
+  }
+  if (!permissionHtml.includes('عدم توافق نسخة الواجهة والسيرفر')) throw new Error('client compatibility preflight missing');
+  if (!permissionServer.includes('permissionSchemaVersion:2') || !permissionServer.includes('permissionKeys:ALL_PERMISSION_KEYS')) throw new Error('server permission schema metadata missing');
+  if (!permissionHtml.includes("['الأدوات والإضافات الجديدة',['audit_view','stats_view','chat_filter_manage','member_status_manage']]")) throw new Error('custom rank editor missing new permission group');
+  pass('v46.27 Arabic permission labels and client/server schema compatibility');
+} catch (error) { fail('v46.27 permission compatibility checks', error.message); }

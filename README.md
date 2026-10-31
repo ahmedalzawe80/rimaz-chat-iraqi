@@ -168,3 +168,10 @@ Run `npm test` before deployment. These local checks do not replace staging test
 - These permissions are editable by the owner/admin for every built-in rank, including Super Red; rank color/level no longer blocks assigning these capabilities.
 - The admin data endpoint returns a reduced payload for staff who only have one of these section permissions.
 - The owner/admin remain the only accounts allowed to edit rank permission sets; protected owner-account actions remain protected.
+
+
+## v46.27.0 — Permission editor compatibility
+- Added Arabic labels for audit log, site statistics, chat word filter, and member status permissions in both rank editors.
+- Added permission schema/version metadata to permission and rank catalogs.
+- Added client preflight checks before saving permissions or custom rank definitions, with clear Arabic compatibility errors.
+- Preserved the existing persistent `data.json`; do not replace live site data with the ZIP placeholder.
