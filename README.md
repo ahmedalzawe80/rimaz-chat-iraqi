@@ -1,12 +1,3 @@
-# Rimaz Chat v46.28 — Login refresh and private staff entry
-
-## Changes in v46.28
-- Updated the login landing page accents to the dark-plum and pink reference palette while preserving the existing layout, form sizing, member/guest tabs, and green online indicator.
-- Removed visible privileged-entry links from the public login screen. Tap the Rimaz heart logo five times to open the private entry choices.
-- Staff hidden login is validated server-side for staff roles. Ghost login is validated server-side for full administrators (owner and admin roles).
-- Hidden staff sessions are omitted from public/member lists for ordinary members and from room presence broadcasts/counts; staff can still see them in member lists. Ghost sessions are omitted from all public/member lists except for full administrators, are hidden from room presence broadcasts/counts, and cannot raise a visible voice-room microphone.
-- Owner and administrator continue to share the full administrator permission set already enforced by the server.
-
 # Rimaz Chat v46.24 — WebRTC Signaling Hardening
 
 ## v46.24 changes
