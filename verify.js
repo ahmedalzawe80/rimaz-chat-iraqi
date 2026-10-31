@@ -26,16 +26,25 @@ try {
   else fail('index.html and public/index.html differ');
 } catch (error) { fail('HTML files readable', error.message); }
 
-// Privileged login must be authorized server-side and invisible sessions must not
-// leak into online rosters or room presence notices.
+// Privileged login and role-aware presence visibility are enforced server-side.
 try {
   const source = fs.readFileSync(server, 'utf8');
   const privileged = source.match(/app\.post\('\/api\/login-privileged',[\s\S]*?\n\}\);/);
-  const online = source.match(/function getOnlineUsers\(\)[\s\S]*?\n\}/);
   const html = fs.readFileSync(mainPath, 'utf8');
-  const ok = privileged && privileged[0].includes("mode==='ghost'&&!isOwner(account)") && privileged[0].includes("mode==='hidden'&&!isStaff(account)&&!hasPermission(account,'panel_access')") && privileged[0].includes("makeSession(real,'member',{hidden:true,ghost:mode==='ghost'})") && online && online[0].includes('!u.hidden&&!u.ghost') && html.includes("api('/api/login-privileged'") && html.includes('rlLogoTaps.length>=5') && !html.includes('<div class="rlSpecial">');
-  if (ok) pass('hidden/ghost login is server-authorized, excluded from online rosters, and unlocked by five logo taps');
-  else fail('hidden/ghost login authorization and visibility checks');
+  const checks = [
+    ['ghost login is restricted to owner or explicitly authorized admin', privileged && privileged[0].includes("mode==='ghost'&&!isOwner(account)&&!(isAdmin(account)&&hasPermission(account,'panel_access'))")],
+    ['hidden login remains restricted to staff or panel-authorized rank', privileged && privileged[0].includes("mode==='hidden'&&!isStaff(account)&&!hasPermission(account,'panel_access')")],
+    ['presence visibility is viewer-aware and ghost is invisible to others', source.includes('function canSeePresence(viewer,target)') && source.includes('if(target.ghost)return false')],
+    ['hidden presence is visible only to staff and self', source.includes("if(target.hidden)return !!viewer&&isStaff(viewer)")],
+    ['live presence state is emitted individually per viewer', source.includes("so.emit('live-state',{online:getOnlineUsers(viewer),rooms:visibleRooms(viewer)})")],
+    ['member directory omits accounts hidden from the current viewer', source.includes('if(hasInvisibleActiveSession(name,req.user))continue')],
+    ['hidden join/leave notices are staff-only and ghost emits no presence notices', source.includes("presenceVisibility:u.hidden?'staff':'public'") && source.includes('function emitPresenceToRoom(room,notice)')],
+    ['private conversation history persists across new sessions', source.includes("app.get('/api/private/history',requireAuth") && !source.slice(source.indexOf("app.get('/api/private/history'"),source.indexOf("app.post('/api/private/read'")).includes('req.user.created')],
+    ['existing private conversations can be reopened even when the peer is not publicly online', html.includes("const existing=contacts.find(x=>key(x.name)===key(name))")]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+  if (html.includes("api('/api/login-privileged'") && html.includes('rlLogoTaps.length>=5') && !html.includes('<div class="rlSpecial">')) pass('privileged login entry gesture remains intact');
+  else fail('privileged login entry gesture remains intact');
 } catch (error) { fail('hidden/ghost login checks', error.message); }
 
 // Ensure every supported text-send transport applies the server-side chat filter.
