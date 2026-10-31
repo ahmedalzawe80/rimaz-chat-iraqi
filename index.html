@@ -618,6 +618,29 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 }
 </style>
 
+
+<style id="rimaz-approved-guest-banner-tweak">
+/* Guest name field uses the same width rule as member name/password fields. */
+#loginForm > input.rlNameInput{
+  width:55%!important;
+  max-width:55%!important;
+  box-sizing:border-box!important;
+  justify-self:end!important;
+}
+/* Keep the banner width unchanged; increase only its vertical size slightly. */
+.rlLegacyBanner{
+  height:185px!important;
+  min-height:185px!important;
+  max-height:185px!important;
+}
+.rlLegacyBanner>img{
+  width:100%!important;
+  height:100%!important;
+  object-fit:fill!important;
+  object-position:center!important;
+}
+</style>
+
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={},privatePeerUser=null;
@@ -650,7 +673,7 @@ const ids={new:'tabNew',in:'tabIn',guest:'tabGuest',hidden:'tabHidden',ghost:'ta
 document.getElementById(ids[mode])?.classList.add('active');
 const f=document.getElementById('loginForm');if(!f)return;
 if(mode==='guest'){
-f.innerHTML=`<input id="ln" autocomplete="nickname" placeholder="اكتب اسم الزائر (اسم فريد)" aria-label="اسم الزائر"><button class="primary guest" onclick="doGuest()">دخول زائر ←</button>`;
+f.innerHTML=`<input id="ln" class="rlNameInput" autocomplete="nickname" placeholder="اكتب اسم الزائر (اسم فريد)" aria-label="اسم الزائر"><button class="primary guest" onclick="doGuest()">دخول</button>`;
 }else if(mode==='in'||mode==='new'){
 f.innerHTML=`<input id="ln" class="rlNameInput" autocomplete="username" placeholder="${mode==='new'?'اختر اسم عضو غير مستخدم':'اكتب اسم العضو'}" aria-label="اسم العضو"><div class="rlPasswordRow"><input id="lp" type="password" autocomplete="${mode==='new'?'new-password':'current-password'}" placeholder="اكتب كلمة المرور" aria-label="كلمة المرور"><button class="primary" onclick="${mode==='new'?'doRegister()':'doLogin()'}">${mode==='new'?'تسجيل':'دخول'} ←</button></div>`;
 }else{
