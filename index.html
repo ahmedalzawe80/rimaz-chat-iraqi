@@ -40,9 +40,9 @@
 /* Rimaz approved login redesign: monochrome/red brand with green status accents */
 .login.rimazLogin{display:block;height:100%;overflow-y:auto;overflow-x:hidden;padding:0;background:#f4f4f5;color:#111;justify-content:initial;align-items:initial}
 .rimazLogin *{box-sizing:border-box}
-.rlTop{min-height:66px;background:#101114;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:10px clamp(12px,3vw,30px);gap:10px;border-bottom:3px solid #d94c53}
-.rlBrand{display:flex;align-items:center;gap:10px}.rlCrown{font-size:34px;color:#e84e57}.rlBrand b{display:flex;flex-direction:column;align-items:center;gap:0;font-size:clamp(17px,3vw,24px);line-height:1.02;white-space:nowrap;font-weight:1000;letter-spacing:.2px}.rlBrand em{font-style:normal;color:#f05a68;font-size:1.06em;text-shadow:0 1px 0 #5a1720}.rlBrand small{display:block;color:#c6c6c6;font-size:10px;margin-top:4px}.rlHeartLogo{width:46px;height:42px;display:grid;place-items:center;position:relative;flex:0 0 auto}.rlHeartLogo:before{content:'♡';font-family:Arial,sans-serif;font-size:54px;line-height:1;color:#ef5a70;position:absolute;inset:-7px 0 0;text-align:center;text-shadow:0 1px 8px #ef5a7044}.rlHeartLogo span{position:relative;z-index:1;font-size:8px;font-weight:900;color:#fff;text-align:center;line-height:1.1;max-width:34px}.rlTopTools{display:flex;gap:16px;color:#eee;font-size:12px;white-space:nowrap}
-.rlHero{height:clamp(175px,27vw,265px);position:relative;overflow:hidden;background:#151515;color:#fff;display:flex;align-items:center;border-bottom:3px solid #222}
+.rlTop{min-height:66px;background:#211521;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:10px clamp(12px,3vw,30px);gap:10px;border-bottom:3px solid #e45a9a}
+.rlBrand{display:flex;align-items:center;gap:10px}.rlCrown{font-size:34px;color:#e84e57}.rlBrand b{display:flex;flex-direction:column;align-items:center;gap:0;font-size:clamp(17px,3vw,24px);line-height:1.02;white-space:nowrap;font-weight:1000;letter-spacing:.2px}.rlBrand em{font-style:normal;color:#f07ab8;font-size:1.06em;text-shadow:0 1px 0 #5a1720}.rlBrand small{display:block;color:#c6c6c6;font-size:10px;margin-top:4px}.rlHeartLogo{width:46px;height:42px;display:grid;place-items:center;position:relative;flex:0 0 auto}.rlHeartLogo:before{content:'♡';font-family:Arial,sans-serif;font-size:54px;line-height:1;color:#ed72b1;position:absolute;inset:-7px 0 0;text-align:center;text-shadow:0 1px 8px #ef5a7044}.rlHeartLogo span{position:relative;z-index:1;font-size:8px;font-weight:900;color:#fff;text-align:center;line-height:1.1;max-width:34px}.rlTopTools{display:flex;gap:16px;color:#eee;font-size:12px;white-space:nowrap}
+.rlHero{height:clamp(175px,27vw,265px);position:relative;overflow:hidden;background:#28172a;color:#fff;display:flex;align-items:center;border-bottom:3px solid #222}
 .rlHero:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#09090900 0%,#09090938 38%,#090909e8 100%)}
 .rlHero>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 34%}
 .rlHeroCopy{position:relative;z-index:1;margin-right:5%;margin-left:auto;text-align:right;max-width:58%;text-shadow:0 2px 8px #000}
@@ -51,16 +51,16 @@
 .rlLoginPanel{max-width:960px;margin:0 auto;padding:12px 14px 14px;background:#fff;border-bottom:1px solid #d8d8d8}
 .rlTabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid #d4d4d4;margin-bottom:12px}
 .rlTabs button{min-height:58px;border:0;border-left:1px solid #ddd;background:#fff;color:#2d6d99;font-weight:900;font-size:clamp(13px,2.4vw,20px);padding:8px 4px}
-.rlTabs button:last-child{border-left:0}.rlTabs button.active{color:#111;background:#f1f1f1;box-shadow:inset 0 -4px #d94c53}
+.rlTabs button:last-child{border-left:0}.rlTabs button.active{color:#111;background:#f1f1f1;box-shadow:inset 0 -4px #e45a9a}
 .rlTabs button span{font-size:17px;color:#4884aa}
 .rlForm{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:0 2px}
 .rlForm input{height:52px;width:100%;border:2px solid #222;border-radius:3px;background:#fff;color:#111;padding:0 12px;text-align:right;font-size:18px}
 .rlForm input::placeholder{color:#777}.rlForm .primary{height:48px;border:2px solid #222;border-radius:3px;background:#101114;color:#fff;font-weight:900;font-size:19px;box-shadow:none}
 .rlForm .guest{background:#101114;color:#fff}
-.rlSpecial{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px}
+.rlSpecial{display:none!important}
 .rlSpecial button{border:0;background:transparent;color:#386b9d;font-weight:800;font-size:13px;padding:7px 3px}
 .rlSpecial button.active{background:#f0f0f0;outline:1px solid #bbb;border-radius:4px}
-.rlPrivateNote{font-size:13px;color:#555;background:#f5f5f5;border-right:3px solid #d94c53;padding:9px 10px}
+.rlPrivateNote{font-size:13px;color:#555;background:#f5f5f5;border-right:3px solid #e45a9a;padding:9px 10px}
 .rlOnline{max-width:960px;margin:0 auto 10px;background:#fff;border:1px solid #d5d5d5;border-radius:3px;overflow:hidden}
 .rlOnlineHead{display:flex;align-items:center;justify-content:space-between;background:#58b85f;color:white;padding:11px 14px;font-size:18px;font-weight:900}
 .rlOnlineHead b{font-size:17px}.rlOnlineList{padding:5px 7px;max-height:440px;overflow:auto}
@@ -567,18 +567,26 @@ function esc(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&l
 async function api(url,opt={}){opt.headers={...(opt.headers||{}),'x-session':sid};let r=await fetch(url,opt);let j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'حدث خطأ');return j}
 function toast(t){const x=document.getElementById('toast');if(!x)return;x.textContent=t;x.style.display='block';clearTimeout(x._t);x._t=setTimeout(()=>x.style.display='none',2600)}
 function login(){
-app.innerHTML=`<div class="login rimazLogin"><header class="rlTop"><div class="rlBrand"><span class="rlHeartLogo" aria-label="دردشة ريماز"><span><b>دردشة</b><em>ريماز</em></span></span><div class="rlBrandTag"><small>محادثات · تواصل · أصدقاء</small></div></div><div class="rlTopTools"><span>⚙ الإعدادات</span><span>؟ مساعدة</span></div></header>
+app.innerHTML=`<div class="login rimazLogin"><header class="rlTop"><div class="rlBrand"><span class="rlHeartLogo" aria-label="دردشة ريماز" onclick="secretEntryTap()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')secretEntryTap()"><span><b>دردشة</b><em>ريماز</em></span></span><div class="rlBrandTag"><small>محادثات · تواصل · أصدقاء</small></div></div><div class="rlTopTools"><span>⚙ الإعدادات</span><span>؟ مساعدة</span></div></header>
 <section class="rlHero"><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=900&q=85" alt="صورة فتاة للترحيب"><div class="rlHeroCopy"><h1>دردشة <strong>ريماز</strong><br>عراقية</h1><p>أهلاً وسهلاً بك في ريماز ♡</p><small>مكانك للتعارف وتكوين الصداقات</small><div class="rlFlag"><span>الله أكبر</span></div></div></section>
 <section class="rlLoginPanel"><div class="rlTabs" dir="rtl">
 <button id="tabGuest" onclick="loginMode('guest')"><span>♟</span> دخول زائر</button>
 <button id="tabIn" onclick="loginMode('in')"><span>♟</span> دخول عضو</button>
 <button id="tabNew" onclick="loginMode('new')"><span>♟✚</span> تسجيل عضو</button></div>
 <div id="loginForm" class="loginForm rlForm"></div>
-<div class="rlSpecial"><button id="tabHidden" onclick="loginMode('hidden')">🛡 دخول السوبر والإداري</button><button id="tabGhost" onclick="loginMode('ghost')">👻 دخول الشبح</button></div>
+
 </section>
 <section class="rlOnline"><div class="rlOnlineHead"><span>👥 المتواجدين الآن</span><b><span id="rlOnlineCount">—</span></b></div><div id="rlOnlineList" class="rlOnlineList"><div class="rlOnlineEmpty">جارٍ تحميل المتواجدين…</div></div><div class="rlOnlineFoot">قائمة للعرض فقط — سجّل دخولك للمشاركة بالدردشة</div></section>
 <footer class="rlFooter"><span>دردشة ريماز عراقية</span><span>♥ أهلاً بكم</span></footer></div>`;
 loginMode('in');loadPublicOnline();if(window.rimazOnlineTimer)clearInterval(window.rimazOnlineTimer);window.rimazOnlineTimer=setInterval(loadPublicOnline,15000);
+}
+let secretTapCount=0,secretTapTimer=null;
+function secretEntryTap(){secretTapCount++;if(secretTapTimer)clearTimeout(secretTapTimer);secretTapTimer=setTimeout(()=>secretTapCount=0,1800);if(secretTapCount>=5){secretTapCount=0;showSecretEntryMenu();}}
+function showSecretEntryMenu(){
+ const old=document.getElementById('rlSecretMenu');if(old)old.remove();
+ const box=document.createElement('div');box.id='rlSecretMenu';box.style.cssText='position:fixed;inset:0;z-index:99999;background:#0009;display:grid;place-items:center;padding:18px';
+ box.innerHTML=`<div dir="rtl" style="width:min(340px,94vw);background:#fff;border:2px solid #e45a9a;box-shadow:0 15px 50px #0006;padding:16px;color:#111"><div style="display:flex;justify-content:space-between;align-items:center;font-weight:900;margin-bottom:12px"><span>دخول خاص</span><button type="button" onclick="document.getElementById('rlSecretMenu').remove()" style="border:0;background:#111;color:#fff;width:30px;height:30px">×</button></div><button type="button" onclick="document.getElementById('rlSecretMenu').remove();loginMode('hidden')" style="width:100%;height:44px;margin:5px 0;border:0;background:#101114;color:#fff;font-weight:900">🛡 دخول الرتب والإدارة</button><button type="button" onclick="document.getElementById('rlSecretMenu').remove();loginMode('ghost')" style="width:100%;height:44px;margin:5px 0;border:0;background:#101114;color:#fff;font-weight:900">👻 دخول الشبح</button><small style="display:block;color:#777;text-align:center;margin-top:8px">هذه الخيارات لا تظهر في الواجهة العامة</small></div>`;
+ box.addEventListener('click',e=>{if(e.target===box)box.remove()});document.body.appendChild(box);
 }
 function keepKeyboardVisible(){document.querySelectorAll('#loginForm input').forEach(i=>i.addEventListener('focus',()=>setTimeout(()=>i.scrollIntoView({block:'center',behavior:'smooth'}),120)));}
 window.visualViewport?.addEventListener('resize',()=>{const a=document.activeElement;if(a&&a.matches?.('#loginForm input'))setTimeout(()=>a.scrollIntoView({block:'center',behavior:'smooth'}),60)});
@@ -592,16 +600,14 @@ f.innerHTML=`<input id="ln" autocomplete="nickname" placeholder="اكتب اسم
 }else if(mode==='in'||mode==='new'){
 f.innerHTML=`<input id="ln" autocomplete="username" placeholder="${mode==='new'?'اختر اسم عضو غير مستخدم':'اكتب اسم العضو'}" aria-label="اسم العضو"><input id="lp" type="password" autocomplete="${mode==='new'?'new-password':'current-password'}" placeholder="اكتب كلمة المرور" aria-label="كلمة المرور"><button class="primary" onclick="${mode==='new'?'doRegister()':'doLogin()'}">${mode==='new'?'تسجيل (عضو جديد)':'دخول عضو'} ←</button>`;
 }else{
-f.innerHTML=`<div class="rlPrivateNote">${mode==='ghost'?'دخول الشبح مخصص لمالك الموقع فقط':'الدخول المخفي مخصص للسوبر والإداري المخوّل'}</div><input id="ln" autocomplete="username" placeholder="اسم الحساب" aria-label="اسم الحساب"><input id="lp" type="password" autocomplete="current-password" placeholder="كلمة المرور" aria-label="كلمة المرور"><button class="primary" onclick="doPrivilegedLogin('${mode}')">${mode==='ghost'?'دخول الشبح':'دخول مخفي'} ←</button>`;
+f.innerHTML=`<div class="rlPrivateNote">${mode==='ghost'?'دخول الشبح مخصص للأدمن كامل الصلاحيات':'الدخول المخفي مخصص للرتب والإدارة المخوّلة'}</div><input id="ln" autocomplete="username" placeholder="اسم الحساب" aria-label="اسم الحساب"><input id="lp" type="password" autocomplete="current-password" placeholder="كلمة المرور" aria-label="كلمة المرور"><button class="primary" onclick="doPrivilegedLogin('${mode}')">${mode==='ghost'?'دخول الشبح':'دخول مخفي'} ←</button>`;
 }
 keepKeyboardVisible();
 }
 async function doPrivilegedLogin(mode){
 const n=document.getElementById('ln')?.value||'',p=document.getElementById('lp')?.value||'';
 try{
-const j=await api('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,password:p})});
-if(mode==='ghost'&&!j.user?.owner)throw new Error('دخول الشبح مخصص لمالك الموقع فقط');
-if(mode==='hidden'&&!j.user?.staff)throw new Error('هذا الحساب لا يملك صلاحية الدخول المخفي');
+const j=await api('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,password:p,entryMode:mode})});
 sid=j.sid;localStorage.setItem('rimaz_sid',sid);await boot();
 }catch(e){toast(e.message||'تعذر الدخول');}
 }
