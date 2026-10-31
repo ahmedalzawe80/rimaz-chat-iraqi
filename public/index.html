@@ -596,6 +596,28 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 #smileyAdminGrid .smileyAdminTile button{height:24px!important;min-height:24px!important;margin-top:1px!important;padding:2px!important;font-size:9px!important;line-height:1.1!important}
 @media(min-width:700px){#smileyAdminGrid.smileyAdminGrid{grid-template-columns:repeat(9,minmax(0,1fr))!important}}
 </style>
+
+<style id="rimaz-login-width-banner-bottom-fix">
+/* Requested final adjustment: equal login-name/password field widths and show more of banner bottom. */
+.rlNameInput{
+  width:55%!important;
+  max-width:55%!important;
+  justify-self:end!important;
+  box-sizing:border-box!important;
+}
+@media(max-width:650px){
+  .rlLegacyBanner{
+    height:clamp(165px,31vw,225px)!important;
+    min-height:clamp(165px,31vw,225px)!important;
+    max-height:225px!important;
+  }
+  .rlLegacyBanner>img{
+    object-fit:cover!important;
+    object-position:center 55%!important;
+  }
+}
+</style>
+
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={},privatePeerUser=null;
