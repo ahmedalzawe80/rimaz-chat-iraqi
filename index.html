@@ -597,50 +597,6 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 @media(min-width:700px){#smileyAdminGrid.smileyAdminGrid{grid-template-columns:repeat(9,minmax(0,1fr))!important}}
 </style>
 
-<style id="rimaz-login-width-banner-bottom-fix">
-/* Requested final adjustment: equal login-name/password field widths and show more of banner bottom. */
-.rlNameInput{
-  width:55%!important;
-  max-width:55%!important;
-  justify-self:end!important;
-  box-sizing:border-box!important;
-}
-@media(max-width:650px){
-  .rlLegacyBanner{
-    height:clamp(165px,31vw,225px)!important;
-    min-height:clamp(165px,31vw,225px)!important;
-    max-height:225px!important;
-  }
-  .rlLegacyBanner>img{
-    object-fit:cover!important;
-    object-position:center 55%!important;
-  }
-}
-</style>
-
-
-<style id="rimaz-approved-guest-banner-tweak">
-/* Guest name field uses the same width rule as member name/password fields. */
-#loginForm > input.rlNameInput{
-  width:55%!important;
-  max-width:55%!important;
-  box-sizing:border-box!important;
-  justify-self:end!important;
-}
-/* Keep the banner width unchanged; increase only its vertical size slightly. */
-.rlLegacyBanner{
-  height:185px!important;
-  min-height:185px!important;
-  max-height:185px!important;
-}
-.rlLegacyBanner>img{
-  width:100%!important;
-  height:100%!important;
-  object-fit:fill!important;
-  object-position:center!important;
-}
-</style>
-
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={},privatePeerUser=null;
@@ -673,9 +629,9 @@ const ids={new:'tabNew',in:'tabIn',guest:'tabGuest',hidden:'tabHidden',ghost:'ta
 document.getElementById(ids[mode])?.classList.add('active');
 const f=document.getElementById('loginForm');if(!f)return;
 if(mode==='guest'){
-f.innerHTML=`<input id="ln" class="rlNameInput" autocomplete="nickname" placeholder="اكتب اسم الزائر (اسم فريد)" aria-label="اسم الزائر"><button class="primary guest" onclick="doGuest()">دخول</button>`;
+f.innerHTML=`<div class="rlPasswordRow rlGuestRow"><input id="ln" class="rlNameInput" autocomplete="nickname" placeholder="اكتب اسم الزائر (اسم فريد)" aria-label="اسم الزائر"><button type="button" class="primary guest" onclick="doGuest()">دخول</button></div>`;
 }else if(mode==='in'||mode==='new'){
-f.innerHTML=`<input id="ln" class="rlNameInput" autocomplete="username" placeholder="${mode==='new'?'اختر اسم عضو غير مستخدم':'اكتب اسم العضو'}" aria-label="اسم العضو"><div class="rlPasswordRow"><input id="lp" type="password" autocomplete="${mode==='new'?'new-password':'current-password'}" placeholder="اكتب كلمة المرور" aria-label="كلمة المرور"><button class="primary" onclick="${mode==='new'?'doRegister()':'doLogin()'}">${mode==='new'?'تسجيل':'دخول'} ←</button></div>`;
+f.innerHTML=`<input id="ln" class="rlNameInput" autocomplete="username" placeholder="${mode==='new'?'اختر اسم عضو غير مستخدم':'اكتب اسم العضو'}" aria-label="اسم العضو"><div class="rlPasswordRow"><input id="lp" type="password" autocomplete="${mode==='new'?'new-password':'current-password'}" placeholder="اكتب كلمة المرور" aria-label="كلمة المرور"><button class="primary" onclick="${mode==='new'?'doRegister()':'doLogin()'}">دخول</button></div>`;
 }else{
 f.innerHTML=`<div class="rlPrivateNote">${mode==='ghost'?'دخول الشبح مخصص لمالك الموقع فقط':'الدخول المخفي مخصص للسوبر والإداري المخوّل'}</div><input id="ln" class="rlNameInput" autocomplete="username" placeholder="اسم الحساب" aria-label="اسم الحساب"><div class="rlPasswordRow"><input id="lp" type="password" autocomplete="current-password" placeholder="كلمة المرور" aria-label="كلمة المرور"><button class="primary" onclick="doPrivilegedLogin('${mode}')">${mode==='ghost'?'دخول الشبح':'دخول مخفي'} ←</button></div>`;
 }
@@ -1545,6 +1501,56 @@ sid='';localStorage.removeItem('rimaz_sid');login();
   .rlOnlineFoot{font-size:10px!important;padding:5px!important}
 }
 </style>
+
+<style id="rimaz-stable-login-banner-final">
+/* One stable layout for guest and member login rows. */
+#loginForm .rlGuestRow,
+#loginForm .rlPasswordRow{
+  display:grid!important;
+  grid-template-columns:55% 86px minmax(0,1fr)!important;
+  gap:7px!important;
+  align-items:stretch!important;
+  direction:ltr!important;
+  width:100%!important;
+  min-width:0!important;
+}
+#loginForm .rlGuestRow input,
+#loginForm .rlPasswordRow input{
+  grid-column:1!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  justify-self:stretch!important;
+  box-sizing:border-box!important;
+}
+#loginForm .rlGuestRow .primary,
+#loginForm .rlPasswordRow .primary{
+  grid-column:2!important;
+  width:86px!important;
+  min-width:86px!important;
+  max-width:86px!important;
+  justify-self:start!important;
+  align-self:stretch!important;
+  box-sizing:border-box!important;
+  white-space:nowrap!important;
+  padding:0 4px!important;
+}
+/* Keep the banner width unchanged; increase only its height to reveal more of the artwork. */
+.rlLegacyBanner{
+  height:170px!important;
+  min-height:170px!important;
+  max-height:170px!important;
+  overflow:hidden!important;
+}
+.rlLegacyBanner>img{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  object-fit:fill!important;
+  object-position:center!important;
+}
+</style>
+
 </body></html>
 <style id="rimaz-user-latest-final">
 /* latest user alignment — preserve approved sizes, only mirror requested areas */
