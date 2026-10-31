@@ -605,7 +605,7 @@ async function api(url,opt={}){opt.headers={...(opt.headers||{}),'x-session':sid
 function toast(t){const x=document.getElementById('toast');if(!x)return;x.textContent=t;x.style.display='block';clearTimeout(x._t);x._t=setTimeout(()=>x.style.display='none',2600)}
 function login(){
 app.innerHTML=`<div class="login rimazLogin"><header class="rlTop"><div class="rlBrand"><span class="rlHeartLogo" id="rlSecretLogo" role="button" tabindex="0" aria-label="شعار دردشة ريماز - اضغط خمس مرات للدخول الخاص"><span class="rlBMark">R</span></span><div class="rlBrandTag"><b>دردشة ريماز عراقية</b></div></div><button class="rlRefresh" type="button" onclick="loadPublicOnline()" aria-label="الإعدادات">⚙</button></header>
-<section class="rlHero rlLegacyBanner" aria-label="دردشة ريماز عراقية"><img src="/rimaz-hero.jpg" alt="واجهة دردشة ريماز عراقية"><div class="rlBubble" aria-hidden="true">♡<br>دردشة<br>أصدقاء</div><div class="rlHeroPills"><span>◉ دردشة عراقية</span><span>▦ غرف متنوعة</span><span>☆ أصدقاء جدد</span></div><div class="rlHeroCopy"><small class="rlBannerKicker">دردشة</small><h1>ريماز<br><strong>عراقية</strong></h1><p>دردشة عراقية</p></div></section>
+<section class="rlHero rlLegacyBanner" aria-label="دردشة ريماز عراقية"><img src="rimaz-hero.jpg?v=2" alt="واجهة دردشة ريماز عراقية" onerror="this.onerror=null;this.src='/public/rimaz-hero.jpg?v=2'"><div class="rlBubble" aria-hidden="true">♡<br>دردشة<br>أصدقاء</div><div class="rlHeroPills"><span>◉ دردشة عراقية</span><span>▦ غرف متنوعة</span><span>☆ أصدقاء جدد</span></div><div class="rlHeroCopy"><small class="rlBannerKicker">دردشة</small><h1>ريماز<br><strong>عراقية</strong></h1><p>دردشة عراقية</p></div></section>
 <section class="rlLoginPanel"><div class="rlTabs" dir="rtl">
 <button id="tabNew" onclick="loginMode('new')"><span>♟✚</span> تسجيل عضوية</button>
 <button id="tabIn" onclick="loginMode('in')"><span>♟</span> دخول الأعضاء</button>
@@ -1468,6 +1468,38 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 }
 </style>
 
+
+<style id="rimaz-reference-scale-fix-v2">
+/* Match the compact proportions of the supplied Iraqi chat reference on phones. */
+@media(max-width:650px){
+  .rlTop{height:46px!important;min-height:46px!important;padding:3px 9px!important;border-bottom-width:2px!important;gap:7px!important}
+  .rlBrand{gap:7px!important}
+  .rlHeartLogo{width:38px!important;height:38px!important;flex-basis:38px!important}
+  .rlBMark{font-size:29px!important}
+  .rlBrandTag>b{font-size:clamp(12px,3.4vw,16px)!important}
+  .rlRefresh{width:38px!important;height:38px!important;min-width:38px!important;flex-basis:38px!important;font-size:25px!important}
+  .rlLegacyBanner{height:72px!important;min-height:72px!important;max-height:72px!important}
+  .rlLegacyBanner>img{width:100%!important;height:100%!important;object-fit:cover!important;object-position:center 36%!important}
+  .rlLoginPanel{padding:0!important;margin:0!important}
+  .rlTabs{height:43px!important;min-height:43px!important;margin:0!important;border:0!important;border-bottom:1px solid #d7d7d7!important}
+  .rlTabs button{height:43px!important;min-height:43px!important;max-height:43px!important;padding:2px 2px!important;font-size:clamp(10px,2.6vw,14px)!important;line-height:1.05!important;white-space:nowrap!important}
+  .rlTabs button span{display:inline!important;font-size:13px!important;line-height:1!important}
+  .rlTabs button.active{box-shadow:inset 0 -3px #d94c53!important}
+  .rlForm{padding:4px 11px 4px!important;gap:2px!important}
+  .rlForm input{height:32px!important;min-height:32px!important;padding:0 7px!important;font-size:14px!important;border-width:1px!important;border-radius:2px!important}
+  .rlPasswordRow{grid-template-columns:55% 48px minmax(0,1fr)!important;gap:4px!important;direction:ltr!important}
+  .rlForm .primary,.rlForm .guest{height:32px!important;min-height:32px!important;width:48px!important;padding:0 2px!important;font-size:13px!important;border-width:1px!important;border-radius:2px!important}
+  .rlOnline{margin:0 0 6px!important}
+  .rlOnlineHead{min-height:25px!important;padding:3px 10px!important;font-size:14px!important;line-height:1.2!important}
+  .rlOnlineHead b{font-size:14px!important}
+  .rlOnlineList{max-height:54vh!important}
+  .rlOnlineMember{min-height:40px!important;padding:3px 5px!important;gap:6px!important}
+  .rlAvatar{width:36px!important;height:36px!important}
+  .rlMemberInfo b{font-size:13px!important}
+  .rlMemberInfo small{font-size:10px!important;margin-top:1px!important}
+  .rlOnlineFoot{font-size:10px!important;padding:5px!important}
+}
+</style>
 </body></html>
 <style id="rimaz-user-latest-final">
 /* latest user alignment — preserve approved sizes, only mirror requested areas */
