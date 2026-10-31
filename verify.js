@@ -39,7 +39,7 @@ try {
     ['live presence state is emitted individually per viewer', source.includes("so.emit('live-state',{online:getOnlineUsers(viewer),rooms:visibleRooms(viewer)})")],
     ['member directory omits accounts hidden from the current viewer', source.includes('if(hasInvisibleActiveSession(name,req.user))continue')],
     ['hidden join/leave notices are staff-only and ghost emits no presence notices', source.includes("presenceVisibility:u.hidden?'staff':'public'") && source.includes('function emitPresenceToRoom(room,notice)')],
-    ['private conversation history persists across new sessions', source.includes("app.get('/api/private/history',requireAuth") && !source.slice(source.indexOf("app.get('/api/private/history'"),source.indexOf("app.post('/api/private/read'")).includes('req.user.created')],
+    ['private conversation history is memory-only and cleared after full disconnect', source.includes('privateMessages: []') && source.includes('function clearPrivateConversationForUser(name)') && source.includes('schedulePrivateConversationCleanup(u.name)')],
     ['existing private conversations can be reopened even when the peer is not publicly online', html.includes("const existing=contacts.find(x=>key(x.name)===key(name))")]
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
@@ -111,8 +111,8 @@ try {
   const source = fs.readFileSync(server, 'utf8');
   const saveFn = source.match(/function save\(\)\s*\{[\s\S]*?\n\}/);
   const loadBlock = source.match(/let db;[\s\S]*?\nfor \(const \[k,v\] of Object\.entries\(defaults\(\)\)/);
-  if (saveFn && ['.tmp', "fs.openSync(tempFile, 'wx'", 'fs.fsyncSync(fd)', 'fs.renameSync(tempFile, DB_FILE)'].every(x => saveFn[0].includes(x))) pass('database writes use fsynced atomic replacement');
-  else fail('database writes use fsynced atomic replacement');
+  if (saveFn && ['.tmp', "fs.openSync(tempFile, 'wx'", 'JSON.stringify(snapshot)', 'privateMessages: []', 'fs.renameSync(tempFile, DB_FILE)'].every(x => saveFn[0].includes(x)) && !saveFn[0].includes('fs.fsyncSync')) pass('database writes use compact atomic replacement and never persist private messages');
+  else fail('database writes use compact atomic replacement and never persist private messages');
   if (loadBlock && loadBlock[0].includes("error.code === 'ENOENT'") && loadBlock[0].includes('fs.copyFileSync(DB_FILE, recoveryCopy') && loadBlock[0].includes('Refusing to start with an invalid database')) pass('corrupt database is preserved and startup fails closed');
   else fail('corrupt database is preserved and startup fails closed');
 } catch (error) { fail('persistence safety checks', error.message); }
@@ -125,13 +125,13 @@ try {
   if (!saveFn) throw new Error('save() implementation not found');
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-atomic-save-'));
   try {
-    const context = { fs, crypto, DATA_DIR: tempDir, DB_FILE: path.join(tempDir, 'data.json'), db: { users: { test: { likes: 7 } }, messages: [] }, process: { pid: process.pid } };
+    const context = { fs, crypto, DATA_DIR: tempDir, DB_FILE: path.join(tempDir, 'data.json'), db: { users: { test: { likes: 7 } }, messages: [], privateMessages: [{text:'secret'}] }, process: { pid: process.pid } };
     vm.createContext(context);
     vm.runInContext(`${saveFn[0]}\nglobalThis.performSave = save;`, context);
     context.performSave();
     const saved = JSON.parse(fs.readFileSync(context.DB_FILE, 'utf8'));
     const remaining = fs.readdirSync(tempDir);
-    if (saved.users.test.likes === 7 && remaining.length === 1 && remaining[0] === 'data.json') pass('atomic save writes valid JSON and leaves no temporary files');
+    if (saved.users.test.likes === 7 && Array.isArray(saved.privateMessages) && saved.privateMessages.length === 0 && remaining.length === 1 && remaining[0] === 'data.json') pass('atomic save writes compact valid JSON, excludes private history, and leaves no temporary files');
     else fail('atomic save writes valid JSON and leaves no temporary files');
   } finally { fs.rmSync(tempDir, { recursive: true, force: true }); }
 } catch (error) { fail('atomic save runtime fixture', error.message); }
@@ -169,11 +169,75 @@ try {
   const messageRoute = source.match(/app\.post\('\/api\/message',[\s\S]*?\n\}\);/);
   if (messageRoute && messageRoute[0].includes('so.data?.sid===sessionId') && messageRoute[0].includes('so.rooms.has(room)')) pass('HTTP messages require active membership in the requested room');
   else fail('HTTP messages require active membership in the requested room');
-  if (source.includes('db.privateMessages=[...(db.privateMessages||[]),m].slice(-5000)') && source.includes('Private media save failed:') && source.includes('db.wall=previousWall')) pass('private media and wall posts roll back on persistence failure');
-  else fail('private media and wall posts roll back on persistence failure');
+  if (source.includes('db.privateMessages=[...(db.privateMessages||[]),m].slice(-5000)') && source.includes('privateMessages: []') && source.includes('db.wall=previousWall')) pass('private media stays in memory while wall posts retain rollback protection');
+  else fail('private media stays in memory while wall posts retain rollback protection');
 } catch (error) { fail('upload/message authorization checks', error.message); }
 
 
+
+// Chat messages are persisted in a short batch rather than synchronously per message.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const add=source.match(/function addMessage\(m\)\s*\{[\s\S]*?\n\}/);
+  const batch=source.match(/function scheduleMessageSave\(delay=350\)\s*\{[\s\S]*?\n\}/);
+  if(add&&batch&&!add[0].includes('save()')&&add[0].includes('scheduleMessageSave()')&&batch[0].includes('},delay)') && batch[0].includes('scheduleMessageSave(3000)')&&batch[0].includes('save()')&&source.includes('function gracefulShutdown(signal)')) pass('chat message writes are batched and flushed during graceful shutdown');
+  else fail('chat message write batching and shutdown flush');
+} catch(error){fail('chat write batching checks',error.message);}
+
+// Public room and wall content have a 24-hour retention policy with media cleanup.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const ok = source.includes('const PUBLIC_RETENTION_MS=24*60*60*1000')
+    && source.includes('function cleanupExpiredPublicContent(now=Date.now())')
+    && source.includes("message?.room==='public'")
+    && source.includes('const expiredWallIds=new Set()')
+    && source.includes('removePublicUploadIfUnreferenced(url)')
+    && source.includes('setInterval(()=>cleanupExpiredPublicContent(),5*60*1000)');
+  if (ok) pass('public room messages and wall posts expire after 24 hours with orphan media cleanup');
+  else fail('24-hour public and wall retention policy');
+} catch (error) { fail('24-hour retention checks', error.message); }
+
+// Exercise the actual retention functions with old/new public, wall, room, and avatar data.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const block = source.match(/const PUBLIC_RETENTION_MS=24\*60\*60\*1000;[\s\S]*?(?=\ncleanupExpiredPublicContent\(\);)/);
+  if (!block) throw new Error('retention functions not found');
+  const now = 2_000_000_000_000, removedFiles = [], events = [];
+  const old = now - 24*60*60*1000 - 1000, fresh = now - 60_000;
+  const oldMedia = '/uploads/old-wall.jpg';
+  const context = {
+    Date, Set, path,
+    fs: { unlinkSync: file => removedFiles.push(file) },
+    UP_DIR: '/data/uploads',
+    db: {
+      messages: [
+        {id:'old-public',room:'public',at:old,text:'expired'},
+        {id:'new-public',room:'public',at:fresh,text:'keep'},
+        {id:'old-other-room',room:'friends',at:old,text:'keep'},
+        {id:'old-announcement',room:'public',at:old,type:'announcement',text:'keep'}
+      ],
+      wall: [
+        {id:'old-post',at:old,media:{url:oldMedia}},
+        {id:'new-post',at:fresh,text:'keep'}
+      ],
+      wallLikes:{'old-post':['a'],'new-post':['b']},
+      wallComments:{'old-post':['old'],'new-post':['new']},
+      profiles:{a:{avatar:'/uploads/old-wall.jpg'}}, users:{a:{likes:10}}
+    },
+    io: { emit: (...args) => events.push(args) },
+    save: () => { context.saved = true; },
+    console: { log: () => {}, error: () => {}, warn: () => {} }
+  };
+  vm.createContext(context);
+  vm.runInContext(`${block[0]}\nglobalThis.runRetention = cleanupExpiredPublicContent;`, context);
+  context.runRetention(now);
+  const msgIds=context.db.messages.map(x=>x.id).join(','),wallIds=context.db.wall.map(x=>x.id).join(',');
+  const ok=msgIds==='new-public,old-other-room,old-announcement'&&wallIds==='new-post'
+    &&!Object.hasOwn(context.db.wallLikes,'old-post')&&!Object.hasOwn(context.db.wallComments,'old-post')
+    &&removedFiles.length===0&&context.db.users.a.likes===10&&context.saved===true;
+  if(ok)pass('retention runtime fixture removes only expired public/wall content and preserves referenced avatar/account data');
+  else fail('retention runtime fixture',JSON.stringify({msgIds,wallIds,removedFiles,saved:context.saved}));
+} catch(error){fail('retention runtime fixture',error.message);}
 
 // Announcement fan-out is one transaction: do not leave a partial broadcast
 // across rooms if the database write fails.
