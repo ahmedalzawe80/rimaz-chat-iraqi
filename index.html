@@ -597,41 +597,23 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 @media(min-width:700px){#smileyAdminGrid.smileyAdminGrid{grid-template-columns:repeat(9,minmax(0,1fr))!important}}
 </style>
 
-<style id="rimaz-final-guest-banner-fix">
-/* Guest field matches the password-field width; login action label stays compact and consistent. */
-@media(max-width:520px){
-  .rlForm input.rlGuestNameInput{
-    width:55%!important;
-    max-width:55%!important;
-    justify-self:end!important;
-    box-sizing:border-box!important;
-  }
-  .rlForm .guest{
-    width:86px!important;
-    min-width:86px!important;
-    height:48px!important;
-    min-height:48px!important;
-    justify-self:start!important;
-    padding:0 5px!important;
-    white-space:nowrap!important;
-  }
-  .rlForm .primary:not(.guest){
-    width:86px!important;
-    min-width:86px!important;
-    font-size:15px!important;
-  }
-  .rlPasswordRow{
-    grid-template-columns:55% 86px minmax(0,1fr)!important;
-    gap:4px!important;
-  }
+<style id="rimaz-login-width-banner-bottom-fix">
+/* Requested final adjustment: equal login-name/password field widths and show more of banner bottom. */
+.rlNameInput{
+  width:55%!important;
+  max-width:55%!important;
+  justify-self:end!important;
+  box-sizing:border-box!important;
+}
+@media(max-width:650px){
   .rlLegacyBanner{
-    height:clamp(190px,42vw,220px)!important;
-    min-height:190px!important;
-    max-height:220px!important;
+    height:clamp(165px,31vw,225px)!important;
+    min-height:clamp(165px,31vw,225px)!important;
+    max-height:225px!important;
   }
   .rlLegacyBanner>img{
     object-fit:cover!important;
-    object-position:center 52%!important;
+    object-position:center 55%!important;
   }
 }
 </style>
@@ -668,9 +650,9 @@ const ids={new:'tabNew',in:'tabIn',guest:'tabGuest',hidden:'tabHidden',ghost:'ta
 document.getElementById(ids[mode])?.classList.add('active');
 const f=document.getElementById('loginForm');if(!f)return;
 if(mode==='guest'){
-f.innerHTML=`<input id="ln" class="rlNameInput rlGuestNameInput" autocomplete="nickname" placeholder="اكتب اسم الزائر (اسم فريد)" aria-label="اسم الزائر"><button class="primary guest" onclick="doGuest()">دخول</button>`;
+f.innerHTML=`<input id="ln" autocomplete="nickname" placeholder="اكتب اسم الزائر (اسم فريد)" aria-label="اسم الزائر"><button class="primary guest" onclick="doGuest()">دخول زائر ←</button>`;
 }else if(mode==='in'||mode==='new'){
-f.innerHTML=`<input id="ln" class="rlNameInput" autocomplete="username" placeholder="${mode==='new'?'اختر اسم عضو غير مستخدم':'اكتب اسم العضو'}" aria-label="اسم العضو"><div class="rlPasswordRow"><input id="lp" type="password" autocomplete="${mode==='new'?'new-password':'current-password'}" placeholder="اكتب كلمة المرور" aria-label="كلمة المرور"><button class="primary" onclick="${mode==='new'?'doRegister()':'doLogin()'}">دخول</button></div>`;
+f.innerHTML=`<input id="ln" class="rlNameInput" autocomplete="username" placeholder="${mode==='new'?'اختر اسم عضو غير مستخدم':'اكتب اسم العضو'}" aria-label="اسم العضو"><div class="rlPasswordRow"><input id="lp" type="password" autocomplete="${mode==='new'?'new-password':'current-password'}" placeholder="اكتب كلمة المرور" aria-label="كلمة المرور"><button class="primary" onclick="${mode==='new'?'doRegister()':'doLogin()'}">${mode==='new'?'تسجيل':'دخول'} ←</button></div>`;
 }else{
 f.innerHTML=`<div class="rlPrivateNote">${mode==='ghost'?'دخول الشبح مخصص لمالك الموقع فقط':'الدخول المخفي مخصص للسوبر والإداري المخوّل'}</div><input id="ln" class="rlNameInput" autocomplete="username" placeholder="اسم الحساب" aria-label="اسم الحساب"><div class="rlPasswordRow"><input id="lp" type="password" autocomplete="current-password" placeholder="كلمة المرور" aria-label="كلمة المرور"><button class="primary" onclick="doPrivilegedLogin('${mode}')">${mode==='ghost'?'دخول الشبح':'دخول مخفي'} ←</button></div>`;
 }
