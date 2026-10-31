@@ -811,7 +811,7 @@ app.post('/api/logout',requireAuth,(req,res)=>{
   res.json({ok:true});
 });
 
-app.get('/api/public-online',(req,res)=>{ const users=getOnlineUsers().map(u=>({name:u.name,type:u.type,displayName:u.displayName,avatar:u.profile?.avatar||'',status:u.profile?.status||defaultStatus(u.name)})); res.set('Cache-Control','no-store'); res.json({users}); });
+app.get('/api/public-online',(req,res)=>{ const users=getOnlineUsers().map(u=>({name:u.name,type:u.type,displayName:u.displayName,avatar:u.profile?.avatar||'',status:u.profile?.status||defaultStatus(u.name),rank:u.profile?.rank||'',role:u.role||'',vip:!!u.vip})); res.set('Cache-Control','no-store'); res.json({users}); });
 app.get('/api/state',requireAuth,(req,res)=>{
   const u=req.user;
   // A guest starts each fresh app entry with the default status; registered members keep their saved status.
