@@ -271,6 +271,21 @@ try {
   else fail('room deletion rollback on persistence failure');
 } catch (error) { fail('room administration integrity checks', error.message); }
 
+
+// v46.26 granular rank-permission regression checks
+try {
+  const permissionServer = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+  const permissionHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  for (const key of ['audit_view','stats_view','chat_filter_manage','member_status_manage']) {
+    if (!permissionServer.includes(key) || !permissionHtml.includes(key)) throw new Error(`missing ${key}`);
+  }
+  if (!permissionServer.includes("if(p==='/api/admin/audit-logs')return 'audit_view'")) throw new Error('audit endpoint is not permission-gated');
+  if (!permissionServer.includes("if(p==='/api/admin/chat-filter')return 'chat_filter_manage'")) throw new Error('filter endpoint is not permission-gated');
+  if (!permissionServer.includes("if(p==='/api/admin/profile/status')return 'member_status_manage'")) throw new Error('status endpoint is not permission-gated');
+  if (permissionServer.includes('إدارة الصلاحيات مخصصة لرتبة ADMIN الكاملة')) throw new Error('rank permission assignment remains locked');
+  pass('v46.26 granular permissions are present in rank editor and server routes');
+} catch (error) { fail('v46.26 granular permission checks', error.message); }
+
 if (failures.length) {
   console.error(`\n${failures.length} verification check(s) failed.`);
   process.exitCode = 1;

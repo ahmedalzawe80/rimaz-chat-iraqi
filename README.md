@@ -160,3 +160,11 @@ No chat colors, message rendering, member button layout, gifts, likes, or other 
 - Added regression checks for all five room-administration failure paths.
 
 Run `npm test` before deployment. These local checks do not replace staging tests against the target Node.js version, persistent volume, and real database data. Back up `/data` before upgrading.
+
+
+## v46.26 — granular permissions for added admin tools
+
+- Added independent rank permissions for audit log viewing/export, site statistics, chat word-filter management, and member-status management.
+- These permissions are editable by the owner/admin for every built-in rank, including Super Red; rank color/level no longer blocks assigning these capabilities.
+- The admin data endpoint returns a reduced payload for staff who only have one of these section permissions.
+- The owner/admin remain the only accounts allowed to edit rank permission sets; protected owner-account actions remain protected.
