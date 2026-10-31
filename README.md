@@ -1,3 +1,22 @@
+# Rimaz Chat v46.27 — Reference Login Layout and Private Entry
+
+## Current changes
+- Reworked the entry page toward the supplied legacy Iraqi chat reference: compact black masthead with B mark and refresh control, burgundy banner, three RTL login tabs, compact login form, and long online-member rows.
+- Removed the four legacy quick-link buttons from the entry screen as requested.
+- Replaced the entry-banner portrait image URL with a different portrait.
+- Removed visible hidden/ghost entry controls. Five taps on the B logo reveal a private modal with exactly two choices: hidden login and ghost login.
+- Added `/api/login-privileged`: hidden access is checked on the server for staff or accounts with `panel_access`; ghost access is owner-only. These modes are not authorized by client-side flags.
+- Hidden and ghost sessions are excluded from public online rosters, live online state, room online counts, and automatic join/leave presence notices while retaining normal chat transport.
+- `index.html` and `public/index.html` are kept identical.
+
+## Validation
+- `node --check server.js` passed.
+- `npm test` passed, including a new regression check for privileged login and hidden online visibility.
+- ZIP integrity checked after packaging.
+- This is local static verification only; production login, database, mobile rendering, and two-account visibility still require staging/live-server testing.
+
+---
+
 # Rimaz Chat v46.24 — WebRTC Signaling Hardening
 
 ## v46.24 changes

@@ -71,13 +71,6 @@
 .rlOnlineEmpty{padding:20px;text-align:center;color:#777;font-size:14px}
 .rlOnlineFoot{text-align:center;border-top:1px solid #ddd;padding:9px;color:#888;font-size:11px}
 .rlFooter{background:#101114;color:#ddd;display:flex;justify-content:space-between;padding:14px 16px;font-size:12px}
-/* Five-tap private entry: hidden until the brand mark is tapped five times. */
-.rlSecretBackdrop{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px;background:#0009;backdrop-filter:blur(3px)}
-.rlSecretBox{width:min(360px,92vw);background:#101014;border:2px solid #df4d9d;border-radius:16px;padding:16px;box-shadow:0 12px 42px #0009,0 0 18px #e34ca866;color:#fff;text-align:center}
-.rlSecretTitle{font-size:21px;font-weight:900;color:#f27bc0;margin:2px 0 14px}
-.rlSecretClose{float:left;border:0;background:transparent;color:#fff;font-size:25px;line-height:1}
-.rlSecretChoice{display:block;width:100%;margin:10px 0;padding:14px 10px;border:1px solid #dc65ad;border-radius:12px;background:linear-gradient(135deg,#231225,#111);color:#fff;font-size:19px;font-weight:900}
-.rlSecretChoice:active{transform:scale(.985)}
 @media(min-width:760px){.rlLoginPanel{padding:15px 24px}.rlForm{grid-template-columns:1fr 1fr}.rlForm .primary,.rlPrivateNote{grid-column:1/-1}.rlOnlineList{display:grid;grid-template-columns:1fr 1fr}.rlOnlineMember:nth-child(odd){border-left:1px solid #eee}}
 @media(max-width:520px){.rlTop{min-height:58px;padding:8px 10px}.rlTopTools{gap:8px;font-size:10px}.rlBrand{gap:5px}.rlCrown{font-size:24px}.rlBrand b{font-size:15px}.rlBrand small{font-size:8px}.rlHeartLogo{width:36px;height:34px}.rlHeartLogo:before{font-size:44px;top:-6px}.rlHeartLogo span{font-size:7px}.rlHero{height:176px}.rlHeroCopy{max-width:62%;margin-right:4%}.rlFlag{width:118px;height:23px;font-size:9px;padding-top:5px}.rlLoginPanel{padding:9px 9px 12px}.rlTabs button{min-height:56px;font-size:13px}.rlTabs button span{display:block;font-size:14px}.rlForm input{height:48px;font-size:16px}.rlForm .primary{height:46px}.rlOnlineHead{font-size:16px}.rlOnlineList{max-height:360px}.rlOnlineMember{min-height:62px}.rlAvatar{width:49px;height:49px}.rlMemberInfo b{font-size:15px}}
 
@@ -264,6 +257,14 @@
 .wallCompose textarea,.wallInput .wallCompose textarea{height:34px!important;min-height:34px!important;max-height:34px!important;min-width:0!important;width:100%!important;box-sizing:border-box!important;resize:none!important;overflow:auto!important;font-size:13px!important;border-radius:5px!important;}
 .wallPostMain .wallText b{font-size:12px!important;font-weight:700!important;}
 .wallText{font-size:14px!important;line-height:1.3!important;}
+
+/* Reference layout: compact black masthead, burgundy banner and legacy chat tabs. */
+.rlTop{min-height:52px!important;height:52px!important;background:#101014!important;border-bottom:2px solid #28232a!important;padding:5px 10px!important;direction:rtl!important;gap:8px!important}
+.rlBrand{flex:1;min-width:0;gap:8px!important;direction:rtl!important}.rlBrandTag{flex:1;min-width:0}.rlBrandTag>b{display:block;color:#fff;font-size:clamp(11px,2.4vw,18px);font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rlHeartLogo{width:38px!important;height:38px!important;flex-basis:38px!important;border-radius:50%;background:#7041b6;transform:rotate(-18deg);display:grid;place-items:center!important;color:#fff!important}.rlHeartLogo:before{content:none!important}.rlBMark{font-family:Georgia,serif;font-size:30px!important;line-height:1;color:#fff!important;font-weight:1000}.rlRefresh{width:44px;height:44px;flex:0 0 44px;border:0;background:#58b85f;color:#fff;font-size:30px;font-weight:900}
+.rlLegacyBanner{height:clamp(126px,19vw,190px)!important;background:#170e19!important;border-bottom:2px solid #30202f!important}.rlLegacyBanner>img{object-position:78% 35%!important;opacity:.83!important}.rlLegacyBanner:after{background:linear-gradient(90deg,#100b15 0%,#180e1b 37%,#1a101b66 64%,#130d17a8 100%)!important}.rlHeroCopy{margin-right:4%!important;max-width:40%!important;text-align:center!important}.rlHeroCopy h1{font-size:clamp(25px,5vw,46px)!important;line-height:.98!important;margin:0!important;color:#f4d9e7!important}.rlHeroCopy h1 strong{color:#f08aaa!important}.rlHeroCopy p{font-size:clamp(13px,2.5vw,20px)!important;margin:6px 0 0!important}.rlBannerKicker{display:block!important;color:#e6a6c0!important;font-size:11px!important}.rlHeroPills{position:absolute;z-index:2;left:27%;top:22%;display:flex;flex-direction:column;gap:5px}.rlHeroPills span{border:1px solid #95677f;border-radius:16px;color:#e7c6d4;background:#201523c9;padding:3px 12px;font-size:clamp(8px,1.5vw,12px);font-weight:800;text-align:center}.rlBubble{position:absolute;z-index:2;left:4%;top:25%;width:24%;height:58%;border:2px solid #a14d75;border-radius:22px;color:#e58bad;text-align:center;padding-top:5px;font-size:clamp(11px,2vw,18px);font-weight:900;opacity:.9}
+.rlLoginPanel{padding:0!important;max-width:none!important}.rlTabs{margin:0!important;border:0!important;border-bottom:1px solid #d7d7d7!important}.rlTabs button{min-height:58px!important;font-size:clamp(12px,2.2vw,19px)!important;color:#376f99!important}.rlTabs button.active{background:#f3f3f3!important;box-shadow:inset 0 -4px #d94c53!important}.rlForm{padding:8px 8px 7px!important;gap:3px!important}.rlForm input{height:45px!important;border:2px solid #111!important;border-radius:2px!important;font-size:17px!important}.rlForm .primary{height:43px!important;border-radius:2px!important;font-size:18px!important;background:#101014!important}.rlPrivateNote{grid-column:1/-1!important}.rlSpecial{display:none!important}.rlOnline{max-width:none!important;margin:0 0 10px!important;border-radius:0!important}.rlOnlineHead{padding:7px 12px!important;font-size:17px!important}.rlOnlineList{padding:0!important;max-height:58vh!important}.rlOnlineMember{min-height:65px!important;border-bottom:1px solid #dedee5!important;border-radius:0!important;gap:8px!important}.rlAvatar{width:62px!important;height:62px!important;border-radius:0!important;background:#fff!important}.rlMemberInfo b{font-size:17px!important}.rlMemberInfo small{font-size:13px!important}.rlFlagMini{margin-left:3px}.rlOnlineFoot{font-size:12px!important;padding:9px!important}.rlFooter{display:none!important}.rlSecretModal{position:fixed;inset:0;z-index:1000;background:#0009;display:flex;align-items:center;justify-content:center;padding:18px}.rlSecretModal.hidden{display:none!important}.rlSecretBox{width:min(310px,92vw);background:#fff;border:2px solid #171219;box-shadow:0 10px 35px #0007}.rlSecretBox h3{margin:0;padding:10px;background:#111;color:#fff;text-align:center}.rlSecretBox button{display:block;width:calc(100% - 18px);margin:9px;height:42px;border:0;background:#171219;color:#fff;font-weight:900}.rlSecretBox .rlSecretCancel{background:#ddd;color:#222}
+@media(max-width:520px){.rlTop{height:50px!important;min-height:50px!important}.rlBrandTag>b{font-size:11px}.rlRefresh{width:40px;height:40px;flex-basis:40px}.rlLegacyBanner{height:130px!important}.rlHeroCopy{max-width:39%!important}.rlHeroPills{left:26%;top:21%}.rlBubble{left:3%;width:22%;height:58%}.rlLoginPanel{padding:0!important}.rlTabs button{min-height:56px!important}.rlForm input{height:43px!important}.rlOnlineList{max-height:54vh!important}.rlOnlineMember{min-height:59px!important}.rlAvatar{width:54px!important;height:54px!important}}
+
 </style>
 
 <style id="rimaz-final-user-visual-notes">
@@ -574,29 +575,27 @@ function esc(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&l
 async function api(url,opt={}){opt.headers={...(opt.headers||{}),'x-session':sid};let r=await fetch(url,opt);let j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'حدث خطأ');return j}
 function toast(t){const x=document.getElementById('toast');if(!x)return;x.textContent=t;x.style.display='block';clearTimeout(x._t);x._t=setTimeout(()=>x.style.display='none',2600)}
 function login(){
-app.innerHTML=`<div class="login rimazLogin"><header class="rlTop"><div class="rlBrand"><span class="rlHeartLogo" id="rlSecretTrigger" role="button" tabindex="0" aria-label="شعار دردشة ريماز"><span><b>دردشة</b><em>ريماز</em></span></span><div class="rlBrandTag"><small>محادثات · تواصل · أصدقاء</small></div></div><div class="rlTopTools"><span>⚙ الإعدادات</span><span>؟ مساعدة</span></div></header>
-<section class="rlHero"><img src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=85" alt="صورة فتاة للترحيب"><div class="rlHeroCopy"><h1>دردشة <strong>ريماز</strong><br>عراقية</h1><p>أهلاً وسهلاً بك في ريماز ♡</p><small>مكانك للتعارف وتكوين الصداقات</small><div class="rlFlag"><span>الله أكبر</span></div></div></section>
+app.innerHTML=`<div class="login rimazLogin"><header class="rlTop"><div class="rlBrand"><span class="rlHeartLogo" id="rlSecretLogo" role="button" tabindex="0" aria-label="شعار دردشة ريماز"><span class="rlBMark">B</span></span><div class="rlBrandTag"><b>شات بنوتة قلبي&nbsp; | &nbsp;دردشة بنوتة قلبي&nbsp; | &nbsp;شات العراق</b></div></div><button class="rlRefresh" type="button" onclick="loadPublicOnline()" aria-label="تحديث المتواجدين">⟳</button></header>
+<section class="rlHero rlLegacyBanner"><img src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1100&q=85" alt="صورة فتاة للترحيب"><div class="rlBubble" aria-hidden="true">♡<br>دردشة<br>أصدقاء</div><div class="rlHeroPills"><span>◉ دردشة عراقية</span><span>▦ غرف متنوعة</span><span>☆ أصدقاء جدد</span></div><div class="rlHeroCopy"><small class="rlBannerKicker">دردشة</small><h1>بنوتة<br><strong>قلبي</strong></h1><p>دردشة عراقية</p></div></section>
 <section class="rlLoginPanel"><div class="rlTabs" dir="rtl">
-<button id="tabGuest" onclick="loginMode('guest')"><span>♟</span> دخول زائر</button>
-<button id="tabIn" onclick="loginMode('in')"><span>♟</span> دخول عضو</button>
-<button id="tabNew" onclick="loginMode('new')"><span>♟✚</span> تسجيل عضو</button></div>
+<button id="tabNew" onclick="loginMode('new')"><span>♟✚</span> تسجيل عضوية</button>
+<button id="tabIn" onclick="loginMode('in')"><span>♟</span> دخول الأعضاء</button>
+<button id="tabGuest" onclick="loginMode('guest')"><span>♟</span> دخول الزوار</button></div>
 <div id="loginForm" class="loginForm rlForm"></div>
-
 </section>
 <section class="rlOnline"><div class="rlOnlineHead"><span>👥 المتواجدين الآن</span><b><span id="rlOnlineCount">—</span></b></div><div id="rlOnlineList" class="rlOnlineList"><div class="rlOnlineEmpty">جارٍ تحميل المتواجدين…</div></div><div class="rlOnlineFoot">قائمة للعرض فقط — سجّل دخولك للمشاركة بالدردشة</div></section>
-<footer class="rlFooter"><span>دردشة ريماز عراقية</span><span>♥ أهلاً بكم</span></footer><div id="rlSecretModal" class="rlSecretBackdrop hidden" role="dialog" aria-modal="true" aria-label="الدخول الخاص"><div class="rlSecretBox"><button class="rlSecretClose" type="button" onclick="closeSecretMenu()" aria-label="إغلاق">×</button><div class="rlSecretTitle">الدخول الخاص</div><button class="rlSecretChoice" type="button" onclick="selectSecretLogin('hidden')">🕵️ دخول المخفي</button><button class="rlSecretChoice" type="button" onclick="selectSecretLogin('ghost')">👻 دخول الشبح</button></div></div></div>`;
-setupSecretTrigger();loginMode('in');loadPublicOnline();if(window.rimazOnlineTimer)clearInterval(window.rimazOnlineTimer);window.rimazOnlineTimer=setInterval(loadPublicOnline,15000);
+<footer class="rlFooter"><span>دردشة ريماز عراقية</span><span>♥ أهلاً بكم</span></footer><div id="rlSecretModal" class="rlSecretModal hidden" role="dialog" aria-modal="true" aria-label="دخول خاص"><div class="rlSecretBox"><h3>دخول خاص</h3><button type="button" onclick="selectSecretLogin('hidden')">🛡 دخول المخفي</button><button type="button" onclick="selectSecretLogin('ghost')">👻 دخول الشبح</button><button type="button" class="rlSecretCancel" onclick="closeSecretLogin()">إلغاء</button></div></div></div>`;
+bindSecretLogo();loginMode('in');loadPublicOnline();if(window.rimazOnlineTimer)clearInterval(window.rimazOnlineTimer);window.rimazOnlineTimer=setInterval(loadPublicOnline,15000);
 }
-let rlSecretTapCount=0,rlSecretTapTimer=null;
-function setupSecretTrigger(){const mark=document.getElementById('rlSecretTrigger');if(!mark||mark.dataset.secretReady)return;mark.dataset.secretReady='1';const tap=()=>{rlSecretTapCount++;if(rlSecretTapTimer)clearTimeout(rlSecretTapTimer);if(rlSecretTapCount>=5){rlSecretTapCount=0;openSecretMenu();}else{rlSecretTapTimer=setTimeout(()=>{rlSecretTapCount=0},1800);}};mark.addEventListener('click',tap);mark.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();tap();}});}
-function openSecretMenu(){const modal=document.getElementById('rlSecretModal');if(modal)modal.classList.remove('hidden');}
-function closeSecretMenu(){document.getElementById('rlSecretModal')?.classList.add('hidden');}
-function selectSecretLogin(mode){closeSecretMenu();loginMode(mode);}
+let rlLogoTaps=[];function bindSecretLogo(){const logo=document.getElementById('rlSecretLogo');if(!logo||logo.dataset.bound)return;logo.dataset.bound='1';const tap=()=>{const now=Date.now();rlLogoTaps=rlLogoTaps.filter(t=>now-t<2200);rlLogoTaps.push(now);if(rlLogoTaps.length>=5){rlLogoTaps=[];openSecretLogin();}};logo.addEventListener('click',tap);logo.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();tap();}});}
+function openSecretLogin(){document.getElementById('rlSecretModal')?.classList.remove('hidden');}
+function closeSecretLogin(){document.getElementById('rlSecretModal')?.classList.add('hidden');}
+function selectSecretLogin(mode){closeSecretLogin();loginMode(mode);}
 function keepKeyboardVisible(){document.querySelectorAll('#loginForm input').forEach(i=>i.addEventListener('focus',()=>setTimeout(()=>i.scrollIntoView({block:'center',behavior:'smooth'}),120)));}
 window.visualViewport?.addEventListener('resize',()=>{const a=document.activeElement;if(a&&a.matches?.('#loginForm input'))setTimeout(()=>a.scrollIntoView({block:'center',behavior:'smooth'}),60)});
 function loginMode(mode){
-['tabNew','tabIn','tabGuest'].forEach(id=>document.getElementById(id)?.classList.remove('active'));
-const ids={new:'tabNew',in:'tabIn',guest:'tabGuest'};
+['tabNew','tabIn','tabGuest','tabHidden','tabGhost'].forEach(id=>document.getElementById(id)?.classList.remove('active'));
+const ids={new:'tabNew',in:'tabIn',guest:'tabGuest',hidden:'tabHidden',ghost:'tabGhost'};
 document.getElementById(ids[mode])?.classList.add('active');
 const f=document.getElementById('loginForm');if(!f)return;
 if(mode==='guest'){
@@ -611,9 +610,7 @@ keepKeyboardVisible();
 async function doPrivilegedLogin(mode){
 const n=document.getElementById('ln')?.value||'',p=document.getElementById('lp')?.value||'';
 try{
-const j=await api('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,password:p})});
-if(mode==='ghost'&&!j.user?.owner)throw new Error('دخول الشبح مخصص لمالك الموقع فقط');
-if(mode==='hidden'&&!j.user?.staff)throw new Error('هذا الحساب لا يملك صلاحية الدخول المخفي');
+const j=await api('/api/login-privileged',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,password:p,mode})});
 sid=j.sid;localStorage.setItem('rimaz_sid',sid);await boot();
 }catch(e){toast(e.message||'تعذر الدخول');}
 }
