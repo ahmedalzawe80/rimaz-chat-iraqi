@@ -1515,7 +1515,8 @@ sid='';localStorage.removeItem('rimaz_sid');login();
   min-width:0!important;
 }
 #loginForm .rlGuestRow input,
-#loginForm .rlPasswordRow input{
+#loginForm .rlPasswordRow input,
+#loginForm > input.rlNameInput{
   grid-column:1!important;
   width:100%!important;
   min-width:0!important;
@@ -1535,11 +1536,18 @@ sid='';localStorage.removeItem('rimaz_sid');login();
   white-space:nowrap!important;
   padding:0 4px!important;
 }
-/* Keep the banner width unchanged; increase only its height to reveal more of the artwork. */
+#loginForm > input.rlNameInput{
+  width:55%!important;
+  max-width:55%!important;
+  min-width:0!important;
+  justify-self:end!important;
+  box-sizing:border-box!important;
+}
+/* Keep the banner width unchanged; reduce only its height slightly. */
 .rlLegacyBanner{
-  height:170px!important;
-  min-height:170px!important;
-  max-height:170px!important;
+  height:155px!important;
+  min-height:155px!important;
+  max-height:155px!important;
   overflow:hidden!important;
 }
 .rlLegacyBanner>img{
@@ -1548,6 +1556,32 @@ sid='';localStorage.removeItem('rimaz_sid');login();
   height:100%!important;
   object-fit:fill!important;
   object-position:center!important;
+}
+</style>
+
+
+<style id="rimaz-combined-header-final">
+/* Slightly reduce the black top strip and its R/settings controls only. */
+.rlTop{
+  height:48px!important;
+  min-height:48px!important;
+  max-height:48px!important;
+  padding:3px 9px!important;
+  box-sizing:border-box!important;
+}
+.rlHeartLogo{
+  width:36px!important;
+  height:36px!important;
+  min-width:36px!important;
+  flex:0 0 36px!important;
+}
+.rlBMark{font-size:27px!important;line-height:1!important}
+.rlRefresh{
+  width:36px!important;
+  height:36px!important;
+  min-width:36px!important;
+  flex:0 0 36px!important;
+  font-size:23px!important;
 }
 </style>
 
