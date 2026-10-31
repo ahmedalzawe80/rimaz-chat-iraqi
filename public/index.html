@@ -638,7 +638,7 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 /* Single three-part online header: connected on the left, black separator, title and count on the right. */
 .rlOnline .rlOnlineHead{
   display:grid!important;
-  grid-template-columns:minmax(88px,30%) minmax(0,1fr) minmax(150px,42%)!important;
+  grid-template-columns:31% 54% 15%!important;
   align-items:stretch!important;
   justify-content:initial!important;
   gap:0!important;
@@ -674,8 +674,8 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
   grid-column:3!important;
   display:flex!important;
   align-items:center!important;
-  justify-content:space-between!important;
-  gap:5px!important;
+  justify-content:center!important;
+  gap:3px!important;
   min-width:0!important;
   padding:3px 9px!important;
   background:#58b85f!important;
@@ -689,7 +689,7 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
   overflow:hidden!important;
   text-overflow:ellipsis!important;
   white-space:nowrap!important;
-  font-size:clamp(11px,2.2vw,15px)!important;
+  font-size:clamp(13px,3.2vw,18px)!important;
   line-height:1.2!important;
   font-weight:900!important;
 }
@@ -704,7 +704,7 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
   font-weight:900!important;
 }
 @media(max-width:420px){
-  .rlOnline .rlOnlineHead{grid-template-columns:minmax(76px,27%) minmax(0,1fr) minmax(142px,43%)!important;min-height:34px!important}
+  .rlOnline .rlOnlineHead{grid-template-columns:31% 54% 15%!important;min-height:34px!important}
   .rlOnline .rlOnlineConnected{font-size:14px!important;padding-inline:4px!important}
   .rlOnline .rlOnlineHeadRight{gap:3px!important;padding-inline:5px!important}
   .rlOnline .rlOnlineHeadLabel{font-size:11px!important}
@@ -727,7 +727,7 @@ app.innerHTML=`<div class="login rimazLogin"><header class="rlTop"><div class="r
 <button id="tabGuest" onclick="loginMode('guest')"><span>♟</span> دخول الزوار</button></div>
 <div id="loginForm" class="loginForm rlForm"></div>
 </section>
-<section class="rlOnline"><div class="rlOnlineHead" aria-label="حالة المتواجدين"><span class="rlOnlineConnected">متصل</span><span class="rlOnlineHeadDivider" aria-hidden="true"></span><div class="rlOnlineHeadRight"><span class="rlOnlineHeadLabel">👥 المتواجدين الآن</span><b><span id="rlOnlineCount">—</span></b></div></div><div id="rlOnlineList" class="rlOnlineList"><div class="rlOnlineEmpty">جارٍ تحميل المتواجدين…</div></div><div class="rlOnlineFoot">قائمة للعرض فقط — سجّل دخولك للمشاركة بالدردشة</div></section>
+<section class="rlOnline"><div class="rlOnlineHead" aria-label="حالة المتواجدين"><span class="rlOnlineConnected">متصل</span><span class="rlOnlineHeadDivider" aria-hidden="true"></span><div class="rlOnlineHeadRight" aria-label="المتواجدين الآن"><span class="rlOnlineHeadLabel" aria-hidden="true">👥</span><b><span id="rlOnlineCount">—</span></b></div></div><div id="rlOnlineList" class="rlOnlineList"><div class="rlOnlineEmpty">جارٍ تحميل المتواجدين…</div></div><div class="rlOnlineFoot">قائمة للعرض فقط — سجّل دخولك للمشاركة بالدردشة</div></section>
 <footer class="rlFooter"><span>دردشة ريماز عراقية</span><span>♥ أهلاً بكم</span></footer><div id="rlSecretModal" class="rlSecretModal hidden" role="dialog" aria-modal="true" aria-label="دخول خاص"><div class="rlSecretBox"><h3>دخول خاص</h3><button type="button" onclick="selectSecretLogin('hidden')">🛡 دخول المخفي</button><button type="button" onclick="selectSecretLogin('ghost')">👻 دخول الشبح</button><button type="button" class="rlSecretCancel" onclick="closeSecretLogin()">إلغاء</button></div></div></div>`;
 bindSecretLogo();loginMode('in');loadPublicOnline();if(window.rimazOnlineTimer)clearInterval(window.rimazOnlineTimer);window.rimazOnlineTimer=setInterval(loadPublicOnline,15000);
 }
