@@ -204,3 +204,11 @@ Run `npm test` before deployment. These local checks do not replace staging test
 - Restore a member's previous base role when a gift or VIP replaces a staff-like visual rank, and synchronize active sessions after durable save.
 - Normalize legacy profiles at startup so existing active ranks suppress old gifts/VIP, and active VIP suppresses old gifts.
 - Keep the general chat, private chat, wall, room rows, and other layouts unchanged.
+
+
+## v46.31.0 — online members stylesheet consolidation
+
+- Repaired malformed legacy style-tag boundaries and removed the duplicated closing tag that disrupted the intended stylesheet cascade.
+- Removed superseded one-off online-member layout patches and the obsolete broad grid declarations that overlapped the avatar and member information column.
+- Consolidated the online-members panel into one final, panel-scoped layout rule: avatar and badge retain their columns; name and status are stacked in the same text column for every member, including admin.
+- Kept private-contact rows and the general chat, private conversation, wall, and message layouts outside the new online-panel rule.
