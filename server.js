@@ -203,8 +203,13 @@ if(Array.isArray(db.welcomeMessages) && db.welcomeMessages.length && db.welcomeM
 if(Array.isArray(db.welcomeMessages) && db.welcomeMessages.length===2 && db.welcomeMessages.some(m=>String(m.text||'').includes('إدارة ريماز ترحب'))) db.welcomeMessages=agreedWelcomeDefaults;
 try { save(); } catch(e) { console.error('Could not persist welcome-message defaults/migration:',e.message); }
 // Remove expired timed announcements after restarts; expiry is stored with the announcement.
-const expiredAnnouncementIds=new Set((db.announcements||[]).filter(a=>a&&a.duration==='5m'&&Number(a.at)+300000<=Date.now()).map(a=>String(a.id)));
+const expiredAnnouncementIds=new Set((db.announcements||[]).filter(a=>a&&['5m','15m'].includes(a.duration)&&Number(a.at)+900000<=Date.now()).map(a=>String(a.id)));
 if(expiredAnnouncementIds.size){db.announcements=(db.announcements||[]).filter(a=>!expiredAnnouncementIds.has(String(a.id)));db.messages=(db.messages||[]).filter(m=>![...expiredAnnouncementIds].some(id=>String(m.id||'').startsWith(id+'-')));try{fs.writeFileSync(DB_FILE,JSON.stringify(db,null,2))}catch(e){console.error('Could not clean expired announcements:',e.message)}}
+// Announcements are never delivered to private rooms; remove any legacy copies there.
+const privateAnnouncementRooms=new Set((db.rooms||[]).filter(room=>room?.kind==='private').map(room=>String(room.id)));
+const beforePrivateAnnouncementCleanup=(db.messages||[]).length;
+db.messages=(db.messages||[]).filter(message=>message?.type!=='announcement'||!privateAnnouncementRooms.has(String(message.room)));
+if(db.messages.length!==beforePrivateAnnouncementCleanup){try{fs.writeFileSync(DB_FILE,JSON.stringify(db,null,2))}catch(e){console.error('Could not clean private-room announcements:',e.message)}}
 // Normalize legacy saved role permissions at startup so old arrays cannot invert rank hierarchy.
 const ROLE_PERMISSION_CEILINGS={super:['panel_access','users_view','shortcuts_manage','smileys_manage'],banner:['panel_access','users_view','moderation','messages_delete','gifts','announcements','shortcuts_manage','smileys_manage'],admin:Object.keys({panel_access:1,users_view:1,moderation:1,kick_room:1,ban_room:1,mute_room:1,global_kick:1,global_ban:1,messages_delete:1,gifts:1,announcements:1,announcement_post:1,announcement_delete:1,rooms_manage:1,vip:1,profile_edit:1,avatar_delete:1,grant_likes:1,role_assign:1,rank_assign:1,permission_manage:1,member_ip:1,reset_likes:1,chat_tools_manage:1,shortcuts_manage:1,smileys_manage:1,room_move:1,wall_stop:1,wall_restart:1,wall_clear:1,wall_delete_user:1,welcome_manage:1,audit_view:1,stats_view:1,chat_filter_manage:1,member_status_manage:1})};
 const RANK_PERMISSION_PROFILES=['admin-full','super-red','super-white','super-black','crown-silver','crown-gold','admin-shield'];
@@ -283,8 +288,45 @@ function purgePrivateHistoryAtStartup(){
 }
 purgePrivateHistoryAtStartup();
 
-function scheduleAnnouncementExpiry(item){if(!item||item.duration!=='5m'||!item.id)return;const delay=Math.max(0,Number(item.at||Date.now())+300000-Date.now());setTimeout(()=>{const id=String(item.id);db.announcements=(db.announcements||[]).filter(a=>String(a.id)!==id);const removed=(db.messages||[]).filter(m=>String(m.id||'').startsWith(id+'-'));db.messages=(db.messages||[]).filter(m=>!String(m.id||'').startsWith(id+'-'));for(const m of removed)io.emit('message-deleted',{id:m.id});try{save()}catch(e){console.error('Announcement expiry save failed:',e.message)}},delay).unref?.();}
-for(const item of (db.announcements||[])) scheduleAnnouncementExpiry(item);
+const ANNOUNCEMENT_INTERVAL_MS=15*60*1000;
+function announcementRooms(){return (db.rooms||[]).filter(room=>room&&room.kind!=='private');}
+function publishAnnouncement(item){
+  if(!item||!item.id)return [];
+  const at=Date.now();
+  const messages=announcementRooms().map(room=>({id:String(item.id)+'-'+room.id+'-'+at,announcementId:String(item.id),room:room.id,from:item.from,displayName:displayName(item.from),role:item.role,type:'announcement',text:item.text,at,duration:item.duration,profile:profile(item.from)}));
+  db.messages=[...(db.messages||[]),...messages].slice(-1000);
+  for(const message of messages)io.to(message.room).emit('message',message);
+  try{save()}catch(error){console.error('Announcement publish save failed:',error.message);}
+  return messages;
+}
+function removeAnnouncement(itemId){
+  const id=String(itemId);
+  db.announcements=(db.announcements||[]).filter(a=>String(a.id)!==id);
+  const removed=(db.messages||[]).filter(m=>String(m.announcementId||'')===id||String(m.id||'').startsWith(id+'-'));
+  db.messages=(db.messages||[]).filter(m=>String(m.announcementId||'')!==id&&!String(m.id||'').startsWith(id+'-'));
+  for(const message of removed)io.emit('message-deleted',{id:message.id});
+  try{save()}catch(error){console.error('Announcement cleanup save failed:',error.message);}
+  return removed;
+}
+function scheduleAnnouncementExpiry(item){
+  if(!item||!['5m','15m'].includes(item.duration)||!item.id)return;
+  const delay=Math.max(0,Number(item.at||Date.now())+ANNOUNCEMENT_INTERVAL_MS-Date.now());
+  setTimeout(()=>removeAnnouncement(item.id),delay).unref?.();
+}
+function schedulePermanentAnnouncement(item){
+  if(!item||item.duration!=='permanent'||!item.id)return;
+  const tick=()=>{
+    if(!(db.announcements||[]).some(a=>String(a.id)===String(item.id)))return;
+    publishAnnouncement(item);
+    const timer=setTimeout(tick,ANNOUNCEMENT_INTERVAL_MS);timer.unref?.();
+  };
+  const firstDelay=Math.max(0,Number(item.at||Date.now())+ANNOUNCEMENT_INTERVAL_MS-Date.now());
+  const timer=setTimeout(tick,firstDelay);timer.unref?.();
+}
+for(const item of (db.announcements||[])){
+  if(['5m','15m'].includes(item.duration))scheduleAnnouncementExpiry(item);
+  else schedulePermanentAnnouncement(item);
+}
 
 const PUBLIC_RETENTION_MS=24*60*60*1000;
 function containsStoredUrl(value,url,seen=new Set()){
@@ -928,18 +970,16 @@ app.post('/api/admin/member-action',(req,res)=>{requireAuth(req,res,()=>{
 });});
 app.post('/api/admin/broadcast',requireAdmin,(req,res)=>{
   const text=String(req.body.text||'').trim();if(!text)return res.status(400).json({error:'نص الإعلان فارغ'});
-  const duration=req.body.duration==='5m'?'5m':'permanent';
+  const duration=['5m','15m'].includes(req.body.duration)?'15m':'permanent';
   const item={id:crypto.randomUUID(),text:text.slice(0,2000),from:req.user.name,role:roleOf(req.user),at:Date.now(),duration};
   const previousAnnouncements=db.announcements,previousMessages=db.messages;
   db.announcements=[...(db.announcements||[]),item].slice(-100).reverse();
-  const messages=db.rooms.map(room=>({id:item.id+'-'+room.id,announcementId:item.id,room:room.id,from:item.from,displayName:displayName(item.from),role:item.role,type:'announcement',text:item.text,at:item.at,duration:item.duration,profile:profile(item.from)}));
-  db.messages=[...(db.messages||[]),...messages].slice(-1000);
   try{save()}catch(e){if(previousAnnouncements===undefined)delete db.announcements;else db.announcements=previousAnnouncements;if(previousMessages===undefined)delete db.messages;else db.messages=previousMessages;console.error('Announcement save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الإعلان'});}
-  for(const message of messages)io.to(message.room).emit('message',message);
-  if(duration==='5m')scheduleAnnouncementExpiry(item);
+  publishAnnouncement(item);
+  if(duration==='15m')scheduleAnnouncementExpiry(item);else schedulePermanentAnnouncement(item);
   res.json({ok:true,announcement:item});
 });
-app.delete('/api/admin/announcement/:id',requireAdmin,(req,res)=>{const id=String(req.params.id);const existed=(db.announcements||[]).some(x=>x.id===id);db.announcements=(db.announcements||[]).filter(x=>x.id!==id);const removed=db.messages.filter(m=>String(m.id||'').startsWith(id+'-'));db.messages=db.messages.filter(m=>!String(m.id||'').startsWith(id+'-'));for(const m of removed)io.emit('message-deleted',{id:m.id});save();res.json({ok:true,removedMessages:removed.length,existed});});
+app.delete('/api/admin/announcement/:id',requireAdmin,(req,res)=>{const id=String(req.params.id);const existed=(db.announcements||[]).some(x=>String(x.id)===id);const removed=removeAnnouncement(id);res.json({ok:true,removedMessages:removed.length,existed});});
 app.delete('/api/admin/message/:id',requireAdmin,(req,res)=>{const id=req.params.id;db.messages=db.messages.filter(x=>x.id!==id);save();io.emit('message-deleted',{id});res.json({ok:true});});
 app.patch('/api/admin/profile/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);if(isOwner({name:n,role:(getUser(n)||getGuest(n)||{}).role})&&!isOwner(req.user))return res.status(403).json({error:'ملف صاحب الموقع محمي من الإداريين'});if(!getUser(n)&&!getGuest(n))return res.status(404).json({error:'العضو غير موجود'});const p=profile(n);if(req.body.displayName!==undefined){const dn=cleanName(req.body.displayName);if(!dn)return res.status(400).json({error:'الزخرفة لا يمكن أن تكون فارغة'});p.displayName=dn;}if(req.body.nameColor!==undefined){const c=String(req.body.nameColor||'');if(!/^#[0-9a-fA-F]{6}$/.test(c))return res.status(400).json({error:'لون الاسم غير صحيح'});p.nameColor=c;}if(req.body.fontColor!==undefined){const c=String(req.body.fontColor||'');if(!/^#[0-9a-fA-F]{6}$/.test(c))return res.status(400).json({error:'لون الخط غير صحيح'});p.fontColor=c;}if(req.body.bgColor!==undefined){const c=String(req.body.bgColor||'');if(!/^#[0-9a-fA-F]{6}$/.test(c))return res.status(400).json({error:'لون الخلفية غير صحيح'});p.bgColor=c;}save();io.emit('profile-changed',{name:n,profile:p,displayName:p.displayName||cleanName(n)});res.json({ok:true,profile:p,displayName:p.displayName||cleanName(n)});});
 app.patch('/api/admin/member-stats/:name',requireAuth,(req,res)=>{const n=accountKey(req.params.name),field=String(req.body.field||''),value=Number(req.body.value);const user=getUser(n),guest=getGuest(n),target=user||guest;if(!target)return res.status(404).json({error:'العضو غير موجود'});if(isOwner({name:n,role:target.role})&&!(isOwner(req.user)&&keyName(req.user.name)===keyName(n)))return res.status(403).json({error:'حساب صاحب الموقع محمي من تعديل البيانات'});if(!Number.isInteger(value)||value<0||value>1000000)return res.status(400).json({error:'القيمة يجب أن تكون عدداً صحيحاً بين 0 و1000000'});if(field==='likes'){if(!hasPermission(req.user,'grant_likes'))return res.status(403).json({error:'ما عندك صلاحية تعديل اللايكات'});target.likes=value;save();io.emit('likes-changed',{name:n,likes:value,level:level(value)});emitState();return res.json({ok:true,field,likes:value});}if(field==='points'){if(!hasPermission(req.user,'panel_access'))return res.status(403).json({error:'ما عندك صلاحية تعديل النقاط'});target.points=value;save();io.emit('member-stats-changed',{name:n,points:value});emitState();return res.json({ok:true,field,points:value});}return res.status(400).json({error:'نوع القيمة غير معروف'});});
