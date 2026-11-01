@@ -1520,23 +1520,45 @@ window.addEventListener('beforeunload',()=>socket?.disconnect());
 sid='';localStorage.removeItem('rimaz_sid');login();
 </script>
 <style id="rimaz-private-half-screen-final">
-/* Private chat is a top-docked half-screen panel; the rest of the room stays visible. */
-#layer>.privateOverlay{position:absolute!important;left:0!important;right:0!important;top:0!important;bottom:auto!important;width:100%!important;height:52%!important;max-height:52%!important;min-height:0!important;margin:0!important;display:flex!important;flex-direction:column!important;z-index:40!important;box-sizing:border-box!important;border:1px solid #444!important;box-shadow:0 8px 24px #0004!important;background:#fff!important;}
-#layer .privateOverlay .privateHead{height:42px!important;min-height:42px!important;flex:0 0 42px!important;display:grid!important;grid-template-columns:25px 5px 36px minmax(0,1fr) auto!important;gap:7px!important;align-items:center!important;padding:3px 6px!important;direction:ltr!important;background:#111!important;color:#fff!important;box-sizing:border-box!important;}
-.privateHead .privateStatus{display:block!important;width:5px!important;grid-column:2!important;height:32px!important;border-radius:3px!important;grid-column:1!important;}
-.privateHead .privateStatus.statusOpen{background:#58bf61!important}.privateHead .privateStatus.statusClosed{background:#df5555!important}.privateHead .privateStatus.statusOffline{background:#999!important}
-.privateHeadAvatar{grid-column:3!important;width:34px!important;height:34px!important;object-fit:cover!important;border-radius:4px!important;display:block!important;}
-.privateHeadName{grid-column:4!important;min-width:0!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;gap:1px!important;text-align:left!important;direction:rtl!important;}
-.privateHeadName b{font-size:13px!important;font-weight:800!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;line-height:1.15!important;}
-.privateHeadName small{font-size:9px!important;color:#ccc!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
-.privateHeadActions{grid-column:5!important;display:flex!important;align-items:center!important;gap:4px!important;}
-.privateHeadActions button{width:32px!important;height:32px!important;border:0!important;border-radius:4px!important;font-size:17px!important;touch-action:manipulation!important;}
-.privateHeadActions .privateLike{background:#df303b!important;color:#fff!important;font-weight:900!important;}
-.privateHeadActions .blue{background:#287eae!important;color:#fff!important;}
-#layer>.privateOverlay .privateBody{position:relative!important;flex:1 1 auto!important;min-height:0!important;overflow:auto!important;padding:3px 5px 24px!important;box-sizing:border-box!important;}
-.privateMinimize{position:absolute!important;top:46px!important;right:5px!important;z-index:45!important;display:block!important;height:22px!important;padding:0 8px!important;margin:0!important;background:#333!important;color:#fff!important;border:0!important;border-radius:4px!important;font-size:10px!important;}
-#layer>.privateOverlay .privateComposer{position:relative!important;left:auto!important;right:auto!important;bottom:auto!important;flex:0 0 39px!important;height:39px!important;min-height:39px!important;padding:3px!important;box-sizing:border-box!important;background:#fff!important;}
-@media(max-width:650px){#layer>.privateOverlay{width:100%!important;height:52%!important;max-height:52%!important;top:0!important;bottom:auto!important;} .privateHeadName b{font-size:12px!important;} .privateHeadActions button{width:30px!important;height:30px!important;}}
+/* Restore the original compact private-conversation card; keep it independent from generic overlays. */
+#layer > .privateConversationOverlay:not(.privateMax){
+  position:absolute!important;top:22%!important;bottom:auto!important;
+  left:50%!important;right:auto!important;transform:translateX(-50%)!important;
+  width:78%!important;max-width:430px!important;min-width:0!important;
+  height:54%!important;max-height:54%!important;min-height:0!important;
+  display:flex!important;flex-direction:column!important;overflow:hidden!important;
+  box-sizing:border-box!important;border:1px solid #555!important;background:#fff!important;
+}
+#layer > .privateConversationOverlay.privateMax{
+  position:absolute!important;top:14%!important;bottom:auto!important;
+  left:50%!important;right:auto!important;transform:translateX(-50%)!important;
+  width:86%!important;max-width:520px!important;height:70%!important;
+  max-height:70%!important;min-height:0!important;
+}
+#layer > .privateConversationOverlay .privateHead{flex:0 0 60px!important;height:60px!important;min-height:60px!important;}
+#layer > .privateConversationOverlay .privateBody{flex:1 1 auto!important;min-height:0!important;overflow:auto!important;}
+#layer > .privateConversationOverlay .privateComposer{
+  direction:rtl!important;display:grid!important;
+  grid-template-columns:47px minmax(0,1fr) 29px 29px 29px!important;
+  grid-auto-flow:column!important;gap:2px!important;
+  flex:0 0 39px!important;height:39px!important;min-height:39px!important;
+  padding:3px!important;box-sizing:border-box!important;
+}
+#layer > .privateConversationOverlay .privateComposer .composerRichInput{
+  grid-column:2!important;grid-row:1!important;min-width:0!important;width:100%!important;
+  height:29px!important;min-height:29px!important;max-height:29px!important;
+  align-self:center!important;box-sizing:border-box!important;
+}
+#layer > .privateConversationOverlay .privateComposer>button{
+  grid-row:1!important;min-width:0!important;width:100%!important;
+  height:29px!important;min-height:29px!important;max-height:29px!important;
+  padding:0 2px!important;font-size:9px!important;box-sizing:border-box!important;
+}
+#layer > .privateConversationOverlay .privateComposer>button.green{width:29px!important;min-width:29px!important;max-width:29px!important;}
+@media(max-width:650px){
+ #layer > .privateConversationOverlay:not(.privateMax){top:21%!important;left:50%!important;right:auto!important;transform:translateX(-50%)!important;width:84%!important;max-width:430px!important;height:55%!important;max-height:55%!important;}
+ #layer > .privateConversationOverlay.privateMax{top:14%!important;left:50%!important;right:auto!important;transform:translateX(-50%)!important;width:94%!important;max-width:none!important;height:70%!important;max-height:70%!important;}
+}
 </style>
 
 
@@ -1709,7 +1731,7 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 .emojiGrid .smileyImageBtn{min-height:48px!important;min-width:0!important;background:#fff!important;border:1px solid #e6e6e6!important;border-radius:6px!important}
 .emojiGrid .smileyImageBtn img{width:38px!important;height:38px!important;object-fit:contain!important}
 </style>
-<style>.composer .composerRichInput{grid-column:2;grid-row:1;height:32px;min-height:32px;max-height:32px;align-self:center}.composer{grid-template-columns:48px minmax(0,1fr) 34px 34px!important}.privateComposer .composerRichInput{grid-column:2;grid-row:1;height:29px;min-height:29px;max-height:54px;align-self:center}.privateComposer{grid-template-columns:47px 34px 34px 34px minmax(0,1fr)!important}.wallCompose .composerRichInput{grid-column:2;grid-row:1}.composerRichInput{min-width:0;min-height:32px;max-height:74px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;outline:none;border:1px solid #aaa;background:#fff;padding:6px 7px;font:inherit;line-height:1.25;text-align:right;direction:rtl}.composerRichInput:empty:before{content:attr(data-placeholder);color:#888;pointer-events:none}.composerRichInput .composerSmiley{width:21px;height:21px;max-width:21px;max-height:21px;object-fit:contain;vertical-align:middle}.wallComposerRich{height:32px;min-height:32px;max-height:64px;width:100%;padding:5px}.msgtext img.chatSmiley,.pmsg .chatSmiley,.wallText .chatSmiley{width:21px!important;height:21px!important;max-width:21px!important;max-height:21px!important;object-fit:contain!important;vertical-align:middle!important}.emojiGrid .smileyImageBtn img{width:21px!important;height:21px!important;object-fit:contain!important}</style>
+<style>.composer .composerRichInput{grid-column:2;grid-row:1;height:32px;min-height:32px;max-height:32px;align-self:center}.composer{grid-template-columns:48px minmax(0,1fr) 34px 34px!important}.privateComposer .composerRichInput{grid-column:2;grid-row:1;height:29px;min-height:29px;max-height:29px;align-self:center}.privateComposer{direction:rtl!important;grid-template-columns:47px minmax(0,1fr) 29px 29px 29px!important;gap:2px!important}.wallCompose .composerRichInput{grid-column:2;grid-row:1}.composerRichInput{min-width:0;min-height:32px;max-height:74px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;outline:none;border:1px solid #aaa;background:#fff;padding:6px 7px;font:inherit;line-height:1.25;text-align:right;direction:rtl}.composerRichInput:empty:before{content:attr(data-placeholder);color:#888;pointer-events:none}.composerRichInput .composerSmiley{width:21px;height:21px;max-width:21px;max-height:21px;object-fit:contain;vertical-align:middle}.wallComposerRich{height:32px;min-height:32px;max-height:64px;width:100%;padding:5px}.msgtext img.chatSmiley,.pmsg .chatSmiley,.wallText .chatSmiley{width:21px!important;height:21px!important;max-width:21px!important;max-height:21px!important;object-fit:contain!important;vertical-align:middle!important}.emojiGrid .smileyImageBtn img{width:21px!important;height:21px!important;object-fit:contain!important}</style>
 
 <style id="rimaz-profile-layout-recovery-v4613">
 /* Recover the original complete profile header and keep the full card visible. */
@@ -2187,32 +2209,5 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 </style>
 
 
-<style id="rimaz-v46-36-private-conversation-card-only">
-/* The direct conversation opened from a member profile is a compact card.
-   It is intentionally excluded from the generic full-height overlay rules. */
-#layer > .privateConversationOverlay:not(.privateMax){
-  position:absolute!important;
-  top:22%!important; bottom:auto!important;
-  right:0!important; left:auto!important;
-  width:78%!important; max-width:430px!important; min-width:0!important;
-  height:54%!important; max-height:54%!important; min-height:0!important;
-  box-sizing:border-box!important; overflow:hidden!important;
-}
-#layer > .privateConversationOverlay.privateMax{
-  position:absolute!important; top:14%!important; bottom:auto!important;
-  right:0!important; left:auto!important; width:86%!important; max-width:520px!important;
-  height:70%!important; max-height:70%!important; min-height:0!important;
-}
-@media(max-width:650px){
-  #layer > .privateConversationOverlay:not(.privateMax){
-    top:21%!important; bottom:auto!important; right:0!important; left:auto!important;
-    width:84%!important; max-width:430px!important;
-    height:55%!important; max-height:55%!important;
-  }
-  #layer > .privateConversationOverlay.privateMax{
-    top:14%!important; bottom:auto!important; right:0!important; left:auto!important;
-    width:94%!important; max-width:none!important; height:70%!important; max-height:70%!important;
-  }
-}
-</style>
+
 </body></html>
