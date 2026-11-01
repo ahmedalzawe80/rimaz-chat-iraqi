@@ -1,4 +1,4 @@
-# Rimaz Chat v46.27 — Reference Login Layout and Private Entry
+# Rimaz Chat v46.28 — Role-Specific Admin Panel and Gift Notice
 
 ## Current changes
 - Reworked the entry page toward the supplied legacy Iraqi chat reference: compact black masthead with B mark and refresh control, burgundy banner, three RTL login tabs, compact login form, and long online-member rows.
@@ -189,7 +189,7 @@ Run `npm test` before deployment. These local checks do not replace staging test
 - The owner/admin remain the only accounts allowed to edit rank permission sets; protected owner-account actions remain protected.
 
 
-## v46.27.0 — Permission editor compatibility
+## v46.28.0 — Role-specific admin visibility and gift notice
 - Added Arabic labels for audit log, site statistics, chat word filter, and member status permissions in both rank editors.
 - Added permission schema/version metadata to permission and rank catalogs.
 - Added client preflight checks before saving permissions or custom rank definitions, with clear Arabic compatibility errors.
