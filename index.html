@@ -2186,4 +2186,40 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 @media(max-width:650px){#layer .roomsOverlay .room{grid-template-columns:44px 16px minmax(0,1fr) 40px!important;}}
 </style>
 
+
+
+<style id="rimaz-v46-35-restore-private-window-size">
+/* Restore the compact direct private-chat window. Do not affect the private contacts list or other overlays. */
+#layer>.privateOverlay:not(.privateMax){
+  position:absolute!important;
+  top:22%!important; bottom:auto!important;
+  right:0!important; left:auto!important;
+  width:78%!important; max-width:430px!important; min-width:0!important;
+  height:54%!important; max-height:54%!important; min-height:0!important;
+  box-sizing:border-box!important; overflow:hidden!important;
+}
+#layer>.privateOverlay.privateMax{
+  position:absolute!important;
+  top:14%!important; bottom:auto!important;
+  right:0!important; left:auto!important;
+  width:86%!important; max-width:520px!important;
+  height:70%!important; max-height:70%!important; min-height:0!important;
+  box-sizing:border-box!important; overflow:hidden!important;
+}
+@media(max-width:650px){
+  #layer>.privateOverlay:not(.privateMax){
+    top:21%!important; bottom:auto!important;
+    right:0!important; left:auto!important;
+    width:84%!important; max-width:430px!important;
+    height:55%!important; max-height:55%!important;
+  }
+  #layer>.privateOverlay.privateMax{
+    top:14%!important; bottom:auto!important;
+    right:0!important; left:auto!important;
+    width:94%!important; max-width:none!important;
+    height:70%!important; max-height:70%!important;
+  }
+}
+</style>
+
 </body></html>
