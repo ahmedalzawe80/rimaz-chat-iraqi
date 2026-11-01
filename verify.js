@@ -175,6 +175,23 @@ try {
 
 
 
+// Gift, VIP, and visual rank are mutually exclusive member distinctions.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const gift = source.match(/app\.post\('\/api\/admin\/gift',[\s\S]*?\n\}\);/);
+  const vip = source.match(/app\.post\('\/api\/admin\/gift-vip',[\s\S]*?\n\}\);/);
+  const rank = source.match(/app\.post\('\/api\/admin\/rank',[\s\S]*?\n\}\);/);
+  const css = fs.readFileSync(mainPath, 'utf8');
+  if (gift && gift[0].includes('clearRankForBadgeReplacement') && gift[0].includes('delete p.vipUntil') && gift[0].includes('p.gifts=[record]')) pass('new gift replaces prior gift, VIP, and visual rank');
+  else fail('new gift replaces prior gift, VIP, and visual rank');
+  if (vip && vip[0].includes('clearRankForBadgeReplacement') && vip[0].includes('p.gifts=[]') && vip[0].includes('p.vipUntil=')) pass('VIP replaces previous gift and visual rank');
+  else fail('VIP replaces previous gift and visual rank');
+  if (rank && rank[0].includes('p.gifts=[]') && rank[0].includes('delete p.vipUntil')) pass('new visual rank replaces previous gift and VIP');
+  else fail('new visual rank replaces previous gift and VIP');
+  if (css.includes('rimaz-online-members-status-final-v2') && css.includes('grid-template-rows:22px 18px!important') && css.includes('.member .memberSub,#layer .membersOverlay .member.adminMember .memberSub')) pass('online-members panel forces status onto a separate line under the name');
+  else fail('online-members status is directly under the name');
+} catch (error) { fail('badge exclusivity and online layout checks', error.message); }
+
 // Chat messages are persisted in a short batch rather than synchronously per message.
 try {
   const source=fs.readFileSync(server,'utf8');
