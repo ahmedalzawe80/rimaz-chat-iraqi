@@ -371,6 +371,24 @@ try {
   pass('v46.26 granular permissions are present in rank editor and server routes');
 } catch (error) { fail('v46.26 granular permission checks', error.message); }
 
+
+// v46.28 admin panel visibility and gift-notice regression checks
+try {
+  const permissionHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const permissionServer = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+  if (!permissionHtml.includes("document.querySelectorAll('.overlay.admin .tabs button')")) throw new Error('admin tab filter does not target the actual tab container');
+  if (permissionHtml.includes("document.querySelectorAll('.overlay.adminPanel .tabs button')")) throw new Error('stale incorrect admin tab selector remains');
+  for (const key of ['users_view','grant_likes','reset_likes','rooms_manage','announcement_post','announcement_delete','member_status_manage','wall_delete_user']) {
+    if (!permissionHtml.includes(key)) throw new Error(`missing client permission ${key}`);
+  }
+  if (!permissionHtml.includes("welcome:(me?.owner||me?.admin||hasClientPermission('welcome_manage'))")) throw new Error('welcome tab is not aligned with its permission');
+  if (!permissionHtml.includes("can('profile_edit')") || !permissionHtml.includes("can('member_ip')")) throw new Error('member action buttons are not individually filtered');
+  if (!permissionServer.includes('fromDisplayName:displayName(req.user.name)') || !permissionServer.includes('fromProfile:profile(req.user.name)')) throw new Error('gift sender identity is incomplete');
+  if (permissionServer.includes("req.user.name+' (admin) هدية:")) throw new Error('gift sender name can still be duplicated');
+  if (!permissionHtml.includes('rimaz-gift-alert-title') || !permissionHtml.includes('rimaz-gift-sender')) throw new Error('reference gift alert layout is missing');
+  pass('v46.28 role-specific admin buttons and reference gift notice');
+} catch (error) { fail('v46.28 admin visibility and gift notice checks', error.message); }
+
 if (failures.length) {
   console.error(`\n${failures.length} verification check(s) failed.`);
   process.exitCode = 1;
