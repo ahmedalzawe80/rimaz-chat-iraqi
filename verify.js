@@ -244,8 +244,8 @@ try {
 try {
   const source = fs.readFileSync(server, 'utf8');
   const route = source.match(/app\.post\('\/api\/admin\/broadcast',[\s\S]*?\n\}\);/);
-  if (route && route[0].includes('previousAnnouncements') && route[0].includes('previousMessages') && route[0].includes("try{save()}catch(e)") && route[0].includes('publishAnnouncement(item)') && source.includes("const ANNOUNCEMENT_INTERVAL_MS=15*60*1000") && source.includes("function announcementRooms(){return (db.rooms||[]).filter(room=>room&&room.id&&room.kind!=='wall');}") && source.includes("title:item.title||'إعلان إداري'")) pass('announcement delivery is persisted atomically to all chat rooms, with administrative titles');
-  else fail('announcement delivery is persisted atomically before broadcast');
+  if (route && route[0].includes('previousAnnouncements') && route[0].includes('previousMessages') && route[0].includes("try{save()}catch(e)") && route[0].includes('publishAnnouncement(item)') && source.includes("const ANNOUNCEMENT_INTERVAL_MS=15*60*1000") && source.includes('function isAnnouncementRoom(room)') && source.includes('function announcementRooms(){return (Array.isArray(db.rooms)?db.rooms:[]).filter(isAnnouncementRoom);}') && source.includes("!['wall','__wall__','__private__'].includes(id)") && source.includes('function roomHistoryWithAnnouncements(roomId,viewer,createdAt=0)') && source.includes('roomHistoryWithAnnouncements(room,u,Number(u.created)||0)') && source.includes("title:item.title||'إعلان إداري'")) pass('announcement delivery covers every configured room, excludes only wall/DM channels, and restores active notices after history eviction');
+  else fail('announcement delivery is persisted atomically and reaches every configured room');
 } catch (error) { fail('announcement transaction checks', error.message); }
 
 // Session revocation: logout disconnects every socket using that session, and a
