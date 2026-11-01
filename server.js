@@ -205,11 +205,9 @@ try { save(); } catch(e) { console.error('Could not persist welcome-message defa
 // Remove expired timed announcements after restarts; expiry is stored with the announcement.
 const expiredAnnouncementIds=new Set((db.announcements||[]).filter(a=>a&&['5m','15m'].includes(a.duration)&&Number(a.at)+900000<=Date.now()).map(a=>String(a.id)));
 if(expiredAnnouncementIds.size){db.announcements=(db.announcements||[]).filter(a=>!expiredAnnouncementIds.has(String(a.id)));db.messages=(db.messages||[]).filter(m=>![...expiredAnnouncementIds].some(id=>String(m.id||'').startsWith(id+'-')));try{fs.writeFileSync(DB_FILE,JSON.stringify(db,null,2))}catch(e){console.error('Could not clean expired announcements:',e.message)}}
-// Announcements are never delivered to private rooms; remove any legacy copies there.
-const privateAnnouncementRooms=new Set((db.rooms||[]).filter(room=>room?.kind==='private').map(room=>String(room.id)));
-const beforePrivateAnnouncementCleanup=(db.messages||[]).length;
-db.messages=(db.messages||[]).filter(message=>message?.type!=='announcement'||!privateAnnouncementRooms.has(String(message.room)));
-if(db.messages.length!==beforePrivateAnnouncementCleanup){try{fs.writeFileSync(DB_FILE,JSON.stringify(db,null,2))}catch(e){console.error('Could not clean private-room announcements:',e.message)}}
+// Direct private conversations and the wall are separate from db.rooms.
+// Keep room announcements available in every configured room, including rooms
+// whose access kind is private; only one-to-one DMs and the wall are excluded.
 // Normalize legacy saved role permissions at startup so old arrays cannot invert rank hierarchy.
 const ROLE_PERMISSION_CEILINGS={super:['panel_access','users_view','shortcuts_manage','smileys_manage'],banner:['panel_access','users_view','moderation','messages_delete','gifts','announcements','shortcuts_manage','smileys_manage'],admin:Object.keys({panel_access:1,users_view:1,moderation:1,kick_room:1,ban_room:1,mute_room:1,global_kick:1,global_ban:1,messages_delete:1,gifts:1,announcements:1,announcement_post:1,announcement_delete:1,rooms_manage:1,vip:1,profile_edit:1,avatar_delete:1,grant_likes:1,role_assign:1,rank_assign:1,permission_manage:1,member_ip:1,reset_likes:1,chat_tools_manage:1,shortcuts_manage:1,smileys_manage:1,room_move:1,wall_stop:1,wall_restart:1,wall_clear:1,wall_delete_user:1,welcome_manage:1,audit_view:1,stats_view:1,chat_filter_manage:1,member_status_manage:1})};
 const RANK_PERMISSION_PROFILES=['admin-full','super-red','super-white','super-black','crown-silver','crown-gold','admin-shield'];
@@ -289,11 +287,11 @@ function purgePrivateHistoryAtStartup(){
 purgePrivateHistoryAtStartup();
 
 const ANNOUNCEMENT_INTERVAL_MS=15*60*1000;
-function announcementRooms(){return (db.rooms||[]).filter(room=>room&&room.kind!=='private');}
+function announcementRooms(){return (db.rooms||[]).filter(room=>room&&room.id&&room.kind!=='wall');}
 function publishAnnouncement(item){
   if(!item||!item.id)return [];
   const at=Date.now();
-  const messages=announcementRooms().map(room=>({id:String(item.id)+'-'+room.id+'-'+at,announcementId:String(item.id),room:room.id,from:item.from,displayName:displayName(item.from),role:item.role,type:'announcement',text:item.text,at,duration:item.duration,profile:profile(item.from)}));
+  const messages=announcementRooms().map(room=>({id:String(item.id)+'-'+room.id+'-'+at,announcementId:String(item.id),room:room.id,from:'الإدارة',displayName:'الإدارة',title:item.title||'إعلان إداري',role:'admin',type:'announcement',text:item.text,at,duration:item.duration,profile:{}}));
   db.messages=[...(db.messages||[]),...messages].slice(-1000);
   for(const message of messages)io.to(message.room).emit('message',message);
   try{save()}catch(error){console.error('Announcement publish save failed:',error.message);}
@@ -971,7 +969,8 @@ app.post('/api/admin/member-action',(req,res)=>{requireAuth(req,res,()=>{
 app.post('/api/admin/broadcast',requireAdmin,(req,res)=>{
   const text=String(req.body.text||'').trim();if(!text)return res.status(400).json({error:'نص الإعلان فارغ'});
   const duration=['5m','15m'].includes(req.body.duration)?'15m':'permanent';
-  const item={id:crypto.randomUUID(),text:text.slice(0,2000),from:req.user.name,role:roleOf(req.user),at:Date.now(),duration};
+  const title=String(req.body.title||'').trim().slice(0,60)||(duration==='permanent'?'إعلان إداري':'إعلان للدعاية والمسابقات');
+  const item={id:crypto.randomUUID(),title,text:text.slice(0,2000),from:'الإدارة',displayName:'الإدارة',role:'admin',at:Date.now(),duration,profile:{}};
   const previousAnnouncements=db.announcements,previousMessages=db.messages;
   db.announcements=[...(db.announcements||[]),item].slice(-100).reverse();
   try{save()}catch(e){if(previousAnnouncements===undefined)delete db.announcements;else db.announcements=previousAnnouncements;if(previousMessages===undefined)delete db.messages;else db.messages=previousMessages;console.error('Announcement save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الإعلان'});}

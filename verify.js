@@ -244,7 +244,7 @@ try {
 try {
   const source = fs.readFileSync(server, 'utf8');
   const route = source.match(/app\.post\('\/api\/admin\/broadcast',[\s\S]*?\n\}\);/);
-  if (route && route[0].includes('previousAnnouncements') && route[0].includes('previousMessages') && route[0].includes("try{save()}catch(e)") && route[0].includes('publishAnnouncement(item)') && source.includes("const ANNOUNCEMENT_INTERVAL_MS=15*60*1000") && source.includes("room.kind!=='private'")) pass('announcement delivery is persisted atomically and scheduled only to non-private rooms');
+  if (route && route[0].includes('previousAnnouncements') && route[0].includes('previousMessages') && route[0].includes("try{save()}catch(e)") && route[0].includes('publishAnnouncement(item)') && source.includes("const ANNOUNCEMENT_INTERVAL_MS=15*60*1000") && source.includes("function announcementRooms(){return (db.rooms||[]).filter(room=>room&&room.id&&room.kind!=='wall');}") && source.includes("title:item.title||'إعلان إداري'")) pass('announcement delivery is persisted atomically to all chat rooms, with administrative titles');
   else fail('announcement delivery is persisted atomically before broadcast');
 } catch (error) { fail('announcement transaction checks', error.message); }
 
