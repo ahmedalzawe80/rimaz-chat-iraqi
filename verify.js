@@ -413,3 +413,18 @@ try {
   if (!permissionHtml.includes("['الأدوات والإضافات الجديدة',['audit_view','stats_view','chat_filter_manage','member_status_manage']]")) throw new Error('custom rank editor missing new permission group');
   pass('v46.27 Arabic permission labels and client/server schema compatibility');
 } catch (error) { fail('v46.27 permission compatibility checks', error.message); }
+
+// v46.29 regression checks: online row status placement, duplicate legacy identities,
+// and rank-based welcome-message permissions must agree across client and server.
+try {
+  const repairServer = fs.readFileSync(server, 'utf8');
+  const repairHtml = fs.readFileSync(mainPath, 'utf8');
+  const membersRoute = repairServer.match(/app\.get\('\/api\/members',[\s\S]*?\n\}\);/);
+  const adminDataRoute = repairServer.match(/app\.get\('\/api\/admin\/data',[\s\S]*?\n\}\);/);
+  if (!repairHtml.includes('rimaz-final-online-presence-and-permission-repair-v46-29') || !repairHtml.includes('#layer .membersOverlay .member.adminMember .memberSub{display:block!important')) throw new Error('online status final override missing');
+  if (!membersRoute || !membersRoute[0].includes('registeredKeys.has(normalized)') || !membersRoute[0].includes('seenMemberKeys.has(normalized)')) throw new Error('member directory does not suppress legacy guest/registered duplicates');
+  if (!repairServer.includes('const registeredAccountKeys=new Set(Object.keys(db.users||{}).map(keyName))') || !repairServer.includes('registeredAccountKeys.has(k)||seenAdminAccountKeys.has(k)')) throw new Error('admin data does not suppress duplicate account identities');
+  if (!repairServer.includes("app.get('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")) throw new Error('welcome-message GET route still blocks rank permission');
+  if (!repairHtml.includes("async function welcomeMessagesEditor(){if(!me?.owner&&!me?.admin&&!hasClientPermission('welcome_manage'))")) throw new Error('welcome editor still checks only owner/admin roles');
+  pass('v46.29 online status alignment, legacy duplicate identity suppression, and rank-based welcome permissions');
+} catch (error) { fail('v46.29 regression checks', error.message); }

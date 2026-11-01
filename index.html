@@ -726,6 +726,41 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 .rimaz-gift-reference .rimaz-gift-card>button{display:block;margin:10px auto 0;border:0;border-radius:2px;background:#111;color:#fff;font-weight:900;padding:7px 24px;min-width:90px}
 @media(max-width:520px){.rimaz-gift-reference .rimaz-gift-card{width:min(92vw,460px)}.rimaz-gift-reference .rimaz-gift-sender-name{font-size:16px}.rimaz-gift-reference .rimaz-gift-content{min-height:90px}}
 </style>
+<style id="rimaz-final-online-presence-and-permission-repair-v46-29">
+/* Authoritative online-members layout: name and status share the same content column,
+   with status directly beneath the name for every member including admin. */
+#layer .membersOverlay .member{
+  display:grid!important;
+  grid-template-columns:4px 48px 26px minmax(0,1fr) 32px 24px!important;
+  grid-template-rows:minmax(22px,auto) minmax(18px,auto)!important;
+  align-items:center!important;
+  column-gap:3px!important;
+  min-height:62px!important;
+  height:auto!important;
+  padding:4px!important;
+  direction:ltr!important;
+  box-sizing:border-box!important;
+}
+#layer .membersOverlay .member>.memberStatusBar{grid-column:1!important;grid-row:1 / span 2!important;align-self:center!important;width:4px!important;height:48px!important;margin:0!important;}
+#layer .membersOverlay .member>img{grid-column:2!important;grid-row:1 / span 2!important;align-self:center!important;width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;object-fit:cover!important;margin:0!important;}
+#layer .membersOverlay .member>.memberBadges{grid-column:3!important;grid-row:1 / span 2!important;align-self:center!important;justify-self:center!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;min-width:0!important;margin:0!important;padding:0!important;}
+#layer .membersOverlay .member>.memberBadges .memberBadge{display:inline-grid!important;place-items:center!important;flex:0 0 23px!important;width:23px!important;height:23px!important;min-width:23px!important;min-height:23px!important;margin:0!important;font-size:15px!important;line-height:1!important;}
+#layer .membersOverlay .member>.memberMain{grid-column:4!important;grid-row:1 / span 2!important;align-self:stretch!important;min-width:0!important;width:100%!important;margin:0!important;padding:2px 3px!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:center!important;gap:2px!important;direction:rtl!important;text-align:right!important;overflow:hidden!important;}
+#layer .membersOverlay .member .memberName{display:block!important;grid-row:1!important;width:100%!important;min-width:0!important;margin:0!important;font-size:15px!important;font-weight:900!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+#layer .membersOverlay .member .memberSub,
+#layer .membersOverlay .member.adminMember .memberSub{display:block!important;visibility:visible!important;opacity:1!important;position:static!important;width:100%!important;min-width:0!important;height:auto!important;min-height:0!important;max-height:none!important;margin:0!important;padding:0!important;color:#888!important;font-size:12px!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;direction:rtl!important;text-align:right!important;}
+#layer .membersOverlay .member .memberLikes{grid-column:5!important;grid-row:1 / span 2!important;align-self:center!important;min-width:0!important;padding:0!important;text-align:center!important;font-size:10px!important;}
+#layer .membersOverlay .member.adminMember .memberLikes{display:none!important;}
+#layer .membersOverlay .member>.memberCountryFlag{grid-column:6!important;grid-row:1 / span 2!important;align-self:center!important;display:flex!important;align-items:center!important;justify-content:center!important;width:24px!important;min-width:24px!important;font-size:20px!important;line-height:1!important;}
+@media(max-width:600px){
+ #layer .membersOverlay .member{grid-template-columns:4px 44px 23px minmax(0,1fr) 28px 22px!important;column-gap:2px!important;min-height:58px!important;padding:3px!important;}
+ #layer .membersOverlay .member>img{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;}
+ #layer .membersOverlay .member>.memberBadges .memberBadge{flex-basis:21px!important;width:21px!important;height:21px!important;min-width:21px!important;min-height:21px!important;font-size:14px!important;}
+ #layer .membersOverlay .member .memberName{font-size:14px!important;}
+ #layer .membersOverlay .member .memberSub,#layer .membersOverlay .member.adminMember .memberSub{font-size:11px!important;}
+ #layer .membersOverlay .member>.memberCountryFlag{width:22px!important;min-width:22px!important;font-size:18px!important;}
+}
+</style>
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={},privatePeerUser=null;
@@ -1114,7 +1149,7 @@ function hasClientPermission(p){if(!p)return false;const d=window.adminCachedDat
 function canManageRolePermissions(){return !!(me?.owner||me?.admin||me?.role==='owner'||me?.role==='admin');}
 async function loadMemberManualPermissions(){if(!(me?.owner||me?.admin))return toast('هذه الإدارة للإداريين فقط');const name=document.getElementById('manualPermissionTarget')?.value;if(!name)return toast('اختر العضو أولاً');try{const d=await api('/api/admin/member-permissions/'+encodeURIComponent(name));const ids=Object.keys(d.catalog||{});document.getElementById('manualPermissionChecks').innerHTML=ids.map(id=>`<label class="adminUser" style="display:flex;align-items:center;gap:10px"><input type="checkbox" data-manual-permission="${esc(id)}" ${(d.permissions||[]).includes(id)?'checked':''}><span>${esc(d.catalog[id])}</span></label>`).join('');document.getElementById('manualPermissionSave').style.display='block';}catch(e){toast(e.message)}}
 async function saveMemberManualPermissions(){const name=document.getElementById('manualPermissionTarget')?.value;if(!name)return;const permissions=[...document.querySelectorAll('[data-manual-permission]:checked')].map(x=>x.dataset.manualPermission);try{await api('/api/admin/member-permissions/'+encodeURIComponent(name),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({permissions})});toast('تم حفظ الصلاحيات الإضافية للعضو');}catch(e){toast(e.message)}}
-async function welcomeMessagesEditor(){if(!me?.owner&&me?.role!=='admin')return '<div class="adminCard">ما عندك صلاحية تعديل رسائل الترحيب.</div>';let d;try{d=await api('/api/admin/welcome-messages')}catch(e){return '<div class="adminCard">تعذر تحميل رسائل الترحيب: '+esc(e.message)+'<p>حدّث اللوحة ثم جرّب مرة ثانية.</p></div>'}window.editWelcomeMessages=(Array.isArray(d.messages)?d.messages:[]).map(x=>({...x}));return `<div class="adminCard welcomeEditor"><h3>رسائل الترحيب عند دخول الغرفة</h3><p>عدّل النص داخل المربعات مباشرة. كل الرسائل المفعّلة تظهر معاً للداخل الجديد. الحد الأعلى 12 رسالة.</p><div id="welcomeMessageRows">${window.editWelcomeMessages.map((m,i)=>welcomeMessageRow(m,i)).join('')}</div><button type="button" onclick="addWelcomeMessage()">＋ إضافة رسالة</button> <button type="button" onclick="saveWelcomeMessages()">💾 حفظ رسائل الترحيب</button><div id="welcomeSaveStatus" role="status" style="margin-top:8px;font-weight:bold"></div></div>`}
+async function welcomeMessagesEditor(){if(!me?.owner&&!me?.admin&&!hasClientPermission('welcome_manage'))return '<div class="adminCard">ما عندك صلاحية تعديل رسائل الترحيب.</div>';let d;try{d=await api('/api/admin/welcome-messages')}catch(e){return '<div class="adminCard">تعذر تحميل رسائل الترحيب: '+esc(e.message)+'<p>حدّث اللوحة ثم جرّب مرة ثانية.</p></div>'}window.editWelcomeMessages=(Array.isArray(d.messages)?d.messages:[]).map(x=>({...x}));return `<div class="adminCard welcomeEditor"><h3>رسائل الترحيب عند دخول الغرفة</h3><p>عدّل النص داخل المربعات مباشرة. كل الرسائل المفعّلة تظهر معاً للداخل الجديد. الحد الأعلى 12 رسالة.</p><div id="welcomeMessageRows">${window.editWelcomeMessages.map((m,i)=>welcomeMessageRow(m,i)).join('')}</div><button type="button" onclick="addWelcomeMessage()">＋ إضافة رسالة</button> <button type="button" onclick="saveWelcomeMessages()">💾 حفظ رسائل الترحيب</button><div id="welcomeSaveStatus" role="status" style="margin-top:8px;font-weight:bold"></div></div>`}
 function welcomeMessageRow(m,i){return `<div class="adminCard" style="margin:8px 0"><label>عنوان الرسالة</label><input data-welcome-title="${i}" maxlength="80" value="${esc(m.title||'')}" style="width:100%"><label>نص الرسالة</label><textarea data-welcome-text="${i}" maxlength="1200" style="width:100%;min-height:90px">${esc(m.text||'')}</textarea><label><input type="checkbox" data-welcome-enabled="${i}" ${m.enabled!==false?'checked':''}> مفعّلة</label><button class="red" onclick="removeWelcomeMessage(${i})">حذف الرسالة</button></div>`}
 function collectWelcomeRows(){return (window.editWelcomeMessages||[]).map((m,i)=>({...m,title:document.querySelector(`[data-welcome-title=\"${i}\"]`)?.value??m.title,text:document.querySelector(`[data-welcome-text=\"${i}\"]`)?.value??m.text,enabled:document.querySelector(`[data-welcome-enabled=\"${i}\"]`)?.checked??m.enabled}))}
 function addWelcomeMessage(){window.editWelcomeMessages=collectWelcomeRows();if(window.editWelcomeMessages.length>=12)return toast('وصلت للحد الأعلى: 12 رسالة');window.editWelcomeMessages.push({id:'welcome-'+Date.now(),title:'الترحيب الجديد',text:'اكتب نص الترحيب هنا',enabled:true});adminTab('welcome')}
