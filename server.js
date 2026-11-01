@@ -291,7 +291,10 @@ function announcementRooms(){return (db.rooms||[]).filter(room=>room&&room.id&&r
 function publishAnnouncement(item){
   if(!item||!item.id)return [];
   const at=Date.now();
-  const messages=announcementRooms().map(room=>({id:String(item.id)+'-'+room.id+'-'+at,announcementId:String(item.id),room:room.id,from:'الإدارة',displayName:'الإدارة',title:item.title||'إعلان إداري',role:'admin',type:'announcement',text:item.text,at,duration:item.duration,profile:{}}));
+  const temporary=item.duration==='15m';
+  const messages=announcementRooms().map(room=>temporary
+    ?({id:String(item.id)+'-'+room.id+'-'+at,announcementId:String(item.id),room:room.id,from:item.from,displayName:item.displayName||displayName(item.from),role:item.role||roleOf({name:item.from}),type:'announcement',text:item.text,at,duration:item.duration,profile:item.profile||profile(item.from)})
+    :({id:String(item.id)+'-'+room.id+'-'+at,announcementId:String(item.id),room:room.id,from:'الإدارة',displayName:'الإدارة',title:item.title||'إعلان إداري',role:'admin',type:'announcement',text:item.text,at,duration:item.duration,profile:{}}));
   db.messages=[...(db.messages||[]),...messages].slice(-1000);
   for(const message of messages)io.to(message.room).emit('message',message);
   try{save()}catch(error){console.error('Announcement publish save failed:',error.message);}
@@ -969,8 +972,11 @@ app.post('/api/admin/member-action',(req,res)=>{requireAuth(req,res,()=>{
 app.post('/api/admin/broadcast',requireAdmin,(req,res)=>{
   const text=String(req.body.text||'').trim();if(!text)return res.status(400).json({error:'نص الإعلان فارغ'});
   const duration=['5m','15m'].includes(req.body.duration)?'15m':'permanent';
-  const title=String(req.body.title||'').trim().slice(0,60)||(duration==='permanent'?'إعلان إداري':'إعلان للدعاية والمسابقات');
-  const item={id:crypto.randomUUID(),title,text:text.slice(0,2000),from:'الإدارة',displayName:'الإدارة',role:'admin',at:Date.now(),duration,profile:{}};
+  const temporary=duration==='15m';
+  const title=temporary?'':(String(req.body.title||'').trim().slice(0,60)||'إعلان إداري');
+  const item=temporary
+    ?{id:crypto.randomUUID(),text:text.slice(0,2000),from:req.user.name,displayName:displayName(req.user.name),role:roleOf(req.user),at:Date.now(),duration,profile:profile(req.user.name)}
+    :{id:crypto.randomUUID(),title,text:text.slice(0,2000),from:'الإدارة',displayName:'الإدارة',role:'admin',at:Date.now(),duration,profile:{}};
   const previousAnnouncements=db.announcements,previousMessages=db.messages;
   db.announcements=[...(db.announcements||[]),item].slice(-100).reverse();
   try{save()}catch(e){if(previousAnnouncements===undefined)delete db.announcements;else db.announcements=previousAnnouncements;if(previousMessages===undefined)delete db.messages;else db.messages=previousMessages;console.error('Announcement save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الإعلان'});}
