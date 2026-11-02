@@ -477,3 +477,18 @@ try {
   if (!repairHtml.includes("async function welcomeMessagesEditor(){if(!me?.owner&&!me?.admin&&!hasClientPermission('welcome_manage'))")) throw new Error('welcome editor still checks only owner/admin roles');
   pass('online-members CSS cleanup, legacy duplicate identity suppression, and rank-based welcome permissions');
 } catch (error) { fail('v46.29 regression checks', error.message); }
+
+
+// v46.34: rank grants use the same single reusable reference card as gifts.
+try {
+  const rankServer = fs.readFileSync(server, 'utf8');
+  const rankHtml = fs.readFileSync(mainPath, 'utf8');
+  const rankRoute = rankServer.match(/app\.post\('\/api\/admin\/rank',[\s\S]*?\n\}\);/);
+  if (!rankRoute || !rankRoute[0].includes("emitToUser(n,'rank-granted'") || rankRoute[0].includes("emitToUser(n,'admin-action-notice',{title:'🏅 تم منحك رتبة'")) throw new Error('rank assignment still uses the generic duplicate notice path');
+  if (!rankRoute[0].includes('fromProfile:{...profile(actor.name)}') || !rankRoute[0].includes('fromRole:roleOf(actor)') || !rankRoute[0].includes('rankName:definition.name')) throw new Error('rank event is missing sender identity or rank details');
+  if (!rankHtml.includes('function showAwardNoticeCard(') || !rankHtml.includes('function showGiftAnimation(') || !rankHtml.includes('function showRankGrantCard(')) throw new Error('gift/rank cards do not share one renderer');
+  if (!rankHtml.includes("socket.on('rank-granted'") || !rankHtml.includes('rimaz-rank-reference') || !rankHtml.includes('rimaz-rank-duration')) throw new Error('rank card listener or rank-specific content styles are missing');
+  if (!rankHtml.includes("senderCaption:'أرسل لك هدية'") || !rankHtml.includes("senderCaption:'منحك رتبة جديدة'")) throw new Error('gift or rank sender caption is missing');
+  if (rankHtml.includes('.rimaz-gift-ribbon') || rankHtml.includes('.rimaz-gift-burst') || rankHtml.includes('@keyframes rgGiftFloat') || rankHtml.includes('@keyframes rgRibbon')) throw new Error('unused legacy gift-animation rules remain');
+  pass('v46.34 rank-grant notice shares the exact gift-card renderer and avoids duplicate generic notices');
+} catch (error) { fail('v46.34 rank-grant card checks', error.message); }

@@ -1,3 +1,20 @@
+# Rimaz Chat v46.34 — Reference Rank-Grant Card
+
+## v46.34 changes
+- Refactored gift and rank-award popups to use one shared card renderer, so the frame, colors, spacing, sender identity placement, and confirmation button remain identical.
+- Rank grants now deliver a dedicated `rank-granted` event with the giver's avatar, display name, rank badge, role, awarded rank name, and duration. The recipient sees the reference-style centered card with the rank emblem and name instead of the old generic admin notice.
+- The saved notification-center record remains available; the old generic popup for rank grants is no longer emitted, preventing duplicate notices. Other administrative notices continue using their existing flow.
+- Existing gift-card behavior is preserved through the shared renderer. Removed unused legacy gift-animation styles; only the shared popup shell and reference-card layout remain.
+
+## Validation
+- `node --check server.js`
+- `node --check scripts/verify.js`
+- `npm test` — includes the v46.34 rank-card regression check.
+- `index.html` and `public/index.html` remain byte-identical.
+- Static tests do not replace live multi-account verification on the hosted server.
+
+---
+
 # Rimaz Chat v46.33 — Seven-Rank Protection and Exclusive Badges
 
 ## v46.33 changes
