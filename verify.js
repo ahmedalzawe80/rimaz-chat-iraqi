@@ -501,3 +501,14 @@ try {
   if (rankHtml.includes('.rimaz-gift-ribbon') || rankHtml.includes('.rimaz-gift-burst') || rankHtml.includes('@keyframes rgGiftFloat') || rankHtml.includes('@keyframes rgRibbon')) throw new Error('unused legacy gift-animation rules remain');
   pass('v46.35 rank-grant notice is durably queued before the same gift-card renderer is triggered');
 } catch (error) { fail('v46.34 rank-grant card checks', error.message); }
+
+// v46.36: cancellable, real upload progress is scoped to private chat and wall only.
+try {
+  const mediaHtml = fs.readFileSync(mainPath, 'utf8');
+  if (!mediaHtml.includes('xhr.upload.onprogress') || !mediaHtml.includes('function uploadMediaWithProgress(')) throw new Error('real upload progress handler is missing');
+  if (!mediaHtml.includes('function cancelMediaUpload(') || !mediaHtml.includes('item.xhr?.abort()')) throw new Error('cancel button does not abort active upload');
+  if (!mediaHtml.includes('function sharePrivate()') || !mediaHtml.includes('function wallMedia(kind)')) throw new Error('private or wall media upload entrypoint is missing');
+  if (!mediaHtml.includes('onclick="openWallMediaFrom(this)"') || !mediaHtml.includes('function openWallMediaFrom(')) throw new Error('wall media is not click-to-open');
+  if (!mediaHtml.includes('rimazUploadCancel') || !mediaHtml.includes('rimazUploadFill') || !mediaHtml.includes('wallMediaOpen')) throw new Error('red progress strip or wall thumbnail is missing');
+  pass('v46.36 private and wall media uploads show cancellable real progress; wall media opens on click');
+} catch (error) { fail('v46.36 media upload progress checks', error.message); }
