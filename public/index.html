@@ -2175,4 +2175,33 @@ sid='';localStorage.removeItem('rimaz_sid');login();
   #layer .membersOverlay .member>.memberCountryFlag{width:22px!important;min-width:22px!important;font-size:18px!important}
 }
 </style>
+
+<style id="rimaz-v4639-private-wall-view-buttons-left">
+/* v46.39: move ONLY private-chat and wall media view buttons to the left and slightly compact them. */
+#layer .privateOverlay .pmsg .privateMediaArea{
+  width:100%!important; margin:5px 0 0 0!important;
+  direction:ltr!important; text-align:left!important;
+  display:flex!important; justify-content:flex-start!important;
+}
+#layer .privateOverlay .pmsg .privateMediaCard,
+#layer .wallOverlay .wallMediaCard,
+.wallOverlay .wallMediaCard{
+  margin-left:0!important; margin-right:auto!important;
+  align-self:flex-start!important; direction:ltr!important;
+}
+#layer .privateOverlay .pmsg .privateMediaView,
+#layer .wallOverlay .wallMediaView,
+.wallOverlay .wallMediaView{
+  min-height:29px!important; padding:3px 9px!important;
+  font-size:13px!important; line-height:1.2!important;
+  width:auto!important; max-width:160px!important;
+}
+@media(max-width:650px){
+  #layer .privateOverlay .pmsg .privateMediaArea{margin-left:0!important;margin-right:0!important;}
+  #layer .privateOverlay .pmsg .privateMediaView,
+  #layer .wallOverlay .wallMediaView, .wallOverlay .wallMediaView{
+    min-height:28px!important;padding:3px 8px!important;font-size:12px!important;
+  }
+}
+</style>
 </body></html>
