@@ -512,8 +512,10 @@ try {
   if (!mediaHtml.includes('عرض الصورة') || !mediaHtml.includes('عرض الفيديو') || !mediaHtml.includes('onclick="openPrivateMediaFrom(this.parentElement)"')) throw new Error('private image/video explicit view buttons are missing');
   const wallCardSource=(mediaHtml.match(/function wallCard\([\s\S]*?function postWall\(/)||[])[0]||'';
   const privateMediaSource=(mediaHtml.match(/async function addPrivateMedia\([\s\S]*?function openWallMediaFrom\(/)||[])[0]||'';
-  if (!mediaHtml.includes('class="privateMediaPreview privateVideoPreview"') || !mediaHtml.includes('class="wallMediaPreview wallVideoPreview"') || /<video[^>]*autoplay/i.test(wallCardSource+privateMediaSource)) throw new Error('video preview must not autoplay');
+  if (/<(?:img|video)[^>]*class="(?:privateMediaPreview|wallMediaPreview)/i.test(wallCardSource+privateMediaSource)) throw new Error('private/wall renderer still embeds media previews that display immediately');
+  if (!wallCardSource.includes('wallMediaView') || !privateMediaSource.includes('privateMediaView')) throw new Error('private/wall media explicit view controls are missing');
+  if (mediaHtml.includes('class="privateMediaPreview') || mediaHtml.includes('class="wallMediaPreview')) throw new Error('obsolete automatic private/wall media preview elements remain');
   if (mediaHtml.includes('class="privateMediaThumb') || mediaHtml.includes('class="wallMedia wallMediaOpen')) throw new Error('legacy click-anywhere media controls remain');
-  if (!mediaHtml.includes('rimazUploadCancel') || !mediaHtml.includes('rimazUploadFill') || !mediaHtml.includes('wallMediaCard')) throw new Error('red progress strip or wall thumbnail is missing');
-  pass('v46.37 private and wall media use explicit view buttons after upload; previews do not open or autoplay');
+  if (!mediaHtml.includes('rimazUploadCancel') || !mediaHtml.includes('rimazUploadFill') || !mediaHtml.includes('wallMediaCard')) throw new Error('red progress strip or wall card is missing');
+  pass('v46.38 private and wall media remain closed until explicit view button; no auto-preview elements');
 } catch (error) { fail('v46.37 media view-card checks', error.message); }
