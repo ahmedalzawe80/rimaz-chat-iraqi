@@ -1,19 +1,3 @@
-# Rimaz Chat v46.32 — Online Members Name/Status Alignment Fix
-
-## v46.32 changes
-- Corrected the online-members-only text alignment: Arabic name and status remain right-to-left but are anchored beside the rank/avatar area instead of being pushed to the far edge of the row.
-- Kept the status directly beneath the name for both admin and regular/guest members.
-- Scoped the change to `.membersOverlay`; general chat, private conversations, and wall layouts are untouched.
-- Kept `index.html` and `public/index.html` identical.
-
-## Validation
-- `node --check server.js` passed.
-- `node --check scripts/verify.js` passed.
-- `npm test` passed, including the online-members alignment regression check.
-- This is local static verification; actual rendering on the hosted server still needs confirmation.
-
----
-
 # Rimaz Chat v46.30 — Online Members Alignment and Exclusive Badges
 
 ## Current changes

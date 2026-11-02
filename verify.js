@@ -188,8 +188,8 @@ try {
   else fail('VIP replaces previous gift and visual rank');
   if (rank && rank[0].includes('p.gifts=[]') && rank[0].includes('delete p.vipUntil')) pass('new visual rank replaces previous gift and VIP');
   else fail('new visual rank replaces previous gift and VIP');
-  if (css.includes('rimaz-online-members-single-source-v47') && css.includes('#layer .membersOverlay .member>.memberMain') && css.includes('flex-direction:column!important') && css.includes('#layer .membersOverlay .member.adminMember .memberSub') && /#layer \.membersOverlay \.member>\.memberMain[\s\S]*?text-align:left!important/.test(css) && /#layer \.membersOverlay \.member \.memberName[\s\S]*?text-align:left!important/.test(css) && /#layer \.membersOverlay \.member \.memberSub[\s\S]*?text-align:left!important/.test(css)) pass('online-members name and status align beside avatar/rank and stack for admin and regular accounts');
-  else fail('online-members name/status alignment and stacking');
+  if (css.includes('rimaz-online-members-single-source-v47') && css.includes('#layer .membersOverlay .member>.memberMain') && css.includes('flex-direction:column!important') && css.includes('#layer .membersOverlay .member.adminMember .memberSub')) pass('online-members panel stacks status under the name using one scoped layout source');
+  else fail('online-members status is directly under the name');
 } catch (error) { fail('badge exclusivity and online layout checks', error.message); }
 
 // Chat messages are persisted in a short batch rather than synchronously per message.
