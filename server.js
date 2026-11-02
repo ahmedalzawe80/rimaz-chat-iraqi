@@ -780,7 +780,21 @@ function normalizeIp(value){ let ip=String(value||'').trim(); if(ip.includes(','
 function requestClientIp(req){ return normalizeIp(req.get('cf-connecting-ip')||req.get('x-real-ip')||req.ip||req.socket?.remoteAddress||''); }
 function socketClientIp(socket){ const h=socket.handshake?.headers||{}; return normalizeIp(h['cf-connecting-ip']||h['x-real-ip']||socket.handshake?.address||''); }
 function globalIpBanned(ip){ const k=normalizeIp(ip); if(!k)return false; const item=(db.globalIpBans||{})[k]; if(!item)return false; if(Number(item.until||0)<=Date.now()){delete db.globalIpBans[k];save();return false;} return true; }
-function globalBanned(name,ip){ const n=keyName(name), item=(db.globalBans||{})[n]; if(item){ if(Number(item.until||0)<=Date.now()){delete db.globalBans[n];save();} else return true; } return globalIpBanned(ip); }
+function globalBanStatus(name,ip,now=Date.now()){
+  const n=keyName(name); let until=0,changed=false;
+  const nameBan=(db.globalBans||{})[n];
+  if(nameBan){const expiry=Number(nameBan.until)||0;if(expiry>now)until=Math.max(until,expiry);else{delete db.globalBans[n];changed=true;}}
+  const ipKey=normalizeIp(ip),ipBan=ipKey?(db.globalIpBans||{})[ipKey]:null;
+  if(ipBan){const expiry=Number(ipBan.until)||0;if(expiry>now)until=Math.max(until,expiry);else{delete db.globalIpBans[ipKey];changed=true;}}
+  if(changed)save();
+  if(!until)return null;
+  const remainingMs=Math.max(0,until-now),totalSeconds=Math.ceil(remainingMs/1000),minutes=Math.floor(totalSeconds/60),seconds=totalSeconds%60;
+  const remainingText=minutes?`${minutes} دقيقة و${seconds} ثانية`:`${seconds} ثانية`;
+  return {until,remainingMs,remainingSeconds:totalSeconds,remainingText};
+}
+function globalBanResponse(res,name,ip){const ban=globalBanStatus(name,ip);if(!ban)return false;return res.status(403).json({error:`أنت محظور من الدردشة. الوقت المتبقي: ${ban.remainingText}. حاول الدخول بعد انتهاء الحظر.`,code:'GLOBAL_BAN_ACTIVE',...ban});}
+function globalBanned(name,ip){return !!globalBanStatus(name,ip);}
+function nameTaken(name){const n=keyName(name);if(!n)return false;return n==='owner'||(!!process.env.OWNER_NAME&&n===keyName(process.env.OWNER_NAME))||Object.keys(db.users||{}).some(x=>keyName(x)===n)||Object.keys(db.guests||{}).some(x=>keyName(x)===n);} 
 function removeFromChat(name, banned){ const n=keyName(name); for(const so of io.sockets.sockets.values()){ const sid2=so.data?.sid, u2=so.data?.user||socketUsers.get(sid2); if(!u2||keyName(u2.name)!==n)continue; const oldRoom=u2.room||''; if(oldRoom){so.leave(oldRoom);roomSockets.get(oldRoom)?.delete(sid2);} if(so.data?.user)so.data.user.room=''; if(socketUsers.get(sid2))socketUsers.get(sid2).room=''; so.emit('kicked',{global:true,banned:!!banned,room:oldRoom}); if(banned)so.disconnect(true); } emitState(); }
 function safeMessage(m){ return {...m, text:String(m.text||'').slice(0,2000)}; }
 let messageSaveTimer=null;
@@ -888,7 +902,7 @@ function validateUploadedContent(category='any') {
 
 app.post('/api/register',(req,res)=>{
   const n=cleanName(req.body.name), p=String(req.body.password||'');
-  if(n && globalBanned(n,requestClientIp(req)))return res.status(403).json({error:'عنوان الإنترنت محظور من الدردشة، حاول بعد انتهاء 5 دقائق'});
+  if(n && globalBanResponse(res,n,requestClientIp(req)))return;
   if(!n||!p)return res.status(400).json({error:'الاسم وكلمة المرور مطلوبان'});
   const ownerRequested = keyName(n)==='owner' || (!!process.env.OWNER_NAME && keyName(n)===keyName(process.env.OWNER_NAME));
   if(ownerRequested){
@@ -898,14 +912,14 @@ app.post('/api/register',(req,res)=>{
     if(!process.env.OWNER_BOOTSTRAP_PASSWORD || token.length<24 || token!==process.env.OWNER_BOOTSTRAP_PASSWORD)return res.status(403).json({error:'رمز تهيئة المالك غير صحيح'});
     if(p.length<12)return res.status(400).json({error:'كلمة مرور المالك يجب أن تكون 12 حرفاً على الأقل'});
   } else if(p.length<3) return res.status(400).json({error:'كلمة المرور 3 أحرف على الأقل'});
-  if(db.users[n]||Object.keys(db.users).some(x=>keyName(x)===keyName(n)))return res.status(409).json({error:'الاسم مستخدم مسبقاً'});
+  if(nameTaken(n)&&!ownerRequested)return res.status(409).json({error:'هذا الاسم موجود بالفعل، اختار اسماً آخر'});
   db.users[n]={hash:bcrypt.hashSync(p,12),likes:keyName(n)==='admin'?999999:0,created:Date.now()};
   if(ownerRequested){ db.ownerSetupCompleted=true; }
   profile(n); const sid=makeSession(n,'member'); save(); res.json({sid,user:sessionUser(sid)});
 });
 app.post('/api/login',(req,res)=>{
   const n=cleanName(req.body.name), p=String(req.body.password||'');
-  if(n && globalBanned(n,requestClientIp(req)))return res.status(403).json({error:'عنوان الإنترنت محظور من الدردشة، حاول بعد انتهاء 5 دقائق'});
+  if(n && globalBanResponse(res,n,requestClientIp(req)))return;
   const u=db.users[n] || Object.entries(db.users).find(([k])=>keyName(k)===keyName(n))?.[1];
   if(!u || !bcrypt.compareSync(p,u.hash))return res.status(401).json({error:'الاسم أو الباسورد غير صحيح'});
   const real=Object.keys(db.users).find(k=>keyName(k)===keyName(n))||n; const sid=makeSession(real,'member'); res.json({sid,user:sessionUser(sid)});
@@ -913,7 +927,7 @@ app.post('/api/login',(req,res)=>{
 app.post('/api/login-privileged',(req,res)=>{
   const n=cleanName(req.body.name),p=String(req.body.password||''),mode=String(req.body.mode||'');
   if(!['hidden','ghost'].includes(mode))return res.status(400).json({error:'نوع الدخول غير صحيح'});
-  if(n&&globalBanned(n,requestClientIp(req)))return res.status(403).json({error:'عنوان الإنترنت محظور من الدردشة، حاول بعد انتهاء 5 دقائق'});
+  if(n&&globalBanResponse(res,n,requestClientIp(req)))return;
   const u=db.users[n]||Object.entries(db.users).find(([k])=>keyName(k)===keyName(n))?.[1];
   if(!u||!bcrypt.compareSync(p,u.hash))return res.status(401).json({error:'الاسم أو الباسورد غير صحيح'});
   const real=Object.keys(db.users).find(k=>keyName(k)===keyName(n))||n;
@@ -925,9 +939,8 @@ app.post('/api/login-privileged',(req,res)=>{
 });
 app.post('/api/guest',(req,res)=>{
   const n=cleanName(req.body.name); if(!n)return res.status(400).json({error:'اكتب اسم الزائر'});
-  if(globalBanned(n,requestClientIp(req)))return res.status(403).json({error:'عنوان الإنترنت محظور من الدردشة، حاول بعد انتهاء 5 دقائق'});
-  const taken=keyName(n)==='owner' || (!!process.env.OWNER_NAME && keyName(n)===keyName(process.env.OWNER_NAME)) || Object.keys(db.users).some(x=>keyName(x)===keyName(n)) || Object.keys(db.guests).some(x=>keyName(x)===keyName(n));
-  if(taken)return res.status(409).json({error:'الاسم مستخدم، اختر اسماً آخر'});
+  if(globalBanResponse(res,n,requestClientIp(req)))return;
+  if(nameTaken(n))return res.status(409).json({error:'هذا الاسم موجود بالفعل، اختار اسماً آخر'});
   db.guests[n]={likes:0,created:Date.now()}; const gp=profile(n); gp.status='(غير مسجل)'; const sid=makeSession(n,'guest'); save(); res.json({sid,user:sessionUser(sid)});
 });
 app.post('/api/logout',requireAuth,(req,res)=>{
@@ -1141,7 +1154,7 @@ app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{
 });});
 app.get('/api/admin/member-ip/:name' ,requireAuth,(req,res)=>{if(!hasPermission(req.user,'member_ip'))return res.status(403).json({error:'ما عندك صلاحية عرض IP'});const n=keyName(req.params.name);if(isOwnerName(n))return res.status(403).json({error:'معلومات اتصال صاحب الموقع محمية'});const matches=[];for(const so of io.sockets.sockets.values()){const sid2=so.data?.sid,u2=so.data?.user||socketUsers.get(sid2);if(u2&&keyName(u2.name)===n){matches.push({ip:socketClientIp(so),room:u2.room||'',connected:true});}}res.json({name:req.params.name,connections:matches});});
 // Rank definitions are editable independently from chat UI, buttons and colors.
-app.get('/api/admin/ranks',requireAuth,(req,res)=>{if(!isAdmin(req.user))return res.status(403).json({error:'إدارة تعريفات الرتب للمالك والإداري فقط'});res.json({appVersion:'46.39.0',permissionSchemaVersion:2,permissionKeys:ALL_PERMISSION_KEYS,ranks:(db.rankDefinitions||[]).slice().sort((a,b)=>Number(b.level)-Number(a.level)),catalog:PERMISSION_CATALOG});});
+app.get('/api/admin/ranks',requireAuth,(req,res)=>{if(!isAdmin(req.user))return res.status(403).json({error:'إدارة تعريفات الرتب للمالك والإداري فقط'});res.json({appVersion:'46.40.0',permissionSchemaVersion:2,permissionKeys:ALL_PERMISSION_KEYS,ranks:(db.rankDefinitions||[]).slice().sort((a,b)=>Number(b.level)-Number(a.level)),catalog:PERMISSION_CATALOG});});
 app.post('/api/admin/ranks',requireAuth,(req,res)=>{if(!isAdmin(req.user))return res.status(403).json({error:'إدارة تعريفات الرتب للمالك والإداري فقط'});const name=cleanName(req.body.name),id=String(req.body.id||'').trim().toLowerCase(),level=Number(req.body.level),icon=String(req.body.icon||'★').trim().slice(0,8),baseRole=String(req.body.baseRole||'member'),permissions=Array.isArray(req.body.permissions)?req.body.permissions:[];if(!name||name.length>48)return res.status(400).json({error:'اسم الرتبة مطلوب وبحد أقصى 48 حرفاً'});if(!/^[a-z0-9][a-z0-9_-]{1,39}$/.test(id)||rankDefinition(id))return res.status(400).json({error:'معرّف الرتبة غير صالح أو مستخدم'});if(!Number.isInteger(level)||level<1||level>999)return res.status(400).json({error:'المستوى يجب أن يكون رقماً صحيحاً من 1 إلى 999'});if(baseRole!=='member')return res.status(400).json({error:'الرتب الجديدة مستقلة عن مناصب الدردشة ولا تغيّر نوع العضو'});if(Number(req.body.permissionSchemaVersion||1)>2)return res.status(409).json({error:'نسخة محرر الرتب أحدث من السيرفر. حدّث ملفات الموقع كاملة.'});if(permissions.some(k=>!Object.hasOwn(PERMISSION_CATALOG,k)))return res.status(400).json({error:'توجد صلاحية غير معروفة في نسخة السيرفر الحالية. حدّث ملفات الموقع كاملة.'});if(permissions.includes('permission_manage')||permissions.includes('rank_assign')||permissions.includes('role_assign'))return res.status(400).json({error:'لا يمكن تضمين صلاحيات إدارة الرتب والصلاحيات في رتبة مخصصة'});db.rankDefinitions.push({id,name,level,icon,baseRole,permissions:[...new Set(['panel_access',...permissions])],createdAt:Date.now(),updatedAt:Date.now()});save();res.json({ok:true,rank:rankDefinition(id)});});
 app.put('/api/admin/ranks/:id',requireAuth,(req,res)=>{if(!isAdmin(req.user))return res.status(403).json({error:'تعديل تعريفات الرتب للمالك والإداري فقط'});const r=rankDefinition(req.params.id);if(!r){removeUploadedFile(req.file);return res.status(404).json({error:'الرتبة غير موجودة'});}const name=cleanName(req.body.name),level=Number(req.body.level),icon=String(req.body.icon||'★').trim().slice(0,8),baseRole=String(req.body.baseRole||'member'),permissions=Array.isArray(req.body.permissions)?req.body.permissions:[];if(!name||name.length>48||!Number.isInteger(level)||level<1||level>999)return res.status(400).json({error:'تحقق من اسم الرتبة ومستواها'});if(baseRole!=='member'&&baseRole!==RANK_BASE_ROLE[r.id])return res.status(400).json({error:'الرتب المخصصة لا تغيّر نوع العضو أو مظهره في الدردشة'});if(RANK_BASE_ROLE[r.id]&&baseRole!==RANK_BASE_ROLE[r.id])return res.status(400).json({error:'لا يمكن تغيير نوع الرتبة الأساسية القديمة'});if(Number(req.body.permissionSchemaVersion||1)>2)return res.status(409).json({error:'نسخة محرر الرتب أحدث من السيرفر. حدّث ملفات الموقع كاملة.'});if(permissions.some(k=>!Object.hasOwn(PERMISSION_CATALOG,k))||(r.id!=='admin-full'&&permissions.some(k=>['permission_manage','rank_assign','role_assign'].includes(k))))return res.status(400).json({error:'الصلاحيات المختارة غير مسموحة لهذه الرتبة'});Object.assign(r,{name,level,icon,baseRole,permissions:[...new Set(['panel_access',...permissions])],updatedAt:Date.now()});save();res.json({ok:true,rank:r});});
 app.delete('/api/admin/ranks/:id',requireAuth,(req,res)=>{if(!isAdmin(req.user))return res.status(403).json({error:'حذف تعريفات الرتب للمالك والإداري فقط'});const id=String(req.params.id),r=rankDefinition(id);if(!r)return res.status(404).json({error:'الرتبة غير موجودة'});if(!isOwner(req.user)&&RANK_PERMISSION_PROFILES.includes(id))return res.status(403).json({error:'الإداري يستطيع حذف الرتب المخصصة فقط؛ الرتب الأساسية محمية'});if(RANK_PERMISSION_PROFILES.includes(id))return res.status(400).json({error:'لا يمكن حذف رتبة أساسية قديمة؛ يمكن تعديل اسمها وصلاحياتها'});const assigned=Object.values(db.profiles||{}).some(p=>p&&p.rank===id&&(!p.rankUntil||Number(p.rankUntil)>Date.now()));if(assigned)return res.status(409).json({error:'لا يمكن حذف رتبة ممنوحة لأعضاء. أزلها من الأعضاء أولاً'});db.rankDefinitions=db.rankDefinitions.filter(x=>x.id!==id);delete db.rolePermissions[id];save();res.json({ok:true,id});});
@@ -1154,7 +1167,7 @@ app.get('/api/admin/permissions',requireAuth,(req,res)=>{
   const source=def?(def.permissions||[]):(Array.isArray(db.rolePermissions[r])?db.rolePermissions[r]:(DEFAULT_ROLE_PERMISSIONS[r]||[]));
   return [r,[...new Set(['panel_access',...source.filter(p=>Object.hasOwn(PERMISSION_CATALOG,p)&&!PROTECTED_ROLE_PERMISSIONS.includes(p))])]];
  }));
- res.json({appVersion:'46.39.0',permissionSchemaVersion:2,permissionKeys:ALL_PERMISSION_KEYS,catalog:PERMISSION_CATALOG,defaults:DEFAULT_ROLE_PERMISSIONS,roles});
+ res.json({appVersion:'46.40.0',permissionSchemaVersion:2,permissionKeys:ALL_PERMISSION_KEYS,catalog:PERMISSION_CATALOG,defaults:DEFAULT_ROLE_PERMISSIONS,roles});
 });
 app.put('/api/admin/permissions',requireAuth,(req,res)=>{if(!isAdmin(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة الصلاحيات'});const role=String(req.body.role||'');if(!['admin','super','banner',...RANK_PERMISSION_PROFILES].includes(role))return res.status(400).json({error:'الرتبة أو المنصب غير صحيح'});const allowed=ALL_PERMISSION_KEYS;const requested=Array.isArray(req.body.permissions)?req.body.permissions:[];if(Number(req.body.permissionSchemaVersion||1)>2)return res.status(409).json({error:'نسخة محرر الصلاحيات أحدث من السيرفر. حدّث ملفات الموقع كاملة.'});if(requested.some(x=>!allowed.includes(x)))return res.status(400).json({error:'توجد صلاحية غير معروفة في نسخة السيرفر الحالية. حدّث ملفات الموقع كاملة.'});const protectedPerms=PROTECTED_ROLE_PERMISSIONS;db.rolePermissions=db.rolePermissions||{};db.rolePermissionMeta=db.rolePermissionMeta||{customized:{}};db.rolePermissionMeta.customized=db.rolePermissionMeta.customized||{};const previousPermissions=db.rolePermissions[role],previousCustomized=db.rolePermissionMeta.customized[role],rankDef=rankDefinition(role),previousRankPermissions=rankDef?.permissions,previousRankUpdatedAt=rankDef?.updatedAt;db.rolePermissions[role]=[...new Set(['panel_access',...requested.filter(x=>allowed.includes(x))])];if(rankDef){rankDef.permissions=[...db.rolePermissions[role]];rankDef.updatedAt=Date.now();}db.rolePermissionMeta.customized[role]=true;try{save();}catch(error){if(previousPermissions===undefined)delete db.rolePermissions[role];else db.rolePermissions[role]=previousPermissions;if(previousCustomized===undefined)delete db.rolePermissionMeta.customized[role];else db.rolePermissionMeta.customized[role]=previousCustomized;if(rankDef){rankDef.permissions=previousRankPermissions;rankDef.updatedAt=previousRankUpdatedAt;}console.error('Role permissions persistence failed:',error.message);return res.status(500).json({error:'تعذر حفظ الصلاحيات؛ لم يتم تطبيق التغيير'});}res.json({ok:true,role,permissions:db.rolePermissions[role]});});
 app.get('/api/admin/member-permissions/:name',requireAuth,(req,res)=>{if(!isAdmin(req.user))return res.status(403).json({error:'إضافة الصلاحيات اليدوية متاحة للإدارة فقط'});const n=accountKey(req.params.name),target=getUser(n)||getGuest(n);if(!target)return res.status(404).json({error:'العضو غير موجود'});if(isOwner({name:n,role:target.role}))return res.status(403).json({error:'حساب صاحب الموقع محمي'});const permissions=[...new Set((db.permissionOverrides?.[keyName(n)]||[]).filter(p=>Object.hasOwn(PERMISSION_CATALOG,p)))];res.json({name:n,permissions,catalog:PERMISSION_CATALOG});});

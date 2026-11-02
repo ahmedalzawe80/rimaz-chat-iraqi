@@ -47,6 +47,28 @@ try {
   else fail('privileged login entry gesture remains intact');
 } catch (error) { fail('hidden/ghost login checks', error.message); }
 
+// Entry identity and five-minute global-ban feedback must be enforced consistently.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const html = fs.readFileSync(mainPath, 'utf8');
+  const routes = ['/api/register','/api/login','/api/login-privileged','/api/guest'];
+  const checks = [
+    ['registration rejects names already held by registered members or guests', source.includes('function nameTaken(name)') && source.includes("Object.keys(db.users||{}).some(x=>keyName(x)===n)") && source.includes("Object.keys(db.guests||{}).some(x=>keyName(x)===n)") && source.includes('if(nameTaken(n)&&!ownerRequested)')],
+    ['guest entry rejects names already held by members or guests', source.includes("app.post('/api/guest'") && source.includes('if(nameTaken(n))return res.status(409)')],
+    ['all entry routes return remaining global-ban time', routes.every(route => { const m=source.match(new RegExp("app\\.post\\('"+route.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')+"',[\\s\\S]*?\\n\\}\\);")); return m && m[0].includes('globalBanResponse(res,n,requestClientIp(req))'); })],
+    ['global-ban response calculates remaining minutes and seconds from stored expiry', source.includes('function globalBanStatus(name,ip,now=Date.now())') && source.includes('remainingSeconds:totalSeconds') && source.includes('remainingText') && source.includes('GLOBAL_BAN_ACTIVE')],
+    ['login forms show actionable errors without leaving the entry screen', html.includes('async function doRegister()') && html.includes('async function doLogin()') && html.includes('async function doGuest()') && html.includes("document.getElementById('ln')?.focus()") && html.includes('الوقت المتبقي|دقيقة|ثانية|الاسم موجود')]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+  const banFn = source.match(/function globalBanStatus\(name,ip,now=Date\.now\(\)\)\{[\s\S]*?\n\}/);
+  if (!banFn) throw new Error('globalBanStatus not found');
+  const context = { db:{globalBans:{ali:{until:160000}},globalIpBans:{'1.2.3.4':{until:190000}}}, keyName:x=>String(x||'').toLowerCase(), normalizeIp:x=>String(x||'').toLowerCase(), save(){}, Date:{now:()=>100000} };
+  vm.createContext(context); vm.runInContext(`${banFn[0]}\nglobalThis.checkBan=globalBanStatus;`,context);
+  const named=context.checkBan('ali','',100000), ip=context.checkBan('other','1.2.3.4',100000);
+  if(named?.remainingSeconds===60 && ip?.remainingSeconds===90) pass('remaining-ban timer runtime fixtures cover name and IP bans');
+  else fail('remaining-ban timer runtime fixtures',JSON.stringify({named,ip}));
+} catch(error) { fail('entry and ban regression checks',error.message); }
+
 // Ensure every supported text-send transport applies the server-side chat filter.
 try {
   const source = fs.readFileSync(server, 'utf8');
