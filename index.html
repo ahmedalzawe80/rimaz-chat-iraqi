@@ -158,7 +158,6 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 .incomingNotice .inBody{padding:14px 12px;text-align:center;font-size:17px;font-weight:800;line-height:1.5}
 .incomingNotice .inClose{width:30px;height:30px;border:0;background:#df5555;color:#fff;font-weight:900}
 @media(max-width:600px){.msg{grid-template-columns:56px minmax(0,1fr) 48px}.avatar{width:54px;height:54px}.msghead{font-size:16px}.msgtext{font-size:15px}.presence{grid-template-columns:56px minmax(0,1fr) 48px}.presence .presenceAvatar{width:54px;height:54px;cursor:pointer}.presence .presenceName{font-size:17px}.presence .presenceText{font-size:14px}.bottom{height:39px}.bottom button{font-size:12px}.composer{bottom:39px}.settings .save,.settings .plain,.settings .danger{height:44px}.privateOverlay{width:84%;height:55%;top:21%}}
-</style>
 <style id="rimaz-latest-fixes">
 /* latest user-requested fixes */
 .roombar{height:34px;min-height:34px;display:block;direction:ltr;background:#e9e9ee;border:2px solid #101010;z-index:6}
@@ -180,7 +179,6 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 /* user latest: remove the extra top room strip and keep six equal bottom buttons */
 .roombar{display:none!important}
 .bottom{grid-template-columns:repeat(6,minmax(0,1fr))!important}
-</style>
 <style id="rimaz-user-final-tweaks">
 /* user final layout tweaks: rooms/settings/name sizing */
 .room{grid-template-columns:82px minmax(0,1fr) 82px;direction:ltr;}
@@ -208,7 +206,7 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
   .memberName{font-size:13px!important;}
   .wallText > b{font-size:13px!important;}
 }
-</style><style id="rimaz-current-layout-fix">
+</style></style><style id="rimaz-current-layout-fix">
 .bottom{grid-template-columns:repeat(5,minmax(0,1fr))!important;height:39px!important}
 .bottom button{font-size:12px!important;font-weight:900!important;padding:0 1px!important}
 .composer{direction:rtl!important;grid-template-columns:54px minmax(0,1fr) 34px 34px!important;gap:3px!important}
@@ -602,6 +600,40 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 </style>
 
 
+<style id="rimaz-online-members-row-final-v1">
+/* Online members only: avatar left, role + name/status in the middle, country flag at the far right. */
+.membersOverlay .member{
+  display:grid!important;
+  grid-template-columns:4px 48px 27px minmax(0,1fr) 38px 28px!important;
+  grid-template-rows:auto!important;
+  align-items:center!important;
+  column-gap:3px!important;
+  min-height:62px!important;
+  padding:4px 5px!important;
+  direction:ltr!important;
+  box-sizing:border-box!important;
+}
+.membersOverlay .member>.memberStatusBar{grid-column:1!important;grid-row:1!important;width:4px!important;height:48px!important;margin:0!important;align-self:center!important}
+.membersOverlay .member>img{grid-column:2!important;grid-row:1!important;width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;object-fit:cover!important;margin:0!important}
+.membersOverlay .member>.memberBadges{grid-column:3!important;grid-row:1!important;display:flex!important;align-items:center!important;justify-content:center!important;min-width:0!important}
+.membersOverlay .member>.memberBadges .memberBadge{display:inline-grid!important;place-items:center!important;width:24px!important;height:24px!important;min-width:24px!important;margin:0!important;font-size:16px!important;line-height:1!important}
+.membersOverlay .member>.memberMain{grid-column:4!important;grid-row:1!important;min-width:0!important;width:100%!important;margin:0!important;padding:1px 3px!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:center!important;gap:3px!important;direction:rtl!important;text-align:right!important;overflow:hidden!important}
+.membersOverlay .member .memberName{display:block!important;width:100%!important;min-width:0!important;font-size:15px!important;font-weight:900!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.membersOverlay .member .memberSub{display:block!important;visibility:visible!important;width:100%!important;min-width:0!important;margin:0!important;padding:0!important;color:#888!important;font-size:13px!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.membersOverlay .member.adminMember .memberSub{display:block!important}
+.membersOverlay .member .memberLikes{grid-column:5!important;grid-row:1!important;min-width:0!important;padding:0!important;text-align:center!important;font-size:10px!important}
+.membersOverlay .member.adminMember .memberLikes{display:none!important}
+.membersOverlay .member>.memberCountryFlag{grid-column:6!important;grid-row:1!important;display:flex!important;align-items:center!important;justify-content:center!important;width:26px!important;min-width:26px!important;font-size:22px!important;line-height:1!important}
+@media(max-width:600px){
+ .membersOverlay .member{grid-template-columns:3px 44px 24px minmax(0,1fr) 32px 25px!important;column-gap:2px!important;min-height:58px!important;padding:3px!important}
+ .membersOverlay .member>img{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important}
+ .membersOverlay .member>.memberBadges .memberBadge{width:22px!important;height:22px!important;min-width:22px!important;font-size:15px!important}
+ .membersOverlay .member .memberName{font-size:14px!important}
+ .membersOverlay .member .memberSub{font-size:12px!important}
+ .membersOverlay .member>.memberCountryFlag{width:24px!important;min-width:24px!important;font-size:20px!important}
+}
+</style>
+
 <style id="rimaz-online-header-connected-final-v1">
 /* Single three-part online header: connected on the left, black separator, title and count on the right. */
 .rlOnline .rlOnlineHead{
@@ -729,359 +761,6 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
  #layer .membersOverlay .member>.memberCountryFlag{width:22px!important;min-width:22px!important;font-size:18px!important;}
 }
 </style>
-
-<style id="rimaz-user-latest-final">
-/* latest user alignment — preserve approved sizes, only mirror requested areas */
-.memberSectionBar{height:34px;min-height:34px;display:flex;align-items:center;justify-content:center;background:#111;color:#fff;font-size:15px;font-weight:900;text-align:center;border-top:1px solid #000;border-bottom:1px solid #000}
-.membersHead,.privateListHead{direction:ltr!important;justify-content:space-between!important}
-.roomsHead{direction:ltr!important;justify-content:space-between!important}
-.roomsHead .close{order:0}.roomsHead span{order:1}
-/* member rows: flag/count right, photo left, name beside photo */
-/* private list follows the same visual order */
-.privateListOverlay .member{direction:ltr!important}
-/* rooms: photo left, room details middle, black occupancy box right */
-.room{direction:ltr!important;grid-template-columns:58px 24px minmax(0,1fr) 82px!important}.roomLockMark{font-size:16px;text-align:center}
-.room > div:nth-child(2){text-align:left!important;direction:rtl!important}
-.roomName,.roomDesc{text-align:left!important}
-.count{grid-column:4!important;grid-row:1!important;justify-self:end!important;align-self:start!important;margin:0 3px 0 0!important;background:#111!important;color:#fff!important;text-align:center!important}
-/* wall posts: photo left, name/content beside it, reactions right */
-.wallPost{display:grid!important;grid-template-columns:54px minmax(0,1fr)!important;gap:6px!important;direction:ltr!important;align-items:start!important}
-.wallAvatar{width:50px!important;height:50px!important;object-fit:cover!important;grid-column:1!important}
-.wallPostMain{grid-column:2!important;min-width:0!important;direction:rtl!important;text-align:left!important}
-.wallText{text-align:left!important}
-.wallActions{direction:ltr!important;justify-content:flex-end!important;margin-top:4px!important}
-/* private messages: avatar left, name beside it */
-.pmsg{direction:ltr!important;text-align:left!important}
-.pmsgHead{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:6px!important;direction:ltr!important;margin-bottom:3px!important}
-.pmsgHead img{width:34px!important;height:34px!important;object-fit:cover!important;border-radius:3px!important}
-.pmsgHead b{font-size:13px!important;font-weight:900!important}
-.pmsg > div:last-child{text-align:left!important;direction:rtl!important}
-/* private composer: send right, text, emoji, media, call left */
-.privateComposer{direction:rtl!important;grid-template-columns:47px minmax(0,1fr) 29px 29px 29px!important;gap:2px!important}
-/* notification composer: send on the right */
-.noticeMiniBody{direction:ltr!important;grid-template-columns:minmax(0,1fr) 58px!important}
-.noticeMiniBody input{text-align:right!important;direction:rtl!important}
-/* settings first rows: label right, input left, input gets a little over half */
-.settings .srow:nth-child(-n+4){grid-template-columns:42% 58%!important;direction:rtl!important}
-.settings .srow:nth-child(-n+4) .slabel{text-align:right!important;direction:rtl!important}
-.settings .srow:nth-child(-n+4) .svalue{direction:ltr!important}
-.settings .srow:nth-child(-n+4) .svalue input,.settings .srow:nth-child(-n+4) .svalue select{width:100%!important}
-</style>
-
-<style id="rimaz-user-alignment-media-v2">
-/* Overlay: starts at the very top of the room and ends exactly above the bottom navigation. */
-#layer{position:absolute;inset:0;z-index:20;pointer-events:none;}
-#layer>.overlay,#layer>.privateOverlay{pointer-events:auto;top:0!important;bottom:39px!important;height:auto!important;max-height:none!important;}
-@media(max-width:650px){#layer>.overlay,#layer>.privateOverlay{top:0!important;bottom:39px!important;height:auto!important;}}
-/* Keep names compact without changing the approved left/right message layout. */
-.msghead{font-size:14px!important;gap:5px!important;line-height:1.15!important;}
-.msgtext{font-size:15px!important;line-height:1.32!important;}
-.presence .presenceName{font-size:14px!important;line-height:1.15!important;}
-.presence .presenceText{font-size:13px!important;}
-.member{grid-template-columns:6px 54px 30px minmax(0,1fr) 48px!important;column-gap:1px!important;}
-.memberName{font-size:12px!important;font-weight:700!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
-.memberSub{font-size:10px!important;line-height:1.2!important;}
-.memberMain{grid-column:4!important;grid-row:1!important;padding:3px 5px!important;min-width:0!important;}
-.member .memberBadge{grid-column:3!important;grid-row:1!important;}
-.memberLikes{grid-column:5!important;grid-row:1!important;}
-.memberLikes{font-size:9px!important;padding-right:3px!important;}
-.privateListOverlay .memberName{font-size:12px!important;}
-.pmsgHead b{font-size:12px!important;font-weight:800!important;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.wallText{font-size:15px!important;line-height:1.35!important;}
-.wallPostMain .wallText b{font-size:13px!important;font-weight:800!important;}
-/* Compact media thumbnails open into a modest square viewer; videos retain playback controls. */
-.privateMediaArea{margin-top:5px!important;direction:ltr!important;text-align:left!important;display:flex!important;justify-content:flex-start!important;margin-right:auto!important;width:100%!important;}
-.privateMediaThumb{margin-left:0!important;margin-right:auto!important;display:flex;align-items:center;justify-content:center;gap:8px;width:108px;height:108px;max-width:100%;padding:0;border:1px solid #bbb;border-radius:7px;background:#f1f1f1;color:#111;overflow:hidden;cursor:pointer;}
-.privateMediaThumb.imageThumb img{display:block;width:100%;height:100%;object-fit:cover;}
-.privateMediaThumb.videoThumb{flex-direction:column;background:linear-gradient(145deg,#181818,#3a3a3a);color:#fff;font-size:11px;font-weight:800;}
-.videoPlayIcon{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:#df5555;color:#fff;font-size:20px;padding-left:3px;}
-.privateAudio{max-width:100%;width:250px;height:38px;}
-.privateMediaViewer{position:absolute;inset:0;z-index:300;background:#000b;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;}
-.privateMediaFrame{position:relative;width:min(320px,86vw);aspect-ratio:1/1;max-height:68%;background:#111;border:1px solid #555;border-radius:9px;overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 28px #0009;}
-.privateMediaFrame.imageFrame{background:#111;}
-.privateMediaFullImage{display:block;width:100%;height:100%;object-fit:contain;}
-.privateMediaClose{position:absolute;z-index:2;top:6px;right:6px;width:30px;height:30px;border:0;border-radius:5px;background:#df5555;color:#fff;font-size:25px;line-height:1;font-weight:900;}
-.videoFrame{flex-direction:column;aspect-ratio:auto;max-height:70%;height:auto;min-height:190px;}
-.privateMediaTitle{height:38px;min-height:38px;width:100%;box-sizing:border-box;padding:0 42px 0 10px;display:flex;align-items:center;background:#111;color:#fff;font-size:13px;font-weight:800;}
-.privateMediaFullVideo{display:block;width:100%;height:auto;max-height:280px;object-fit:contain;background:#000;}
-@media(max-width:400px){.privateMediaFrame{width:min(280px,84vw);}.privateMediaFullVideo{max-height:230px;}}
-</style>
-
-<style id="rimaz-exact-two-layout-fixes">
-/* Overlay touches the room's top edge and stops exactly at the top of the bottom bar. */
-#layer{position:absolute!important;inset:0!important;z-index:20!important;pointer-events:none!important;}
-#layer>.overlay,#layer>.privateOverlay{position:absolute!important;top:0!important;bottom:39px!important;height:auto!important;max-height:none!important;pointer-events:auto!important;}
-/* Presence strip, photo, admin badge and name are four distinct adjacent columns. */
-.member{display:grid!important;direction:ltr!important;grid-template-columns:6px 54px 29px minmax(0,1fr) 46px!important;column-gap:1px!important;min-height:58px!important;align-items:center!important;overflow:hidden!important;}
-.member .memberStatusBar{grid-column:1!important;grid-row:1!important;width:6px!important;height:54px!important;align-self:center!important;margin:0!important;border-radius:3px 0 0 3px!important;display:block!important;}
-.member>img{grid-column:2!important;grid-row:1!important;width:54px!important;height:54px!important;object-fit:cover!important;margin:0!important;align-self:center!important;}
-.member .memberBadge{grid-column:3!important;grid-row:1!important;width:27px!important;height:27px!important;margin:0!important;justify-self:start!important;align-self:center!important;display:grid!important;place-items:center!important;font-size:17px!important;line-height:1!important;}
-.member .memberMain{grid-column:4!important;grid-row:1!important;min-width:0!important;padding:2px 3px!important;direction:rtl!important;text-align:right!important;overflow:hidden!important;}
-.member .memberName{font-size:12px!important;font-weight:700!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;overflow-wrap:normal!important;}
-.member .memberSub{font-size:10px!important;line-height:1.15!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
-.member .memberLikes{grid-column:5!important;grid-row:1!important;min-width:0!important;padding:0 2px!important;text-align:center!important;font-size:9px!important;}
-</style>
-
-<style id="rimaz-private-half-overlay-final">
-/* Private chat occupies only the upper half, leaving the public room and its composer usable below. */
-#layer>.privateOverlay{position:absolute!important;left:0!important;right:0!important;top:0!important;bottom:auto!important;width:100%!important;height:50%!important;min-height:0!important;max-height:50%!important;margin:0!important;box-sizing:border-box!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;z-index:50!important;background:#fff!important;}
-#layer .privateOverlay .privateHead{flex:0 0 42px!important;height:42px!important;min-height:42px!important;}
-#layer .privateOverlay .privateHeadActions{direction:rtl!important;display:flex!important;flex-direction:row!important;align-items:center!important;gap:4px!important;white-space:nowrap!important;}
-#layer .privateOverlay .privateHeadActions .privateClose{order:0!important;background:#df5555!important;color:#fff!important;font-size:25px!important;font-weight:900!important;width:30px!important;height:30px!important;line-height:1!important;border:0!important;border-radius:4px!important;}
-#layer .privateOverlay .privateHeadActions .blue{order:1!important;}
-#layer .privateOverlay .privateHeadActions .privateLike{order:2!important;}
-#layer>.privateOverlay .privateBody{flex:1 1 auto!important;min-height:0!important;overflow:auto!important;}
-#layer>.privateOverlay .privateComposer{flex:0 0 39px!important;height:39px!important;min-height:39px!important;}
-#layer>.privateOverlay .privateMinimize{top:auto!important;right:5px!important;bottom:43px!important;z-index:55!important;}
-@media(max-width:650px){#layer>.privateOverlay{top:0!important;bottom:auto!important;width:100%!important;height:50%!important;max-height:50%!important;}#layer .privateOverlay .privateHead{grid-template-columns:25px 5px 36px minmax(0,1fr) auto!important;gap:5px!important;padding:3px 5px!important;}#layer .privateOverlay .privateHeadActions{gap:3px!important;}#layer .privateOverlay .privateHeadActions button{width:28px!important;height:29px!important;}}
-
-/* Private contacts: photo, badge, and name/likes grouped on the left; delete stays at far right. */
-.privateListOverlay .member{grid-template-columns:6px 48px 28px minmax(0,1fr) 66px!important;direction:ltr!important;column-gap:0!important;padding-right:0!important;align-items:center!important;}
-.privateListOverlay .member img{grid-column:2!important;width:46px!important;height:46px!important;}
-.privateListOverlay .member .memberBadge{grid-column:3!important;width:24px!important;height:24px!important;font-size:15px!important;}
-.privateListOverlay .member .memberMain{grid-column:4!important;min-width:0!important;margin:0 3px!important;padding:3px!important;}
-.privateListOverlay .member .memberName{display:flex!important;align-items:center!important;gap:6px!important;min-width:0!important;flex-wrap:nowrap!important;}
-.privateListOverlay .member .privateInlineLikes{display:inline-block!important;white-space:nowrap!important;font-size:10px!important;font-weight:700!important;flex:0 0 auto!important;}
-.privateListOverlay .member .memberLikes{display:none!important;}
-.privateListOverlay .member .privateContactDelete{grid-column:5!important;justify-self:center!important;max-width:58px!important;height:26px!important;min-height:26px!important;font-size:10px!important;padding:2px 4px!important;}
-@media(max-width:600px){.privateListOverlay .member{grid-template-columns:5px 42px 24px minmax(0,1fr) 64px!important;min-height:62px!important}.privateListOverlay .member img{width:40px!important;height:40px!important}.privateListOverlay .member .memberBadge{width:21px!important;height:21px!important;font-size:13px!important}.privateListOverlay .member .privateContactDelete{height:26px!important;font-size:10px!important;padding:2px 4px!important}}
-
-/* Private contacts: hide legacy likes and heart only. */
-.privateListOverlay .privateInlineLikes,.privateListOverlay .memberLikes{display:none!important}
-/* Rimaz minimal fix: compact only the private-chat delete control; preserve all layout dimensions. */
-.privateListOverlay .privateContactDelete{
-  width:auto!important;min-width:0!important;max-width:58px!important;
-  height:26px!important;min-height:26px!important;padding:2px 4px!important;
-  margin:0!important;font-size:10px!important;line-height:1!important;
-  border-radius:6px!important;box-sizing:border-box!important;
-  justify-self:center!important;align-self:center!important;
-}
-
-</style>
-
-<style id="rimaz-country-flag-left-fix">
-/* Keep the country flag on the far-left side of the private-chat header. */
-#layer .privateOverlay .privateHead{grid-template-columns:28px 5px 36px minmax(0,1fr) auto!important;gap:5px!important;direction:ltr!important;}
-#layer .privateOverlay .privateCountryFlag{grid-column:1!important;grid-row:1!important;position:relative!important;z-index:5!important;display:flex!important;align-items:center!important;justify-content:center!important;min-width:24px!important;width:24px!important;height:30px!important;margin:0!important;padding:0!important;font-size:20px!important;line-height:1!important;overflow:visible!important;visibility:visible!important;opacity:1!important;}
-#layer .privateOverlay .privateStatus{grid-column:2!important;grid-row:1!important;width:5px!important;}
-#layer .privateOverlay .privateHeadAvatar{grid-column:3!important;grid-row:1!important;}
-#layer .privateOverlay .privateHeadName{grid-column:4!important;grid-row:1!important;}
-#layer .privateOverlay .privateHeadActions{grid-column:5!important;grid-row:1!important;}
-</style>
-
-<style id="rimaz-profile-reference-size-fix">
-@media(max-width:650px){#layer .profileOverlay{width:84%!important;max-width:none!important;right:8%!important;left:auto!important;top:15px!important;border-radius:0!important;overflow:hidden!important;}#layer .profilePhoto{width:100%!important;height:200px!important;max-height:none!important;object-fit:cover!important;}#layer .memberProfileCountry{direction:rtl!important;}#layer .memberProfileRoomName{margin-left:0!important;margin-right:0!important;}#layer .profileGrid .ignore{grid-column:1!important;grid-row:2!important;}#layer .profileTop{height:48px!important;min-height:48px!important;}#layer .memberProfileMetaRow{min-height:40px!important;}#layer .profileGrid button{min-height:48px!important;font-size:13px!important;}}
-</style>
-
-<style id="rimaz-profile-size-and-gift-fix">
-@media(max-width:650px){
- #layer .profileOverlay{position:absolute!important;top:15px!important;right:8%!important;left:auto!important;width:84%!important;max-width:360px!important;height:auto!important;max-height:calc(100dvh - 30px)!important;overflow:auto!important;border-radius:0!important;box-shadow:0 4px 18px #0005!important;background:#fff!important;}
- #layer .profileTop{position:absolute!important;top:3px!important;right:3px!important;left:3px!important;z-index:4!important;height:32px!important;min-height:32px!important;padding:0!important;background:transparent!important;color:#fff!important;justify-content:flex-end!important;gap:4px!important;pointer-events:none!important}
- #layer .profileTop b,#layer .profileTopAvatar{display:none!important}
- #layer .profileTop .close{pointer-events:auto!important;background:#d9534f!important;color:#fff!important;border:0!important;border-radius:0!important;box-shadow:none!important}
- #layer .profilePhoto{display:block!important;width:100%!important;height:165px!important;max-height:165px!important;object-fit:cover!important}
- #layer .profileInfo{padding:5px 7px!important;text-align:center!important}
- #layer .profileGrid{grid-template-columns:repeat(3,minmax(0,1fr))!important;border-top:1px solid #ddd!important}
- #layer .profileGrid button{min-width:0!important;min-height:38px!important;height:auto!important;padding:5px 2px!important;border:1px solid #eee!important;border-radius:0!important;background:#fff!important;color:#333!important;font-size:11px!important;font-weight:700!important;line-height:1.2!important}
- #layer .profileGrid .memberProfileLikeButton{color:#d00!important}
- #layer .profileGrid .memberProfileMetaRow{min-height:34px!important;padding:5px!important}
- #layer .profileGrid .memberProfileRoomName{background:#365d70!important;border-color:#496779!important;border-radius:0!important}
- #layer .profileGiftShade{position:absolute!important;inset:0!important;z-index:120!important;display:flex!important;align-items:flex-start!important;justify-content:flex-start!important;direction:rtl!important;background:#0007!important;padding:0!important}
- #layer .profileGiftPanel{width:84%!important;max-width:360px!important;margin-right:8%!important;margin-top:15px!important;height:min(70vh,560px)!important;max-height:70vh!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;background:#fff!important;color:#222!important;border:1px solid #aaa!important;border-radius:0!important;box-shadow:none!important}
- #layer .profileGiftHead{height:34px!important;min-height:34px!important;display:flex!important;align-items:center!important;justify-content:space-between!important;padding:4px 8px!important;background:#fff!important;color:#222!important;border-bottom:1px solid #bbb!important;font-weight:700!important;font-size:13px!important}
- #layer .profileGiftHead button{width:25px!important;height:25px!important;border:0!important;background:#d9534f!important;color:#fff!important;font-size:21px!important;border-radius:0!important}
- #layer .profileGiftGrid{display:grid!important;grid-template-columns:repeat(8,minmax(0,1fr))!important;gap:2px!important;padding:7px 5px!important;overflow:auto!important;align-content:start!important;flex:1!important;background:#fff!important}
- #layer .profileGiftGrid button{height:31px!important;min-width:0!important;padding:1px!important;border:1px solid #eee!important;background:#fff!important;color:#222!important;border-radius:0!important;font-size:19px!important;line-height:1!important}
- #layer .profileGiftGrid button.selected{background:#e1edf4!important;border:1px solid #64859a!important;outline:none!important}
- #layer .profileGiftFoot{display:flex!important;gap:4px!important;padding:5px!important;border-top:1px solid #bbb!important;background:#fff!important}
- #layer .profileGiftFoot button{flex:1!important;min-height:30px!important;border:1px solid #496779!important;border-radius:0!important;background:#365d70!important;color:#fff!important;font-size:12px!important;font-weight:700!important}
- #layer .profileGiftFoot .profileGiftDelete{background:#c94848!important;border-color:#b63838!important;color:#fff!important}
-#layer .profileGiftGrid .giftArt,.giftGrid .giftArt,.memberClassicGrid .giftArt{display:block!important;width:100%!important;height:100%!important;max-width:26px!important;max-height:26px!important;object-fit:contain!important;object-position:center center!important;margin:auto!important;box-sizing:border-box!important;overflow:hidden!important} .giftArtFallback{display:flex!important;width:100%!important;height:100%!important;align-items:center!important;justify-content:center!important;font-size:22px!important;line-height:1!important;overflow:hidden!important}
-#layer .profileGiftGrid .giftRemoveTile{height:42px!important;min-height:42px!important;min-width:0!important;padding:4px 2px!important;border:1px solid #496779!important;background:#365d70!important;color:#fff!important;border-radius:0!important;font-size:12px!important;line-height:1.15!important;font-weight:700!important;white-space:normal!important;align-self:start!important}
-}
-</style>
-
-<style id="rimaz-admin-member-layout-fix">
-/* Admin entry in the online members and private contacts lists: keep the existing avatar and crown, but remove likes/heart/level. */
-.adminMember .memberSub,.adminMember .memberLikes{display:none!important;}
-.adminMember .memberMain{grid-column:4!important;min-width:0!important;}
-.adminMember .memberName{display:flex!important;align-items:center!important;justify-content:flex-start!important;direction:ltr!important;text-align:left!important;gap:5px!important;white-space:nowrap!important;}
-.privateListOverlay .adminMember .memberMain{grid-column:4!important;}
-</style>
-
-<style id="rimaz-final-unified-layout-reference">
-/* One consistent member row: avatar, single role mark, name and status. */
-.member,.privateListOverlay .member{display:grid!important;grid-template-columns:5px 54px 30px minmax(0,1fr) 58px!important;column-gap:4px!important;align-items:center!important;min-height:66px!important;box-sizing:border-box!important;direction:ltr!important;padding:4px 3px!important}
-.member>img,.privateListOverlay .member>img{grid-column:2!important;grid-row:1!important;width:54px!important;height:54px!important;min-width:54px!important;min-height:54px!important;object-fit:cover!important;margin:0!important}
-.member .memberBadge,.privateListOverlay .member .memberBadge{grid-column:3!important;grid-row:1!important;width:28px!important;height:28px!important;min-width:28px!important;display:grid!important;place-items:center!important;justify-self:center!important;align-self:center!important;font-size:18px!important;line-height:1!important;margin:0!important}
-.member .memberMain,.privateListOverlay .member .memberMain{grid-column:4!important;grid-row:1!important;min-width:0!important;margin:0!important;padding:2px 4px!important;direction:rtl!important;text-align:right!important;overflow:hidden!important}
-.member .memberName,.privateListOverlay .member .memberName{display:block!important;font-size:16px!important;font-weight:900!important;line-height:1.25!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
-.member .memberSub,.privateListOverlay .member .privateLastMessage{display:block!important;font-size:15px!important;line-height:1.3!important;margin-top:3px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;color:#888!important;direction:rtl!important;text-align:right!important}
-.privateListOverlay .member .privateContactDelete{grid-column:5!important;grid-row:1!important;width:54px!important;max-width:54px!important;justify-self:center!important;font-size:11px!important}
-.member .memberStatusBar{grid-column:1!important;grid-row:1!important;width:5px!important;height:54px!important;align-self:center!important}
-.wallPost{display:grid!important;grid-template-columns:54px minmax(0,1fr)!important;gap:8px!important;align-items:start!important;direction:ltr!important;padding:8px!important}
-.wallAvatar{grid-column:1!important;width:54px!important;height:54px!important;object-fit:cover!important}
-.wallPostMain{grid-column:2!important;min-width:0!important;direction:rtl!important;text-align:right!important}
-.rimazUnifiedName{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:7px!important;min-height:28px!important;direction:rtl!important;margin-bottom:4px!important}
-.rimazUnifiedName b{font-size:16px!important;font-weight:900!important;line-height:1.2!important}
-.rimazRoleBadge .memberBadge{display:inline-grid!important;place-items:center!important;width:25px!important;height:25px!important;font-size:17px!important;vertical-align:middle!important}
-.presence{grid-template-columns:54px minmax(0,1fr) 48px!important;align-items:center!important;min-height:62px!important}
-.presence .presenceAvatar{grid-column:1!important;grid-row:1!important;width:54px!important;height:54px!important;object-fit:cover!important}
-.presence .presenceBody{grid-column:2!important;grid-row:1!important;min-width:0!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:center!important;gap:3px!important}
-.presence .presenceName{font-size:17px!important;line-height:1.2!important}
-.presence .presenceText{font-size:16px!important;line-height:1.25!important}
-@media(max-width:600px){.member,.privateListOverlay .member{grid-template-columns:4px 48px 27px minmax(0,1fr) 48px!important;min-height:60px!important;column-gap:2px!important}.member>img,.privateListOverlay .member>img{width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important}.member .memberBadge,.privateListOverlay .member .memberBadge{width:24px!important;height:24px!important;min-width:24px!important;font-size:15px!important}.member .memberName,.privateListOverlay .member .memberName{font-size:15px!important}.member .memberSub,.privateListOverlay .member .privateLastMessage{font-size:14px!important}.privateListOverlay .member .privateContactDelete{width:45px!important;max-width:45px!important;font-size:10px!important}.wallAvatar{width:48px!important;height:48px!important}.wallPost{grid-template-columns:48px minmax(0,1fr)!important}.presence .presenceText{font-size:16px!important}}
-</style>
-<style id="rimaz-unified-wall-crown">
-/* Use the wall's gold crown glyph everywhere; remove the black badge backing without changing dimensions or names. */
-.member .memberBadge.roleAdmin,
-.privateListOverlay .member .memberBadge.roleAdmin,
-.msg .msghead .memberBadge.roleAdmin,
-.wallPost .rimazRoleBadge .memberBadge.roleAdmin,
-#layer .privateOverlay .privateHeadTitle .memberBadge.roleAdmin {
-  background:transparent!important;
-  border-color:transparent!important;
-  color:inherit!important;
-  box-shadow:none!important;
-}
-.msg .msghead .memberBadge {flex:0 0 25px!important;width:25px!important;height:25px!important;min-width:25px!important;display:inline-grid!important;place-items:center!important;font-size:17px!important;line-height:1!important;padding:0!important;}
-</style>
-<style id="rimaz-public-wall-requested-fixes">
-/* Public messages: preserve the existing name and dimensions; render the owner's gold crown beside the avatar/name line. */
-.msg .msghead .memberBadge.roleAdmin{background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important;color:inherit!important;}
-/* Wall: keep the photo at its existing size and restore crown then name beside it. */
-.wallPost .rimazUnifiedName{direction:ltr!important;display:flex!important;flex-direction:row!important;justify-content:flex-start!important;align-items:flex-start!important;gap:6px!important;}
-.wallPost .rimazUnifiedName .rimazRoleBadge{order:0!important;}
-.wallPost .rimazUnifiedName b{order:1!important;}
-</style>
-<style id="rimaz-approved-top-alignment-v2">
-/* Approved layout: avatar on the left; badge first, then name on the same top line; detail directly below. */
-.member,.privateListOverlay .member{align-items:start!important;min-height:66px!important;}
-.member>img,.privateListOverlay .member>img{grid-row:1 / span 2!important;align-self:start!important;margin-top:0!important;}
-.member .memberBadge,.privateListOverlay .member .memberBadge{grid-row:1!important;align-self:start!important;justify-self:center!important;margin-top:1px!important;}
-.member .memberMain,.privateListOverlay .member .memberMain{grid-row:1 / span 2!important;align-self:start!important;padding-top:0!important;}
-.member .memberName,.privateListOverlay .member .memberName{min-height:27px!important;display:flex!important;align-items:flex-start!important;line-height:1.25!important;}
-.member .memberSub,.privateListOverlay .member .privateLastMessage{margin-top:0!important;padding-top:2px!important;line-height:1.25!important;}
-/* Keep the badge and username at the top edge in public messages too. */
-.msg{align-items:start!important;}
-.msg .avatar{grid-row:1!important;align-self:start!important;}
-.msg .msgbody{align-self:start!important;padding-top:3px!important;}
-.msg .msghead{align-items:flex-start!important;justify-content:flex-start!important;gap:6px!important;line-height:1.2!important;}
-.msg .msghead .badge,.msg .msghead .memberBadge,.msg .msghead .rimazRoleBadge{align-self:flex-start!important;margin-top:0!important;}
-/* Wall posts use the same avatar / badge / name top alignment as the public chat. */
-.wallPost{align-items:start!important;}
-.wallPost>.wallAvatar{grid-column:1!important;grid-row:1!important;align-self:start!important;}
-.wallPost .wallPostMain{grid-column:2!important;grid-row:1!important;align-self:start!important;}
-.wallPost .rimazUnifiedName{direction:ltr!important;justify-content:flex-start!important;align-items:flex-start!important;gap:6px!important;margin-top:0!important;margin-bottom:4px!important;}
-.wallPost .rimazUnifiedName .rimazRoleBadge{flex:0 0 auto!important;margin:0!important;align-self:flex-start!important;}
-.wallPost .rimazUnifiedName b{align-self:flex-start!important;margin:0!important;line-height:1.25!important;}
-@media(max-width:600px){
- .member,.privateListOverlay .member{grid-template-columns:4px 48px 27px minmax(0,1fr) 48px!important;min-height:60px!important;column-gap:2px!important;}
- .member>img,.privateListOverlay .member>img{width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;}
- .member .memberBadge,.privateListOverlay .member .memberBadge{width:24px!important;height:24px!important;min-width:24px!important;font-size:15px!important;}
- .member .memberMain,.privateListOverlay .member .memberMain{padding:0 3px!important;}
- .member .memberName,.privateListOverlay .member .memberName{font-size:15px!important;min-height:23px!important;}
- .member .memberSub,.privateListOverlay .member .privateLastMessage{font-size:13px!important;}
- .wallPost{grid-template-columns:48px minmax(0,1fr)!important;gap:6px!important;}
- .wallAvatar{width:48px!important;height:48px!important;}
-}
-</style>
-
-<style id="rimaz-private-message-sender-badge-v13">
-/* Private conversation messages: keep sender avatar, role crown/badge, and name aligned at the top. */
-#layer .privateOverlay .pmsg{display:block!important;padding:8px 9px!important;direction:ltr!important;text-align:left!important;}
-#layer .privateOverlay .pmsgHead{display:flex!important;flex-direction:row!important;align-items:flex-start!important;justify-content:flex-start!important;gap:8px!important;direction:ltr!important;margin:0 0 5px!important;min-height:44px!important;}
-#layer .privateOverlay .pmsgHead>img{display:block!important;flex:0 0 44px!important;width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;object-fit:cover!important;border-radius:5px!important;margin:0!important;}
-#layer .privateOverlay .pmsgIdentity{display:flex!important;flex:1 1 auto!important;min-width:0!important;align-self:flex-start!important;padding-top:0!important;}
-#layer .privateOverlay .pmsgTitle{display:flex!important;flex-direction:row!important;align-items:flex-start!important;justify-content:flex-start!important;gap:6px!important;direction:ltr!important;min-width:0!important;max-width:100%!important;line-height:1.2!important;}
-#layer .privateOverlay .pmsgTitle .memberBadges{display:inline-flex!important;align-items:flex-start!important;gap:3px!important;flex:0 0 auto!important;margin:0!important;padding:0!important;}
-#layer .privateOverlay .pmsgTitle .memberBadge{display:inline-grid!important;place-items:center!important;flex:0 0 auto!important;min-width:23px!important;width:auto!important;height:23px!important;min-height:23px!important;margin:0!important;padding:0 3px!important;font-size:16px!important;line-height:1!important;vertical-align:top!important;}
-#layer .privateOverlay .pmsgTitle b{display:block!important;min-width:0!important;max-width:100%!important;margin:0!important;padding:1px 0 0!important;font-size:15px!important;font-weight:900!important;line-height:1.2!important;white-space:normal!important;overflow-wrap:anywhere!important;}
-#layer .privateOverlay .pmsg>div:last-child{direction:rtl!important;text-align:left!important;line-height:1.4!important;}
-#layer .privateOverlay .pmsg .privateMediaArea{margin:5px 0 0 52px!important;direction:ltr!important;text-align:left!important;}
-#layer .privateOverlay .pmsg .privateMediaArea img{max-width:100%!important;}
-@media(max-width:650px){#layer .privateOverlay .pmsg{padding:7px!important;}#layer .privateOverlay .pmsgHead{gap:7px!important;min-height:42px!important;}#layer .privateOverlay .pmsgHead>img{flex-basis:42px!important;width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;}#layer .privateOverlay .pmsgTitle .memberBadge{min-width:21px!important;height:21px!important;min-height:21px!important;font-size:15px!important;}#layer .privateOverlay .pmsgTitle b{font-size:14px!important;}#layer .privateOverlay .pmsg .privateMediaArea{margin-left:49px!important;}}
-</style>
-
-<style id="rimaz-v14-private-sender-alignment-final">
-/* Stable private conversation header and message sender layout: avatar, badge and name aligned at the top. */
-#layer .privateOverlay .privateHead{display:grid!important;grid-template-columns:24px 5px 48px minmax(0,1fr) auto!important;gap:6px!important;align-items:start!important;height:60px!important;min-height:60px!important;flex:0 0 60px!important;padding:5px 6px!important;box-sizing:border-box!important;direction:ltr!important;overflow:hidden!important;}
-#layer .privateOverlay .privateHead .privateCountryFlag{grid-column:1!important;grid-row:1!important;align-self:start!important;min-width:22px!important;width:22px!important;height:28px!important;font-size:18px!important;}
-#layer .privateOverlay .privateHead .privateStatus{grid-column:2!important;grid-row:1!important;align-self:start!important;width:5px!important;height:44px!important;margin:0!important;}
-#layer .privateOverlay .privateHead .privateHeadAvatar{grid-column:3!important;grid-row:1!important;width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;align-self:start!important;object-fit:cover!important;border-radius:6px!important;margin:0!important;}
-#layer .privateOverlay .privateHead .privateHeadName{grid-column:4!important;grid-row:1!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:flex-start!important;gap:3px!important;min-width:0!important;align-self:start!important;margin:0!important;padding:0!important;direction:ltr!important;text-align:left!important;}
-#layer .privateOverlay .privateHead .privateHeadTitle{display:flex!important;flex-direction:row!important;align-items:flex-start!important;justify-content:flex-start!important;gap:5px!important;min-width:0!important;width:100%!important;margin:0!important;padding:0!important;line-height:1.2!important;direction:ltr!important;}
-#layer .privateOverlay .privateHead .privateHeadTitle .memberBadges{display:inline-flex!important;flex:0 0 auto!important;align-items:flex-start!important;gap:3px!important;margin:0!important;padding:0!important;}
-#layer .privateOverlay .privateHead .privateHeadTitle .memberBadge{display:inline-grid!important;place-items:center!important;align-self:flex-start!important;flex:0 0 auto!important;width:auto!important;min-width:24px!important;height:24px!important;min-height:24px!important;margin:0!important;padding:0 3px!important;font-size:17px!important;line-height:1!important;}
-#layer .privateOverlay .privateHead .privateHeadTitle b{display:block!important;align-self:flex-start!important;min-width:0!important;font-size:15px!important;line-height:1.2!important;font-weight:900!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;margin:1px 0 0!important;padding:0!important;}
-#layer .privateOverlay .privateHead .privateHeadName small{display:block!important;width:100%!important;text-align:left!important;direction:rtl!important;font-size:10px!important;line-height:1.2!important;color:#ddd!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
-#layer .privateOverlay .privateHead .privateHeadActions{grid-column:5!important;grid-row:1!important;display:flex!important;align-items:flex-start!important;gap:3px!important;align-self:start!important;}
-#layer .privateOverlay .privateHead .privateHeadActions button{width:29px!important;height:29px!important;min-width:29px!important;margin:0!important;padding:0!important;}
-#layer .privateOverlay .pmsgHead{display:grid!important;grid-template-columns:46px minmax(0,1fr)!important;grid-template-rows:auto!important;align-items:start!important;justify-content:initial!important;gap:8px!important;direction:ltr!important;min-height:46px!important;margin:0 0 6px!important;}
-#layer .privateOverlay .pmsgHead>img{grid-column:1!important;grid-row:1!important;width:46px!important;height:46px!important;min-width:46px!important;min-height:46px!important;flex:none!important;align-self:start!important;margin:0!important;border-radius:6px!important;object-fit:cover!important;}
-#layer .privateOverlay .pmsgIdentity{grid-column:2!important;grid-row:1!important;display:block!important;min-width:0!important;align-self:start!important;padding:0!important;margin:0!important;}
-#layer .privateOverlay .pmsgTitle{display:flex!important;flex-direction:row!important;align-items:flex-start!important;justify-content:flex-start!important;gap:6px!important;direction:ltr!important;min-width:0!important;width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;line-height:1.2!important;}
-#layer .privateOverlay .pmsgTitle>.memberBadges{display:inline-flex!important;flex:0 0 auto!important;align-items:flex-start!important;align-self:flex-start!important;gap:3px!important;margin:0!important;padding:0!important;}
-#layer .privateOverlay .pmsgTitle .memberBadge{display:inline-grid!important;place-items:center!important;align-self:flex-start!important;flex:0 0 auto!important;width:auto!important;min-width:24px!important;height:24px!important;min-height:24px!important;margin:0!important;padding:0 3px!important;font-size:17px!important;line-height:1!important;vertical-align:top!important;}
-#layer .privateOverlay .pmsgTitle b{display:block!important;align-self:flex-start!important;min-width:0!important;max-width:100%!important;margin:0!important;padding:1px 0 0!important;font-size:15px!important;font-weight:900!important;line-height:1.2!important;white-space:normal!important;overflow-wrap:anywhere!important;}
-#layer .privateOverlay .pmsg .privateMediaArea{margin:5px 0 0 54px!important;direction:ltr!important;text-align:left!important;}
-@media(max-width:650px){#layer .privateOverlay .privateHead{grid-template-columns:20px 4px 42px minmax(0,1fr) auto!important;gap:4px!important;height:56px!important;min-height:56px!important;flex-basis:56px!important;padding:4px!important;}#layer .privateOverlay .privateHead .privateHeadAvatar{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;}#layer .privateOverlay .privateHead .privateHeadTitle .memberBadge{min-width:21px!important;height:21px!important;min-height:21px!important;font-size:15px!important;}#layer .privateOverlay .privateHead .privateHeadTitle b{font-size:13px!important;}#layer .privateOverlay .privateHead .privateHeadActions button{width:26px!important;height:28px!important;min-width:26px!important;}#layer .privateOverlay .pmsgHead{grid-template-columns:42px minmax(0,1fr)!important;gap:7px!important;min-height:42px!important;}#layer .privateOverlay .pmsgHead>img{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;}#layer .privateOverlay .pmsgTitle .memberBadge{min-width:22px!important;height:22px!important;min-height:22px!important;font-size:15px!important;}#layer .privateOverlay .pmsgTitle b{font-size:14px!important;}#layer .privateOverlay .pmsg .privateMediaArea{margin-left:49px!important;}}
-</style>
-
-
-<style>
-.welcomeEditor input[data-welcome-title],.welcomeEditor textarea[data-welcome-text]{display:block!important;position:relative!important;z-index:2!important;pointer-events:auto!important;user-select:text!important;-webkit-user-select:text!important;touch-action:manipulation!important;width:100%!important;min-height:42px!important;padding:8px!important;border:1px solid #777!important;background:#fff!important;color:#111!important;font-size:16px!important;opacity:1!important;box-sizing:border-box!important}.welcomeEditor textarea[data-welcome-text]{min-height:110px!important;resize:vertical!important}.welcomeEditor label{display:block!important;margin:7px 0 3px!important}.welcomeEditor button:disabled{opacity:.6!important}
-</style>
-
-<style id="rimaz-v32-two-fixes">
-/* Keep the V30 badge size and colors; move only the count badge to the top-right. */
-.room{grid-template-columns:58px 24px minmax(0,1fr) 82px!important;align-items:center!important;}
-.room .count{grid-column:4!important;grid-row:1!important;justify-self:end!important;align-self:start!important;margin:0 3px 0 0!important;}
-@media(max-width:650px){.room{grid-template-columns:44px 16px minmax(0,1fr) 40px!important;align-items:center!important}.room .count{grid-column:4!important;grid-row:1!important;justify-self:end!important;align-self:start!important;margin:0 1px 0 0!important}}
-/* The message input remains disabled until the server confirms successful room entry. */
-</style>
-
-<style>.giftGrid{display:grid!important;grid-template-columns:repeat(10,minmax(0,1fr))!important;gap:4px!important}.giftTile{aspect-ratio:1/1;min-width:0!important;padding:2px!important;font-size:23px!important;display:grid;place-items:center;border:1px solid #ddd!important;background:#fff!important}.giftTile.selected{outline:3px solid #e3b341!important;background:#fff7d7!important}.createRoomForm{display:flex;flex-direction:column;gap:8px;padding:12px}.createRoomForm input:not([type=radio]){width:100%;min-height:36px;padding:7px;border:1px solid #aaa;border-radius:5px}.createRoomKinds{display:grid;grid-template-columns:1fr 1fr;gap:8px}.createRoomKinds label{padding:10px;border:1px solid #bbb;border-radius:6px}.createRoomForm>label{font-weight:800}.createRoomOverlay{max-height:90vh;overflow:auto}@media(max-width:520px){.giftGrid{grid-template-columns:repeat(10,minmax(0,1fr))!important;gap:2px!important}.giftTile{font-size:18px!important}.createRoomOverlay{width:92%!important}}</style>
-
-<style id="rimaz-admin-panel-half-screen-fix">
-#layer .memberClassicShade{position:absolute!important;inset:0!important;display:flex!important;align-items:stretch!important;justify-content:flex-start!important;direction:rtl!important;}
-#layer .memberClassicPanel{width:50vw!important;max-width:50vw!important;min-width:0!important;height:100%!important;max-height:100%!important;overflow-y:auto!important;overflow-x:hidden!important;box-sizing:border-box!important;}
-#layer .memberClassicActions{display:flex!important;flex-direction:column!important;gap:5px!important;padding:6px!important;}
-#layer .memberClassicActions button{width:100%!important;min-height:36px!important;box-sizing:border-box!important;}
-@media(max-width:650px){#layer .memberClassicPanel{width:50vw!important;max-width:50vw!important;height:100%!important;}#layer .memberClassicActions button{font-size:11px!important;white-space:normal!important;}}
-</style>
-
-<style id="rimaz-inline-profile-admin-grid-final">
-#layer .profileGrid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
-#layer .profileGrid .memberProfileAdminInline button{grid-column:auto!important;grid-row:auto!important;min-width:0!important;height:auto!important;min-height:36px!important;white-space:normal!important;overflow-wrap:anywhere!important}
-#layer .profileGrid .memberProfileAdminInline{grid-column:1/-1!important}
-</style>
-
-<style id="rimaz-gifts-rebuilt-v20">
-.giftEmoji{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;line-height:1!important;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif!important;font-size:clamp(22px,6vw,34px)!important;white-space:nowrap!important;overflow:visible!important;object-fit:contain!important}
-.giftEmojiLarge{font-size:clamp(76px,22vw,112px)!important;width:auto!important;height:auto!important;min-height:1em!important}
-#layer .profileGiftShade{position:absolute!important;inset:0!important;z-index:2147483000!important;display:flex!important;align-items:center!important;justify-content:center!important;direction:rtl!important;background:rgba(0,0,0,.56)!important;padding:10px!important;box-sizing:border-box!important}
-#layer .profileGiftPanel{width:min(94vw,620px)!important;max-width:620px!important;height:min(84dvh,760px)!important;max-height:84dvh!important;margin:0!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;background:#fff!important;color:#222!important;border:1px solid #aeb7bf!important;border-radius:8px!important;box-shadow:0 12px 36px #0005!important}
-#layer .profileGiftHead{flex:0 0 48px!important;height:48px!important;min-height:48px!important;display:flex!important;align-items:center!important;justify-content:space-between!important;padding:6px 12px!important;background:#fff!important;color:#222!important;border-bottom:1px solid #d5dbe0!important;font-size:17px!important;font-weight:900!important}
-#layer .profileGiftHead button{width:36px!important;height:36px!important;min-width:36px!important;border:0!important;background:#d9534f!important;color:#fff!important;font-size:25px!important;border-radius:3px!important}
-#layer .profileGiftGrid{display:grid!important;grid-template-columns:repeat(8,minmax(0,1fr))!important;gap:5px!important;padding:9px!important;overflow:auto!important;overscroll-behavior:contain!important;align-content:start!important;flex:1 1 auto!important;min-height:0!important;background:#fff!important}
-#layer .profileGiftGrid .giftTile{width:100%!important;min-width:0!important;min-height:0!important;aspect-ratio:1/1!important;height:auto!important;padding:3px!important;display:flex!important;align-items:center!important;justify-content:center!important;border:1px solid #e0e4e8!important;border-radius:4px!important;background:#fff!important;color:#222!important;overflow:visible!important;box-sizing:border-box!important}
-#layer .profileGiftGrid .giftTile.selected{background:#e8f2f8!important;border:2px solid #557f96!important;box-shadow:inset 0 0 0 1px #fff!important}
-#layer .profileGiftGrid .giftTile .giftEmoji{font-size:clamp(22px,6.5vw,36px)!important}
-#layer .profileGiftGrid .giftRemoveTile{min-height:46px!important;height:auto!important;padding:5px!important;border:1px solid #496779!important;background:#365d70!important;color:#fff!important;font-size:12px!important;font-weight:900!important;white-space:normal!important}
-#layer .profileGiftSelected{flex:0 0 auto!important;min-height:34px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;padding:5px 8px!important;border-top:1px solid #e3e6e8!important;background:#f5f8fa!important;color:#263b46!important;font-weight:800!important;text-align:center!important}
-#layer .profileGiftFoot{flex:0 0 auto!important;display:flex!important;gap:7px!important;padding:8px!important;border-top:1px solid #cbd3d8!important;background:#fff!important}
-#layer .profileGiftFoot button{flex:1 1 0!important;min-height:48px!important;border:1px solid #496779!important;border-radius:2px!important;background:#365d70!important;color:#fff!important;font-size:16px!important;font-weight:900!important}
-#layer .profileGiftFoot button:last-child{background:#59636a!important;border-color:#59636a!important}
-.member .giftArtBadge{width:24px!important;height:24px!important;min-width:24px!important;padding:1px!important;overflow:visible!important}
-.member .giftArtBadge .giftEmoji{font-size:19px!important}
-.giftGrid .giftTile .giftEmoji,.memberClassicGrid .giftEmoji{font-size:clamp(20px,4vw,28px)!important}
-@media(max-width:420px){#layer .profileGiftPanel{width:96vw!important;height:86dvh!important;max-height:86dvh!important}#layer .profileGiftGrid{grid-template-columns:repeat(8,minmax(0,1fr))!important;gap:4px!important;padding:7px!important}#layer .profileGiftGrid .giftTile .giftEmoji{font-size:clamp(21px,7vw,29px)!important}#layer .profileGiftHead{height:44px!important;min-height:44px!important;flex-basis:44px!important}#layer .profileGiftFoot button{min-height:46px!important;font-size:15px!important}}
-</style>
-
-<style>.smileyAdminGrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;max-height:68vh;overflow:auto;padding:3px}.smileyAdminTile{border:1px solid #ccc;background:#fff;border-radius:7px;padding:5px 3px;text-align:center;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px}.smileyAdminTile img{width:42px;height:42px;object-fit:contain;display:block;margin:0 auto}.smileyAdminTile .smileyEmoji{font-size:32px;display:block;line-height:44px}.smileyAdminTile small{display:block;overflow-wrap:anywhere}.smileyAdminTile button{margin-top:2px;width:100%;font-size:11px;padding:5px 2px}.smileyShortcutInput{width:100%;min-width:0;box-sizing:border-box;font-size:11px;padding:5px 2px;text-align:center}.smileyAdminTile b{font-size:10px;white-space:nowrap;overflow:hidden;max-width:100%;text-overflow:ellipsis}@media(min-width:700px){.smileyAdminGrid{grid-template-columns:repeat(9,minmax(0,1fr))}}.emojiGrid .smileyImageBtn{display:grid;place-items:center;padding:3px}.emojiGrid .smileyImageBtn img{width:34px;height:34px;object-fit:contain}.msgtext img.chatSmiley,.pmsg .chatSmiley,.wallText .chatSmiley{width:34px;height:34px;object-fit:contain;vertical-align:middle}.smileyUploadRow{display:grid;grid-template-columns:1fr 1fr;gap:6px}.smileyUploadRow input{min-width:0}.smileyAdminGrid{margin-top:8px}</style>
-
-
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={},privatePeerUser=null;
@@ -1648,6 +1327,15 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 #layer .privateOverlay .privateHeadName small{display:block!important;width:100%!important;text-align:left!important;direction:rtl!important;font-size:10px!important;line-height:1.2!important;}
 </style>
 
+<style id="rimaz-online-status-visible-final-v2">
+/* Online members only: restore status line under each name; do not affect private conversation previews. */
+#layer .membersOverlay .member .memberSub,
+#layer .membersOverlay .adminMember .memberSub { display:block!important; visibility:visible!important; opacity:1!important; height:auto!important; min-height:initial!important; max-height:none!important; margin-top:3px!important; margin-bottom:0!important; padding:0!important; line-height:1.3!important; overflow:visible!important; }
+</style>
+
+
+
+
 <style id="rimaz-status-label-position-fix-v16">
 /* Keep the status directly below the display name, in the same text column, not floated to the right. */
 .member .memberMain,.privateListOverlay .member .memberMain{display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:center!important;gap:2px!important;direction:rtl!important;text-align:right!important;position:static!important;transform:none!important;}
@@ -2088,83 +1776,422 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 </style>
 
 
-
-<style id="rimaz-online-members-single-source-v47">
-/* Single authoritative layout for the in-chat online-members panel only.
-   Legacy .member rules remain available to private contacts; these scoped rules win only here. */
+<style id="rimaz-chat-members-rank-alignment-fix-v1">
+/* In-chat member directory only: keep rank badge on the same top line as the name.
+   The public pre-login list (.rlOnlineMember) and all other screens are untouched. */
 #layer .membersOverlay .member{
   display:grid!important;
-  grid-template-columns:4px 48px 27px minmax(0,1fr) 34px 25px!important;
+  grid-template-columns:4px 48px 28px minmax(0,1fr) 38px 28px!important;
   grid-template-rows:minmax(54px,auto)!important;
   align-items:center!important;
   column-gap:3px!important;
   min-height:62px!important;
   height:auto!important;
-  padding:4px!important;
+  padding:4px 5px!important;
   direction:ltr!important;
-  box-sizing:border-box!important;
   overflow:visible!important;
+  box-sizing:border-box!important;
 }
-#layer .membersOverlay .member>.memberStatusBar{
-  grid-column:1!important;grid-row:1!important;align-self:center!important;
-  display:block!important;width:4px!important;height:48px!important;margin:0!important;
-}
-#layer .membersOverlay .member>img{
-  grid-column:2!important;grid-row:1!important;align-self:center!important;
-  display:block!important;width:48px!important;height:48px!important;
-  min-width:48px!important;min-height:48px!important;object-fit:cover!important;margin:0!important;
-}
-#layer .membersOverlay .member>.memberBadges{
-  grid-column:3!important;grid-row:1!important;align-self:center!important;justify-self:center!important;
-  display:inline-flex!important;align-items:center!important;justify-content:center!important;
-  min-width:0!important;margin:0!important;padding:0!important;
-}
-#layer .membersOverlay .member>.memberBadges .memberBadge{
-  display:inline-grid!important;place-items:center!important;flex:0 0 23px!important;
-  width:23px!important;height:23px!important;min-width:23px!important;min-height:23px!important;
-  margin:0!important;font-size:15px!important;line-height:1!important;
-}
-#layer .membersOverlay .member>.memberMain{
-  grid-column:4!important;grid-row:1!important;align-self:center!important;
-  display:flex!important;flex-direction:column!important;align-items:stretch!important;
-  justify-content:center!important;gap:2px!important;min-width:0!important;width:100%!important;
-  margin:0!important;padding:1px 4px!important;direction:rtl!important;text-align:right!important;
-  position:static!important;transform:none!important;overflow:hidden!important;box-sizing:border-box!important;
-}
-#layer .membersOverlay .member .memberName{
-  display:block!important;order:1!important;align-self:stretch!important;width:100%!important;min-width:0!important;
-  margin:0!important;padding:0!important;font-size:15px!important;font-weight:900!important;
-  line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;
-  direction:rtl!important;text-align:right!important;float:none!important;transform:none!important;
-}
-#layer .membersOverlay .member .memberSub,
-#layer .membersOverlay .member.adminMember .memberSub{
-  display:block!important;order:2!important;position:static!important;float:none!important;
-  align-self:stretch!important;visibility:visible!important;opacity:1!important;
-  width:100%!important;min-width:0!important;height:auto!important;min-height:0!important;max-height:none!important;
-  margin:1px 0 0!important;padding:0!important;color:#888!important;font-size:12px!important;
-  line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;
-  direction:rtl!important;text-align:right!important;grid-column:auto!important;grid-row:auto!important;
-  transform:none!important;
-}
-#layer .membersOverlay .member .memberLikes{
-  grid-column:5!important;grid-row:1!important;align-self:center!important;min-width:0!important;
-  margin:0!important;padding:0!important;text-align:center!important;font-size:10px!important;
-}
-#layer .membersOverlay .member.adminMember .memberLikes{display:none!important;}
-#layer .membersOverlay .member>.memberCountryFlag{
-  grid-column:6!important;grid-row:1!important;align-self:center!important;display:flex!important;
-  align-items:center!important;justify-content:center!important;width:25px!important;min-width:25px!important;
-  margin:0!important;font-size:20px!important;line-height:1!important;
-}
+#layer .membersOverlay .member>.memberStatusBar{grid-column:1!important;grid-row:1!important;align-self:center!important;width:4px!important;height:48px!important;margin:0!important}
+#layer .membersOverlay .member>img{grid-column:2!important;grid-row:1!important;align-self:center!important;width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;object-fit:cover!important;margin:0!important}
+#layer .membersOverlay .member>.memberBadges{grid-column:3!important;grid-row:1!important;align-self:start!important;justify-self:center!important;display:inline-flex!important;align-items:flex-start!important;justify-content:center!important;min-width:0!important;margin:3px 0 0!important;padding:0!important}
+#layer .membersOverlay .member>.memberBadges .memberBadge{display:inline-grid!important;place-items:center!important;flex:0 0 24px!important;width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;margin:0!important;font-size:16px!important;line-height:1!important}
+#layer .membersOverlay .member>.memberMain{grid-column:4!important;grid-row:1!important;align-self:center!important;min-width:0!important;width:100%!important;margin:0!important;padding:1px 3px!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:center!important;gap:3px!important;direction:rtl!important;text-align:right!important;overflow:hidden!important}
+#layer .membersOverlay .member .memberName{display:block!important;width:100%!important;min-width:0!important;margin:0!important;font-size:15px!important;font-weight:900!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+#layer .membersOverlay .member .memberSub{display:block!important;visibility:visible!important;width:100%!important;min-width:0!important;margin:0!important;padding:0!important;color:#888!important;font-size:13px!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+#layer .membersOverlay .member .memberLikes{grid-column:5!important;grid-row:1!important;align-self:center!important;min-width:0!important;padding:0!important;text-align:center!important;font-size:10px!important}
+#layer .membersOverlay .member.adminMember .memberLikes{display:none!important}
+#layer .membersOverlay .member>.memberCountryFlag{grid-column:6!important;grid-row:1!important;align-self:center!important;display:flex!important;align-items:center!important;justify-content:center!important;width:26px!important;min-width:26px!important;font-size:22px!important;line-height:1!important}
 @media(max-width:600px){
-  #layer .membersOverlay .member{grid-template-columns:3px 44px 23px minmax(0,1fr) 27px 22px!important;column-gap:2px!important;min-height:58px!important;padding:3px!important;}
-  #layer .membersOverlay .member>img{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;}
-  #layer .membersOverlay .member>.memberBadges .memberBadge{flex-basis:21px!important;width:21px!important;height:21px!important;min-width:21px!important;min-height:21px!important;font-size:14px!important;}
-  #layer .membersOverlay .member .memberName{font-size:14px!important;}
-  #layer .membersOverlay .member .memberSub,#layer .membersOverlay .member.adminMember .memberSub{font-size:11px!important;}
-  #layer .membersOverlay .member>.memberCountryFlag{width:22px!important;min-width:22px!important;font-size:18px!important;}
+  #layer .membersOverlay .member{grid-template-columns:3px 44px 24px minmax(0,1fr) 30px 25px!important;column-gap:2px!important;min-height:58px!important;padding:3px!important}
+  #layer .membersOverlay .member>img{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important}
+  #layer .membersOverlay .member>.memberBadges .memberBadge{flex-basis:22px!important;width:22px!important;height:22px!important;min-width:22px!important;min-height:22px!important;font-size:15px!important}
+  #layer .membersOverlay .member .memberName{font-size:14px!important}
+  #layer .membersOverlay .member .memberSub{font-size:12px!important}
+  #layer .membersOverlay .member>.memberCountryFlag{width:24px!important;min-width:24px!important;font-size:20px!important}
 }
 </style>
 
+
+<style id="rimaz-online-members-status-final-v2">
+/* Only the in-chat online-members panel: force the status into a second line under the name.
+   This final scoped rule intentionally supersedes older conflicting .member/.memberMain rules. */
+#layer .membersOverlay .member{
+  display:grid!important;
+  grid-template-columns:4px 48px 27px minmax(0,1fr) 34px 25px!important;
+  grid-template-rows:25px 20px!important;
+  align-items:center!important;
+  column-gap:3px!important;
+  min-height:60px!important;
+  height:auto!important;
+  padding:4px!important;
+  direction:ltr!important;
+  box-sizing:border-box!important;
+}
+#layer .membersOverlay .member>.memberStatusBar{grid-column:1!important;grid-row:1 / span 2!important;align-self:center!important;width:4px!important;height:48px!important;margin:0!important}
+#layer .membersOverlay .member>img{grid-column:2!important;grid-row:1 / span 2!important;align-self:center!important;width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;object-fit:cover!important;margin:0!important}
+#layer .membersOverlay .member>.memberBadges{grid-column:3!important;grid-row:1 / span 2!important;align-self:center!important;justify-self:center!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;min-width:0!important;margin:0!important;padding:0!important}
+#layer .membersOverlay .member>.memberMain{grid-column:4!important;grid-row:1 / span 2!important;align-self:stretch!important;display:grid!important;grid-template-columns:minmax(0,1fr)!important;grid-template-rows:min-content min-content!important;align-content:center!important;justify-items:stretch!important;align-items:start!important;gap:2px!important;min-width:0!important;width:100%!important;margin:0!important;padding:0 4px!important;direction:rtl!important;text-align:right!important;overflow:hidden!important;box-sizing:border-box!important}
+#layer .membersOverlay .member .memberName{grid-column:1!important;grid-row:1!important;display:block!important;align-self:start!important;width:100%!important;min-width:0!important;margin:0!important;padding:0!important;font-size:15px!important;font-weight:900!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;text-align:right!important;direction:rtl!important}
+#layer .membersOverlay .member .memberSub,#layer .membersOverlay .member.adminMember .memberSub{grid-column:1!important;grid-row:2!important;display:block!important;position:static!important;align-self:start!important;visibility:visible!important;opacity:1!important;width:100%!important;min-width:0!important;height:auto!important;min-height:0!important;max-height:none!important;margin:0!important;padding:0!important;color:#888!important;font-size:12px!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;text-align:right!important;direction:rtl!important}
+#layer .membersOverlay .member .memberLikes{grid-column:5!important;grid-row:1 / span 2!important;align-self:center!important;min-width:0!important;padding:0!important;text-align:center!important;font-size:10px!important}
+#layer .membersOverlay .member.adminMember .memberLikes{display:none!important}
+#layer .membersOverlay .member>.memberCountryFlag{grid-column:6!important;grid-row:1 / span 2!important;align-self:center!important;display:flex!important;align-items:center!important;justify-content:center!important;width:25px!important;min-width:25px!important;font-size:20px!important;line-height:1!important}
+@media(max-width:600px){#layer .membersOverlay .member{grid-template-columns:3px 44px 23px minmax(0,1fr) 27px 22px!important;grid-template-rows:22px 18px!important;column-gap:2px!important;min-height:56px!important;padding:3px!important}#layer .membersOverlay .member>img{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important}#layer .membersOverlay .member>.memberBadges .memberBadge{width:21px!important;height:21px!important;min-width:21px!important;min-height:21px!important;font-size:14px!important}#layer .membersOverlay .member .memberName{font-size:14px!important}#layer .membersOverlay .member .memberSub,#layer .membersOverlay .member.adminMember .memberSub{font-size:11px!important}#layer .membersOverlay .member>.memberCountryFlag{width:22px!important;min-width:22px!important;font-size:18px!important}}
+</style>
 </body></html>
+<style id="rimaz-user-latest-final">
+/* latest user alignment — preserve approved sizes, only mirror requested areas */
+.memberSectionBar{height:34px;min-height:34px;display:flex;align-items:center;justify-content:center;background:#111;color:#fff;font-size:15px;font-weight:900;text-align:center;border-top:1px solid #000;border-bottom:1px solid #000}
+.membersHead,.privateListHead{direction:ltr!important;justify-content:space-between!important}
+.roomsHead{direction:ltr!important;justify-content:space-between!important}
+.roomsHead .close{order:0}.roomsHead span{order:1}
+/* member rows: flag/count right, photo left, name beside photo */
+.member{direction:ltr!important;grid-template-columns:58px minmax(0,1fr) 62px!important}
+.member img{grid-column:2!important;grid-row:1!important;width:54px!important;height:54px!important;object-fit:cover!important;margin:0!important;}
+.memberMain{grid-column:2!important;text-align:left!important;direction:rtl!important}
+.memberLikes{grid-column:3!important;text-align:right!important;padding-right:5px}
+/* private list follows the same visual order */
+.privateListOverlay .member{direction:ltr!important}
+/* rooms: photo left, room details middle, black occupancy box right */
+.room{direction:ltr!important;grid-template-columns:58px 24px minmax(0,1fr) 82px!important}.roomLockMark{font-size:16px;text-align:center}
+.room > div:nth-child(2){text-align:left!important;direction:rtl!important}
+.roomName,.roomDesc{text-align:left!important}
+.count{grid-column:4!important;grid-row:1!important;justify-self:end!important;align-self:start!important;margin:0 3px 0 0!important;background:#111!important;color:#fff!important;text-align:center!important}
+/* wall posts: photo left, name/content beside it, reactions right */
+.wallPost{display:grid!important;grid-template-columns:54px minmax(0,1fr)!important;gap:6px!important;direction:ltr!important;align-items:start!important}
+.wallAvatar{width:50px!important;height:50px!important;object-fit:cover!important;grid-column:1!important}
+.wallPostMain{grid-column:2!important;min-width:0!important;direction:rtl!important;text-align:left!important}
+.wallText{text-align:left!important}
+.wallActions{direction:ltr!important;justify-content:flex-end!important;margin-top:4px!important}
+/* private messages: avatar left, name beside it */
+.pmsg{direction:ltr!important;text-align:left!important}
+.pmsgHead{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:6px!important;direction:ltr!important;margin-bottom:3px!important}
+.pmsgHead img{width:34px!important;height:34px!important;object-fit:cover!important;border-radius:3px!important}
+.pmsgHead b{font-size:13px!important;font-weight:900!important}
+.pmsg > div:last-child{text-align:left!important;direction:rtl!important}
+/* private composer: send right, text, emoji, media, call left */
+.privateComposer{direction:rtl!important;grid-template-columns:47px minmax(0,1fr) 29px 29px 29px!important;gap:2px!important}
+/* notification composer: send on the right */
+.noticeMiniBody{direction:ltr!important;grid-template-columns:minmax(0,1fr) 58px!important}
+.noticeMiniBody input{text-align:right!important;direction:rtl!important}
+/* settings first rows: label right, input left, input gets a little over half */
+.settings .srow:nth-child(-n+4){grid-template-columns:42% 58%!important;direction:rtl!important}
+.settings .srow:nth-child(-n+4) .slabel{text-align:right!important;direction:rtl!important}
+.settings .srow:nth-child(-n+4) .svalue{direction:ltr!important}
+.settings .srow:nth-child(-n+4) .svalue input,.settings .srow:nth-child(-n+4) .svalue select{width:100%!important}
+</style>
+
+<style id="rimaz-user-alignment-media-v2">
+/* Overlay: starts at the very top of the room and ends exactly above the bottom navigation. */
+#layer{position:absolute;inset:0;z-index:20;pointer-events:none;}
+#layer>.overlay,#layer>.privateOverlay{pointer-events:auto;top:0!important;bottom:39px!important;height:auto!important;max-height:none!important;}
+@media(max-width:650px){#layer>.overlay,#layer>.privateOverlay{top:0!important;bottom:39px!important;height:auto!important;}}
+/* Keep names compact without changing the approved left/right message layout. */
+.msghead{font-size:14px!important;gap:5px!important;line-height:1.15!important;}
+.msgtext{font-size:15px!important;line-height:1.32!important;}
+.presence .presenceName{font-size:14px!important;line-height:1.15!important;}
+.presence .presenceText{font-size:13px!important;}
+.member{grid-template-columns:6px 54px 30px minmax(0,1fr) 48px!important;column-gap:1px!important;}
+.memberName{font-size:12px!important;font-weight:700!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+.memberSub{font-size:10px!important;line-height:1.2!important;}
+.memberMain{grid-column:4!important;grid-row:1!important;padding:3px 5px!important;min-width:0!important;}
+.member .memberBadge{grid-column:3!important;grid-row:1!important;}
+.memberLikes{grid-column:5!important;grid-row:1!important;}
+.memberLikes{font-size:9px!important;padding-right:3px!important;}
+.privateListOverlay .memberName{font-size:12px!important;}
+.pmsgHead b{font-size:12px!important;font-weight:800!important;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.wallText{font-size:15px!important;line-height:1.35!important;}
+.wallPostMain .wallText b{font-size:13px!important;font-weight:800!important;}
+/* Compact media thumbnails open into a modest square viewer; videos retain playback controls. */
+.privateMediaArea{margin-top:5px!important;direction:ltr!important;text-align:left!important;display:flex!important;justify-content:flex-start!important;margin-right:auto!important;width:100%!important;}
+.privateMediaThumb{margin-left:0!important;margin-right:auto!important;display:flex;align-items:center;justify-content:center;gap:8px;width:108px;height:108px;max-width:100%;padding:0;border:1px solid #bbb;border-radius:7px;background:#f1f1f1;color:#111;overflow:hidden;cursor:pointer;}
+.privateMediaThumb.imageThumb img{display:block;width:100%;height:100%;object-fit:cover;}
+.privateMediaThumb.videoThumb{flex-direction:column;background:linear-gradient(145deg,#181818,#3a3a3a);color:#fff;font-size:11px;font-weight:800;}
+.videoPlayIcon{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:#df5555;color:#fff;font-size:20px;padding-left:3px;}
+.privateAudio{max-width:100%;width:250px;height:38px;}
+.privateMediaViewer{position:absolute;inset:0;z-index:300;background:#000b;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;}
+.privateMediaFrame{position:relative;width:min(320px,86vw);aspect-ratio:1/1;max-height:68%;background:#111;border:1px solid #555;border-radius:9px;overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 28px #0009;}
+.privateMediaFrame.imageFrame{background:#111;}
+.privateMediaFullImage{display:block;width:100%;height:100%;object-fit:contain;}
+.privateMediaClose{position:absolute;z-index:2;top:6px;right:6px;width:30px;height:30px;border:0;border-radius:5px;background:#df5555;color:#fff;font-size:25px;line-height:1;font-weight:900;}
+.videoFrame{flex-direction:column;aspect-ratio:auto;max-height:70%;height:auto;min-height:190px;}
+.privateMediaTitle{height:38px;min-height:38px;width:100%;box-sizing:border-box;padding:0 42px 0 10px;display:flex;align-items:center;background:#111;color:#fff;font-size:13px;font-weight:800;}
+.privateMediaFullVideo{display:block;width:100%;height:auto;max-height:280px;object-fit:contain;background:#000;}
+@media(max-width:400px){.privateMediaFrame{width:min(280px,84vw);}.privateMediaFullVideo{max-height:230px;}}
+</style>
+
+<style id="rimaz-exact-two-layout-fixes">
+/* Overlay touches the room's top edge and stops exactly at the top of the bottom bar. */
+#layer{position:absolute!important;inset:0!important;z-index:20!important;pointer-events:none!important;}
+#layer>.overlay,#layer>.privateOverlay{position:absolute!important;top:0!important;bottom:39px!important;height:auto!important;max-height:none!important;pointer-events:auto!important;}
+/* Presence strip, photo, admin badge and name are four distinct adjacent columns. */
+.member{display:grid!important;direction:ltr!important;grid-template-columns:6px 54px 29px minmax(0,1fr) 46px!important;column-gap:1px!important;min-height:58px!important;align-items:center!important;overflow:hidden!important;}
+.member .memberStatusBar{grid-column:1!important;grid-row:1!important;width:6px!important;height:54px!important;align-self:center!important;margin:0!important;border-radius:3px 0 0 3px!important;display:block!important;}
+.member>img{grid-column:2!important;grid-row:1!important;width:54px!important;height:54px!important;object-fit:cover!important;margin:0!important;align-self:center!important;}
+.member .memberBadge{grid-column:3!important;grid-row:1!important;width:27px!important;height:27px!important;margin:0!important;justify-self:start!important;align-self:center!important;display:grid!important;place-items:center!important;font-size:17px!important;line-height:1!important;}
+.member .memberMain{grid-column:4!important;grid-row:1!important;min-width:0!important;padding:2px 3px!important;direction:rtl!important;text-align:right!important;overflow:hidden!important;}
+.member .memberName{font-size:12px!important;font-weight:700!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;overflow-wrap:normal!important;}
+.member .memberSub{font-size:10px!important;line-height:1.15!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+.member .memberLikes{grid-column:5!important;grid-row:1!important;min-width:0!important;padding:0 2px!important;text-align:center!important;font-size:9px!important;}
+</style>
+
+<style id="rimaz-private-half-overlay-final">
+/* Private chat occupies only the upper half, leaving the public room and its composer usable below. */
+#layer>.privateOverlay{position:absolute!important;left:0!important;right:0!important;top:0!important;bottom:auto!important;width:100%!important;height:50%!important;min-height:0!important;max-height:50%!important;margin:0!important;box-sizing:border-box!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;z-index:50!important;background:#fff!important;}
+#layer .privateOverlay .privateHead{flex:0 0 42px!important;height:42px!important;min-height:42px!important;}
+#layer .privateOverlay .privateHeadActions{direction:rtl!important;display:flex!important;flex-direction:row!important;align-items:center!important;gap:4px!important;white-space:nowrap!important;}
+#layer .privateOverlay .privateHeadActions .privateClose{order:0!important;background:#df5555!important;color:#fff!important;font-size:25px!important;font-weight:900!important;width:30px!important;height:30px!important;line-height:1!important;border:0!important;border-radius:4px!important;}
+#layer .privateOverlay .privateHeadActions .blue{order:1!important;}
+#layer .privateOverlay .privateHeadActions .privateLike{order:2!important;}
+#layer>.privateOverlay .privateBody{flex:1 1 auto!important;min-height:0!important;overflow:auto!important;}
+#layer>.privateOverlay .privateComposer{flex:0 0 39px!important;height:39px!important;min-height:39px!important;}
+#layer>.privateOverlay .privateMinimize{top:auto!important;right:5px!important;bottom:43px!important;z-index:55!important;}
+@media(max-width:650px){#layer>.privateOverlay{top:0!important;bottom:auto!important;width:100%!important;height:50%!important;max-height:50%!important;}#layer .privateOverlay .privateHead{grid-template-columns:25px 5px 36px minmax(0,1fr) auto!important;gap:5px!important;padding:3px 5px!important;}#layer .privateOverlay .privateHeadActions{gap:3px!important;}#layer .privateOverlay .privateHeadActions button{width:28px!important;height:29px!important;}}
+
+/* Private contacts: photo, badge, and name/likes grouped on the left; delete stays at far right. */
+.privateListOverlay .member{grid-template-columns:6px 48px 28px minmax(0,1fr) 66px!important;direction:ltr!important;column-gap:0!important;padding-right:0!important;align-items:center!important;}
+.privateListOverlay .member img{grid-column:2!important;width:46px!important;height:46px!important;}
+.privateListOverlay .member .memberBadge{grid-column:3!important;width:24px!important;height:24px!important;font-size:15px!important;}
+.privateListOverlay .member .memberMain{grid-column:4!important;min-width:0!important;margin:0 3px!important;padding:3px!important;}
+.privateListOverlay .member .memberName{display:flex!important;align-items:center!important;gap:6px!important;min-width:0!important;flex-wrap:nowrap!important;}
+.privateListOverlay .member .privateInlineLikes{display:inline-block!important;white-space:nowrap!important;font-size:10px!important;font-weight:700!important;flex:0 0 auto!important;}
+.privateListOverlay .member .memberLikes{display:none!important;}
+.privateListOverlay .member .privateContactDelete{grid-column:5!important;justify-self:center!important;max-width:58px!important;height:26px!important;min-height:26px!important;font-size:10px!important;padding:2px 4px!important;}
+@media(max-width:600px){.privateListOverlay .member{grid-template-columns:5px 42px 24px minmax(0,1fr) 64px!important;min-height:62px!important}.privateListOverlay .member img{width:40px!important;height:40px!important}.privateListOverlay .member .memberBadge{width:21px!important;height:21px!important;font-size:13px!important}.privateListOverlay .member .privateContactDelete{height:26px!important;font-size:10px!important;padding:2px 4px!important}}
+
+/* Private contacts: hide legacy likes and heart only. */
+.privateListOverlay .privateInlineLikes,.privateListOverlay .memberLikes{display:none!important}
+/* Rimaz minimal fix: compact only the private-chat delete control; preserve all layout dimensions. */
+.privateListOverlay .privateContactDelete{
+  width:auto!important;min-width:0!important;max-width:58px!important;
+  height:26px!important;min-height:26px!important;padding:2px 4px!important;
+  margin:0!important;font-size:10px!important;line-height:1!important;
+  border-radius:6px!important;box-sizing:border-box!important;
+  justify-self:center!important;align-self:center!important;
+}
+
+</style>
+
+<style id="rimaz-country-flag-left-fix">
+/* Keep the country flag on the far-left side of the private-chat header. */
+#layer .privateOverlay .privateHead{grid-template-columns:28px 5px 36px minmax(0,1fr) auto!important;gap:5px!important;direction:ltr!important;}
+#layer .privateOverlay .privateCountryFlag{grid-column:1!important;grid-row:1!important;position:relative!important;z-index:5!important;display:flex!important;align-items:center!important;justify-content:center!important;min-width:24px!important;width:24px!important;height:30px!important;margin:0!important;padding:0!important;font-size:20px!important;line-height:1!important;overflow:visible!important;visibility:visible!important;opacity:1!important;}
+#layer .privateOverlay .privateStatus{grid-column:2!important;grid-row:1!important;width:5px!important;}
+#layer .privateOverlay .privateHeadAvatar{grid-column:3!important;grid-row:1!important;}
+#layer .privateOverlay .privateHeadName{grid-column:4!important;grid-row:1!important;}
+#layer .privateOverlay .privateHeadActions{grid-column:5!important;grid-row:1!important;}
+</style>
+
+<style id="rimaz-profile-reference-size-fix">
+@media(max-width:650px){#layer .profileOverlay{width:84%!important;max-width:none!important;right:8%!important;left:auto!important;top:15px!important;border-radius:0!important;overflow:hidden!important;}#layer .profilePhoto{width:100%!important;height:200px!important;max-height:none!important;object-fit:cover!important;}#layer .memberProfileCountry{direction:rtl!important;}#layer .memberProfileRoomName{margin-left:0!important;margin-right:0!important;}#layer .profileGrid .ignore{grid-column:1!important;grid-row:2!important;}#layer .profileTop{height:48px!important;min-height:48px!important;}#layer .memberProfileMetaRow{min-height:40px!important;}#layer .profileGrid button{min-height:48px!important;font-size:13px!important;}}
+</style>
+
+<style id="rimaz-profile-size-and-gift-fix">
+@media(max-width:650px){
+ #layer .profileOverlay{position:absolute!important;top:15px!important;right:8%!important;left:auto!important;width:84%!important;max-width:360px!important;height:auto!important;max-height:calc(100dvh - 30px)!important;overflow:auto!important;border-radius:0!important;box-shadow:0 4px 18px #0005!important;background:#fff!important;}
+ #layer .profileTop{position:absolute!important;top:3px!important;right:3px!important;left:3px!important;z-index:4!important;height:32px!important;min-height:32px!important;padding:0!important;background:transparent!important;color:#fff!important;justify-content:flex-end!important;gap:4px!important;pointer-events:none!important}
+ #layer .profileTop b,#layer .profileTopAvatar{display:none!important}
+ #layer .profileTop .close{pointer-events:auto!important;background:#d9534f!important;color:#fff!important;border:0!important;border-radius:0!important;box-shadow:none!important}
+ #layer .profilePhoto{display:block!important;width:100%!important;height:165px!important;max-height:165px!important;object-fit:cover!important}
+ #layer .profileInfo{padding:5px 7px!important;text-align:center!important}
+ #layer .profileGrid{grid-template-columns:repeat(3,minmax(0,1fr))!important;border-top:1px solid #ddd!important}
+ #layer .profileGrid button{min-width:0!important;min-height:38px!important;height:auto!important;padding:5px 2px!important;border:1px solid #eee!important;border-radius:0!important;background:#fff!important;color:#333!important;font-size:11px!important;font-weight:700!important;line-height:1.2!important}
+ #layer .profileGrid .memberProfileLikeButton{color:#d00!important}
+ #layer .profileGrid .memberProfileMetaRow{min-height:34px!important;padding:5px!important}
+ #layer .profileGrid .memberProfileRoomName{background:#365d70!important;border-color:#496779!important;border-radius:0!important}
+ #layer .profileGiftShade{position:absolute!important;inset:0!important;z-index:120!important;display:flex!important;align-items:flex-start!important;justify-content:flex-start!important;direction:rtl!important;background:#0007!important;padding:0!important}
+ #layer .profileGiftPanel{width:84%!important;max-width:360px!important;margin-right:8%!important;margin-top:15px!important;height:min(70vh,560px)!important;max-height:70vh!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;background:#fff!important;color:#222!important;border:1px solid #aaa!important;border-radius:0!important;box-shadow:none!important}
+ #layer .profileGiftHead{height:34px!important;min-height:34px!important;display:flex!important;align-items:center!important;justify-content:space-between!important;padding:4px 8px!important;background:#fff!important;color:#222!important;border-bottom:1px solid #bbb!important;font-weight:700!important;font-size:13px!important}
+ #layer .profileGiftHead button{width:25px!important;height:25px!important;border:0!important;background:#d9534f!important;color:#fff!important;font-size:21px!important;border-radius:0!important}
+ #layer .profileGiftGrid{display:grid!important;grid-template-columns:repeat(8,minmax(0,1fr))!important;gap:2px!important;padding:7px 5px!important;overflow:auto!important;align-content:start!important;flex:1!important;background:#fff!important}
+ #layer .profileGiftGrid button{height:31px!important;min-width:0!important;padding:1px!important;border:1px solid #eee!important;background:#fff!important;color:#222!important;border-radius:0!important;font-size:19px!important;line-height:1!important}
+ #layer .profileGiftGrid button.selected{background:#e1edf4!important;border:1px solid #64859a!important;outline:none!important}
+ #layer .profileGiftFoot{display:flex!important;gap:4px!important;padding:5px!important;border-top:1px solid #bbb!important;background:#fff!important}
+ #layer .profileGiftFoot button{flex:1!important;min-height:30px!important;border:1px solid #496779!important;border-radius:0!important;background:#365d70!important;color:#fff!important;font-size:12px!important;font-weight:700!important}
+ #layer .profileGiftFoot .profileGiftDelete{background:#c94848!important;border-color:#b63838!important;color:#fff!important}
+#layer .profileGiftGrid .giftArt,.giftGrid .giftArt,.memberClassicGrid .giftArt{display:block!important;width:100%!important;height:100%!important;max-width:26px!important;max-height:26px!important;object-fit:contain!important;object-position:center center!important;margin:auto!important;box-sizing:border-box!important;overflow:hidden!important} .giftArtFallback{display:flex!important;width:100%!important;height:100%!important;align-items:center!important;justify-content:center!important;font-size:22px!important;line-height:1!important;overflow:hidden!important}
+#layer .profileGiftGrid .giftRemoveTile{height:42px!important;min-height:42px!important;min-width:0!important;padding:4px 2px!important;border:1px solid #496779!important;background:#365d70!important;color:#fff!important;border-radius:0!important;font-size:12px!important;line-height:1.15!important;font-weight:700!important;white-space:normal!important;align-self:start!important}
+}
+</style>
+
+<style id="rimaz-admin-member-layout-fix">
+/* Admin entry in the online members and private contacts lists: keep the existing avatar and crown, but remove likes/heart/level. */
+.adminMember .memberSub,.adminMember .memberLikes{display:none!important;}
+.adminMember .memberMain{grid-column:4!important;min-width:0!important;}
+.adminMember .memberName{display:flex!important;align-items:center!important;justify-content:flex-start!important;direction:ltr!important;text-align:left!important;gap:5px!important;white-space:nowrap!important;}
+.privateListOverlay .adminMember .memberMain{grid-column:4!important;}
+</style>
+
+<style id="rimaz-final-unified-layout-reference">
+/* One consistent member row: avatar, single role mark, name and status. */
+.member,.privateListOverlay .member{display:grid!important;grid-template-columns:5px 54px 30px minmax(0,1fr) 58px!important;column-gap:4px!important;align-items:center!important;min-height:66px!important;box-sizing:border-box!important;direction:ltr!important;padding:4px 3px!important}
+.member>img,.privateListOverlay .member>img{grid-column:2!important;grid-row:1!important;width:54px!important;height:54px!important;min-width:54px!important;min-height:54px!important;object-fit:cover!important;margin:0!important}
+.member .memberBadge,.privateListOverlay .member .memberBadge{grid-column:3!important;grid-row:1!important;width:28px!important;height:28px!important;min-width:28px!important;display:grid!important;place-items:center!important;justify-self:center!important;align-self:center!important;font-size:18px!important;line-height:1!important;margin:0!important}
+.member .memberMain,.privateListOverlay .member .memberMain{grid-column:4!important;grid-row:1!important;min-width:0!important;margin:0!important;padding:2px 4px!important;direction:rtl!important;text-align:right!important;overflow:hidden!important}
+.member .memberName,.privateListOverlay .member .memberName{display:block!important;font-size:16px!important;font-weight:900!important;line-height:1.25!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.member .memberSub,.privateListOverlay .member .privateLastMessage{display:block!important;font-size:15px!important;line-height:1.3!important;margin-top:3px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;color:#888!important;direction:rtl!important;text-align:right!important}
+.privateListOverlay .member .privateContactDelete{grid-column:5!important;grid-row:1!important;width:54px!important;max-width:54px!important;justify-self:center!important;font-size:11px!important}
+.member .memberStatusBar{grid-column:1!important;grid-row:1!important;width:5px!important;height:54px!important;align-self:center!important}
+.wallPost{display:grid!important;grid-template-columns:54px minmax(0,1fr)!important;gap:8px!important;align-items:start!important;direction:ltr!important;padding:8px!important}
+.wallAvatar{grid-column:1!important;width:54px!important;height:54px!important;object-fit:cover!important}
+.wallPostMain{grid-column:2!important;min-width:0!important;direction:rtl!important;text-align:right!important}
+.rimazUnifiedName{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:7px!important;min-height:28px!important;direction:rtl!important;margin-bottom:4px!important}
+.rimazUnifiedName b{font-size:16px!important;font-weight:900!important;line-height:1.2!important}
+.rimazRoleBadge .memberBadge{display:inline-grid!important;place-items:center!important;width:25px!important;height:25px!important;font-size:17px!important;vertical-align:middle!important}
+.presence{grid-template-columns:54px minmax(0,1fr) 48px!important;align-items:center!important;min-height:62px!important}
+.presence .presenceAvatar{grid-column:1!important;grid-row:1!important;width:54px!important;height:54px!important;object-fit:cover!important}
+.presence .presenceBody{grid-column:2!important;grid-row:1!important;min-width:0!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:center!important;gap:3px!important}
+.presence .presenceName{font-size:17px!important;line-height:1.2!important}
+.presence .presenceText{font-size:16px!important;line-height:1.25!important}
+@media(max-width:600px){.member,.privateListOverlay .member{grid-template-columns:4px 48px 27px minmax(0,1fr) 48px!important;min-height:60px!important;column-gap:2px!important}.member>img,.privateListOverlay .member>img{width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important}.member .memberBadge,.privateListOverlay .member .memberBadge{width:24px!important;height:24px!important;min-width:24px!important;font-size:15px!important}.member .memberName,.privateListOverlay .member .memberName{font-size:15px!important}.member .memberSub,.privateListOverlay .member .privateLastMessage{font-size:14px!important}.privateListOverlay .member .privateContactDelete{width:45px!important;max-width:45px!important;font-size:10px!important}.wallAvatar{width:48px!important;height:48px!important}.wallPost{grid-template-columns:48px minmax(0,1fr)!important}.presence .presenceText{font-size:16px!important}}
+</style>
+<style id="rimaz-unified-wall-crown">
+/* Use the wall's gold crown glyph everywhere; remove the black badge backing without changing dimensions or names. */
+.member .memberBadge.roleAdmin,
+.privateListOverlay .member .memberBadge.roleAdmin,
+.msg .msghead .memberBadge.roleAdmin,
+.wallPost .rimazRoleBadge .memberBadge.roleAdmin,
+#layer .privateOverlay .privateHeadTitle .memberBadge.roleAdmin {
+  background:transparent!important;
+  border-color:transparent!important;
+  color:inherit!important;
+  box-shadow:none!important;
+}
+.msg .msghead .memberBadge {flex:0 0 25px!important;width:25px!important;height:25px!important;min-width:25px!important;display:inline-grid!important;place-items:center!important;font-size:17px!important;line-height:1!important;padding:0!important;}
+</style>
+<style id="rimaz-public-wall-requested-fixes">
+/* Public messages: preserve the existing name and dimensions; render the owner's gold crown beside the avatar/name line. */
+.msg .msghead .memberBadge.roleAdmin{background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important;color:inherit!important;}
+/* Wall: keep the photo at its existing size and restore crown then name beside it. */
+.wallPost .rimazUnifiedName{direction:ltr!important;display:flex!important;flex-direction:row!important;justify-content:flex-start!important;align-items:flex-start!important;gap:6px!important;}
+.wallPost .rimazUnifiedName .rimazRoleBadge{order:0!important;}
+.wallPost .rimazUnifiedName b{order:1!important;}
+</style>
+<style id="rimaz-approved-top-alignment-v2">
+/* Approved layout: avatar on the left; badge first, then name on the same top line; detail directly below. */
+.member,.privateListOverlay .member{align-items:start!important;min-height:66px!important;}
+.member>img,.privateListOverlay .member>img{grid-row:1 / span 2!important;align-self:start!important;margin-top:0!important;}
+.member .memberBadge,.privateListOverlay .member .memberBadge{grid-row:1!important;align-self:start!important;justify-self:center!important;margin-top:1px!important;}
+.member .memberMain,.privateListOverlay .member .memberMain{grid-row:1 / span 2!important;align-self:start!important;padding-top:0!important;}
+.member .memberName,.privateListOverlay .member .memberName{min-height:27px!important;display:flex!important;align-items:flex-start!important;line-height:1.25!important;}
+.member .memberSub,.privateListOverlay .member .privateLastMessage{margin-top:0!important;padding-top:2px!important;line-height:1.25!important;}
+/* Keep the badge and username at the top edge in public messages too. */
+.msg{align-items:start!important;}
+.msg .avatar{grid-row:1!important;align-self:start!important;}
+.msg .msgbody{align-self:start!important;padding-top:3px!important;}
+.msg .msghead{align-items:flex-start!important;justify-content:flex-start!important;gap:6px!important;line-height:1.2!important;}
+.msg .msghead .badge,.msg .msghead .memberBadge,.msg .msghead .rimazRoleBadge{align-self:flex-start!important;margin-top:0!important;}
+/* Wall posts use the same avatar / badge / name top alignment as the public chat. */
+.wallPost{align-items:start!important;}
+.wallPost>.wallAvatar{grid-column:1!important;grid-row:1!important;align-self:start!important;}
+.wallPost .wallPostMain{grid-column:2!important;grid-row:1!important;align-self:start!important;}
+.wallPost .rimazUnifiedName{direction:ltr!important;justify-content:flex-start!important;align-items:flex-start!important;gap:6px!important;margin-top:0!important;margin-bottom:4px!important;}
+.wallPost .rimazUnifiedName .rimazRoleBadge{flex:0 0 auto!important;margin:0!important;align-self:flex-start!important;}
+.wallPost .rimazUnifiedName b{align-self:flex-start!important;margin:0!important;line-height:1.25!important;}
+@media(max-width:600px){
+ .member,.privateListOverlay .member{grid-template-columns:4px 48px 27px minmax(0,1fr) 48px!important;min-height:60px!important;column-gap:2px!important;}
+ .member>img,.privateListOverlay .member>img{width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;}
+ .member .memberBadge,.privateListOverlay .member .memberBadge{width:24px!important;height:24px!important;min-width:24px!important;font-size:15px!important;}
+ .member .memberMain,.privateListOverlay .member .memberMain{padding:0 3px!important;}
+ .member .memberName,.privateListOverlay .member .memberName{font-size:15px!important;min-height:23px!important;}
+ .member .memberSub,.privateListOverlay .member .privateLastMessage{font-size:13px!important;}
+ .wallPost{grid-template-columns:48px minmax(0,1fr)!important;gap:6px!important;}
+ .wallAvatar{width:48px!important;height:48px!important;}
+}
+</style>
+
+<style id="rimaz-private-message-sender-badge-v13">
+/* Private conversation messages: keep sender avatar, role crown/badge, and name aligned at the top. */
+#layer .privateOverlay .pmsg{display:block!important;padding:8px 9px!important;direction:ltr!important;text-align:left!important;}
+#layer .privateOverlay .pmsgHead{display:flex!important;flex-direction:row!important;align-items:flex-start!important;justify-content:flex-start!important;gap:8px!important;direction:ltr!important;margin:0 0 5px!important;min-height:44px!important;}
+#layer .privateOverlay .pmsgHead>img{display:block!important;flex:0 0 44px!important;width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;object-fit:cover!important;border-radius:5px!important;margin:0!important;}
+#layer .privateOverlay .pmsgIdentity{display:flex!important;flex:1 1 auto!important;min-width:0!important;align-self:flex-start!important;padding-top:0!important;}
+#layer .privateOverlay .pmsgTitle{display:flex!important;flex-direction:row!important;align-items:flex-start!important;justify-content:flex-start!important;gap:6px!important;direction:ltr!important;min-width:0!important;max-width:100%!important;line-height:1.2!important;}
+#layer .privateOverlay .pmsgTitle .memberBadges{display:inline-flex!important;align-items:flex-start!important;gap:3px!important;flex:0 0 auto!important;margin:0!important;padding:0!important;}
+#layer .privateOverlay .pmsgTitle .memberBadge{display:inline-grid!important;place-items:center!important;flex:0 0 auto!important;min-width:23px!important;width:auto!important;height:23px!important;min-height:23px!important;margin:0!important;padding:0 3px!important;font-size:16px!important;line-height:1!important;vertical-align:top!important;}
+#layer .privateOverlay .pmsgTitle b{display:block!important;min-width:0!important;max-width:100%!important;margin:0!important;padding:1px 0 0!important;font-size:15px!important;font-weight:900!important;line-height:1.2!important;white-space:normal!important;overflow-wrap:anywhere!important;}
+#layer .privateOverlay .pmsg>div:last-child{direction:rtl!important;text-align:left!important;line-height:1.4!important;}
+#layer .privateOverlay .pmsg .privateMediaArea{margin:5px 0 0 52px!important;direction:ltr!important;text-align:left!important;}
+#layer .privateOverlay .pmsg .privateMediaArea img{max-width:100%!important;}
+@media(max-width:650px){#layer .privateOverlay .pmsg{padding:7px!important;}#layer .privateOverlay .pmsgHead{gap:7px!important;min-height:42px!important;}#layer .privateOverlay .pmsgHead>img{flex-basis:42px!important;width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;}#layer .privateOverlay .pmsgTitle .memberBadge{min-width:21px!important;height:21px!important;min-height:21px!important;font-size:15px!important;}#layer .privateOverlay .pmsgTitle b{font-size:14px!important;}#layer .privateOverlay .pmsg .privateMediaArea{margin-left:49px!important;}}
+</style>
+
+<style id="rimaz-v14-private-sender-alignment-final">
+/* Stable private conversation header and message sender layout: avatar, badge and name aligned at the top. */
+#layer .privateOverlay .privateHead{display:grid!important;grid-template-columns:24px 5px 48px minmax(0,1fr) auto!important;gap:6px!important;align-items:start!important;height:60px!important;min-height:60px!important;flex:0 0 60px!important;padding:5px 6px!important;box-sizing:border-box!important;direction:ltr!important;overflow:hidden!important;}
+#layer .privateOverlay .privateHead .privateCountryFlag{grid-column:1!important;grid-row:1!important;align-self:start!important;min-width:22px!important;width:22px!important;height:28px!important;font-size:18px!important;}
+#layer .privateOverlay .privateHead .privateStatus{grid-column:2!important;grid-row:1!important;align-self:start!important;width:5px!important;height:44px!important;margin:0!important;}
+#layer .privateOverlay .privateHead .privateHeadAvatar{grid-column:3!important;grid-row:1!important;width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;align-self:start!important;object-fit:cover!important;border-radius:6px!important;margin:0!important;}
+#layer .privateOverlay .privateHead .privateHeadName{grid-column:4!important;grid-row:1!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:flex-start!important;gap:3px!important;min-width:0!important;align-self:start!important;margin:0!important;padding:0!important;direction:ltr!important;text-align:left!important;}
+#layer .privateOverlay .privateHead .privateHeadTitle{display:flex!important;flex-direction:row!important;align-items:flex-start!important;justify-content:flex-start!important;gap:5px!important;min-width:0!important;width:100%!important;margin:0!important;padding:0!important;line-height:1.2!important;direction:ltr!important;}
+#layer .privateOverlay .privateHead .privateHeadTitle .memberBadges{display:inline-flex!important;flex:0 0 auto!important;align-items:flex-start!important;gap:3px!important;margin:0!important;padding:0!important;}
+#layer .privateOverlay .privateHead .privateHeadTitle .memberBadge{display:inline-grid!important;place-items:center!important;align-self:flex-start!important;flex:0 0 auto!important;width:auto!important;min-width:24px!important;height:24px!important;min-height:24px!important;margin:0!important;padding:0 3px!important;font-size:17px!important;line-height:1!important;}
+#layer .privateOverlay .privateHead .privateHeadTitle b{display:block!important;align-self:flex-start!important;min-width:0!important;font-size:15px!important;line-height:1.2!important;font-weight:900!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;margin:1px 0 0!important;padding:0!important;}
+#layer .privateOverlay .privateHead .privateHeadName small{display:block!important;width:100%!important;text-align:left!important;direction:rtl!important;font-size:10px!important;line-height:1.2!important;color:#ddd!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+#layer .privateOverlay .privateHead .privateHeadActions{grid-column:5!important;grid-row:1!important;display:flex!important;align-items:flex-start!important;gap:3px!important;align-self:start!important;}
+#layer .privateOverlay .privateHead .privateHeadActions button{width:29px!important;height:29px!important;min-width:29px!important;margin:0!important;padding:0!important;}
+#layer .privateOverlay .pmsgHead{display:grid!important;grid-template-columns:46px minmax(0,1fr)!important;grid-template-rows:auto!important;align-items:start!important;justify-content:initial!important;gap:8px!important;direction:ltr!important;min-height:46px!important;margin:0 0 6px!important;}
+#layer .privateOverlay .pmsgHead>img{grid-column:1!important;grid-row:1!important;width:46px!important;height:46px!important;min-width:46px!important;min-height:46px!important;flex:none!important;align-self:start!important;margin:0!important;border-radius:6px!important;object-fit:cover!important;}
+#layer .privateOverlay .pmsgIdentity{grid-column:2!important;grid-row:1!important;display:block!important;min-width:0!important;align-self:start!important;padding:0!important;margin:0!important;}
+#layer .privateOverlay .pmsgTitle{display:flex!important;flex-direction:row!important;align-items:flex-start!important;justify-content:flex-start!important;gap:6px!important;direction:ltr!important;min-width:0!important;width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;line-height:1.2!important;}
+#layer .privateOverlay .pmsgTitle>.memberBadges{display:inline-flex!important;flex:0 0 auto!important;align-items:flex-start!important;align-self:flex-start!important;gap:3px!important;margin:0!important;padding:0!important;}
+#layer .privateOverlay .pmsgTitle .memberBadge{display:inline-grid!important;place-items:center!important;align-self:flex-start!important;flex:0 0 auto!important;width:auto!important;min-width:24px!important;height:24px!important;min-height:24px!important;margin:0!important;padding:0 3px!important;font-size:17px!important;line-height:1!important;vertical-align:top!important;}
+#layer .privateOverlay .pmsgTitle b{display:block!important;align-self:flex-start!important;min-width:0!important;max-width:100%!important;margin:0!important;padding:1px 0 0!important;font-size:15px!important;font-weight:900!important;line-height:1.2!important;white-space:normal!important;overflow-wrap:anywhere!important;}
+#layer .privateOverlay .pmsg .privateMediaArea{margin:5px 0 0 54px!important;direction:ltr!important;text-align:left!important;}
+@media(max-width:650px){#layer .privateOverlay .privateHead{grid-template-columns:20px 4px 42px minmax(0,1fr) auto!important;gap:4px!important;height:56px!important;min-height:56px!important;flex-basis:56px!important;padding:4px!important;}#layer .privateOverlay .privateHead .privateHeadAvatar{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;}#layer .privateOverlay .privateHead .privateHeadTitle .memberBadge{min-width:21px!important;height:21px!important;min-height:21px!important;font-size:15px!important;}#layer .privateOverlay .privateHead .privateHeadTitle b{font-size:13px!important;}#layer .privateOverlay .privateHead .privateHeadActions button{width:26px!important;height:28px!important;min-width:26px!important;}#layer .privateOverlay .pmsgHead{grid-template-columns:42px minmax(0,1fr)!important;gap:7px!important;min-height:42px!important;}#layer .privateOverlay .pmsgHead>img{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;}#layer .privateOverlay .pmsgTitle .memberBadge{min-width:22px!important;height:22px!important;min-height:22px!important;font-size:15px!important;}#layer .privateOverlay .pmsgTitle b{font-size:14px!important;}#layer .privateOverlay .pmsg .privateMediaArea{margin-left:49px!important;}}
+</style>
+
+
+<style>
+.welcomeEditor input[data-welcome-title],.welcomeEditor textarea[data-welcome-text]{display:block!important;position:relative!important;z-index:2!important;pointer-events:auto!important;user-select:text!important;-webkit-user-select:text!important;touch-action:manipulation!important;width:100%!important;min-height:42px!important;padding:8px!important;border:1px solid #777!important;background:#fff!important;color:#111!important;font-size:16px!important;opacity:1!important;box-sizing:border-box!important}.welcomeEditor textarea[data-welcome-text]{min-height:110px!important;resize:vertical!important}.welcomeEditor label{display:block!important;margin:7px 0 3px!important}.welcomeEditor button:disabled{opacity:.6!important}
+</style>
+
+<style id="rimaz-v32-two-fixes">
+/* Keep the V30 badge size and colors; move only the count badge to the top-right. */
+.room{grid-template-columns:58px 24px minmax(0,1fr) 82px!important;align-items:center!important;}
+.room .count{grid-column:4!important;grid-row:1!important;justify-self:end!important;align-self:start!important;margin:0 3px 0 0!important;}
+@media(max-width:650px){.room{grid-template-columns:44px 16px minmax(0,1fr) 40px!important;align-items:center!important}.room .count{grid-column:4!important;grid-row:1!important;justify-self:end!important;align-self:start!important;margin:0 1px 0 0!important}}
+/* The message input remains disabled until the server confirms successful room entry. */
+</style>
+
+<style>.giftGrid{display:grid!important;grid-template-columns:repeat(10,minmax(0,1fr))!important;gap:4px!important}.giftTile{aspect-ratio:1/1;min-width:0!important;padding:2px!important;font-size:23px!important;display:grid;place-items:center;border:1px solid #ddd!important;background:#fff!important}.giftTile.selected{outline:3px solid #e3b341!important;background:#fff7d7!important}.createRoomForm{display:flex;flex-direction:column;gap:8px;padding:12px}.createRoomForm input:not([type=radio]){width:100%;min-height:36px;padding:7px;border:1px solid #aaa;border-radius:5px}.createRoomKinds{display:grid;grid-template-columns:1fr 1fr;gap:8px}.createRoomKinds label{padding:10px;border:1px solid #bbb;border-radius:6px}.createRoomForm>label{font-weight:800}.createRoomOverlay{max-height:90vh;overflow:auto}@media(max-width:520px){.giftGrid{grid-template-columns:repeat(10,minmax(0,1fr))!important;gap:2px!important}.giftTile{font-size:18px!important}.createRoomOverlay{width:92%!important}}</style>
+
+<style id="rimaz-admin-panel-half-screen-fix">
+#layer .memberClassicShade{position:absolute!important;inset:0!important;display:flex!important;align-items:stretch!important;justify-content:flex-start!important;direction:rtl!important;}
+#layer .memberClassicPanel{width:50vw!important;max-width:50vw!important;min-width:0!important;height:100%!important;max-height:100%!important;overflow-y:auto!important;overflow-x:hidden!important;box-sizing:border-box!important;}
+#layer .memberClassicActions{display:flex!important;flex-direction:column!important;gap:5px!important;padding:6px!important;}
+#layer .memberClassicActions button{width:100%!important;min-height:36px!important;box-sizing:border-box!important;}
+@media(max-width:650px){#layer .memberClassicPanel{width:50vw!important;max-width:50vw!important;height:100%!important;}#layer .memberClassicActions button{font-size:11px!important;white-space:normal!important;}}
+</style>
+
+<style id="rimaz-inline-profile-admin-grid-final">
+#layer .profileGrid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+#layer .profileGrid .memberProfileAdminInline button{grid-column:auto!important;grid-row:auto!important;min-width:0!important;height:auto!important;min-height:36px!important;white-space:normal!important;overflow-wrap:anywhere!important}
+#layer .profileGrid .memberProfileAdminInline{grid-column:1/-1!important}
+</style>
+
+<style id="rimaz-gifts-rebuilt-v20">
+.giftEmoji{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;line-height:1!important;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif!important;font-size:clamp(22px,6vw,34px)!important;white-space:nowrap!important;overflow:visible!important;object-fit:contain!important}
+.giftEmojiLarge{font-size:clamp(76px,22vw,112px)!important;width:auto!important;height:auto!important;min-height:1em!important}
+#layer .profileGiftShade{position:absolute!important;inset:0!important;z-index:2147483000!important;display:flex!important;align-items:center!important;justify-content:center!important;direction:rtl!important;background:rgba(0,0,0,.56)!important;padding:10px!important;box-sizing:border-box!important}
+#layer .profileGiftPanel{width:min(94vw,620px)!important;max-width:620px!important;height:min(84dvh,760px)!important;max-height:84dvh!important;margin:0!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;background:#fff!important;color:#222!important;border:1px solid #aeb7bf!important;border-radius:8px!important;box-shadow:0 12px 36px #0005!important}
+#layer .profileGiftHead{flex:0 0 48px!important;height:48px!important;min-height:48px!important;display:flex!important;align-items:center!important;justify-content:space-between!important;padding:6px 12px!important;background:#fff!important;color:#222!important;border-bottom:1px solid #d5dbe0!important;font-size:17px!important;font-weight:900!important}
+#layer .profileGiftHead button{width:36px!important;height:36px!important;min-width:36px!important;border:0!important;background:#d9534f!important;color:#fff!important;font-size:25px!important;border-radius:3px!important}
+#layer .profileGiftGrid{display:grid!important;grid-template-columns:repeat(8,minmax(0,1fr))!important;gap:5px!important;padding:9px!important;overflow:auto!important;overscroll-behavior:contain!important;align-content:start!important;flex:1 1 auto!important;min-height:0!important;background:#fff!important}
+#layer .profileGiftGrid .giftTile{width:100%!important;min-width:0!important;min-height:0!important;aspect-ratio:1/1!important;height:auto!important;padding:3px!important;display:flex!important;align-items:center!important;justify-content:center!important;border:1px solid #e0e4e8!important;border-radius:4px!important;background:#fff!important;color:#222!important;overflow:visible!important;box-sizing:border-box!important}
+#layer .profileGiftGrid .giftTile.selected{background:#e8f2f8!important;border:2px solid #557f96!important;box-shadow:inset 0 0 0 1px #fff!important}
+#layer .profileGiftGrid .giftTile .giftEmoji{font-size:clamp(22px,6.5vw,36px)!important}
+#layer .profileGiftGrid .giftRemoveTile{min-height:46px!important;height:auto!important;padding:5px!important;border:1px solid #496779!important;background:#365d70!important;color:#fff!important;font-size:12px!important;font-weight:900!important;white-space:normal!important}
+#layer .profileGiftSelected{flex:0 0 auto!important;min-height:34px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;padding:5px 8px!important;border-top:1px solid #e3e6e8!important;background:#f5f8fa!important;color:#263b46!important;font-weight:800!important;text-align:center!important}
+#layer .profileGiftFoot{flex:0 0 auto!important;display:flex!important;gap:7px!important;padding:8px!important;border-top:1px solid #cbd3d8!important;background:#fff!important}
+#layer .profileGiftFoot button{flex:1 1 0!important;min-height:48px!important;border:1px solid #496779!important;border-radius:2px!important;background:#365d70!important;color:#fff!important;font-size:16px!important;font-weight:900!important}
+#layer .profileGiftFoot button:last-child{background:#59636a!important;border-color:#59636a!important}
+.member .giftArtBadge{width:24px!important;height:24px!important;min-width:24px!important;padding:1px!important;overflow:visible!important}
+.member .giftArtBadge .giftEmoji{font-size:19px!important}
+.giftGrid .giftTile .giftEmoji,.memberClassicGrid .giftEmoji{font-size:clamp(20px,4vw,28px)!important}
+@media(max-width:420px){#layer .profileGiftPanel{width:96vw!important;height:86dvh!important;max-height:86dvh!important}#layer .profileGiftGrid{grid-template-columns:repeat(8,minmax(0,1fr))!important;gap:4px!important;padding:7px!important}#layer .profileGiftGrid .giftTile .giftEmoji{font-size:clamp(21px,7vw,29px)!important}#layer .profileGiftHead{height:44px!important;min-height:44px!important;flex-basis:44px!important}#layer .profileGiftFoot button{min-height:46px!important;font-size:15px!important}}
+</style>
+
+<style>.smileyAdminGrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;max-height:68vh;overflow:auto;padding:3px}.smileyAdminTile{border:1px solid #ccc;background:#fff;border-radius:7px;padding:5px 3px;text-align:center;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px}.smileyAdminTile img{width:42px;height:42px;object-fit:contain;display:block;margin:0 auto}.smileyAdminTile .smileyEmoji{font-size:32px;display:block;line-height:44px}.smileyAdminTile small{display:block;overflow-wrap:anywhere}.smileyAdminTile button{margin-top:2px;width:100%;font-size:11px;padding:5px 2px}.smileyShortcutInput{width:100%;min-width:0;box-sizing:border-box;font-size:11px;padding:5px 2px;text-align:center}.smileyAdminTile b{font-size:10px;white-space:nowrap;overflow:hidden;max-width:100%;text-overflow:ellipsis}@media(min-width:700px){.smileyAdminGrid{grid-template-columns:repeat(9,minmax(0,1fr))}}.emojiGrid .smileyImageBtn{display:grid;place-items:center;padding:3px}.emojiGrid .smileyImageBtn img{width:34px;height:34px;object-fit:contain}.msgtext img.chatSmiley,.pmsg .chatSmiley,.wallText .chatSmiley{width:34px;height:34px;object-fit:contain;vertical-align:middle}.smileyUploadRow{display:grid;grid-template-columns:1fr 1fr;gap:6px}.smileyUploadRow input{min-width:0}.smileyAdminGrid{margin-top:8px}</style>
+

@@ -188,7 +188,7 @@ try {
   else fail('VIP replaces previous gift and visual rank');
   if (rank && rank[0].includes('p.gifts=[]') && rank[0].includes('delete p.vipUntil')) pass('new visual rank replaces previous gift and VIP');
   else fail('new visual rank replaces previous gift and VIP');
-  if (css.includes('rimaz-online-members-single-source-v47') && css.includes('#layer .membersOverlay .member>.memberMain') && css.includes('flex-direction:column!important') && css.includes('#layer .membersOverlay .member.adminMember .memberSub')) pass('online-members panel stacks status under the name using one scoped layout source');
+  if (css.includes('rimaz-online-members-status-final-v2') && css.includes('grid-template-rows:22px 18px!important') && css.includes('.member .memberSub,#layer .membersOverlay .member.adminMember .memberSub')) pass('online-members panel forces status onto a separate line under the name');
   else fail('online-members status is directly under the name');
 } catch (error) { fail('badge exclusivity and online layout checks', error.message); }
 
