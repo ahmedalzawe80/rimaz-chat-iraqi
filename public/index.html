@@ -687,82 +687,7 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 .rimaz-gift-reference .rimaz-gift-card>button{display:block;margin:10px auto 0;border:0;border-radius:2px;background:#111;color:#fff;font-weight:900;padding:7px 24px;min-width:90px}
 @media(max-width:520px){.rimaz-gift-reference .rimaz-gift-card{width:min(92vw,460px)}.rimaz-gift-reference .rimaz-gift-sender-name{font-size:16px}.rimaz-gift-reference .rimaz-gift-content{min-height:90px}}
 </style>
-\n<style id="rimaz-members-overlay-unified-layout-v1">
-/* Single source of truth for the in-chat online members panel.
-   DOM order: status bar, avatar, rank badges, name/status, likes, country flag.
-   The text column starts immediately beside the rank badges (not at the far edge). */
-#layer .membersOverlay .member{
-  display:grid!important;
-  grid-template-columns:4px 48px auto minmax(0,1fr) 34px 25px!important;
-  grid-template-rows:minmax(0,auto)!important;
-  align-items:center!important;
-  column-gap:3px!important;
-  min-height:60px!important;
-  height:auto!important;
-  padding:4px!important;
-  direction:ltr!important;
-  box-sizing:border-box!important;
-}
-#layer .membersOverlay .member>.memberStatusBar{
-  grid-column:1!important;grid-row:1!important;align-self:center!important;
-  width:4px!important;height:48px!important;margin:0!important;
-}
-#layer .membersOverlay .member>img{
-  grid-column:2!important;grid-row:1!important;align-self:center!important;
-  width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;
-  object-fit:cover!important;margin:0!important;
-}
-#layer .membersOverlay .member>.memberBadges{
-  grid-column:3!important;grid-row:1!important;align-self:center!important;justify-self:center!important;
-  display:inline-flex!important;align-items:center!important;justify-content:center!important;
-  flex-wrap:nowrap!important;min-width:0!important;margin:0!important;padding:0!important;
-}
-#layer .membersOverlay .member>.memberBadges .memberBadge{
-  display:inline-grid!important;place-items:center!important;flex:0 0 23px!important;
-  width:23px!important;height:23px!important;min-width:23px!important;min-height:23px!important;
-  margin:0!important;font-size:15px!important;line-height:1!important;
-}
-#layer .membersOverlay .member>.memberMain{
-  grid-column:4!important;grid-row:1!important;align-self:center!important;justify-self:stretch!important;
-  display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:center!important;
-  gap:2px!important;direction:ltr!important;text-align:left!important;
-  min-width:0!important;width:100%!important;margin:0!important;padding:1px 3px!important;
-  overflow:hidden!important;box-sizing:border-box!important;
-}
-#layer .membersOverlay .member .memberName,
-#layer .membersOverlay .member .memberSub,
-#layer .membersOverlay .member.adminMember .memberSub{
-  display:block!important;position:static!important;visibility:visible!important;opacity:1!important;
-  align-self:stretch!important;width:100%!important;min-width:0!important;height:auto!important;
-  min-height:0!important;max-height:none!important;margin:0!important;padding:0!important;
-  direction:rtl!important;text-align:left!important;white-space:nowrap!important;
-  overflow:hidden!important;text-overflow:ellipsis!important;box-sizing:border-box!important;
-}
-#layer .membersOverlay .member .memberName{
-  color:inherit!important;font-size:15px!important;font-weight:900!important;line-height:1.2!important;
-}
-#layer .membersOverlay .member .memberSub{
-  color:#888!important;font-size:12px!important;font-weight:400!important;line-height:1.2!important;
-}
-#layer .membersOverlay .member .memberLikes{
-  grid-column:5!important;grid-row:1!important;align-self:center!important;min-width:0!important;
-  padding:0!important;text-align:center!important;font-size:10px!important;
-}
-#layer .membersOverlay .member.adminMember .memberLikes{display:none!important}
-#layer .membersOverlay .member>.memberCountryFlag{
-  grid-column:6!important;grid-row:1!important;align-self:center!important;display:flex!important;
-  align-items:center!important;justify-content:center!important;width:25px!important;min-width:25px!important;
-  font-size:20px!important;line-height:1!important;
-}
-@media(max-width:600px){
-  #layer .membersOverlay .member{grid-template-columns:3px 44px auto minmax(0,1fr) 27px 22px!important;column-gap:2px!important;min-height:56px!important;padding:3px!important}
-  #layer .membersOverlay .member>img{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important}
-  #layer .membersOverlay .member>.memberBadges .memberBadge{flex-basis:21px!important;width:21px!important;height:21px!important;min-width:21px!important;min-height:21px!important;font-size:14px!important}
-  #layer .membersOverlay .member .memberName{font-size:14px!important}
-  #layer .membersOverlay .member .memberSub{font-size:11px!important}
-  #layer .membersOverlay .member>.memberCountryFlag{width:22px!important;min-width:22px!important;font-size:18px!important}
-}
-</style>
+
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={},privatePeerUser=null;
@@ -1769,7 +1694,7 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 </style>
 
 
-</body></html>
+
 <style id="rimaz-user-latest-final">
 /* latest user alignment — preserve approved sizes, only mirror requested areas */
 .memberSectionBar{height:34px;min-height:34px;display:flex;align-items:center;justify-content:center;background:#111;color:#fff;font-size:15px;font-weight:900;text-align:center;border-top:1px solid #000;border-bottom:1px solid #000}
@@ -2125,3 +2050,94 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 
 <style>.smileyAdminGrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;max-height:68vh;overflow:auto;padding:3px}.smileyAdminTile{border:1px solid #ccc;background:#fff;border-radius:7px;padding:5px 3px;text-align:center;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px}.smileyAdminTile img{width:42px;height:42px;object-fit:contain;display:block;margin:0 auto}.smileyAdminTile .smileyEmoji{font-size:32px;display:block;line-height:44px}.smileyAdminTile small{display:block;overflow-wrap:anywhere}.smileyAdminTile button{margin-top:2px;width:100%;font-size:11px;padding:5px 2px}.smileyShortcutInput{width:100%;min-width:0;box-sizing:border-box;font-size:11px;padding:5px 2px;text-align:center}.smileyAdminTile b{font-size:10px;white-space:nowrap;overflow:hidden;max-width:100%;text-overflow:ellipsis}@media(min-width:700px){.smileyAdminGrid{grid-template-columns:repeat(9,minmax(0,1fr))}}.emojiGrid .smileyImageBtn{display:grid;place-items:center;padding:3px}.emojiGrid .smileyImageBtn img{width:34px;height:34px;object-fit:contain}.msgtext img.chatSmiley,.pmsg .chatSmiley,.wallText .chatSmiley{width:34px;height:34px;object-fit:contain;vertical-align:middle}.smileyUploadRow{display:grid;grid-template-columns:1fr 1fr;gap:6px}.smileyUploadRow input{min-width:0}.smileyAdminGrid{margin-top:8px}</style>
 
+<style id="rimaz-members-overlay-unified-layout-v1">
+/* One authoritative layout for the online-members panel only.
+   DOM order: status bar | avatar | rank | name/status | likes | flag. */
+#layer .membersOverlay .member{
+  display:grid!important;
+  grid-template-columns:4px 48px auto minmax(0,1fr) 34px 25px!important;
+  grid-template-rows:1fr!important;
+  align-items:center!important;
+  column-gap:3px!important;
+  min-height:60px!important;
+  height:auto!important;
+  padding:4px!important;
+  direction:ltr!important;
+  box-sizing:border-box!important;
+}
+#layer .membersOverlay .member>.memberStatusBar{
+  grid-column:1!important;grid-row:1!important;align-self:center!important;
+  width:4px!important;height:48px!important;margin:0!important;
+}
+#layer .membersOverlay .member>img{
+  grid-column:2!important;grid-row:1!important;align-self:center!important;
+  width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;
+  object-fit:cover!important;margin:0!important;
+}
+#layer .membersOverlay .member>.memberBadges{
+  grid-column:3!important;grid-row:1!important;
+  align-self:start!important;justify-self:center!important;
+  display:inline-flex!important;align-items:flex-start!important;justify-content:center!important;
+  flex-wrap:nowrap!important;gap:2px!important;min-width:0!important;
+  margin:6px 0 0!important;padding:0!important;
+}
+#layer .membersOverlay .member>.memberBadges .memberBadge{
+  display:inline-grid!important;place-items:center!important;align-self:flex-start!important;
+  flex:0 0 23px!important;width:23px!important;height:23px!important;
+  min-width:23px!important;min-height:23px!important;margin:0!important;
+  padding:0!important;font-size:15px!important;line-height:1!important;
+}
+#layer .membersOverlay .member>.memberMain{
+  grid-column:4!important;grid-row:1!important;
+  align-self:start!important;justify-self:stretch!important;
+  display:flex!important;flex-direction:column!important;align-items:flex-start!important;
+  justify-content:flex-start!important;gap:4px!important;
+  direction:ltr!important;text-align:left!important;
+  min-width:0!important;width:100%!important;max-width:100%!important;
+  margin:6px 0 0!important;padding:0 3px!important;
+  overflow:hidden!important;box-sizing:border-box!important;
+}
+#layer .membersOverlay .member .memberName,
+#layer .membersOverlay .member .memberSub,
+#layer .membersOverlay .member.adminMember .memberSub{
+  display:block!important;position:static!important;float:none!important;
+  visibility:visible!important;opacity:1!important;align-self:stretch!important;
+  width:100%!important;min-width:0!important;height:auto!important;
+  min-height:0!important;max-height:none!important;margin:0!important;padding:0!important;
+  direction:rtl!important;text-align:left!important;white-space:nowrap!important;
+  overflow:hidden!important;text-overflow:ellipsis!important;box-sizing:border-box!important;
+  transform:none!important;
+}
+#layer .membersOverlay .member .memberName{
+  color:inherit!important;font-size:15px!important;font-weight:900!important;
+  line-height:1.2!important;
+}
+#layer .membersOverlay .member .memberSub{
+  color:#888!important;font-size:12px!important;font-weight:400!important;
+  line-height:1.2!important;margin-top:2px!important;
+}
+#layer .membersOverlay .member .memberLikes{
+  grid-column:5!important;grid-row:1!important;align-self:center!important;
+  min-width:0!important;padding:0!important;text-align:center!important;font-size:10px!important;
+}
+#layer .membersOverlay .member.adminMember .memberLikes{display:none!important}
+#layer .membersOverlay .member>.memberCountryFlag{
+  grid-column:6!important;grid-row:1!important;align-self:center!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  width:25px!important;min-width:25px!important;font-size:20px!important;line-height:1!important;
+}
+@media(max-width:600px){
+  #layer .membersOverlay .member{
+    grid-template-columns:3px 44px auto minmax(0,1fr) 27px 22px!important;
+    min-height:56px!important;padding:3px!important;column-gap:2px!important;
+  }
+  #layer .membersOverlay .member>img{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important}
+  #layer .membersOverlay .member>.memberBadges{margin-top:6px!important}
+  #layer .membersOverlay .member>.memberBadges .memberBadge{flex-basis:21px!important;width:21px!important;height:21px!important;min-width:21px!important;min-height:21px!important;font-size:14px!important}
+  #layer .membersOverlay .member>.memberMain{margin-top:6px!important;padding:0 2px!important;gap:4px!important}
+  #layer .membersOverlay .member .memberName{font-size:14px!important;line-height:1.2!important}
+  #layer .membersOverlay .member .memberSub{font-size:11px!important;line-height:1.2!important;margin-top:2px!important}
+  #layer .membersOverlay .member>.memberCountryFlag{width:22px!important;min-width:22px!important;font-size:18px!important}
+}
+</style>
+</body></html>
