@@ -359,9 +359,9 @@ try {
   const source = fs.readFileSync(server, 'utf8');
   const roleRoute = source.match(/app\.post\('\/api\/admin\/role',[\s\S]*?\n\}\);\}\);/);
   const permissionRoute = source.split('\n').find(line => line.includes("app.put('/api/admin/permissions'"));
-  const rankRoute = source.split('\n').find(line => line.includes("app.post('/api/admin/rank'"));
-  if (rankRoute && rankRoute.includes('previousProfile=JSON.parse(JSON.stringify(p))') && rankRoute.includes('Rank assignment persistence failed:') && rankRoute.includes('db.rankAudit=previousRankAudit')) pass('rank grants restore member profile, base role, and audit history if persistence fails');
-  else fail('rank grants restore member profile, base role, and audit history if persistence fails');
+  const rankRoute = source.match(/app\.post\('\/api\/admin\/rank',[\s\S]*?app\.get\('\/api\/admin\/member-ip/);
+  if (rankRoute && rankRoute[0].includes('previousProfile=JSON.parse(JSON.stringify(p))') && rankRoute[0].includes('Rank assignment persistence failed:') && rankRoute[0].includes('db.rankAudit=previousRankAudit') && rankRoute[0].includes('previousNotifications')) pass('rank grants restore member profile, base role, audit history, and inbox notifications if persistence fails');
+  else fail('rank grants restore member profile, base role, audit history, and inbox notifications if persistence fails');
   if (roleRoute && roleRoute[0].includes('previousRole=target.role') && roleRoute[0].includes('Role update persistence failed:') && roleRoute[0].indexOf('try{save();}') < roleRoute[0].indexOf("emit('role-changed'")) pass('role changes roll back on persistence failure and notify only after durable save');
   else fail('role changes roll back on persistence failure and notify only after durable save');
   if (permissionRoute && permissionRoute.includes('previousPermissions=db.rolePermissions[role]') && permissionRoute.includes('Role permissions persistence failed:') && permissionRoute.includes('previousRankPermissions')) pass('rank permission edits restore role and rank metadata when save fails');
@@ -479,16 +479,25 @@ try {
 } catch (error) { fail('v46.29 regression checks', error.message); }
 
 
-// v46.34: rank grants use the same single reusable reference card as gifts.
+// v46.35: rank grants persist their inbox item atomically and deliver the same live card as gifts.
 try {
   const rankServer = fs.readFileSync(server, 'utf8');
   const rankHtml = fs.readFileSync(mainPath, 'utf8');
   const rankRoute = rankServer.match(/app\.post\('\/api\/admin\/rank',[\s\S]*?\n\}\);/);
   if (!rankRoute || !rankRoute[0].includes("emitToUser(n,'rank-granted'") || rankRoute[0].includes("emitToUser(n,'admin-action-notice',{title:'🏅 تم منحك رتبة'")) throw new Error('rank assignment still uses the generic duplicate notice path');
   if (!rankRoute[0].includes('fromProfile:{...profile(actor.name)}') || !rankRoute[0].includes('fromRole:roleOf(actor)') || !rankRoute[0].includes('rankName:definition.name')) throw new Error('rank event is missing sender identity or rank details');
+  const saveAt=rankRoute[0].indexOf('try{save();}');
+  const profileEmitAt=rankRoute[0].indexOf("io.emit('profile-changed'");
+  const cardEmitAt=rankRoute[0].indexOf("emitToUser(n,'rank-granted'");
+  if (!rankRoute[0].includes('db.notifications[n]=[inboxItem') || !(saveAt>0 && profileEmitAt>saveAt && cardEmitAt>profileEmitAt) || !rankRoute[0].includes('cardQueued:!!definition')) throw new Error('rank notification is not saved atomically before profile/card events');
   if (!rankHtml.includes('function showAwardNoticeCard(') || !rankHtml.includes('function showGiftAnimation(') || !rankHtml.includes('function showRankGrantCard(')) throw new Error('gift/rank cards do not share one renderer');
   if (!rankHtml.includes("socket.on('rank-granted'") || !rankHtml.includes('rimaz-rank-reference') || !rankHtml.includes('rimaz-rank-duration')) throw new Error('rank card listener or rank-specific content styles are missing');
   if (!rankHtml.includes("senderCaption:'أرسل لك هدية'") || !rankHtml.includes("senderCaption:'منحك رتبة جديدة'")) throw new Error('gift or rank sender caption is missing');
+  const roleRoute=rankServer.match(/app\.post\('\/api\/admin\/role',[\s\S]*?\n\}\);\}\);/);
+  const legacyAction=rankServer.match(/if\(action==='grant-admin'\|\|action==='grant-super'\|\|action==='grant-banner'\)\{[\s\S]*?return res\.json\(\{ok:true,role,cardQueued:true\}\);\}/);
+  if(!roleRoute || !roleRoute[0].includes("emit('rank-granted'") || roleRoute[0].includes("emit('admin-action-notice',{title:'🏅 تغيير المنصب'")) throw new Error('direct role promotion does not use the shared award card');
+  if(!rankServer.includes("emitToUser(n,'rank-granted',{id:crypto.randomUUID(),name:n,rank,rankName:")) throw new Error('legacy promotion action bypasses the shared award card');
+  if(rankHtml.includes('.rimaz-rank-reference .rimaz-gift-alert-title{')) throw new Error('rank card overrides the agreed shared header sizing');
   if (rankHtml.includes('.rimaz-gift-ribbon') || rankHtml.includes('.rimaz-gift-burst') || rankHtml.includes('@keyframes rgGiftFloat') || rankHtml.includes('@keyframes rgRibbon')) throw new Error('unused legacy gift-animation rules remain');
-  pass('v46.34 rank-grant notice shares the exact gift-card renderer and avoids duplicate generic notices');
+  pass('v46.35 rank-grant notice is durably queued before the same gift-card renderer is triggered');
 } catch (error) { fail('v46.34 rank-grant card checks', error.message); }
