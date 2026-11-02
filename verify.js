@@ -188,8 +188,8 @@ try {
   else fail('VIP replaces previous gift and visual rank');
   if (rank && rank[0].includes('p.gifts=[]') && rank[0].includes('delete p.vipUntil')) pass('new visual rank replaces previous gift and VIP');
   else fail('new visual rank replaces previous gift and VIP');
-  if (css.includes('rimaz-online-members-status-final-v2') && css.includes('grid-template-rows:22px 18px!important') && css.includes('.member .memberSub,#layer .membersOverlay .member.adminMember .memberSub')) pass('online-members panel forces status onto a separate line under the name');
-  else fail('online-members status is directly under the name');
+  if (css.includes('rimaz-members-overlay-unified-layout-v1') && css.includes('grid-template-columns:4px 48px auto minmax(0,1fr) 34px 25px!important') && css.includes('direction:ltr!important;text-align:left!important') && css.includes('direction:rtl!important;text-align:left!important') && css.includes('.member .memberSub')) pass('online-members panel uses one layout with name and status beside rank');
+  else fail('online-members status/name/rank unified layout');
 } catch (error) { fail('badge exclusivity and online layout checks', error.message); }
 
 // Chat messages are persisted in a short batch rather than synchronously per message.
@@ -438,10 +438,10 @@ try {
   const repairHtml = fs.readFileSync(mainPath, 'utf8');
   const membersRoute = repairServer.match(/app\.get\('\/api\/members',[\s\S]*?\n\}\);/);
   const adminDataRoute = repairServer.match(/app\.get\('\/api\/admin\/data',[\s\S]*?\n\}\);/);
-  if (!repairHtml.includes('rimaz-final-online-presence-and-permission-repair-v46-29') || !repairHtml.includes('#layer .membersOverlay .member.adminMember .memberSub{display:block!important')) throw new Error('online status final override missing');
+  if (!repairHtml.includes('rimaz-members-overlay-unified-layout-v1') || repairHtml.includes('rimaz-final-online-presence-and-permission-repair-v46-29') || repairHtml.includes('rimaz-chat-members-rank-alignment-fix-v1') || repairHtml.includes('rimaz-online-members-status-final-v2')) throw new Error('legacy online layout rules remain or unified layout is missing');
   if (!membersRoute || !membersRoute[0].includes('registeredKeys.has(normalized)') || !membersRoute[0].includes('seenMemberKeys.has(normalized)')) throw new Error('member directory does not suppress legacy guest/registered duplicates');
   if (!repairServer.includes('const registeredAccountKeys=new Set(Object.keys(db.users||{}).map(keyName))') || !repairServer.includes('registeredAccountKeys.has(k)||seenAdminAccountKeys.has(k)')) throw new Error('admin data does not suppress duplicate account identities');
   if (!repairServer.includes("app.get('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")) throw new Error('welcome-message GET route still blocks rank permission');
   if (!repairHtml.includes("async function welcomeMessagesEditor(){if(!me?.owner&&!me?.admin&&!hasClientPermission('welcome_manage'))")) throw new Error('welcome editor still checks only owner/admin roles');
-  pass('v46.29 online status alignment, legacy duplicate identity suppression, and rank-based welcome permissions');
+  pass('online-members CSS cleanup, legacy duplicate identity suppression, and rank-based welcome permissions');
 } catch (error) { fail('v46.29 regression checks', error.message); }

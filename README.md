@@ -1,4 +1,4 @@
-# Rimaz Chat v46.30 — Online Members Alignment and Exclusive Badges
+# Rimaz Chat v46.31 — Online Members CSS Cleanup and Unified Layout
 
 ## Current changes
 - Reworked the entry page toward the supplied legacy Iraqi chat reference: compact black masthead with B mark and refresh control, burgundy banner, three RTL login tabs, compact login form, and long online-member rows.
@@ -195,6 +195,14 @@ Run `npm test` before deployment. These local checks do not replace staging test
 - Added client preflight checks before saving permissions or custom rank definitions, with clear Arabic compatibility errors.
 - Preserved the existing persistent `data.json`; do not replace live site data with the ZIP placeholder.
 
+
+## v46.31.0 — Online members CSS cleanup and unified layout
+
+- Removed six overlapping legacy online-members style blocks and the conflicting mobile/name-size overrides.
+- Replaced them with one scoped stylesheet for the in-chat members panel.
+- Standardized row order: status bar, avatar, rank badges, name with status underneath, likes, country flag.
+- Anchored the name/status column immediately beside the rank badges; kept the private-contact list rules separate.
+- Updated static verification to reject the removed legacy style blocks and check the unified layout.
 
 ## v46.30.0 — Online member status and exclusive member badges
 
