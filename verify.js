@@ -508,7 +508,12 @@ try {
   if (!mediaHtml.includes('xhr.upload.onprogress') || !mediaHtml.includes('function uploadMediaWithProgress(')) throw new Error('real upload progress handler is missing');
   if (!mediaHtml.includes('function cancelMediaUpload(') || !mediaHtml.includes('item.xhr?.abort()')) throw new Error('cancel button does not abort active upload');
   if (!mediaHtml.includes('function sharePrivate()') || !mediaHtml.includes('function wallMedia(kind)')) throw new Error('private or wall media upload entrypoint is missing');
-  if (!mediaHtml.includes('onclick="openWallMediaFrom(this)"') || !mediaHtml.includes('function openWallMediaFrom(')) throw new Error('wall media is not click-to-open');
-  if (!mediaHtml.includes('rimazUploadCancel') || !mediaHtml.includes('rimazUploadFill') || !mediaHtml.includes('wallMediaOpen')) throw new Error('red progress strip or wall thumbnail is missing');
-  pass('v46.36 private and wall media uploads show cancellable real progress; wall media opens on click');
-} catch (error) { fail('v46.36 media upload progress checks', error.message); }
+  if (!mediaHtml.includes('onclick="openWallMediaFrom(this.parentElement)"') || !mediaHtml.includes('function openWallMediaFrom(')) throw new Error('wall media view button is missing');
+  if (!mediaHtml.includes('عرض الصورة') || !mediaHtml.includes('عرض الفيديو') || !mediaHtml.includes('onclick="openPrivateMediaFrom(this.parentElement)"')) throw new Error('private image/video explicit view buttons are missing');
+  const wallCardSource=(mediaHtml.match(/function wallCard\([\s\S]*?function postWall\(/)||[])[0]||'';
+  const privateMediaSource=(mediaHtml.match(/async function addPrivateMedia\([\s\S]*?function openWallMediaFrom\(/)||[])[0]||'';
+  if (!mediaHtml.includes('class="privateMediaPreview privateVideoPreview"') || !mediaHtml.includes('class="wallMediaPreview wallVideoPreview"') || /<video[^>]*autoplay/i.test(wallCardSource+privateMediaSource)) throw new Error('video preview must not autoplay');
+  if (mediaHtml.includes('class="privateMediaThumb') || mediaHtml.includes('class="wallMedia wallMediaOpen')) throw new Error('legacy click-anywhere media controls remain');
+  if (!mediaHtml.includes('rimazUploadCancel') || !mediaHtml.includes('rimazUploadFill') || !mediaHtml.includes('wallMediaCard')) throw new Error('red progress strip or wall thumbnail is missing');
+  pass('v46.37 private and wall media use explicit view buttons after upload; previews do not open or autoplay');
+} catch (error) { fail('v46.37 media view-card checks', error.message); }
