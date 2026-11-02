@@ -1,3 +1,22 @@
+# Rimaz Chat v46.33 — Seven-Rank Protection and Exclusive Badges
+
+## v46.33 changes
+- Added one server-side hierarchy check for the seven built-in ranks, from Super Red through the two administrator tiers. A lower rank cannot act on a higher rank; a higher rank can act on a lower rank. Equal ranks are not blocked by this hierarchy rule.
+- The new comparison applies only when both actor and target are within the built-in rank ladder. Ordinary members and guests are not added to the new protection system.
+- The site-owner account remains outside the new comparison and the existing owner-protection logic was retained.
+- Applied the hierarchy check to member-card actions, room/global moderation, profile-name and profile-color changes, avatar removal, rank/role assignment, gifts/VIP, likes, and room moves. Checks run on the server, not only in the browser.
+- A rank now always takes precedence over gifts and VIP. A gift replaces an older gift or VIP; VIP replaces an older gift; neither can replace an active rank. The legacy member-action gift path now replaces the old gift instead of accumulating multiple gifts.
+- Added regression checks for rank ordering, owner/member exclusions, moderation/profile routes, and exclusive gift/VIP/rank behavior.
+
+## Validation
+- `node --check server.js`
+- `node --check scripts/verify.js`
+- `npm test` — all local checks passed.
+- `index.html` and `public/index.html` remain byte-identical.
+- Static/regression checks do not replace live testing with the production database and two logged-in rank accounts. Test the Super Red → Admin block and Admin → Super Red allow behavior on staging before production rollout.
+
+---
+
 # Rimaz Chat v46.31 — Online Members CSS Cleanup and Unified Layout
 
 ## Current changes

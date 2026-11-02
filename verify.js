@@ -182,15 +182,47 @@ try {
   const vip = source.match(/app\.post\('\/api\/admin\/gift-vip',[\s\S]*?\n\}\);/);
   const rank = source.match(/app\.post\('\/api\/admin\/rank',[\s\S]*?\n\}\);/);
   const css = fs.readFileSync(mainPath, 'utf8');
-  if (gift && gift[0].includes('clearRankForBadgeReplacement') && gift[0].includes('delete p.vipUntil') && gift[0].includes('p.gifts=[record]')) pass('new gift replaces prior gift, VIP, and visual rank');
-  else fail('new gift replaces prior gift, VIP, and visual rank');
-  if (vip && vip[0].includes('clearRankForBadgeReplacement') && vip[0].includes('p.gifts=[]') && vip[0].includes('p.vipUntil=')) pass('VIP replaces previous gift and visual rank');
-  else fail('VIP replaces previous gift and visual rank');
+  if (gift && gift[0].includes('denyBadgeForRank(n,p,res)') && gift[0].includes('delete p.vipUntil') && gift[0].includes('p.gifts=[record]')) pass('new gift replaces the previous gift/VIP but never replaces an active rank');
+  else fail('new gift replaces the previous gift/VIP but never replaces an active rank');
+  if (vip && vip[0].includes('denyBadgeForRank(n,p,res)') && vip[0].includes('p.gifts=[]') && vip[0].includes('p.vipUntil=')) pass('VIP replaces a previous gift but never replaces an active rank');
+  else fail('VIP replaces a previous gift but never replaces an active rank');
   if (rank && rank[0].includes('p.gifts=[]') && rank[0].includes('delete p.vipUntil')) pass('new visual rank replaces previous gift and VIP');
   else fail('new visual rank replaces previous gift and VIP');
   if (css.includes('rimaz-members-overlay-unified-layout-v1') && css.includes('grid-template-columns:4px 48px auto minmax(0,1fr) 34px 25px!important') && css.includes('direction:ltr!important;text-align:left!important') && css.includes('direction:rtl!important;text-align:left!important') && css.includes('.member .memberSub')) pass('online-members panel uses one layout with name and status beside rank');
   else fail('online-members status/name/rank unified layout');
 } catch (error) { fail('badge exclusivity and online layout checks', error.message); }
+
+// Rank hierarchy is enforced centrally for every member-targeted administrative action.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const expectedLevels = ["'super-red':400","'super-white':500","'super-black':600","'crown-silver':700","'crown-gold':800","'admin-shield':900","'admin-full':1000"];
+  const checks = [
+    ['all seven built-in ranks have a fixed ascending hierarchy', expectedLevels.every(x => source.includes(x))],
+    ['only strictly higher ranked targets are protected', source.includes('targetLevel>actorLevel')],
+    ['legacy member-action VIP and gift handlers reject badge replacement on ranked accounts', source.includes("if(action==='grant-vip')") && source.includes("if(action==='gift')") && (source.match(/denyBadgeForRank\(n,p,res\)/g)||[]).length >= 4],
+    ['ordinary members/guests and the site owner are excluded from the new rank comparison', source.includes('if(!actor||isOwner(actor)||!targetName||isOwnerName(targetName))return false')],
+    ['rank guard returns the requested Arabic permission message', source.includes('صلاحية هذه الرتبة أعلى منك') && source.includes('HIGHER_RANK_PROTECTED')],
+    ['central member actions enforce hierarchy before moderation and global bans', source.includes("app.post('/api/admin/member-action'") && source.includes('denyHigherRankTarget(actor,n,res)')],
+    ['room ban/mute helper enforces hierarchy server-side', source.includes('function roomAction(type,req,res)') && source.includes('denyHigherRankTarget(req.user,name,res)')],
+    ['profile name/color edits and avatar deletion enforce hierarchy', source.includes("app.patch('/api/admin/profile/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return") && source.includes("app.delete('/api/admin/avatar/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return")],
+    ['direct rank assignment and role changes enforce hierarchy', source.includes("app.post('/api/admin/rank'") && source.includes('if(denyHigherRankTarget(actor,n,res))return') && source.includes("app.post('/api/admin/role'")],
+    ['additional member edits and removals enforce hierarchy', source.includes("app.patch('/api/admin/member-stats/:name',requireAuth,(req,res)=>{const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return") && source.includes("app.put('/api/admin/member-permissions/:name'") && source.includes("if(action==='delete-user')") && source.includes("app.post('/api/admin/unban'") && source.includes('if(denyHigherRankTarget(req.user,name,res))return')],
+    ['rank badge cannot be replaced by gift or VIP', source.includes('function denyBadgeForRank(name,p,res)') && source.includes('if(!hasActiveVisualRank(p))return false') && source.includes('لا يمكن استبدالها بهدية أو VIP')],
+    ['member-action gifts replace rather than accumulate', source.includes("if(action==='gift')") && source.includes('p.gifts=[record]') && !source.includes('p.gifts.unshift(record)')]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+  const levels = { 'super-red':400, 'super-white':500, 'super-black':600, 'crown-silver':700, 'crown-gold':800, 'admin-shield':900, 'admin-full':1000 };
+  const simulate = new Function('levels', `const isOwner = user => !!user?.owner; const isOwnerName = name => name === 'site-owner'; const coreRankLevelForName = name => levels[name] ?? null; ${source.match(/function higherRankTargetError\(actor,targetName\)\{[\s\S]*?\n\}/)[0]}; return higherRankTargetError;`)(levels);
+  const scenarios = [
+    ['lower super cannot act on admin', simulate({name:'super-red'}, 'admin-shield') === true],
+    ['admin can act on lower super', simulate({name:'admin-shield'}, 'super-red') === false],
+    ['highest admin can act on lower admin tier', simulate({name:'admin-full'}, 'admin-shield') === false],
+    ['equal ranks can act on each other', simulate({name:'super-white'}, 'super-white') === false],
+    ['ordinary member target is not added to rank protection', simulate({name:'super-red'}, 'ordinary-member') === false],
+    ['site owner remains outside the new rank guard', simulate({name:'super-red',owner:true}, 'admin-full') === false]
+  ];
+  for (const [label, ok] of scenarios) ok ? pass(label) : fail(label);
+} catch (error) { fail('rank hierarchy regression checks', error.message); }
 
 // Chat messages are persisted in a short batch rather than synchronously per message.
 try {
