@@ -1,4 +1,4 @@
-# Rimaz Chat v46.28 — Role-Specific Admin Panel and Gift Notice
+# Rimaz Chat v46.30 — Online Members Alignment and Exclusive Badges
 
 ## Current changes
 - Reworked the entry page toward the supplied legacy Iraqi chat reference: compact black masthead with B mark and refresh control, burgundy banner, three RTL login tabs, compact login form, and long online-member rows.
@@ -194,3 +194,13 @@ Run `npm test` before deployment. These local checks do not replace staging test
 - Added permission schema/version metadata to permission and rank catalogs.
 - Added client preflight checks before saving permissions or custom rank definitions, with clear Arabic compatibility errors.
 - Preserved the existing persistent `data.json`; do not replace live site data with the ZIP placeholder.
+
+
+## v46.30.0 — Online member status and exclusive member badges
+
+- Force the online-members panel to render each member status directly below the member name; scope the final CSS override to that panel only.
+- Make gift, VIP, and visual rank mutually exclusive: a newly granted distinction replaces the previous one.
+- A new gift replaces the previous gift instead of accumulating multiple visible gifts.
+- Restore a member's previous base role when a gift or VIP replaces a staff-like visual rank, and synchronize active sessions after durable save.
+- Normalize legacy profiles at startup so existing active ranks suppress old gifts/VIP, and active VIP suppresses old gifts.
+- Keep the general chat, private chat, wall, room rows, and other layouts unchanged.
