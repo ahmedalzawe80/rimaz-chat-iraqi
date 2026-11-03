@@ -1,3 +1,19 @@
+# Rimaz Chat v46.46 — Complete Voice Room Audio
+
+## v46.46 changes
+- Replaced the previous mic-seat-only toggle with real microphone capture and room audio using WebRTC peer connections.
+- Added server-authorized room speaker rosters and validated room-scoped offer, answer, and ICE signaling. Speaker limits and like requirements remain server-enforced.
+- Lowering a mic stops the local microphone tracks and closes remote peer connections; leaving, switching rooms, or disconnecting also removes peer links.
+- Preserved the circular avatar mic-seat layout, five-seat default, and adjustable seat count up to 20.
+- Kept chat messaging and private-call signaling separate from the new room-audio signaling.
+
+## Validation
+- `node --check server.js`
+- `node verify.js` — static and regression checks passed.
+- Live multi-device microphone, browser-permission, NAT/TURN, and hosted-database testing is still required before calling production audio fully verified.
+
+---
+
 # Rimaz Chat v46.42 — Wall Media Left Alignment Root-Cause Fix
 
 ## v46.42 changes

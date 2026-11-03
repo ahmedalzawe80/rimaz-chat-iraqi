@@ -47,6 +47,21 @@ try {
   else fail('privileged login entry gesture remains intact');
 } catch (error) { fail('hidden/ghost login checks', error.message); }
 
+// Voice rooms use one room-scoped WebRTC mesh and a single active mic-seat flow.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const html = fs.readFileSync(mainPath, 'utf8');
+  const checks = [
+    ['voice room uses server-authorized mic seats and emits a peer roster', source.includes("socket.emit('voice-mic-granted'") && source.includes("socket.on('request-mic'") && source.includes('voice-peer-joined')],
+    ['voice WebRTC offers, answers, and ICE are room- and speaker-validated', source.includes("socket.on('voice-peer-offer'") && source.includes("socket.on('voice-peer-answer'") && source.includes("socket.on('voice-peer-ice'") && source.includes('speakers?.has(sid)')],
+    ['voice peers are removed on room leave and disconnect', source.includes("socketBySession(peerSid)?.emit('voice-peer-left'") && source.includes("socket.on('disconnect'")],
+    ['client captures microphone audio and creates room peer connections', html.includes('navigator.mediaDevices.getUserMedia({audio:') && html.includes('new RTCPeerConnection') && html.includes("'voice-peer-offer'" )],
+    ['client stops local microphone tracks and closes remote peer audio on lowering', html.includes('voiceLocalStream.getTracks().forEach(t=>t.stop())') && html.includes('closeVoicePeer(peerSid)')],
+    ['voice room layout uses circular mic seats and five default seats', html.includes('border-radius:50%!important') && html.includes('id="publicRoomMics" type="number" min="1" max="20" value="5"') && html.includes('id="rmics" type="number" min="1" max="20" value="5"')],
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+} catch (error) { fail('voice-room regression checks', error.message); }
+
 // Entry identity and five-minute global-ban feedback must be enforced consistently.
 try {
   const source = fs.readFileSync(server, 'utf8');
