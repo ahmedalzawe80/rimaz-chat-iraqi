@@ -6,7 +6,7 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
-const root = path.resolve(__dirname, '..');
+const root = __dirname;
 const failures = [];
 const pass = (label) => console.log(`✓ ${label}`);
 const fail = (label, detail) => { failures.push(label); console.error(`✗ ${label}${detail ? `: ${detail}` : ''}`); };
@@ -57,7 +57,9 @@ try {
     ['guest entry rejects names already held by members or guests', source.includes("app.post('/api/guest'") && source.includes('if(nameTaken(n))return res.status(409)')],
     ['all entry routes return remaining global-ban time', routes.every(route => { const m=source.match(new RegExp("app\\.post\\('"+route.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')+"',[\\s\\S]*?\\n\\}\\);")); return m && m[0].includes('globalBanResponse(res,n,requestClientIp(req))'); })],
     ['global-ban response calculates remaining minutes and seconds from stored expiry', source.includes('function globalBanStatus(name,ip,now=Date.now())') && source.includes('remainingSeconds:totalSeconds') && source.includes('remainingText') && source.includes('GLOBAL_BAN_ACTIVE')],
-    ['login forms show actionable errors without leaving the entry screen', html.includes('async function doRegister()') && html.includes('async function doLogin()') && html.includes('async function doGuest()') && html.includes("document.getElementById('ln')?.focus()") && html.includes('الوقت المتبقي|دقيقة|ثانية|الاسم موجود')]
+    ['login forms show actionable errors without leaving the entry screen', html.includes('async function doRegister()') && html.includes('async function doLogin()') && html.includes('async function doGuest()') && html.includes("document.getElementById('ln')?.focus()") && html.includes('الوقت المتبقي|دقيقة|ثانية|الاسم موجود')],
+    ['duplicate-name response uses the requested exact Arabic message', source.includes("error:'هذا الاسم موجود'") && !source.includes('هذا الاسم موجود بالفعل، اختار اسماً آخر')],
+    ['forced global-ban return displays the remaining time on the entry page', source.includes("...(banned?(globalBanStatus(n,'')||{}):{})") && html.includes("d?.remainingText?' · الوقت المتبقي: '+d.remainingText:''") && html.includes('if(message)showLoginFeedback(message)')]
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
   const banFn = source.match(/function globalBanStatus\(name,ip,now=Date\.now\(\)\)\{[\s\S]*?\n\}/);
@@ -536,6 +538,7 @@ try {
   const privateMediaSource=(mediaHtml.match(/async function addPrivateMedia\([\s\S]*?function openWallMediaFrom\(/)||[])[0]||'';
   if (/<(?:img|video)[^>]*class="(?:privateMediaPreview|wallMediaPreview)/i.test(wallCardSource+privateMediaSource)) throw new Error('private/wall renderer still embeds media previews that display immediately');
   if (!wallCardSource.includes('wallMediaView') || !privateMediaSource.includes('privateMediaView')) throw new Error('private/wall media explicit view controls are missing');
+  if (!mediaHtml.includes('id="rimaz-wall-media-left-final"') || !mediaHtml.includes('margin:5px auto 5px 0!important')) throw new Error('wall media view button is not pinned to the left edge');
   if (mediaHtml.includes('class="privateMediaPreview') || mediaHtml.includes('class="wallMediaPreview')) throw new Error('obsolete automatic private/wall media preview elements remain');
   if (mediaHtml.includes('class="privateMediaThumb') || mediaHtml.includes('class="wallMedia wallMediaOpen')) throw new Error('legacy click-anywhere media controls remain');
   if (!mediaHtml.includes('rimazUploadCancel') || !mediaHtml.includes('rimazUploadFill') || !mediaHtml.includes('wallMediaCard')) throw new Error('red progress strip or wall card is missing');

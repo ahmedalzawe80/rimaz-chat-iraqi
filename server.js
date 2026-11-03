@@ -795,7 +795,7 @@ function globalBanStatus(name,ip,now=Date.now()){
 function globalBanResponse(res,name,ip){const ban=globalBanStatus(name,ip);if(!ban)return false;return res.status(403).json({error:`أنت محظور من الدردشة. الوقت المتبقي: ${ban.remainingText}. حاول الدخول بعد انتهاء الحظر.`,code:'GLOBAL_BAN_ACTIVE',...ban});}
 function globalBanned(name,ip){return !!globalBanStatus(name,ip);}
 function nameTaken(name){const n=keyName(name);if(!n)return false;return n==='owner'||(!!process.env.OWNER_NAME&&n===keyName(process.env.OWNER_NAME))||Object.keys(db.users||{}).some(x=>keyName(x)===n)||Object.keys(db.guests||{}).some(x=>keyName(x)===n);} 
-function removeFromChat(name, banned){ const n=keyName(name); for(const so of io.sockets.sockets.values()){ const sid2=so.data?.sid, u2=so.data?.user||socketUsers.get(sid2); if(!u2||keyName(u2.name)!==n)continue; const oldRoom=u2.room||''; if(oldRoom){so.leave(oldRoom);roomSockets.get(oldRoom)?.delete(sid2);} if(so.data?.user)so.data.user.room=''; if(socketUsers.get(sid2))socketUsers.get(sid2).room=''; so.emit('kicked',{global:true,banned:!!banned,room:oldRoom}); if(banned)so.disconnect(true); } emitState(); }
+function removeFromChat(name, banned){ const n=keyName(name); for(const so of io.sockets.sockets.values()){ const sid2=so.data?.sid, u2=so.data?.user||socketUsers.get(sid2); if(!u2||keyName(u2.name)!==n)continue; const oldRoom=u2.room||''; if(oldRoom){so.leave(oldRoom);roomSockets.get(oldRoom)?.delete(sid2);} if(so.data?.user)so.data.user.room=''; if(socketUsers.get(sid2))socketUsers.get(sid2).room=''; so.emit('kicked',{global:true,banned:!!banned,room:oldRoom,...(banned?(globalBanStatus(n,'')||{}):{})}); if(banned)so.disconnect(true); } emitState(); }
 function safeMessage(m){ return {...m, text:String(m.text||'').slice(0,2000)}; }
 let messageSaveTimer=null;
 function scheduleMessageSave(delay=350){
@@ -912,7 +912,7 @@ app.post('/api/register',(req,res)=>{
     if(!process.env.OWNER_BOOTSTRAP_PASSWORD || token.length<24 || token!==process.env.OWNER_BOOTSTRAP_PASSWORD)return res.status(403).json({error:'رمز تهيئة المالك غير صحيح'});
     if(p.length<12)return res.status(400).json({error:'كلمة مرور المالك يجب أن تكون 12 حرفاً على الأقل'});
   } else if(p.length<3) return res.status(400).json({error:'كلمة المرور 3 أحرف على الأقل'});
-  if(nameTaken(n)&&!ownerRequested)return res.status(409).json({error:'هذا الاسم موجود بالفعل، اختار اسماً آخر'});
+  if(nameTaken(n)&&!ownerRequested)return res.status(409).json({error:'هذا الاسم موجود'});
   db.users[n]={hash:bcrypt.hashSync(p,12),likes:keyName(n)==='admin'?999999:0,created:Date.now()};
   if(ownerRequested){ db.ownerSetupCompleted=true; }
   profile(n); const sid=makeSession(n,'member'); save(); res.json({sid,user:sessionUser(sid)});
@@ -940,7 +940,7 @@ app.post('/api/login-privileged',(req,res)=>{
 app.post('/api/guest',(req,res)=>{
   const n=cleanName(req.body.name); if(!n)return res.status(400).json({error:'اكتب اسم الزائر'});
   if(globalBanResponse(res,n,requestClientIp(req)))return;
-  if(nameTaken(n))return res.status(409).json({error:'هذا الاسم موجود بالفعل، اختار اسماً آخر'});
+  if(nameTaken(n))return res.status(409).json({error:'هذا الاسم موجود'});
   db.guests[n]={likes:0,created:Date.now()}; const gp=profile(n); gp.status='(غير مسجل)'; const sid=makeSession(n,'guest'); save(); res.json({sid,user:sessionUser(sid)});
 });
 app.post('/api/logout',requireAuth,(req,res)=>{

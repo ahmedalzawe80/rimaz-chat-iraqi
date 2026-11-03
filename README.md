@@ -1,3 +1,20 @@
+# Rimaz Chat v46.41 — Wall Media Alignment, Entry Feedback, and Ban Timer
+
+## v46.41 changes
+- Pinned the wall image/video "view" action to the left edge without changing private-media controls.
+- Duplicate registration/guest names now return the exact message `هذا الاسم موجود`, displayed inline on the entry page.
+- Global five-minute bans show the live remaining time (minutes and seconds) on the entry page whenever the member attempts to return before expiry. The forced return also carries the server-calculated remaining time.
+- Audited the current source for dead/duplicate logic: removed the unused `server.js.orig` backup and a duplicated media-scope guard. Kept separate room-ban behavior unchanged.
+- Repaired the verification command and verifier root path so `npm test` runs from the project root; mirrored `index.html` to `public/index.html`.
+
+## Validation
+- `node --check server.js`
+- `node --check verify.js`
+- `npm test` — all local static/regression checks passed.
+- Live hosted-server testing with the production database and multiple accounts remains required.
+
+---
+
 # Rimaz Chat v46.34 — Reference Rank-Grant Card
 
 ## v46.34 changes
@@ -8,7 +25,7 @@
 
 ## Validation
 - `node --check server.js`
-- `node --check scripts/verify.js`
+- `node --check verify.js`
 - `npm test` — includes the v46.34 rank-card regression check.
 - `index.html` and `public/index.html` remain byte-identical.
 - Static tests do not replace live multi-account verification on the hosted server.
@@ -27,7 +44,7 @@
 
 ## Validation
 - `node --check server.js`
-- `node --check scripts/verify.js`
+- `node --check verify.js`
 - `npm test` — all local checks passed.
 - `index.html` and `public/index.html` remain byte-identical.
 - Static/regression checks do not replace live testing with the production database and two logged-in rank accounts. Test the Super Red → Admin block and Admin → Super Red allow behavior on staging before production rollout.
@@ -70,7 +87,7 @@
 
 ## Validation
 - `node --check server.js`
-- `node --check scripts/verify.js`
+- `node --check verify.js`
 - `npm test`
 - `index.html` and `public/index.html` byte-identical
 - These are local checks; a hosted-server / production-database integration test is still required.
@@ -173,7 +190,7 @@ No chat colors, message rendering, member button layout, gifts, likes, or other 
 - Added a server-side 2,000-character limit to the HTTP message path so clients cannot bypass the normal message-size limit by calling the endpoint directly.
 - Extended `npm test` to verify that HTTP, Socket.IO public, and private message paths all enforce the filter, and that the HTTP path applies the length limit.
 - No owner/Admin protection, role, subscription, or existing data behavior was changed.
-- Validation: `node --check server.js`, `node --check scripts/verify.js`, and `npm test` passed. Live hosted-server testing remains outstanding.
+- Validation: `node --check server.js`, `node --check verify.js`, and `npm test` passed. Live hosted-server testing remains outstanding.
 
 
 ## v46.20 — Upload hardening

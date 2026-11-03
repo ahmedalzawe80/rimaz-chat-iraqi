@@ -1,11 +1,11 @@
 {
   "name": "rimaz-chat-iraqi",
-  "version": "46.40.0",
+  "version": "46.41.0",
   "private": true,
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node scripts/verify.js"
+    "test": "node verify.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
