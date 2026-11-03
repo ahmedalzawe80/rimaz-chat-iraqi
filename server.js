@@ -421,7 +421,7 @@ function validIceCandidate(value){if(!value||typeof value!=='object')return fals
 const welcomeSentSessions = new Set();
 // Per-room raised-mic state (not shared across rooms).
 const voiceSpeakers = new Map();
-function emitVoiceState(room){ const r=db.rooms.find(x=>x.id===room); if(!r||r.kind!=='voice')return; const speakers=[...(voiceSpeakers.get(room)||new Map()).values()]; io.to(room).emit('voice-state',{room,speakers,count:speakers.length,limit:Number(r.mics)||5}); }
+function emitVoiceState(room){ const r=db.rooms.find(x=>x.id===room); if(!r||r.kind!=='voice')return; const speakers=[...(voiceSpeakers.get(room)||new Map()).values()].sort((a,b)=>Number(a.seatIndex)-Number(b.seatIndex)); io.to(room).emit('voice-state',{room,speakers,count:speakers.length,limit:Number(r.mics)||5}); }
 const guestDisconnectTimers = new Map();
 const privateDisconnectTimers = new Map();
 const PRIVATE_DISCONNECT_GRACE_MS=25000;
@@ -1333,15 +1333,21 @@ io.on('connection',socket=>{
     socket.emit('room-joined',{room});
     socket.emit('history',{room,items:roomHistoryWithAnnouncements(room,u,Number(u.created)||0)}); if(!u.ghost){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'join',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{addMessage(pm)}catch(e){console.warn('Join presence could not be saved:',e.message)}emitPresenceToRoom(room,pm);} if(!welcomeSentSessions.has(sid)){for(const item of (db.welcomeMessages||[]).filter(x=>x.enabled!==false&&String(x.text||'').trim())){const welcome={id:'welcome-'+crypto.randomUUID(),room,from:'شات ريماز',displayName:item.title||'الترحيب',type:'welcome',text:item.text,at:Date.now(),profile:{nameColor:'#2877b9',bgColor:'#eaf5ff'}};socket.emit('message',welcome);}welcomeSentSessions.add(sid);} emitState(); const joinedRoom=db.rooms.find(r=>r.id===room); if(joinedRoom?.kind==='voice')emitVoiceState(room);
   });
-  socket.on('request-mic',({room,raised}={})=>{
+  socket.on('request-mic',({room,raised,seatIndex}={})=>{
     const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!room||u.room!==room||!socket.rooms.has(room))return;
     const r=db.rooms.find(x=>x.id===room);if(!r||r.kind!=='voice')return socket.emit('error-msg',{error:'هذا الخيار متاح بالغرف الصوتية فقط'});
     const speakers=voiceSpeakers.get(room)||new Map();
     if(raised){
       const likesRequired=Math.max(0,Number(r.micLikesRequired??30));
       if(userLikes(u)<likesRequired&&!isOwner(u)&&!isAdmin(u)){const error=`تحتاج إلى ${likesRequired} إعجاباً على الأقل لرفع المايك في هذه الغرفة`;socket.emit('voice-mic-denied',{error});return socket.emit('error-msg',{error});}
-      if(speakers.size>=Math.max(1,Number(r.mics)||5)&&!speakers.has(sid)){const error='اكتمل عدد المايكات في هذه الغرفة';socket.emit('voice-mic-denied',{error});return socket.emit('error-msg',{error});}
-      speakers.set(sid,{sid,name:u.name,displayName:displayName(u.name),avatar:profile(u.name).avatar||'',at:Date.now()});voiceSpeakers.set(room,speakers);
+      const limit=Math.max(1,Math.min(20,Number(r.mics)||5));
+      const requested=Number(seatIndex);
+      if(!Number.isInteger(requested)||requested<0||requested>=limit){const error='رقم مقعد المايك غير صالح';socket.emit('voice-mic-denied',{error});return socket.emit('error-msg',{error});}
+      const occupied=[...speakers.entries()].find(([peerSid,x])=>peerSid!==sid&&Number(x.seatIndex)===requested);
+      if(occupied){const error='هذا المقعد مشغول، اختَر مقعداً فارغاً';socket.emit('voice-mic-denied',{error});return socket.emit('error-msg',{error});}
+      if(speakers.size>=limit&&!speakers.has(sid)){const error='اكتمل عدد المايكات في هذه الغرفة';socket.emit('voice-mic-denied',{error});return socket.emit('error-msg',{error});}
+      const previous=speakers.get(sid);if(previous&&Number(previous.seatIndex)!==requested){const error='أنت مرفوع على مقعد آخر؛ اخفض المايك أولاً';socket.emit('voice-mic-denied',{error});return socket.emit('error-msg',{error});}
+      speakers.set(sid,{sid,name:u.name,displayName:displayName(u.name),avatar:profile(u.name).avatar||'',seatIndex:requested,at:Date.now()});voiceSpeakers.set(room,speakers);
       const peers=[...speakers.entries()].filter(([peerSid])=>peerSid!==sid).map(([peerSid,x])=>({sid:peerSid,name:x.name}));
       socket.emit('voice-mic-granted',{room,peers});
       for(const [peerSid,x] of speakers)if(peerSid!==sid)socketBySession(peerSid)?.emit('voice-peer-joined',{room,sid,name:u.name});

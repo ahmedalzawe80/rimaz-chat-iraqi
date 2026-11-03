@@ -305,3 +305,10 @@ Run `npm test` before deployment. These local checks do not replace staging test
 - The marker is rendered from each viewer's own active room state, so it applies to every member and guest without account-specific rules.
 - No crown, extra icon, row-width, room-image-size, or room-order changes. The marker overlays the existing row and does not alter its layout dimensions.
 - Validation: `npm test` and JavaScript syntax checks. Live multi-account/browser confirmation remains recommended.
+
+## v46.48 — Voice room rebuild
+- Replaced the previous voice-room toolbar layout with an isolated left-to-right row: speaker output toggle first at the far left, followed by numbered mic seats moving right.
+- Speaker output toggle mutes/unmutes all remote room audio locally only; it does not mute the user's microphone or affect other participants.
+- Mic-seat selection now sends the exact seat index. The server validates the requested seat, rejects occupied/invalid seats, and broadcasts seat-indexed speaker state.
+- Active-speaker animation uses live audio-level analysis for local and remote streams; the avatar halo pulses while voice energy is detected and stops during silence.
+- Replaced the previous voice-room CSS and client seat-rendering handlers; kept private calls and unrelated chat features unchanged.
