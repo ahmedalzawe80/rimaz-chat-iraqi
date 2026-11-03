@@ -575,3 +575,15 @@ try {
   if (roomHtml !== deployedHtml) throw new Error('public/index.html differs from index.html');
   pass('v46.44 current-room marker is per-viewer, slim, left-aligned, and layout-neutral');
 } catch (error) { fail('v46.44 current-room marker checks', error.message); }
+
+// v46.49: the member profile's room label is a single direct-navigation control.
+try {
+  const html = fs.readFileSync(mainPath, 'utf8');
+  const checks = [
+    ['member profile room control navigates using the member room ID', html.includes('onclick="openMemberRoom(${jsq(u.room)})"')],
+    ['direct room navigation refreshes room data and resolves by exact room ID', html.includes("async function openMemberRoom(roomId)") && html.includes("api('/api/state')") && html.includes('String(r.id)===target') && html.includes('reenterRoom(room.id)')],
+    ['member profile shows one room label and no duplicated room-name heading', html.includes('>غرفة: ${esc((rooms.find') && !html.includes('اسم الغرفة: ${esc((rooms.find')],
+    ['users without an active room do not get a clickable room control', html.includes('memberProfileRoomUnavailable') && html.includes('غرفة: غير موجود في غرفة')],
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+} catch (error) { fail('v46.49 member profile room navigation', error.message); }

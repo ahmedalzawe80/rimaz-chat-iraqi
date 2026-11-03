@@ -312,3 +312,12 @@ Run `npm test` before deployment. These local checks do not replace staging test
 - Mic-seat selection now sends the exact seat index. The server validates the requested seat, rejects occupied/invalid seats, and broadcasts seat-indexed speaker state.
 - Active-speaker animation uses live audio-level analysis for local and remote streams; the avatar halo pulses while voice energy is detected and stops during silence.
 - Replaced the previous voice-room CSS and client seat-rendering handlers; kept private calls and unrelated chat features unchanged.
+
+
+## v46.49 — Direct room navigation from member profile
+- Replaced the passive room label in a member profile with one clear `غرفة: <room name>` control.
+- Clicking the room control refreshes the room catalog, resolves the member's exact room ID, and enters that room directly without opening/searching the room list.
+- Existing locked-room password protection is preserved; unavailable/offline room states remain non-clickable.
+- Removed the duplicated room-name wording from the profile display while preserving the country and other profile details.
+- Kept the change scoped to member-profile room navigation; no changes to chat, voice rooms, or other profile actions.
+- Validation: `node --check server.js`, browser-script syntax, and `node verify.js`. Live multi-account navigation is not simulated by static checks.
