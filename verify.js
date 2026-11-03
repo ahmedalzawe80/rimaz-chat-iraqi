@@ -539,6 +539,8 @@ try {
   if (/<(?:img|video)[^>]*class="(?:privateMediaPreview|wallMediaPreview)/i.test(wallCardSource+privateMediaSource)) throw new Error('private/wall renderer still embeds media previews that display immediately');
   if (!wallCardSource.includes('wallMediaView') || !privateMediaSource.includes('privateMediaView')) throw new Error('private/wall media explicit view controls are missing');
   if (!mediaHtml.includes('id="rimaz-wall-media-left-final"') || !mediaHtml.includes('margin:5px auto 5px 0!important')) throw new Error('wall media view button is not pinned to the left edge');
+  const wallOpenSource=(mediaHtml.match(/async function openWall\([\s\S]*?function wallCard\(/)||[])[0]||'';
+  if (!wallOpenSource.includes('class="overlay wallOverlay"')) throw new Error('wall overlay root is missing the wallOverlay class required by the left-alignment CSS');
   if (mediaHtml.includes('class="privateMediaPreview') || mediaHtml.includes('class="wallMediaPreview')) throw new Error('obsolete automatic private/wall media preview elements remain');
   if (mediaHtml.includes('class="privateMediaThumb') || mediaHtml.includes('class="wallMedia wallMediaOpen')) throw new Error('legacy click-anywhere media controls remain');
   if (!mediaHtml.includes('rimazUploadCancel') || !mediaHtml.includes('rimazUploadFill') || !mediaHtml.includes('wallMediaCard')) throw new Error('red progress strip or wall card is missing');

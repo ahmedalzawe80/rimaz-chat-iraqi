@@ -1,3 +1,19 @@
+# Rimaz Chat v46.42 — Wall Media Left Alignment Root-Cause Fix
+
+## v46.42 changes
+- Fixed the actual cause of the wall media button staying on the right: the wall overlay root was missing the `wallOverlay` class, so the existing left-alignment selectors never matched.
+- Added the class to the wall overlay root and removed obsolete wall selectors from the earlier mixed private/wall CSS patch. Private-chat media styling remains unchanged.
+- Extended regression verification to assert that the wall overlay root carries the class required by the left-alignment rules.
+- No changes to login, duplicate-name handling, ban timers, uploads, stored data, or other wall behavior.
+
+## Validation
+- `node --check server.js`
+- `node --check verify.js`
+- `npm test`
+- `index.html` and `public/index.html` remain byte-identical.
+
+---
+
 # Rimaz Chat v46.41 — Wall Media Alignment, Entry Feedback, and Ban Timer
 
 ## v46.41 changes
