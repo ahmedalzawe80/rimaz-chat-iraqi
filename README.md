@@ -321,3 +321,12 @@ Run `npm test` before deployment. These local checks do not replace staging test
 - Removed the duplicated room-name wording from the profile display while preserving the country and other profile details.
 - Kept the change scoped to member-profile room navigation; no changes to chat, voice rooms, or other profile actions.
 - Validation: `node --check server.js`, browser-script syntax, and `node verify.js`. Live multi-account navigation is not simulated by static checks.
+
+
+## v46.50 — Member profile room badge design rebuild
+- Rebuilt the member-profile room control as one self-contained component instead of retaining the previous blue inline-styled label.
+- The badge now uses the reference design: a black RTL strip, bold white room name, and the room's own image at the visual end of the strip.
+- The badge remains in the same profile row and position; the country, profile dimensions, action buttons, and other layout elements are unchanged.
+- Clicking the badge continues to use the exact room ID for direct navigation; members without an active room see a non-clickable status.
+- Replaced the old room-badge styling rules with one dedicated stylesheet for the rebuilt component.
+- Validation: server syntax, browser-script compilation, and the local verification suite. Live browser appearance still needs confirmation after deployment.

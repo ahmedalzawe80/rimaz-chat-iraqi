@@ -839,7 +839,7 @@ async function openMemberProfileAdminReference(n){
  layer(html,'memberProfileAdminReference');
 }
 async function openMemberProfile(name){
- const a=await api('/api/members');const u=a.find(x=>key(x.name)===key(name));if(!u)return;const p=u.profile||{};const dn=displayFor(u)||name;
+ const a=await api('/api/members');const u=a.find(x=>key(x.name)===key(name));if(!u)return;const p=u.profile||{};const dn=displayFor(u)||name;const profileRoom=rooms.find(r=>String(r.id)===String(u.room));
  let inlineAdmin='';
  if(me?.staff&&key(name)!==key(me.name)){
   try{
@@ -892,7 +892,7 @@ async function openMemberProfile(name){
    </div>`;
   }catch(e){toast('تعذر تحميل صلاحيات الإدارة: '+e.message)}
  }
- layer(`<div class="profileOverlay"><div class="profileTop"><img class="profileTopAvatar" src="${esc(avatarFor(p))}" alt=""><b>${esc(dn)}</b><button type="button" class="close" style="width:28px;height:28px;font-size:22px" onclick="closeLayer()">×</button></div><img class="profilePhoto" src="${esc(avatarFor(p))}" onerror="this.style.display='none'"><div class="profileInfo"><div style="font-size:12px;color:#777"><span class="statusDot ${u.online?(p.privateOpen===false?'statusClosed':'statusOpen'):'statusOffline'}"></span>${esc(u.online?(p.status||(u.type==='guest'?'(غير مسجل)':'(عضو جديد)')):'غير متصل')}</div>${u.vip?'<div style="margin-top:4px">👑 VIP</div>':''}</div><div class="profileGrid"><div class="memberProfileMetaRow" style="grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 8px 5px;direction:ltr;box-sizing:border-box"><span class="memberProfileCountry" title="دولة المستخدم" style="display:inline-flex;align-items:center;gap:4px;min-width:0;font-size:12px;font-weight:900;color:#111;white-space:nowrap">${countryFlag(u.countryCode||p.countryCode||p.country||'IQ')} <span>${esc(countryName(u.countryCode||p.countryCode||p.country||'IQ'))}</span></span>${u.room?`<button type="button" class="memberProfileRoomName" title="اضغط للانتقال مباشرة إلى الغرفة" aria-label="الانتقال إلى غرفة ${esc((rooms.find(r=>String(r.id)===String(u.room))||{}).name||u.room)}" onclick="openMemberRoom(${jsq(u.room)})" style="justify-self:end;margin-right:0;margin-left:auto;max-width:72%;width:max-content;box-sizing:border-box;text-align:right;padding:4px 12px;font-size:12px;line-height:1.35;font-weight:900;color:#fff;background:#365d70;border:1px solid #496779;border-radius:0;overflow-wrap:anywhere;cursor:pointer;appearance:none">غرفة: ${esc((rooms.find(r=>String(r.id)===String(u.room))||{}).name||'غرفة غير معروفة')}</button>`:`<span class="memberProfileRoomName memberProfileRoomUnavailable">غرفة: غير موجود في غرفة</span>`}</div><button type="button" class="memberProfileLikeButton" onclick="sendLike('${esc(name)}')"><span class="memberProfileHeart">♥</span><span class="memberProfileLikeCount">${Number(u.likes)||0}</span></button><button type="button" onclick="notifyUser('${esc(name)}')">✉ تنبيه</button><button type="button" onclick="openPrivate('${esc(name)}')"><span style="display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;white-space:normal">💬 محادثة<br>خاصة</span></button><button type="button" class="ignore" onclick="ignoreUser('${esc(name)}')">⛔ تجاهل</button>${me.staff&&key(name)!==key(me.name)?inlineAdmin:''}</div></div>`,'memberProfile')
+ layer(`<div class="profileOverlay"><div class="profileTop"><img class="profileTopAvatar" src="${esc(avatarFor(p))}" alt=""><b>${esc(dn)}</b><button type="button" class="close" style="width:28px;height:28px;font-size:22px" onclick="closeLayer()">×</button></div><img class="profilePhoto" src="${esc(avatarFor(p))}" onerror="this.style.display='none'"><div class="profileInfo"><div style="font-size:12px;color:#777"><span class="statusDot ${u.online?(p.privateOpen===false?'statusClosed':'statusOpen'):'statusOffline'}"></span>${esc(u.online?(p.status||(u.type==='guest'?'(غير مسجل)':'(عضو جديد)')):'غير متصل')}</div>${u.vip?'<div style="margin-top:4px">👑 VIP</div>':''}</div><div class="profileGrid"><div class="memberProfileMetaRow" style="grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 8px 5px;direction:ltr;box-sizing:border-box"><span class="memberProfileCountry" title="دولة المستخدم" style="display:inline-flex;align-items:center;gap:4px;min-width:0;font-size:12px;font-weight:900;color:#111;white-space:nowrap">${countryFlag(u.countryCode||p.countryCode||p.country||'IQ')} <span>${esc(countryName(u.countryCode||p.countryCode||p.country||'IQ'))}</span></span>${u.room?`<button type="button" class="memberProfileRoomBadge" title="اضغط للانتقال مباشرة إلى الغرفة" aria-label="الانتقال إلى غرفة ${esc(profileRoom?.name||u.room)}" onclick="openMemberRoom(${jsq(u.room)})"><span class="memberProfileRoomBadgeText">${esc(profileRoom?.name||'غرفة غير معروفة')}</span><img class="memberProfileRoomBadgeImage" src="${esc(profileRoom?.image||avatarFor({}))}" alt="" onerror="this.onerror=null;this.src='${esc(avatarFor({}))}'"></button>`:`<span class="memberProfileRoomBadge memberProfileRoomUnavailable"><span class="memberProfileRoomBadgeText">غير موجود في غرفة</span></span>`}</div><button type="button" class="memberProfileLikeButton" onclick="sendLike('${esc(name)}')"><span class="memberProfileHeart">♥</span><span class="memberProfileLikeCount">${Number(u.likes)||0}</span></button><button type="button" onclick="notifyUser('${esc(name)}')">✉ تنبيه</button><button type="button" onclick="openPrivate('${esc(name)}')"><span style="display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;white-space:normal">💬 محادثة<br>خاصة</span></button><button type="button" class="ignore" onclick="ignoreUser('${esc(name)}')">⛔ تجاهل</button>${me.staff&&key(name)!==key(me.name)?inlineAdmin:''}</div></div>`,'memberProfile')
 }
 
 async function openMembers(){const a=await api('/api/members');layer(`<div class="overlay membersOverlay"><div class="overlayHead membersHead"><span>المتواجدين</span><button class="close" onclick="closeLayer()">×</button></div><div class="overlayBody"><div style="padding:5px"><input id="memberSearch" style="width:100%;height:38px;border:1px solid #aaa;padding:5px" placeholder="... البحث" oninput="filterMembers()"></div><div id="memberList">${memberRows(a)}</div></div></div>`,'members')}
@@ -1428,7 +1428,7 @@ sid='';localStorage.removeItem('rimaz_sid');login();
   margin-right:auto!important;
   margin-left:0!important;
 }
-#layer .profileGrid > .memberProfileMetaRow .memberProfileRoomName{
+#layer .profileGrid > .memberProfileMetaRow .memberProfileRoomBadge{
   order:2!important;
   margin-left:auto!important;
   margin-right:0!important;
@@ -1908,7 +1908,65 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 </style>
 
 <style id="rimaz-profile-reference-size-fix">
-@media(max-width:650px){#layer .profileOverlay{width:84%!important;max-width:none!important;right:8%!important;left:auto!important;top:15px!important;border-radius:0!important;overflow:hidden!important;}#layer .profilePhoto{width:100%!important;height:200px!important;max-height:none!important;object-fit:cover!important;}#layer .memberProfileCountry{direction:rtl!important;}#layer .memberProfileRoomName{margin-left:0!important;margin-right:0!important;}#layer .profileGrid .ignore{grid-column:1!important;grid-row:2!important;}#layer .profileTop{height:48px!important;min-height:48px!important;}#layer .memberProfileMetaRow{min-height:40px!important;}#layer .profileGrid button{min-height:48px!important;font-size:13px!important;}}
+@media(max-width:650px){#layer .profileOverlay{width:84%!important;max-width:none!important;right:8%!important;left:auto!important;top:15px!important;border-radius:0!important;overflow:hidden!important;}#layer .profilePhoto{width:100%!important;height:200px!important;max-height:none!important;object-fit:cover!important;}#layer .memberProfileCountry{direction:rtl!important;}#layer .profileGrid .ignore{grid-column:1!important;grid-row:2!important;}#layer .profileTop{height:48px!important;min-height:48px!important;}#layer .memberProfileMetaRow{min-height:40px!important;}#layer .profileGrid button{min-height:48px!important;font-size:13px!important;}}
+</style>
+
+<style id="rimaz-profile-room-badge-rebuilt-v4650">
+/* Rebuilt room badge: black RTL strip, white room title, room image at the visual end. */
+#layer .profileGrid > .memberProfileMetaRow .memberProfileRoomBadge{
+  order:2!important;
+  justify-self:end!important;
+  margin-left:auto!important;
+  margin-right:0!important;
+  max-width:72%!important;
+  width:max-content!important;
+  min-height:46px!important;
+  display:inline-flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:7px!important;
+  direction:rtl!important;
+  box-sizing:border-box!important;
+  padding:2px 4px!important;
+  background:#080808!important;
+  color:#fff!important;
+  border:1px solid #252525!important;
+  border-radius:0!important;
+  text-align:right!important;
+  font-size:15px!important;
+  line-height:1.25!important;
+  font-weight:900!important;
+  white-space:normal!important;
+  overflow:hidden!important;
+  cursor:pointer!important;
+  appearance:none!important;
+  -webkit-appearance:none!important;
+}
+#layer .memberProfileRoomBadge .memberProfileRoomBadgeText{
+  display:block!important;
+  flex:0 1 auto!important;
+  min-width:0!important;
+  color:#fff!important;
+  font-weight:900!important;
+  overflow-wrap:anywhere!important;
+}
+#layer .memberProfileRoomBadge .memberProfileRoomBadgeImage{
+  display:block!important;
+  flex:0 0 38px!important;
+  width:38px!important;
+  height:38px!important;
+  min-width:38px!important;
+  max-width:38px!important;
+  object-fit:cover!important;
+  background:#fff!important;
+  border:0!important;
+  border-radius:0!important;
+}
+#layer .memberProfileRoomBadge.memberProfileRoomUnavailable{
+  cursor:default!important;
+  color:#fff!important;
+}
 </style>
 
 <style id="rimaz-profile-size-and-gift-fix">
@@ -1923,7 +1981,6 @@ sid='';localStorage.removeItem('rimaz_sid');login();
  #layer .profileGrid button{min-width:0!important;min-height:38px!important;height:auto!important;padding:5px 2px!important;border:1px solid #eee!important;border-radius:0!important;background:#fff!important;color:#333!important;font-size:11px!important;font-weight:700!important;line-height:1.2!important}
  #layer .profileGrid .memberProfileLikeButton{color:#d00!important}
  #layer .profileGrid .memberProfileMetaRow{min-height:34px!important;padding:5px!important}
- #layer .profileGrid .memberProfileRoomName{background:#365d70!important;border-color:#496779!important;border-radius:0!important}
  #layer .profileGiftShade{position:absolute!important;inset:0!important;z-index:120!important;display:flex!important;align-items:flex-start!important;justify-content:flex-start!important;direction:rtl!important;background:#0007!important;padding:0!important}
  #layer .profileGiftPanel{width:84%!important;max-width:360px!important;margin-right:8%!important;margin-top:15px!important;height:min(70vh,560px)!important;max-height:70vh!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;background:#fff!important;color:#222!important;border:1px solid #aaa!important;border-radius:0!important;box-shadow:none!important}
  #layer .profileGiftHead{height:34px!important;min-height:34px!important;display:flex!important;align-items:center!important;justify-content:space-between!important;padding:4px 8px!important;background:#fff!important;color:#222!important;border-bottom:1px solid #bbb!important;font-weight:700!important;font-size:13px!important}

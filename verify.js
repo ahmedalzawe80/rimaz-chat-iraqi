@@ -582,8 +582,8 @@ try {
   const checks = [
     ['member profile room control navigates using the member room ID', html.includes('onclick="openMemberRoom(${jsq(u.room)})"')],
     ['direct room navigation refreshes room data and resolves by exact room ID', html.includes("async function openMemberRoom(roomId)") && html.includes("api('/api/state')") && html.includes('String(r.id)===target') && html.includes('reenterRoom(room.id)')],
-    ['member profile shows one room label and no duplicated room-name heading', html.includes('>غرفة: ${esc((rooms.find') && !html.includes('اسم الغرفة: ${esc((rooms.find')],
-    ['users without an active room do not get a clickable room control', html.includes('memberProfileRoomUnavailable') && html.includes('غرفة: غير موجود في غرفة')],
+    ['member profile room badge is rebuilt as a black RTL strip with white room title and room image', html.includes('memberProfileRoomBadge') && html.includes('memberProfileRoomBadgeText') && html.includes('memberProfileRoomBadgeImage') && html.includes('background:#080808') && html.includes('color:#fff') && html.includes('profileRoom?.image')],
+    ['users without an active room do not get a clickable room control', html.includes('memberProfileRoomUnavailable') && html.includes('غير موجود في غرفة') && html.includes('memberProfileRoomBadgeText')],
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
 } catch (error) { fail('v46.49 member profile room navigation', error.message); }
