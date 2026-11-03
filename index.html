@@ -1911,25 +1911,27 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 @media(max-width:650px){#layer .profileOverlay{width:84%!important;max-width:none!important;right:8%!important;left:auto!important;top:15px!important;border-radius:0!important;overflow:hidden!important;}#layer .profilePhoto{width:100%!important;height:200px!important;max-height:none!important;object-fit:cover!important;}#layer .memberProfileCountry{direction:rtl!important;}#layer .profileGrid .ignore{grid-column:1!important;grid-row:2!important;}#layer .profileTop{height:48px!important;min-height:48px!important;}#layer .memberProfileMetaRow{min-height:40px!important;}#layer .profileGrid button{min-height:48px!important;font-size:13px!important;}}
 </style>
 
-<style id="rimaz-profile-room-badge-balanced-v4652">
-/* Compact room badge: reduce only the black strip width; preserve its layout and contents. */
+<style id="rimaz-profile-room-badge-width-clean-v4651">
+/* Single source of truth for the member-card room strip.
+   Only the black strip width is reduced; title typography and room image dimensions stay unchanged. */
 #layer .profileGrid > .memberProfileMetaRow .memberProfileRoomBadge{
   order:2!important;
   justify-self:end!important;
   margin-left:auto!important;
   margin-right:0!important;
-  width:30%!important;
-  max-width:30%!important;
+  width:32%!important;
+  max-width:32%!important;
   min-width:0!important;
-  min-height:36px!important;
+  min-height:46px!important;
   display:inline-flex!important;
+  flex:0 0 32%!important;
   flex-direction:row!important;
   align-items:center!important;
   justify-content:flex-start!important;
-  gap:5px!important;
+  gap:7px!important;
   direction:rtl!important;
   box-sizing:border-box!important;
-  padding:2px 3px!important;
+  padding:2px 4px!important;
   background:#080808!important;
   color:#fff!important;
   border:1px solid #252525!important;
@@ -1938,7 +1940,7 @@ sid='';localStorage.removeItem('rimaz_sid');login();
   font-size:15px!important;
   line-height:1.25!important;
   font-weight:900!important;
-  white-space:nowrap!important;
+  white-space:normal!important;
   overflow:hidden!important;
   cursor:pointer!important;
   appearance:none!important;
@@ -1946,21 +1948,19 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 }
 #layer .memberProfileRoomBadge .memberProfileRoomBadgeText{
   display:block!important;
-  flex:1 1 auto!important;
+  flex:0 1 auto!important;
   min-width:0!important;
   color:#fff!important;
   font-weight:900!important;
-  white-space:nowrap!important;
-  overflow:hidden!important;
-  text-overflow:ellipsis!important;
+  overflow-wrap:anywhere!important;
 }
 #layer .memberProfileRoomBadge .memberProfileRoomBadgeImage{
   display:block!important;
-  flex:0 0 28px!important;
-  width:28px!important;
-  height:28px!important;
-  min-width:28px!important;
-  max-width:28px!important;
+  flex:0 0 38px!important;
+  width:38px!important;
+  height:38px!important;
+  min-width:38px!important;
+  max-width:38px!important;
   object-fit:cover!important;
   background:#fff!important;
   border:0!important;

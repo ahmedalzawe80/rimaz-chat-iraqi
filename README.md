@@ -333,11 +333,6 @@ Run `npm test` before deployment. These local checks do not replace staging test
 
 
 ## v46.51
-- Reduced only the member profile room badge black strip width; preserved the card dimensions, badge contents, image size, and surrounding layout.
-
-
-## v46.52 — Balanced member room badge sizing
-- Reduced the black room badge width slightly and reduced only its room thumbnail to 28×28 px, with a matching 36 px badge height.
-- Kept the white room-name text size, weight, color, and position unchanged.
-- Left the profile card, photo, action buttons, country flag, and direct room navigation unchanged.
-- Validation: local verification suite and archive integrity checks.
+- Rebuilt the member-card room badge sizing rule as one source of truth.
+- Reduced only the black room-strip width to 32% of the metadata row.
+- Preserved the room-name font styling and the room image at 38×38px; no other card dimensions changed.
