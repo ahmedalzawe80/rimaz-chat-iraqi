@@ -546,3 +546,17 @@ try {
   if (!mediaHtml.includes('rimazUploadCancel') || !mediaHtml.includes('rimazUploadFill') || !mediaHtml.includes('wallMediaCard')) throw new Error('red progress strip or wall card is missing');
   pass('v46.38 private and wall media remain closed until explicit view button; no auto-preview elements');
 } catch (error) { fail('v46.37 media view-card checks', error.message); }
+
+
+// v46.44: a narrow blue marker follows each viewer's currently active room only.
+try {
+  const roomHtml = fs.readFileSync(mainPath, 'utf8');
+  const roomRender = roomHtml.match(/async function openRooms\(\)[\s\S]*?function [A-Za-z_$][\w$]*\(/);
+  if (!roomRender || !roomRender[0].includes("r.id===currentRoom?'room-current':''")) throw new Error('room list does not mark the viewer current room');
+  if (!roomHtml.includes('id="rimaz-current-room-indicator-v1"') || !roomHtml.includes('.room.room-current::before')) throw new Error('slim current-room marker CSS is missing');
+  if (!roomHtml.includes('left:0!important;top:0!important;bottom:0!important;width:4px!important')) throw new Error('current-room marker is not a slim full-height left-edge strip');
+  if (!roomHtml.includes("aria-current=\"${r.id===currentRoom?'true':'false'}\"")) throw new Error('current-room state is not exposed accessibly');
+  const deployedHtml = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
+  if (roomHtml !== deployedHtml) throw new Error('public/index.html differs from index.html');
+  pass('v46.44 current-room marker is per-viewer, slim, left-aligned, and layout-neutral');
+} catch (error) { fail('v46.44 current-room marker checks', error.message); }

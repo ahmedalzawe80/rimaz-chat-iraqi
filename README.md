@@ -281,3 +281,11 @@ Run `npm test` before deployment. These local checks do not replace staging test
 - Restore a member's previous base role when a gift or VIP replaces a staff-like visual rank, and synchronize active sessions after durable save.
 - Normalize legacy profiles at startup so existing active ranks suppress old gifts/VIP, and active VIP suppresses old gifts.
 - Keep the general chat, private chat, wall, room rows, and other layouts unchanged.
+
+
+## v46.44 — Current-room indicator
+- Added a slim blue vertical marker at the far-left edge of the room row the current viewer is occupying.
+- The marker follows the viewer's active room when they switch rooms and is absent when they are outside a room.
+- The marker is rendered from each viewer's own active room state, so it applies to every member and guest without account-specific rules.
+- No crown, extra icon, row-width, room-image-size, or room-order changes. The marker overlays the existing row and does not alter its layout dimensions.
+- Validation: `npm test` and JavaScript syntax checks. Live multi-account/browser confirmation remains recommended.
