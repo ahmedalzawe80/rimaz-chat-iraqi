@@ -330,8 +330,3 @@ Run `npm test` before deployment. These local checks do not replace staging test
 - Clicking the badge continues to use the exact room ID for direct navigation; members without an active room see a non-clickable status.
 - Replaced the old room-badge styling rules with one dedicated stylesheet for the rebuilt component.
 - Validation: server syntax, browser-script compilation, and the local verification suite. Live browser appearance still needs confirmation after deployment.
-
-
-## v46.51
-- Adjusted only the member profile room badge width and room thumbnail proportions to match the supplied reference.
-- Preserved the room name font size/weight, profile card dimensions, buttons, and all behavior.
