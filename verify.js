@@ -612,10 +612,12 @@ try {
     ['room listeners can negotiate receive-only WebRTC without opening their microphone',!!voiceOfferHandler&&!voiceOfferHandler[0].includes('!voiceLocalStream')&&voiceOfferHandler[0].includes('voiceOfferSent.add(d.from)')&&html.includes('audio.play().catch')],
     ['room voice signaling authorizes active speaker to send to any room member',!!serverVoiceOffer&&serverVoiceOffer[0].includes('speakers?.has(sid)')&&serverVoiceOffer[0].includes('members?.has(d.to)')],
     ['incoming call rejection and call termination are server-relayed',fs.readFileSync(server,'utf8').includes("socket.on('call-reject',d=>")&&fs.readFileSync(server,'utf8').includes("socket.on('call-end',d=>")],
-    ['room audio output mute control is retained independently from microphone mute',html.includes('function toggleRoomSpeaker()')&&html.includes('function toggleVoiceMute()')&&html.includes('roomOutputMuted')]
+    ['room audio output mute control is retained independently from microphone mute',html.includes('function toggleRoomSpeaker()')&&html.includes('function toggleVoiceMute()')&&html.includes('roomOutputMuted')],
+    ['incoming call header places call type left and close control right',html.includes('direction:ltr;align-items:center;justify-content:space-between') && html.includes('.incomingCallTop{height:36px')],
+    ['incoming call identity is avatar, rank, name, then caller status',html.includes('class=\"incomingCallTitleLine\"><span class=\"incomingCallRank\">${memberBadge(member)}</span><strong>') && html.includes('<small>يتصل بك الآن</small>')]
   ];
   for (const [label, ok] of extraChecks) ok ? pass(label) : fail(label);
   const deployedHtml = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
-  if (html === deployedHtml) pass('v46.58 browser entry files remain identical');
-  else fail('v46.58 browser entry files remain identical');
+  if (html === deployedHtml) pass('v46.59 browser entry files remain identical');
+  else fail('v46.59 browser entry files remain identical');
 } catch (error) { fail('v46.58 private call and voice-room media isolation checks', error.message); }

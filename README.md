@@ -1,4 +1,9 @@
-# Rimaz Chat v46.58 — WebRTC Call Acceptance and Room Listener Audio
+# Rimaz Chat v46.59 — Incoming Call Card Layout
+
+## v46.59 changes
+- Incoming-call header places the call type on the left and the close control on the right.
+- Incoming caller identity is arranged left-to-right as avatar, rank badge, then display name, with “يتصل بك الآن” directly below the name.
+- This revision changes only incoming-call card layout; call signaling, permissions, room audio, and unrelated site behavior are unchanged.
 
 ## v46.58 changes
 - Incoming private calls now display an in-site caller card with avatar, rank/badge, display name, and explicit accept/reject controls. The recipient's camera/microphone are not requested until they accept.
