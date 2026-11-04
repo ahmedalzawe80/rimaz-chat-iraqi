@@ -636,6 +636,9 @@ try {
     ['private call obtains server ICE configuration and preserves STUN fallback', html.includes("api('/api/rtc-config')") && html.includes('function configureCallPeer(peerName,iceServers)')],
     ['server supports authenticated optional TURN configuration', serverText.includes("app.get('/api/rtc-config',requireAuth") && serverText.includes('process.env.TURN_URLS') && serverText.includes('process.env.TURN_USERNAME') && serverText.includes('process.env.TURN_CREDENTIAL')],
     ['camera-call dimensions remain at the previously approved medium size', html.includes('.call.cameraCall{width:min(390px,calc(100% - 36px));height:min(560px,calc(100% - 110px))}')],
+    ['video call window remains absolutely positioned and centered', html.includes('.call.cameraCall{position:absolute;background:#080808}') && html.includes('.call{inset:auto;left:50%;top:50%;transform:translate(-50%,-50%)')],
+    ['camera opens facing front and switch button initially targets rear camera', html.includes("callFacingMode='user'") && html.includes("video:{facingMode:{ideal:'user'}}") && html.includes('title="تبديل الكاميرا" aria-label="تبديل الكاميرا"') && html.includes('>⇄ الكاميرا الخلفية</button>')],
+    ['camera switch button uses the arrow-swap glyph, not a circular glyph', html.includes("?'⇄ الكاميرا الخلفية':'⇄ الكاميرا الأمامية'") && !html.includes('🔄 الكاميرا')],
   ];
   for (const [label, ok] of videoChecks) ok ? pass(label) : fail(label);
   const deployedHtml = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
