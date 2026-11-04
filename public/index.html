@@ -1167,7 +1167,102 @@ function addPrivateCallTracks(stream){if(!pc||!stream)throw new Error('اتصا�
 function configureCallPeer(peerName,iceServers){callPeerName=peerName;callOfferSent=false;pc=new RTCPeerConnection({iceServers:iceServers||[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}]});pc.onicecandidate=e=>{if(!e.candidate||!callPeerName)return;if(!callOfferSent)pendingOutgoingCallIce.push(e.candidate);else socket?.emit('ice',{to:callPeerName,candidate:e.candidate})};pc.ontrack=e=>{const stream=e.streams?.[0]||new MediaStream([e.track]);attachCallRemote(stream);if(e.track.kind==='video'){const status=document.getElementById('remoteVideoStatus');if(status)status.hidden=true;e.track.onunmute=()=>{const s=document.getElementById('remoteVideoStatus');if(s)s.hidden=true}}};pc.onconnectionstatechange=()=>{if(pc&&['failed','closed'].includes(pc.connectionState))endCall(false)};return pc}
 function flushOutgoingCallIce(){callOfferSent=true;while(pendingOutgoingCallIce.length){socket?.emit('ice',{to:callPeerName,candidate:pendingOutgoingCallIce.shift()})}}
 async function flushCallIce(){if(!pc?.remoteDescription)return;while(pendingCallIce.length){const candidate=pendingCallIce.shift();try{await pc.addIceCandidate(candidate)}catch(error){console.warn('Private call ICE candidate failed',error)}}}
-async function switchCallCamera(){if(callMode!=='camera'||!localStream||!pc||callCameraSwitching)return;const oldTrack=localStream.getVideoTracks()[0];if(!oldTrack)return toast('مسار الكاميرا غير متاح');const sender=pc.getSenders().find(item=>item.track?.kind==='video');if(!sender)return toast('مسار إرسال الفيديو غير جاهز');const nextFacing=callFacingMode==='user'?'environment':'user';callCameraSwitching=true;const button=document.getElementById('switchCallCameraButton');if(button){button.disabled=true;button.textContent='جارٍ التبديل…'}let freshStream=null;try{let targetDevice=null;try{const devices=await navigator.mediaDevices.enumerateDevices();const cameras=devices.filter(device=>device.kind==='videoinput'&&device.deviceId);const currentId=oldTrack.getSettings?.().deviceId||'';const otherCameras=cameras.filter(device=>device.deviceId!==currentId);const backCamera=otherCameras.find(device=>/back|rear|environment|خلف/i.test(device.label));const frontCamera=otherCameras.find(device=>/front|user|face|أمام/i.test(device.label));targetDevice=nextFacing==='environment'?(backCamera||otherCameras[0]):(frontCamera||otherCameras[0]);}catch(enumerationError){console.warn('Camera enumeration unavailable',enumerationError)}const videoConstraint=targetDevice?{deviceId:{exact:targetDevice.deviceId}}:{facingMode:{ideal:nextFacing}};freshStream=await navigator.mediaDevices.getUserMedia({audio:false,video:videoConstraint});const nextTrack=freshStream.getVideoTracks()[0];if(!nextTrack)throw new Error('لم يتم العثور على كاميرا');const nextDeviceId=nextTrack.getSettings?.().deviceId||'';const oldDeviceId=oldTrack.getSettings?.().deviceId||'';if(nextDeviceId&&oldDeviceId&&nextDeviceId===oldDeviceId){freshStream.getTracks().forEach(track=>track.stop());freshStream=null;throw new Error('NO_SECOND_CAMERA')}await sender.replaceTrack(nextTrack);localStream.removeTrack(oldTrack);localStream.addTrack(nextTrack);oldTrack.stop();callFacingMode=nextFacing;attachCallLocal(localStream);if(button)button.textContent=nextFacing==='environment'?'⇄ الكاميرا الخلفية':'⇄ الكاميرا الأمامية'}catch(error){freshStream?.getTracks().forEach(track=>track.stop());console.error('Camera switch failed',error);if(error?.message==='NO_SECOND_CAMERA')toast('هذا الجهاز ما يوفّر كاميرا ثانية للتبديل');else if(error?.name==='NotAllowedError'||error?.name==='SecurityError')toast('تعذر تشغيل الكاميرا المطلوبة');else if(error?.name==='NotFoundError'||error?.name==='OverconstrainedError')toast('الكاميرا المطلوبة غير متاحة على هذا الجهاز');else toast('تعذر تبديل الكاميرا على هذا الجهاز')}finally{callCameraSwitching=false;if(button)button.disabled=false}}
+async function switchCallCamera(){
+ if(callMode!=='camera'||!localStream||!pc||callCameraSwitching)return;
+ if(!navigator.mediaDevices?.getUserMedia)return toast('المتصفح لا يدعم تبديل الكاميرا');
+ const oldTrack=localStream.getVideoTracks()[0];
+ if(!oldTrack)return toast('مسار الكاميرا غير متاح');
+ const sender=pc.getSenders().find(item=>item.track?.kind==='video');
+ if(!sender)return toast('مسار إرسال الفيديو غير جاهز');
+ const oldSettings=oldTrack.getSettings?.()||{};
+ const oldDeviceId=oldSettings.deviceId||'';
+ const oldFacing=oldSettings.facingMode||callFacingMode||'user';
+ const nextFacing=oldFacing==='environment'?'user':'environment';
+ callCameraSwitching=true;
+ const button=document.getElementById('switchCallCameraButton');
+ if(button){button.disabled=true;button.textContent='جارٍ التبديل…'}
+ let freshStream=null,oldTrackStopped=false;
+ const stopFresh=()=>{if(freshStream){freshStream.getTracks().forEach(track=>track.stop());freshStream=null}};
+ const rejectWrongCamera=(stream)=>{stream?.getTracks().forEach(track=>track.stop());const error=new Error('WRONG_CAMERA_SELECTED');error.name='OverconstrainedError';throw error};
+ const validateCandidate=(stream,avoidId,direction)=>{
+  const track=stream?.getVideoTracks?.()[0];
+  if(!track){stream?.getTracks?.().forEach(item=>item.stop());const error=new Error('NO_VIDEO_TRACK');error.name='NotFoundError';throw error}
+  const settings=track.getSettings?.()||{};
+  if(avoidId&&settings.deviceId&&settings.deviceId===avoidId)rejectWrongCamera(stream);
+  if(settings.facingMode&&settings.facingMode!==direction)rejectWrongCamera(stream);
+  return stream;
+ };
+ const acquireFacing=async(direction,avoidId='')=>{
+  const errors=[];
+  let devices=[];
+  try{devices=(await navigator.mediaDevices.enumerateDevices()).filter(device=>device.kind==='videoinput'&&device.deviceId)}catch(error){errors.push(error)}
+  const isBack=direction==='environment';
+  const labelPattern=isBack?/(back|rear|environment|world|خلف)/i:/(front|user|face|أمام)/i;
+  const candidates=devices.filter(device=>device.deviceId!==avoidId&&labelPattern.test(device.label||''));
+  for(const device of candidates){
+   try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{deviceId:{exact:device.deviceId}}});
+    return validateCandidate(stream,avoidId,direction);
+   }catch(error){errors.push(error);console.warn('Camera device selection failed',error)}
+  }
+  // Use an exact facing-mode request when device labels are missing or unreliable.
+  try{
+   const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{exact:direction}}});
+   return validateCandidate(stream,avoidId,direction);
+  }catch(error){errors.push(error)}
+  // Last fallback lets the browser select the requested direction, then verifies it did not return the old lens.
+  try{
+   const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:direction}}});
+   return validateCandidate(stream,avoidId,direction);
+  }catch(error){errors.push(error)}
+  const hardwareBusy=errors.find(error=>['NotReadableError','TrackStartError'].includes(error?.name));
+  throw hardwareBusy||errors[errors.length-1]||new Error('CAMERA_NOT_AVAILABLE');
+ };
+ try{
+  try{freshStream=await acquireFacing(nextFacing,oldDeviceId)}
+  catch(firstError){
+   // A number of Android camera HALs expose one active camera at a time. Release the old capture only for that hardware-busy response.
+   if(!['NotReadableError','TrackStartError'].includes(firstError?.name))throw firstError;
+   oldTrack.stop();oldTrackStopped=true;
+   await new Promise(resolve=>setTimeout(resolve,200));
+   freshStream=await acquireFacing(nextFacing,oldDeviceId);
+  }
+  const nextTrack=freshStream.getVideoTracks()[0];
+  await sender.replaceTrack(nextTrack);
+  localStream.removeTrack(oldTrack);
+  localStream.addTrack(nextTrack);
+  freshStream.getTracks().filter(track=>track!==nextTrack).forEach(track=>track.stop());
+  freshStream=null;
+  if(!oldTrackStopped)oldTrack.stop();
+  callFacingMode=nextFacing;
+  attachCallLocal(localStream);
+ }catch(error){
+  stopFresh();
+  console.error('Private-call camera switch failed',error);
+  if(oldTrackStopped){
+   try{
+    let restoredStream=null;
+    if(oldDeviceId){try{restoredStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{deviceId:{exact:oldDeviceId}}})}catch(restoreByIdError){console.warn('Restore by previous camera ID failed',restoreByIdError)}}
+    if(!restoredStream)restoredStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:oldFacing}}});
+    const restoredTrack=restoredStream.getVideoTracks()[0];
+    if(!restoredTrack)throw new Error('ORIGINAL_CAMERA_RESTORE_FAILED');
+    await sender.replaceTrack(restoredTrack);
+    localStream.removeTrack(oldTrack);
+    localStream.addTrack(restoredTrack);
+    restoredStream.getTracks().filter(track=>track!==restoredTrack).forEach(track=>track.stop());
+    callFacingMode=oldFacing;
+    attachCallLocal(localStream);
+   }catch(restoreError){console.error('Original camera restore failed',restoreError);toast('تعذر تبديل الكاميرا وتعذر استرجاع الكاميرا السابقة؛ أعد تشغيل الكاميرا')}
+  }
+  if(error?.name==='NotAllowedError'||error?.name==='SecurityError')toast('المتصفح منع الوصول للكاميرا؛ راجع إذن الكاميرا للموقع');
+  else if(error?.name==='NotFoundError'||error?.name==='OverconstrainedError'||error?.message==='CAMERA_NOT_AVAILABLE'||error?.message==='WRONG_CAMERA_SELECTED')toast('لم يتم العثور على الكاميرا المطلوبة بهذا الاتجاه على الجهاز');
+  else if(['NotReadableError','TrackStartError'].includes(error?.name))toast('الكاميرا مشغولة من تطبيق أو عملية أخرى؛ أغلق تطبيق الكاميرا وحاول مجدداً');
+  else toast('تعذر تبديل الكاميرا؛ بقي الاتصال على الكاميرا السابقة');
+ }finally{
+  callCameraSwitching=false;
+  if(button){button.disabled=false;button.textContent=callFacingMode==='environment'?'⇄ الكاميرا الأمامية':'⇄ الكاميرا الخلفية'}
+ }
+}
 
 function incomingCallCard(d){const profile=d.fromProfile||{};const member={name:d.from,role:d.fromRole||'member',vip:!!d.fromVip,profile};return `<div class="incomingCallCard" id="incomingCallCard" role="dialog" aria-label="اتصال وارد"><div class="incomingCallTop"><b>${d.video?'📹 اتصال فيديو وارد':'☎ اتصال صوتي وارد'}</b><button type="button" onclick="rejectIncomingCall()" aria-label="إغلاق">×</button></div><div class="incomingCallIdentity"><img src="${esc(avatarFor(profile))}" alt=""><div><div class="incomingCallTitleLine"><span class="incomingCallRank">${memberBadge(member)}</span><strong>${esc(d.fromDisplayName||displayFor({name:d.from,profile})||d.from)}</strong></div><small>يتصل بك الآن</small></div></div><div class="incomingCallActions"><button class="acceptIncoming" onclick="acceptIncomingCall()">فتح الاتصال</button><button class="rejectIncoming" onclick="rejectIncomingCall()">إغلاق الاتصال</button></div></div>`}
 async function startCall(camera){if(me.likes<500&&!me.admin)return toast('الاتصال يفتح عند 500 إعجاب');if(!privateTo)return toast('اختر عضوًا للاتصال');try{endCall(false,false);callMode=camera?'camera':'voice';callFacingMode='user';const iceServers=await getPrivateCallIceServers();configureCallPeer(privateTo,iceServers);showCall(camera,true);localStream=await navigator.mediaDevices.getUserMedia(camera?{audio:{echoCancellation:true,noiseSuppression:true},video:{facingMode:{ideal:'user'}}}:{audio:{echoCancellation:true,noiseSuppression:true},video:false});if(camera)attachCallLocal(localStream);addPrivateCallTracks(localStream);const offer=await pc.createOffer();await pc.setLocalDescription(offer);socket.emit('call-offer',{to:privateTo,offer,video:camera});flushOutgoingCallIce()}catch(error){console.error('Private call start failed',error);endCall(false,false);toast(error?.name==='NotAllowedError'?'اسمح للمتصفح باستخدام الكاميرا والمايك':'تعذر بدء الاتصال؛ تحقق من صلاحية الكاميرا والمايك')}}
