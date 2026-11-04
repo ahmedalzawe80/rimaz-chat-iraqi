@@ -1,4 +1,23 @@
-# Rimaz Chat v46.57 — Private WebRTC and Room Mic Isolation
+# Rimaz Chat v46.58 — WebRTC Call Acceptance and Room Listener Audio
+
+## v46.58 changes
+- Incoming private calls now display an in-site caller card with avatar, rank/badge, display name, and explicit accept/reject controls. The recipient's camera/microphone are not requested until they accept.
+- Added server-authorized reject/end signaling and caller identity metadata; call ICE candidates are queued until the signaling offer/answer is registered and remote descriptions are installed.
+- Room-mic speakers now negotiate audio with connected room members, including listeners who have not granted microphone access. Listener peer connections are receive-only; microphone capture remains exclusive to the explicit raise-mic action. When a listener raises a mic, the existing peer links are renegotiated to add their outgoing track; lowering the mic removes only the outgoing track so they can continue listening.
+- Room audio peers are authorized by current room membership and active speaker state, with per-room negotiated-pair tracking and cleanup on lowering, room changes, and disconnect.
+- Preserved independent private-call and room-microphone peer graphs, local streams, ICE queues, and signaling rate limits.
+- Added a speaker-control recovery path for mobile autoplay restrictions; the room speaker button can activate playback after a user gesture.
+- Removed the old auto-answer behavior that requested media immediately on incoming-call receipt; retained the separate microphone capture path only for users who choose to speak.
+
+## Validation
+- `node --check server.js`
+- `node --check verify.js`
+- `npm test` — static/regression checks include explicit incoming-call acceptance and receive-only room-listener behavior.
+- `index.html` and `public/index.html` are byte-identical.
+- ZIP archive integrity checked after packaging.
+- **Not yet live-tested:** actual two-phone call acceptance/rejection, camera/microphone permissions, room speaker-to-listener audio, autoplay behavior, restrictive mobile NAT, and hosted deployment. The room currently uses a direct peer mesh, so device/network load increases with the number of simultaneous listeners and speakers. STUN-only connectivity can fail on some carrier/Wi-Fi NATs; production reliability on those networks requires TURN credentials from a relay provider, and larger rooms may require an SFU media relay.
+
+---
 
 ## v46.57 changes
 - Repaired private-call media attachment so early remote tracks are retained and attached after the call UI is mounted.

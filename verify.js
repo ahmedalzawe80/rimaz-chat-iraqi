@@ -53,11 +53,11 @@ try {
   const html = fs.readFileSync(mainPath, 'utf8');
   const checks = [
     ['voice room uses server-authorized mic seats and emits a peer roster', source.includes("socket.emit('voice-mic-granted'") && source.includes("socket.on('request-mic'") && source.includes('voice-peer-joined')],
-    ['voice WebRTC offers, answers, and ICE are room- and speaker-validated', source.includes("socket.on('voice-peer-offer'") && source.includes("socket.on('voice-peer-answer'") && source.includes("socket.on('voice-peer-ice'") && source.includes('speakers?.has(sid)')],
+    ['voice WebRTC offers are speaker-authorized while answers/ICE include room listeners', source.includes("socket.on('voice-peer-offer'") && source.includes("socket.on('voice-peer-answer'") && source.includes("socket.on('voice-peer-ice'") && source.includes('speakers?.has(sid)') && source.includes('members?.has(d.to)') && source.includes('activeVoicePairs')],
     ['room-mic signaling has a separate rate limit from private calls', source.includes('const voiceSignalWindows = new Map()') && source.includes('function allowVoiceSignal(sid)') && source.includes("socket.on('voice-peer-offer',d=>") && source.includes('allowVoiceSignal(sid)') && source.includes('voiceSignalWindows.delete(sid)')],
     ['voice peers are removed on room leave and disconnect', source.includes("socketBySession(peerSid)?.emit('voice-peer-left'") && source.includes("socket.on('disconnect'")],
     ['client captures microphone audio and creates room peer connections', html.includes('navigator.mediaDevices.getUserMedia({audio:') && html.includes('new RTCPeerConnection') && html.includes("'voice-peer-offer'" )],
-    ['client stops local microphone tracks and closes remote peer audio on lowering', html.includes('voiceLocalStream.getTracks().forEach(t=>t.stop())') && html.includes('closeVoicePeer(peerSid)')],
+    ['lowering a room mic removes only the outgoing audio track and preserves listening peer connections', html.includes('function stopRoomMicrophone()') && html.includes('sender.replaceTrack(null)') && html.includes('voiceRequestPending=true') && html.includes('voiceMicRequestId') && html.includes("socket.on('voice-mic-lowered',()=>stopRoomMicrophone())") && !html.includes("socket.on('voice-mic-lowered',()=>{micRaised=false;closeVoiceAudio()})")],
     ['voice room layout uses circular mic seats and five default seats', html.includes('border-radius:50%!important') && html.includes('id="publicRoomMics" type="number" min="1" max="20" value="5"') && html.includes('id="rmics" type="number" min="1" max="20" value="5"')],
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
@@ -589,7 +589,7 @@ try {
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
 } catch (error) { fail('v46.49 member profile room navigation', error.message); }
 
-// v46.57: private WebRTC calls queue early ICE and bind remote media after call UI exists;
+// v46.58: incoming calls require explicit acceptance; room audio listeners remain receive-only until speaking;
 // voice-room media remains on its own independent stream/peer graph.
 try {
   const html = fs.readFileSync(mainPath, 'utf8');
@@ -597,14 +597,25 @@ try {
     ['private call remote stream is retained until audio/video element is ready', html.includes('let pc=null,localStream=null,callMode=\'voice\',callRemoteStream=null') && html.includes('function attachCallRemote(stream)') && html.includes('if(callRemoteStream)attachCallRemote(callRemoteStream)')],
     ['private call ICE candidates are queued until remote description is installed', html.includes('const pendingCallIce=[]') && html.includes('async function flushCallIce()') && html.includes('if(!pc.remoteDescription){pendingCallIce.push(d.candidate);return}')],
     ['audio-only private calls use a dedicated remote audio element', html.includes('id="remoteAudio"') && html.includes("callMode==='camera'?'remoteVideo':'remoteAudio'")],
-    ['incoming private calls create the media UI before remote negotiation completes', html.includes('configureCallPeer(d.from);showCall(!!d.video);') && html.includes('await pc.setRemoteDescription(d.offer)')],
-    ['private-call cleanup stops only private-call tracks and clears private-call ICE', html.includes('function endCall(showToast=true)') && html.includes('pendingCallIce.length=0')],
-    ['voice room keeps independent local stream and peer map', html.includes('voiceLocalStream=null') && html.includes('const voicePeers=new Map()') && html.includes('function voicePeerConnection(peerSid)')],
+    ['incoming private calls show caller identity and explicit accept/reject before requesting device access', html.includes('function incomingCallCard(d)') && html.includes('function acceptIncomingCall()') && html.includes('function rejectIncomingCall()') && html.includes('fromProfile:d')===false && html.includes('pendingIncomingCall=d') && html.includes('await navigator.mediaDevices.getUserMedia') && html.includes('فتح الاتصال') && html.includes('إغلاق الاتصال')],
+    ['private-call cleanup stops only private-call tracks and clears private-call ICE', html.includes('function endCall(showToast=true,notifyPeer=true)') && html.includes('pendingCallIce.length=0') && html.includes('pendingOutgoingCallIce.length=0')],
+    ['voice room keeps independent local stream and peer map', html.includes('voiceLocalStream=null') && html.includes('const voicePeers=new Map()') && html.includes('function voicePeerConnection(peerSid)') && html.includes('async function receiveVoiceOffer(d){if(!d||d.room!==currentRoom)return;')],
     ['voice-room ICE candidates are buffered independently by peer and room', html.includes('const voicePeers=new Map(),pendingVoiceIce=new Map()') && html.includes('async function receiveVoiceIce(d)') && html.includes('pendingVoiceIce.set(peerSid,q)')],
     ['private call and room mic signaling do not share peer connections or local stream variables', html.includes('let pc=null,localStream=null') && html.includes('let micRaised=false,voiceMuted=false,voiceLocalStream=null') && html.includes('const voicePeers=new Map()')],
   ];
   for (const [label, ok] of callChecks) ok ? pass(label) : fail(label);
+  const incomingHandler=html.match(/function handleOffer\(d\)\{[\s\S]*?\n/);
+  const voiceOfferHandler=html.match(/async function receiveVoiceOffer\(d\)\{[\s\S]*?\n/);
+  const serverVoiceOffer=fs.readFileSync(server,'utf8').match(/socket\.on\('voice-peer-offer',d=>[^\n]*/);
+  const extraChecks=[
+    ['incoming-call offer handler does not request microphone/camera before acceptance',!!incomingHandler&&!incomingHandler[0].includes('getUserMedia')&&incomingHandler[0].includes('pendingIncomingCall=d')],
+    ['room listeners can negotiate receive-only WebRTC without opening their microphone',!!voiceOfferHandler&&!voiceOfferHandler[0].includes('!voiceLocalStream')&&voiceOfferHandler[0].includes('voiceOfferSent.add(d.from)')&&html.includes('audio.play().catch')],
+    ['room voice signaling authorizes active speaker to send to any room member',!!serverVoiceOffer&&serverVoiceOffer[0].includes('speakers?.has(sid)')&&serverVoiceOffer[0].includes('members?.has(d.to)')],
+    ['incoming call rejection and call termination are server-relayed',fs.readFileSync(server,'utf8').includes("socket.on('call-reject',d=>")&&fs.readFileSync(server,'utf8').includes("socket.on('call-end',d=>")],
+    ['room audio output mute control is retained independently from microphone mute',html.includes('function toggleRoomSpeaker()')&&html.includes('function toggleVoiceMute()')&&html.includes('roomOutputMuted')]
+  ];
+  for (const [label, ok] of extraChecks) ok ? pass(label) : fail(label);
   const deployedHtml = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
-  if (html === deployedHtml) pass('v46.57 browser entry files remain identical');
-  else fail('v46.57 browser entry files remain identical');
-} catch (error) { fail('v46.57 private call and voice-room media isolation checks', error.message); }
+  if (html === deployedHtml) pass('v46.58 browser entry files remain identical');
+  else fail('v46.58 browser entry files remain identical');
+} catch (error) { fail('v46.58 private call and voice-room media isolation checks', error.message); }
