@@ -1,4 +1,4 @@
-# Rimaz Chat v46.59 — Incoming Call Card Layout
+# Rimaz Chat v46.60 — Incoming Call Card Layout
 
 ## v46.59 changes
 - Incoming-call header places the call type on the left and the close control on the right.
@@ -379,3 +379,9 @@ Run `npm test` before deployment. These local checks do not replace staging test
 
 
 Version 46.55: private conversation header height now exactly matches the existing avatar height (48px desktop / 42px mobile); legacy conflicting header height and vertical padding rules removed.
+
+
+### v46.60
+- Incoming-call card actions are laid out left-to-right: accept on the left, reject on the right.
+- Private audio/video call panels use a centered, medium-size responsive layout instead of filling nearly the entire phone screen.
+- No WebRTC signaling, room microphone, or unrelated chat behavior changed.

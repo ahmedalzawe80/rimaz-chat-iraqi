@@ -614,7 +614,9 @@ try {
     ['incoming call rejection and call termination are server-relayed',fs.readFileSync(server,'utf8').includes("socket.on('call-reject',d=>")&&fs.readFileSync(server,'utf8').includes("socket.on('call-end',d=>")],
     ['room audio output mute control is retained independently from microphone mute',html.includes('function toggleRoomSpeaker()')&&html.includes('function toggleVoiceMute()')&&html.includes('roomOutputMuted')],
     ['incoming call header places call type left and close control right',html.includes('direction:ltr;align-items:center;justify-content:space-between') && html.includes('.incomingCallTop{height:36px')],
-    ['incoming call identity is avatar, rank, name, then caller status',html.includes('class=\"incomingCallTitleLine\"><span class=\"incomingCallRank\">${memberBadge(member)}</span><strong>') && html.includes('<small>يتصل بك الآن</small>')]
+    ['incoming call identity is avatar, rank, name, then caller status',html.includes('class=\"incomingCallTitleLine\"><span class=\"incomingCallRank\">${memberBadge(member)}</span><strong>') && html.includes('<small>يتصل بك الآن</small>')],
+    ['incoming-call accept button is on the left and reject button is on the right',html.includes('.incomingCallActions{direction:ltr}')],
+    ['private audio/video call panels are centered and medium-sized on mobile',html.includes('.call{inset:auto;left:50%;top:50%;transform:translate(-50%,-50%)') && html.includes('.call.cameraCall{width:min(390px,calc(100% - 36px));height:min(560px,calc(100% - 110px))}') && html.includes('.call.voiceCall{width:min(360px,calc(100% - 44px));height:min(340px,calc(100% - 140px))}')]
   ];
   for (const [label, ok] of extraChecks) ok ? pass(label) : fail(label);
   const deployedHtml = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
