@@ -416,31 +416,6 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 #msgs .msg .msghead>.memberBadge.roleAdmin{background:transparent!important;border:0!important;color:inherit!important;box-shadow:none!important;}
 </style>
 
-<style id="rimaz-approved-private-header-alignment-v1">
-/* Private conversation header: larger avatar and aligned rank badge/name. */
-#layer .privateOverlay .privateHead{display:grid!important;grid-template-columns:28px 5px 48px minmax(0,1fr) auto!important;gap:5px!important;align-items:center!important;height:60px!important;min-height:60px!important;padding:4px 6px!important;box-sizing:border-box!important;}
-#layer .privateOverlay .privateHeadAvatar{grid-column:3!important;grid-row:1!important;width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;object-fit:cover!important;border-radius:50%!important;align-self:center!important;}
-#layer .privateOverlay .privateHeadName{grid-column:4!important;grid-row:1!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:center!important;gap:4px!important;min-width:0!important;align-self:stretch!important;}
-#layer .privateOverlay .privateHeadTitle{display:flex!important;flex-direction:row!important;align-items:center!important;justify-content:flex-start!important;gap:7px!important;min-width:0!important;width:100%!important;}
-#layer .privateOverlay .privateHeadTitle .memberBadge{flex:0 0 29px!important;width:29px!important;height:29px!important;min-width:29px!important;min-height:29px!important;display:inline-grid!important;place-items:center!important;font-size:19px!important;line-height:1!important;margin:0!important;}
-#layer .privateOverlay .privateHeadTitle b{font-size:18px!important;line-height:1.2!important;font-weight:900!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
-#layer .privateOverlay .privateHeadName small{display:block!important;font-size:12px!important;line-height:1.2!important;max-width:100%!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
-#layer .privateOverlay .privateHeadActions{grid-column:5!important;grid-row:1!important;align-self:center!important;gap:4px!important;}
-@media(max-width:650px){#layer>.privateOverlay{width:100%!important;}#layer .privateOverlay .privateHead{grid-template-columns:22px 4px 42px minmax(0,1fr) auto!important;gap:4px!important;height:58px!important;min-height:58px!important;padding:3px 4px!important;}#layer .privateOverlay .privateHeadAvatar{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;}#layer .privateOverlay .privateHeadTitle .memberBadge{flex-basis:25px!important;width:25px!important;height:25px!important;min-width:25px!important;min-height:25px!important;font-size:17px!important;}#layer .privateOverlay .privateHeadTitle b{font-size:16px!important;}#layer .privateOverlay .privateHeadName small{font-size:11px!important;}#layer .privateOverlay .privateHeadActions{gap:2px!important;}#layer .privateOverlay .privateHeadActions button{width:27px!important;height:29px!important;min-width:27px!important;padding:0!important;}}
-</style>
-
-
-
-
-
-
-
-
-
-
-
-
-
 <style id="rimaz-room-presence-final-fix">
 /* Keep prior room messages scrollable while filtering live traffic to the active room. */
 .roomHistoryDivider{direction:rtl;text-align:center;margin:8px 4px;padding:5px 8px;border-top:1px solid #d5c9bd;border-bottom:1px solid #d5c9bd;color:#6f6258;font-size:12px;font-weight:700;background:#f8f1e9;}
@@ -709,6 +684,23 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 @keyframes voiceAvatarPulse{from{transform:scale(1);filter:brightness(1)}to{transform:scale(1.07);filter:brightness(1.2)}}
 @keyframes voiceHalo{0%{transform:scale(.92);opacity:.95}100%{transform:scale(1.38);opacity:0}}
 @media(max-width:420px){.chat .roombar[aria-hidden="false"]{height:58px!important;min-height:58px!important;padding:4px 6px!important;gap:6px!important}.chat .roombar[aria-hidden="false"] .voiceMicSlots{gap:7px!important}.chat .roombar[aria-hidden="false"] .voiceMicSlot{flex-basis:44px!important;width:44px!important;min-width:44px!important;max-width:44px!important;height:44px!important;min-height:44px!important}}
+</style>
+
+<style id="rimaz-private-conversation-header-single-source-v2">
+/* Single source of truth: header height follows the existing avatar size; no vertical padding. */
+#layer .privateOverlay .privateHead{display:grid!important;grid-template-columns:24px 5px 48px minmax(0,1fr) auto!important;gap:6px!important;align-items:center!important;height:48px!important;min-height:48px!important;max-height:48px!important;flex:0 0 48px!important;padding:0 6px!important;margin:0!important;box-sizing:border-box!important;direction:ltr!important;overflow:hidden!important;}
+#layer .privateOverlay .privateHead .privateCountryFlag{grid-column:1!important;grid-row:1!important;align-self:center!important;width:22px!important;min-width:22px!important;height:28px!important;margin:0!important;padding:0!important;font-size:18px!important;line-height:1!important;}
+#layer .privateOverlay .privateHead .privateStatus{grid-column:2!important;grid-row:1!important;align-self:stretch!important;width:5px!important;height:100%!important;min-height:0!important;margin:0!important;}
+#layer .privateOverlay .privateHead .privateHeadAvatar{grid-column:3!important;grid-row:1!important;width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;align-self:center!important;object-fit:cover!important;margin:0!important;}
+#layer .privateOverlay .privateHead .privateHeadName{grid-column:4!important;grid-row:1!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:center!important;gap:2px!important;min-width:0!important;align-self:stretch!important;margin:0!important;padding:0!important;direction:ltr!important;text-align:left!important;}
+#layer .privateOverlay .privateHead .privateHeadTitle{display:flex!important;flex-direction:row!important;align-items:center!important;justify-content:flex-start!important;gap:5px!important;min-width:0!important;width:100%!important;margin:0!important;padding:0!important;line-height:1.2!important;direction:ltr!important;}
+#layer .privateOverlay .privateHead .privateHeadTitle .memberBadges{display:inline-flex!important;flex:0 0 auto!important;align-items:center!important;gap:3px!important;margin:0!important;padding:0!important;}
+#layer .privateOverlay .privateHead .privateHeadTitle .memberBadge{display:inline-grid!important;place-items:center!important;align-self:center!important;flex:0 0 auto!important;width:auto!important;min-width:24px!important;height:24px!important;min-height:24px!important;margin:0!important;padding:0 3px!important;font-size:17px!important;line-height:1!important;}
+#layer .privateOverlay .privateHead .privateHeadTitle b{display:block!important;align-self:center!important;min-width:0!important;font-size:15px!important;line-height:1.2!important;font-weight:900!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;margin:0!important;padding:0!important;}
+#layer .privateOverlay .privateHead .privateHeadName small{display:block!important;width:100%!important;text-align:left!important;direction:rtl!important;font-size:10px!important;line-height:1.2!important;color:#ddd!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+#layer .privateOverlay .privateHead .privateHeadActions{grid-column:5!important;grid-row:1!important;display:flex!important;align-items:center!important;gap:3px!important;align-self:center!important;}
+#layer .privateOverlay .privateHead .privateHeadActions button{width:29px!important;height:29px!important;min-width:29px!important;margin:0!important;padding:0!important;}
+@media(max-width:650px){#layer .privateOverlay .privateHead{grid-template-columns:20px 4px 42px minmax(0,1fr) auto!important;gap:4px!important;height:42px!important;min-height:42px!important;max-height:42px!important;flex-basis:42px!important;padding:0 4px!important;}#layer .privateOverlay .privateHead .privateHeadAvatar{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;}#layer .privateOverlay .privateHead .privateHeadActions button{width:26px!important;height:28px!important;min-width:26px!important;} }
 </style>
 </head><body><div id="app"></div>
 <script>
@@ -1172,16 +1164,7 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 <style id="rimaz-private-half-screen-final">
 /* Private chat is a top-docked half-screen panel; the rest of the room stays visible. */
 #layer>.privateOverlay{position:absolute!important;left:0!important;right:0!important;top:0!important;bottom:auto!important;width:100%!important;height:52%!important;max-height:52%!important;min-height:0!important;margin:0!important;display:flex!important;flex-direction:column!important;z-index:40!important;box-sizing:border-box!important;border:1px solid #444!important;box-shadow:0 8px 24px #0004!important;background:#fff!important;}
-#layer .privateOverlay .privateHead{height:42px!important;min-height:42px!important;flex:0 0 42px!important;display:grid!important;grid-template-columns:25px 5px 36px minmax(0,1fr) auto!important;gap:7px!important;align-items:center!important;padding:3px 6px!important;direction:ltr!important;background:#111!important;color:#fff!important;box-sizing:border-box!important;}
-.privateHead .privateStatus{display:block!important;width:5px!important;grid-column:2!important;height:32px!important;border-radius:3px!important;grid-column:1!important;}
 .privateHead .privateStatus.statusOpen{background:#58bf61!important}.privateHead .privateStatus.statusClosed{background:#df5555!important}.privateHead .privateStatus.statusOffline{background:#999!important}
-.privateHeadAvatar{grid-column:3!important;width:34px!important;height:34px!important;object-fit:cover!important;border-radius:4px!important;display:block!important;}
-.privateHeadName{grid-column:4!important;min-width:0!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;gap:1px!important;text-align:left!important;direction:rtl!important;}
-.privateHeadName b{font-size:13px!important;font-weight:800!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;line-height:1.15!important;}
-.privateHeadName small{font-size:9px!important;color:#ccc!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
-.privateHeadActions{grid-column:5!important;display:flex!important;align-items:center!important;gap:4px!important;}
-.privateHeadActions button{width:32px!important;height:32px!important;border:0!important;border-radius:4px!important;font-size:17px!important;touch-action:manipulation!important;}
-.privateHeadActions .privateLike{background:#df303b!important;color:#fff!important;font-weight:900!important;}
 .privateHeadActions .blue{background:#287eae!important;color:#fff!important;}
 #layer>.privateOverlay .privateBody{position:relative!important;flex:1 1 auto!important;min-height:0!important;overflow:auto!important;padding:3px 5px 24px!important;box-sizing:border-box!important;}
 .privateMinimize{position:absolute!important;top:46px!important;right:5px!important;z-index:45!important;display:block!important;height:22px!important;padding:0 8px!important;margin:0!important;background:#333!important;color:#fff!important;border:0!important;border-radius:4px!important;font-size:10px!important;}
@@ -1735,7 +1718,6 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 <style id="rimaz-private-half-overlay-final">
 /* Private chat occupies only the upper half, leaving the public room and its composer usable below. */
 #layer>.privateOverlay{position:absolute!important;left:0!important;right:0!important;top:0!important;bottom:auto!important;width:100%!important;height:50%!important;min-height:0!important;max-height:50%!important;margin:0!important;box-sizing:border-box!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;z-index:50!important;background:#fff!important;}
-#layer .privateOverlay .privateHead{flex:0 0 42px!important;height:42px!important;min-height:42px!important;}
 #layer .privateOverlay .privateHeadActions{direction:rtl!important;display:flex!important;flex-direction:row!important;align-items:center!important;gap:4px!important;white-space:nowrap!important;}
 #layer .privateOverlay .privateHeadActions .privateClose{order:0!important;background:#df5555!important;color:#fff!important;font-size:25px!important;font-weight:900!important;width:30px!important;height:30px!important;line-height:1!important;border:0!important;border-radius:4px!important;}
 #layer .privateOverlay .privateHeadActions .blue{order:1!important;}
@@ -1743,7 +1725,7 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 #layer>.privateOverlay .privateBody{flex:1 1 auto!important;min-height:0!important;overflow:auto!important;}
 #layer>.privateOverlay .privateComposer{flex:0 0 39px!important;height:39px!important;min-height:39px!important;}
 #layer>.privateOverlay .privateMinimize{top:auto!important;right:5px!important;bottom:43px!important;z-index:55!important;}
-@media(max-width:650px){#layer>.privateOverlay{top:0!important;bottom:auto!important;width:100%!important;height:50%!important;max-height:50%!important;}#layer .privateOverlay .privateHead{grid-template-columns:25px 5px 36px minmax(0,1fr) auto!important;gap:5px!important;padding:3px 5px!important;}#layer .privateOverlay .privateHeadActions{gap:3px!important;}#layer .privateOverlay .privateHeadActions button{width:28px!important;height:29px!important;}}
+@media(max-width:650px){#layer>.privateOverlay{top:0!important;bottom:auto!important;width:100%!important;height:50%!important;max-height:50%!important;}#layer .privateOverlay .privateHeadActions{gap:3px!important;}#layer .privateOverlay .privateHeadActions button{width:28px!important;height:29px!important;}}
 
 /* Private contacts: photo, badge, and name/likes grouped on the left; delete stays at far right. */
 .privateListOverlay .member{grid-template-columns:6px 48px 28px minmax(0,1fr) 66px!important;direction:ltr!important;column-gap:0!important;padding-right:0!important;align-items:center!important;}
@@ -1767,16 +1749,6 @@ sid='';localStorage.removeItem('rimaz_sid');login();
   justify-self:center!important;align-self:center!important;
 }
 
-</style>
-
-<style id="rimaz-country-flag-left-fix">
-/* Keep the country flag on the far-left side of the private-chat header. */
-#layer .privateOverlay .privateHead{grid-template-columns:28px 5px 36px minmax(0,1fr) auto!important;gap:5px!important;direction:ltr!important;}
-#layer .privateOverlay .privateCountryFlag{grid-column:1!important;grid-row:1!important;position:relative!important;z-index:5!important;display:flex!important;align-items:center!important;justify-content:center!important;min-width:24px!important;width:24px!important;height:30px!important;margin:0!important;padding:0!important;font-size:20px!important;line-height:1!important;overflow:visible!important;visibility:visible!important;opacity:1!important;}
-#layer .privateOverlay .privateStatus{grid-column:2!important;grid-row:1!important;width:5px!important;}
-#layer .privateOverlay .privateHeadAvatar{grid-column:3!important;grid-row:1!important;}
-#layer .privateOverlay .privateHeadName{grid-column:4!important;grid-row:1!important;}
-#layer .privateOverlay .privateHeadActions{grid-column:5!important;grid-row:1!important;}
 </style>
 
 <style id="rimaz-profile-reference-size-fix">
@@ -1913,18 +1885,6 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 
 <style id="rimaz-v14-private-sender-alignment-final">
 /* Stable private conversation header and message sender layout: avatar, badge and name aligned at the top. */
-#layer .privateOverlay .privateHead{display:grid!important;grid-template-columns:24px 5px 48px minmax(0,1fr) auto!important;gap:6px!important;align-items:start!important;height:60px!important;min-height:60px!important;flex:0 0 60px!important;padding:5px 6px!important;box-sizing:border-box!important;direction:ltr!important;overflow:hidden!important;}
-#layer .privateOverlay .privateHead .privateCountryFlag{grid-column:1!important;grid-row:1!important;align-self:start!important;min-width:22px!important;width:22px!important;height:28px!important;font-size:18px!important;}
-#layer .privateOverlay .privateHead .privateStatus{grid-column:2!important;grid-row:1!important;align-self:start!important;width:5px!important;height:44px!important;margin:0!important;}
-#layer .privateOverlay .privateHead .privateHeadAvatar{grid-column:3!important;grid-row:1!important;width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;align-self:start!important;object-fit:cover!important;border-radius:6px!important;margin:0!important;}
-#layer .privateOverlay .privateHead .privateHeadName{grid-column:4!important;grid-row:1!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:flex-start!important;gap:3px!important;min-width:0!important;align-self:start!important;margin:0!important;padding:0!important;direction:ltr!important;text-align:left!important;}
-#layer .privateOverlay .privateHead .privateHeadTitle{display:flex!important;flex-direction:row!important;align-items:flex-start!important;justify-content:flex-start!important;gap:5px!important;min-width:0!important;width:100%!important;margin:0!important;padding:0!important;line-height:1.2!important;direction:ltr!important;}
-#layer .privateOverlay .privateHead .privateHeadTitle .memberBadges{display:inline-flex!important;flex:0 0 auto!important;align-items:flex-start!important;gap:3px!important;margin:0!important;padding:0!important;}
-#layer .privateOverlay .privateHead .privateHeadTitle .memberBadge{display:inline-grid!important;place-items:center!important;align-self:flex-start!important;flex:0 0 auto!important;width:auto!important;min-width:24px!important;height:24px!important;min-height:24px!important;margin:0!important;padding:0 3px!important;font-size:17px!important;line-height:1!important;}
-#layer .privateOverlay .privateHead .privateHeadTitle b{display:block!important;align-self:flex-start!important;min-width:0!important;font-size:15px!important;line-height:1.2!important;font-weight:900!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;margin:1px 0 0!important;padding:0!important;}
-#layer .privateOverlay .privateHead .privateHeadName small{display:block!important;width:100%!important;text-align:left!important;direction:rtl!important;font-size:10px!important;line-height:1.2!important;color:#ddd!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
-#layer .privateOverlay .privateHead .privateHeadActions{grid-column:5!important;grid-row:1!important;display:flex!important;align-items:flex-start!important;gap:3px!important;align-self:start!important;}
-#layer .privateOverlay .privateHead .privateHeadActions button{width:29px!important;height:29px!important;min-width:29px!important;margin:0!important;padding:0!important;}
 #layer .privateOverlay .pmsgHead{display:grid!important;grid-template-columns:46px minmax(0,1fr)!important;grid-template-rows:auto!important;align-items:start!important;justify-content:initial!important;gap:8px!important;direction:ltr!important;min-height:46px!important;margin:0 0 6px!important;}
 #layer .privateOverlay .pmsgHead>img{grid-column:1!important;grid-row:1!important;width:46px!important;height:46px!important;min-width:46px!important;min-height:46px!important;flex:none!important;align-self:start!important;margin:0!important;border-radius:6px!important;object-fit:cover!important;}
 #layer .privateOverlay .pmsgIdentity{grid-column:2!important;grid-row:1!important;display:block!important;min-width:0!important;align-self:start!important;padding:0!important;margin:0!important;}
@@ -1933,7 +1893,7 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 #layer .privateOverlay .pmsgTitle .memberBadge{display:inline-grid!important;place-items:center!important;align-self:flex-start!important;flex:0 0 auto!important;width:auto!important;min-width:24px!important;height:24px!important;min-height:24px!important;margin:0!important;padding:0 3px!important;font-size:17px!important;line-height:1!important;vertical-align:top!important;}
 #layer .privateOverlay .pmsgTitle b{display:block!important;align-self:flex-start!important;min-width:0!important;max-width:100%!important;margin:0!important;padding:1px 0 0!important;font-size:15px!important;font-weight:900!important;line-height:1.2!important;white-space:normal!important;overflow-wrap:anywhere!important;}
 #layer .privateOverlay .pmsg .privateMediaArea{margin:5px 0 0 54px!important;direction:ltr!important;text-align:left!important;}
-@media(max-width:650px){#layer .privateOverlay .privateHead{grid-template-columns:20px 4px 42px minmax(0,1fr) auto!important;gap:4px!important;height:56px!important;min-height:56px!important;flex-basis:56px!important;padding:4px!important;}#layer .privateOverlay .privateHead .privateHeadAvatar{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;}#layer .privateOverlay .privateHead .privateHeadTitle .memberBadge{min-width:21px!important;height:21px!important;min-height:21px!important;font-size:15px!important;}#layer .privateOverlay .privateHead .privateHeadTitle b{font-size:13px!important;}#layer .privateOverlay .privateHead .privateHeadActions button{width:26px!important;height:28px!important;min-width:26px!important;}#layer .privateOverlay .pmsgHead{grid-template-columns:42px minmax(0,1fr)!important;gap:7px!important;min-height:42px!important;}#layer .privateOverlay .pmsgHead>img{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;}#layer .privateOverlay .pmsgTitle .memberBadge{min-width:22px!important;height:22px!important;min-height:22px!important;font-size:15px!important;}#layer .privateOverlay .pmsgTitle b{font-size:14px!important;}#layer .privateOverlay .pmsg .privateMediaArea{margin-left:49px!important;}}
+@media(max-width:650px){#layer .privateOverlay .pmsgHead{grid-template-columns:42px minmax(0,1fr)!important;gap:7px!important;min-height:42px!important;}#layer .privateOverlay .pmsgHead>img{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;}#layer .privateOverlay .pmsgTitle .memberBadge{min-width:22px!important;height:22px!important;min-height:22px!important;font-size:15px!important;}#layer .privateOverlay .pmsgTitle b{font-size:14px!important;}#layer .privateOverlay .pmsg .privateMediaArea{margin-left:49px!important;}}
 </style>
 
 
