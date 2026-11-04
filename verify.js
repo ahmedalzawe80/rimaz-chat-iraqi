@@ -630,7 +630,7 @@ try {
   const serverText = fs.readFileSync(server, 'utf8');
   const videoChecks = [
     ['private video call renders live local and remote video elements', html.includes('id=\"remoteVideo\"') && html.includes('id=\"localVideo\"') && html.includes('function attachCallLocal(stream)')],
-    ['private video call switches camera by device ID with facing-mode fallback', html.includes('function switchCallCamera()') && html.includes('enumerateDevices()') && html.includes('deviceId:{exact:targetDevice.deviceId}') && html.includes('facingMode:{ideal:nextFacing}') && html.includes('sender.replaceTrack(nextTrack)') && html.includes('switchCallCameraButton') && !html.includes('facingMode:{exact:nextFacing}')],
+    ['private video call switches camera using verified opposite-facing device selection and sender replacement', html.includes('function switchCallCamera()') && html.includes('enumerateDevices()') && html.includes('deviceId:{exact:device.deviceId}') && html.includes('facingMode:{exact:direction}') && html.includes('facingMode:{ideal:direction}') && html.includes('validateCandidate(stream,avoidId,direction)') && html.includes('sender.replaceTrack(nextTrack)') && html.includes('switchCallCameraButton')],
     ['incoming video call installs remote offer before adding local tracks and creating answer', html.includes('await pc.setRemoteDescription(incoming.offer);await flushCallIce();addPrivateCallTracks(localStream);const answer=await pc.createAnswer()')],
     ['outgoing video call adds local tracks before creating offer', html.includes('addPrivateCallTracks(localStream);const offer=await pc.createOffer()')],
     ['private call obtains server ICE configuration and preserves STUN fallback', html.includes("api('/api/rtc-config')") && html.includes('function configureCallPeer(peerName,iceServers)')],
@@ -638,9 +638,30 @@ try {
     ['camera-call dimensions remain at the previously approved medium size', html.includes('.call.cameraCall{width:min(390px,calc(100% - 36px));height:min(560px,calc(100% - 110px))}')],
     ['video call window remains absolutely positioned and centered', html.includes('.call.cameraCall{position:absolute;background:#080808}') && html.includes('.call{inset:auto;left:50%;top:50%;transform:translate(-50%,-50%)')],
     ['camera opens facing front and switch button initially targets rear camera', html.includes("callFacingMode='user'") && html.includes("video:{facingMode:{ideal:'user'}}") && html.includes('title="تبديل الكاميرا" aria-label="تبديل الكاميرا"') && html.includes('>⇄ الكاميرا الخلفية</button>')],
-    ['camera switch button uses the arrow-swap glyph, not a circular glyph', html.includes("?'⇄ الكاميرا الخلفية':'⇄ الكاميرا الأمامية'") && !html.includes('🔄 الكاميرا')],
+    ['camera switch button uses the arrow-swap glyph, not a circular glyph', html.includes("callFacingMode==='environment'?'⇄ الكاميرا الأمامية':'⇄ الكاميرا الخلفية'") && !html.includes('🔄 الكاميرا')],
   ];
   for (const [label, ok] of videoChecks) ok ? pass(label) : fail(label);
   const deployedHtml = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
   if (html === deployedHtml) pass('v46.61 browser entry files remain identical'); else fail('v46.61 browser entry files remain identical');
 } catch (error) { fail('v46.61 private video-call repair checks', error.message); }
+
+
+// v46.65: replace the unreliable camera-toggle selection path with verified direction-aware acquisition.
+try {
+  const html = fs.readFileSync(mainPath, 'utf8');
+  const fn = (html.match(/async function switchCallCamera\(\)\{[\s\S]*?\n\}/)||[])[0]||'';
+  const checks = [
+    ['camera switch derives the target direction from the active camera settings', fn.includes("oldSettings.facingMode||callFacingMode||'user'") && fn.includes("oldFacing==='environment'?'user':'environment'")],
+    ['camera switch prefers labelled opposite-facing devices without assuming device enumeration order', fn.includes('labelPattern.test(device.label||\'\')') && fn.includes('device.deviceId!==avoidId')],
+    ['camera switch verifies the acquired track is not the currently active lens', fn.includes('validateCandidate(stream,avoidId,direction)') && fn.includes("settings.deviceId===avoidId") && fn.includes('settings.facingMode!==direction')],
+    ['camera switch uses exact facing mode then a verified ideal fallback', fn.includes('facingMode:{exact:direction}') && fn.includes('facingMode:{ideal:direction}')],
+    ['camera switch releases the old track only after an explicit hardware-busy error and retries', fn.includes("['NotReadableError','TrackStartError'].includes(firstError?.name)") && fn.includes('oldTrack.stop();oldTrackStopped=true') && fn.includes('await new Promise(resolve=>setTimeout(resolve,200))')],
+    ['camera switch restores the original camera if the old capture had to be released', fn.includes('if(oldTrackStopped)') && fn.includes('Restore by previous camera ID failed') && fn.includes('await sender.replaceTrack(restoredTrack)')],
+    ['camera switch keeps the existing video sender and changes only its camera track', fn.includes('await sender.replaceTrack(nextTrack)') && fn.includes('localStream.removeTrack(oldTrack)') && fn.includes('localStream.addTrack(nextTrack)')],
+    ['camera toggle button text always reflects the next camera direction', fn.includes("callFacingMode==='environment'?'⇄ الكاميرا الأمامية':'⇄ الكاميرا الخلفية'")],
+    ['private call and room-mic media variables remain isolated', html.includes('let pc=null,localStream=null') && html.includes('voiceLocalStream=null') && html.includes('const voicePeers=new Map()')],
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+  const deployedHtml = fs.readFileSync(publicPath, 'utf8');
+  if (html === deployedHtml) pass('v46.65 browser entry files remain identical'); else fail('v46.65 browser entry files remain identical');
+} catch (error) { fail('v46.65 camera switch regression checks', error.message); }
