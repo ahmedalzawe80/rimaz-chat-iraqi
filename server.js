@@ -7,23 +7,63 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { Server } = require('socket.io');
 
-// The old generated classic-art catalogue is retired; only licensed assets may be added.
-const MOBILE_EMOJIS = ["😘", "😢", "😔", "😅", "😒", "😂", "😑", "😭", "😁", "💪", "☺️", "🤣", "😮‍💨", "😍", "💋", "👌", "💕", "😆", "💔", "👍", "🖕", "😶", "😊", "😋", "🤔"];
-const EXTRA_MOBILE_EMOJIS = [
-  // Faces and emotions
-  "😀","😃","😄","😆","😇","🙂","🙃","😉","😊","😋","😎","🤓","🧐","🤩","🥳","😏","😌","😛","😜","🤪","😝","🤗","🤭","🫢","🫣","🤫","🤔","🫡","🤐","🤨","😐","😶","🫥","😶‍🌫️","😒","🙄","😬","😮","😯","😲","😳","🥺","🥹","😦","😧","😨","😰","😥","😢","😭","😱","😖","😣","😞","😓","😩","😫","🥱","😤","😡","🤬","😈","👿","💀","☠️","🤡","👻","👽","🤖","💩","🤠","🥸","😷","🤒","🤕","🤢","🤮","🤧","🥵","🥶","🥴","😵","😵‍💫","🤯","🤥","😴","💤","😪","🤑","🤤","🫠","🫨",
-  // Hearts, affection and symbols
-  "❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","🩷","🩵","🩶","💖","💗","💓","💞","💘","💝","💟","❣️","♥️","💌","💋","💯","💢","💥","💫","💦","💨","💬","🗯️","💭","✨","⭐","🌟","⚡","🔥","🎉","🎊","🎈","🎁","🏆","🥇","✅","❌","❓","❗","‼️","⁉️","💤",
-  // Hands and gestures
-  "👋","🤚","🖐️","✋","🖖","🫱","🫲","🫳","🫴","👌","🤌","🤏","✌️","🤞","🫰","🤟","🤘","🤙","👈","👉","👆","👇","☝️","👍","👎","✊","👊","🤛","🤜","👏","🙌","👐","🤲","🤝","🙏","✍️","💅","🤳","💪","🦾","🫶","🖕","🙋","🙆","🙅","🤷","🤦","💁",
-  // Animals and nature
-  "🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐵","🙈","🙉","🙊","🐔","🐧","🐦","🐤","🦆","🦅","🦉","🦇","🐺","🐗","🐴","🦄","🐝","🦋","🐌","🐞","🐜","🪲","🕷️","🦂","🐢","🐍","🦎","🦖","🐙","🦑","🦀","🐠","🐟","🐬","🐳","🦈","🐊","🐘","🦒","🦓","🦍","🐪","🐫","🦘","🐄","🐎","🐑","🐐","🦌","🐕","🐈","🐓","🦃","🦚","🦜","🦢","🦩","🌸","🌹","🌺","🌻","🌼","🌷","💐","🍀","🌿","🌴","🌵","🌳","🍁","🍂","🍃","🌈","☀️","🌤️","⛅","🌧️","⛈️","❄️","☃️","🌙","⭐",
-  // Food and drink
-  "🍎","🍐","🍊","🍋","🍌","🍉","🍇","🍓","🫐","🍈","🍒","🍑","🥭","🍍","🥥","🥝","🍅","🍆","🥑","🥦","🥬","🥒","🌶️","🌽","🥕","🧄","🧅","🥔","🍠","🥐","🍞","🥖","🧀","🥚","🍳","🧈","🥞","🧇","🥓","🍗","🍖","🌭","🍔","🍟","🍕","🥪","🌮","🌯","🥙","🧆","🥗","🍝","🍜","🍲","🍛","🍣","🍱","🥟","🍤","🍙","🍚","🍘","🍥","🥠","🍢","🍡","🍧","🍨","🍦","🥧","🧁","🍰","🎂","🍮","🍭","🍬","🍫","🍿","🍩","🍪","☕","🍵","🧃","🥤","🧋","🍶","🍺","🍻","🥂","🍷","🥛",
-  // Activities, travel and objects
-  "⚽","🏀","🏈","⚾","🎾","🏐","🏉","🎱","🏓","🏸","🥊","🥋","🎮","🕹️","🎯","🎲","🎸","🎹","🎤","🎧","🎬","📷","📸","📱","💻","⌚","💡","🔦","🕯️","📚","✏️","📝","📌","📎","🔑","🔒","🔔","📣","🚗","🚕","🚌","🚎","🏎️","🚓","🚑","🚒","🚜","🚲","🛵","✈️","🚀","🚁","🚢","⛵","🚂","🏠","🏡","🏰","🗼","🗽","🏖️","🏝️","⛰️","🌋","🏕️","🛏️","🛁","🚿","🎀","👑","💍","👒","🧢","🎩","🕶️","👓","🧸","🪄","🪅","🪩","🪇","🪁","🪆"
-];
-const ALL_MOBILE_EMOJIS = [...new Set([...MOBILE_EMOJIS, ...EXTRA_MOBILE_EMOJIS])].slice(0, 400);
+// Built-in classic animated smileys are served as cached GIF assets from /public/classic-smileys.
+const BUILTIN_SMILEYS = {
+  "001": '/classic-smileys/001.gif',
+  "002": '/classic-smileys/002.gif',
+  "003": '/classic-smileys/003.gif',
+  "004": '/classic-smileys/004.gif',
+  "005": '/classic-smileys/005.gif',
+  "006": '/classic-smileys/006.gif',
+  "007": '/classic-smileys/007.gif',
+  "008": '/classic-smileys/008.gif',
+  "009": '/classic-smileys/009.gif',
+  "010": '/classic-smileys/010.gif',
+  "011": '/classic-smileys/011.gif',
+  "012": '/classic-smileys/012.gif',
+  "013": '/classic-smileys/013.gif',
+  "014": '/classic-smileys/014.gif',
+  "015": '/classic-smileys/015.gif',
+  "016": '/classic-smileys/016.gif',
+  "017": '/classic-smileys/017.gif',
+  "018": '/classic-smileys/018.gif',
+  "019": '/classic-smileys/019.gif',
+  "020": '/classic-smileys/020.gif',
+  "021": '/classic-smileys/021.gif',
+  "022": '/classic-smileys/022.gif',
+  "023": '/classic-smileys/023.gif',
+  "024": '/classic-smileys/024.gif',
+  "025": '/classic-smileys/025.gif',
+  "026": '/classic-smileys/026.gif',
+  "027": '/classic-smileys/027.gif',
+  "028": '/classic-smileys/028.gif',
+  "029": '/classic-smileys/029.gif',
+  "030": '/classic-smileys/030.gif',
+  "031": '/classic-smileys/031.gif',
+  "032": '/classic-smileys/032.gif',
+  "033": '/classic-smileys/033.gif',
+  "034": '/classic-smileys/034.gif',
+  "035": '/classic-smileys/035.gif',
+  "036": '/classic-smileys/036.gif',
+  "037": '/classic-smileys/037.gif',
+  "038": '/classic-smileys/038.gif',
+  "039": '/classic-smileys/039.gif',
+  "040": '/classic-smileys/040.gif',
+  "041": '/classic-smileys/041.gif',
+  "042": '/classic-smileys/042.gif',
+  "043": '/classic-smileys/043.gif',
+  "044": '/classic-smileys/044.gif',
+  "045": '/classic-smileys/045.gif',
+  "046": '/classic-smileys/046.gif',
+  "047": '/classic-smileys/047.gif',
+  "048": '/classic-smileys/048.gif',
+  "049": '/classic-smileys/049.gif',
+  "050": '/classic-smileys/050.gif'
+};
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { maxHttpBufferSize: 12 * 1024 * 1024 });
 
 
 const PORT = Number(process.env.PORT || 3000);
@@ -115,20 +155,24 @@ if(!Array.isArray(db.adminAuditLogs)) db.adminAuditLogs=[];
 if(!db.chatFilter || typeof db.chatFilter!=='object') db.chatFilter={enabled:false,words:[]};
 if(!Array.isArray(db.chatFilter.words)) db.chatFilter.words=[];
 if(!Array.isArray(db.chatShortcuts)) db.chatShortcuts=[]; if(!Array.isArray(db.customSmileys)) db.customSmileys=[];
-// Gallery migration v9: mobile Unicode emoji first. The previously generated
-// classic artwork is intentionally excluded; original MSN assets will be added
-// only after their commercial redistribution rights are verified.
-// Reset only the smiley catalogue; preserve accounts, messages, uploads and standalone shortcuts.
-{
-  const desiredCount=ALL_MOBILE_EMOJIS.length;
-  if(Number(db.smileysSeedVersion||0)<9 || !Array.isArray(db.customSmileys) || db.customSmileys.length!==desiredCount || db.customSmileys.some(x=>String(x?.id||'').startsWith('rimaz-classic-'))){
-    const mobile=ALL_MOBILE_EMOJIS.map((icon,i)=>({id:'rimaz-mobile-'+String(i+1).padStart(3,'0'),icon,name:'إيموجي '+String(i+1),shortcut:''}));
-    db.customSmileys=mobile;
-    db.smileysSeedVersion=9;
-    db.smileysSeeded=true;
-    try { save(); console.log('Installed 400 mobile emoji first (migration v9); classic pack pending verified rights.'); }
-    catch(e) { console.error('Could not persist smiley gallery migration:',e.message); }
-  }
+// Gallery migration v9: animated classic 3D smileys only.
+// Replace the generated Unicode mobile emoji catalogue once, retain user-added smileys,
+// and never reset administrator edits on subsequent server starts.
+if (Number(db.smileysSeedVersion || 0) < 9) {
+  const existing = Array.isArray(db.customSmileys) ? db.customSmileys : [];
+  const userSmileys = existing.filter(x => !/^rimaz-(?:classic|mobile)-/.test(String(x?.id || '')));
+  const classicFiles = Object.keys(BUILTIN_SMILEYS).sort();
+  const classic = classicFiles.map((f, i) => ({
+    id: 'rimaz-classic-' + f,
+    icon: BUILTIN_SMILEYS[f],
+    name: 'سمايل كلاسيكي ' + String(i + 1).padStart(2, '0'),
+    shortcut: ''
+  }));
+  db.customSmileys = [...classic, ...userSmileys];
+  db.smileysSeedVersion = 9;
+  db.smileysSeeded = true;
+  try { save(); console.log('Installed 50 animated classic smileys; retained user smileys (migration v9).'); }
+  catch (e) { console.error('Could not persist classic smiley gallery migration:', e.message); }
 }
 
 
