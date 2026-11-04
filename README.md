@@ -330,3 +330,6 @@ Run `npm test` before deployment. These local checks do not replace staging test
 - Clicking the badge continues to use the exact room ID for direct navigation; members without an active room see a non-clickable status.
 - Replaced the old room-badge styling rules with one dedicated stylesheet for the rebuilt component.
 - Validation: server syntax, browser-script compilation, and the local verification suite. Live browser appearance still needs confirmation after deployment.
+
+
+Version 46.55: private conversation header height now exactly matches the existing avatar height (48px desktop / 42px mobile); legacy conflicting header height and vertical padding rules removed.
