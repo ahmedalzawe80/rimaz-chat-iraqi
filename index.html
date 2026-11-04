@@ -702,6 +702,11 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 #layer .privateOverlay .privateHead .privateHeadActions button{width:29px!important;height:29px!important;min-width:29px!important;margin:0!important;padding:0!important;}
 @media(max-width:650px){#layer .privateOverlay .privateHead{grid-template-columns:20px 4px 42px minmax(0,1fr) auto!important;gap:4px!important;height:42px!important;min-height:42px!important;max-height:42px!important;flex-basis:42px!important;padding:0 4px!important;}#layer .privateOverlay .privateHead .privateHeadAvatar{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;}#layer .privateOverlay .privateHead .privateHeadActions button{width:26px!important;height:28px!important;min-width:26px!important;} }
 </style>
+<style id="rimaz-overlay-header-compact-single-source-v4656">
+/* Shared black overlay title strip: trim only vertical padding/height; preserve title, close button, and all controls. */
+#layer .overlayHead{height:34px!important;min-height:34px!important;max-height:34px!important;flex:0 0 34px!important;padding-top:1px!important;padding-bottom:1px!important;box-sizing:border-box!important;}
+#layer .overlayHead>.close{flex:0 0 32px!important;width:32px!important;height:32px!important;min-height:32px!important;margin:0!important;align-self:center!important;}
+</style>
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={},privatePeerUser=null;
@@ -1236,7 +1241,7 @@ sid='';localStorage.removeItem('rimaz_sid');login();
  #layer .overlay,#layer .privateOverlay{position:absolute!important;left:0!important;right:0!important;width:100%!important;max-width:none!important;top:0!important;bottom:39px!important;height:auto!important;box-sizing:border-box!important;border-left:0!important;border-right:0!important;border-radius:0!important;overflow:hidden!important;}
  #layer .overlayBody,#layer .privateBody{min-height:0!important;overflow:auto!important;}
  #layer .privateOverlay.privateMax{left:0!important;right:0!important;width:100%!important;top:0!important;bottom:39px!important;height:auto!important;}
- #layer .overlayHead,#layer .privateHead{min-height:48px!important;height:48px!important;box-sizing:border-box!important;font-size:20px!important;}
+ #layer .privateHead{min-height:48px!important;height:48px!important;box-sizing:border-box!important;font-size:20px!important;}
  #layer .privateListOverlay .member{grid-template-columns:5px 54px 30px minmax(0,1fr) 64px!important;min-height:66px!important;}
  #layer .privateListOverlay .member .memberName{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
 }
