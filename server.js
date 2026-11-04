@@ -963,6 +963,7 @@ app.post('/api/logout',requireAuth,(req,res)=>{
   res.json({ok:true});
 });
 
+app.get('/api/rtc-config',requireAuth,(req,res)=>{const iceServers=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}];const turnUrls=String(process.env.TURN_URLS||process.env.TURN_URL||'').split(',').map(x=>x.trim()).filter(Boolean);const turnUsername=String(process.env.TURN_USERNAME||'').trim(),turnCredential=String(process.env.TURN_CREDENTIAL||'');if(turnUrls.length&&turnUsername&&turnCredential)iceServers.push({urls:turnUrls,username:turnUsername,credential:turnCredential});res.set('Cache-Control','no-store');res.json({iceServers,turnConfigured:turnUrls.length>0&&!!turnUsername&&!!turnCredential});});
 app.get('/api/public-online',(req,res)=>{ const users=getOnlineUsers().map(u=>({name:u.name,type:u.type,displayName:u.displayName,avatar:u.profile?.avatar||'',status:u.profile?.status||defaultStatus(u.name),rank:u.profile?.rank||'',role:u.role||'',vip:!!u.vip})); res.set('Cache-Control','no-store'); res.json({users}); });
 app.get('/api/state',requireAuth,(req,res)=>{
   const u=req.user;

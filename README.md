@@ -1,4 +1,4 @@
-# Rimaz Chat v46.60 — Incoming Call Card Layout
+# Rimaz Chat v46.61 — Incoming Call Card Layout
 
 ## v46.59 changes
 - Incoming-call header places the call type on the left and the close control on the right.
@@ -381,7 +381,15 @@ Run `npm test` before deployment. These local checks do not replace staging test
 Version 46.55: private conversation header height now exactly matches the existing avatar height (48px desktop / 42px mobile); legacy conflicting header height and vertical padding rules removed.
 
 
-### v46.60
+### v46.61
 - Incoming-call card actions are laid out left-to-right: accept on the left, reject on the right.
 - Private audio/video call panels use a centered, medium-size responsive layout instead of filling nearly the entire phone screen.
 - No WebRTC signaling, room microphone, or unrelated chat behavior changed.
+
+
+## v46.61 — إصلاح فيديو الاتصال الخاص
+- إضافة معاينة كاميرا محلية حية داخل نافذة اتصال الفيديو، مع عرض فيديو الطرف الآخر في المساحة الرئيسية.
+- إضافة زر تبديل الكاميرا الأمامية والخلفية أثناء المكالمة باستخدام `RTCRtpSender.replaceTrack` دون إنهاء الاتصال.
+- تعديل ترتيب تفاوض الطرف المستقبل: تثبيت العرض البعيد أولاً ثم إضافة مساراته المحلية قبل إنشاء الرد، لضمان إرسال الفيديو والصوت بالاتجاهين.
+- إضافة إعداد ICE قابل للتهيئة عبر `TURN_URLS` و`TURN_USERNAME` و`TURN_CREDENTIAL` مع إبقاء STUN كخيار افتراضي. يجب ضبط بيانات TURN على الاستضافة للحصول على اتصال موثوق عبر شبكات الهاتف المختلفة.
+- لم تتغير أبعاد نافذة الاتصال أو واجهات الموقع الأخرى، ولم يتغير روم المايك.

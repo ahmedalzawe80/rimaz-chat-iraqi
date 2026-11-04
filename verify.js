@@ -623,3 +623,21 @@ try {
   if (html === deployedHtml) pass('v46.59 browser entry files remain identical');
   else fail('v46.59 browser entry files remain identical');
 } catch (error) { fail('v46.58 private call and voice-room media isolation checks', error.message); }
+
+// v46.61: private video calls have two-way media, local preview, camera switching and optional TURN.
+try {
+  const html = fs.readFileSync(mainPath, 'utf8');
+  const serverText = fs.readFileSync(server, 'utf8');
+  const videoChecks = [
+    ['private video call renders live local and remote video elements', html.includes('id=\"remoteVideo\"') && html.includes('id=\"localVideo\"') && html.includes('function attachCallLocal(stream)')],
+    ['private video call exposes an in-call front/rear camera switch', html.includes('function switchCallCamera()') && html.includes('facingMode:{exact:nextFacing}') && html.includes('sender.replaceTrack(nextTrack)') && html.includes('switchCallCameraButton')],
+    ['incoming video call installs remote offer before adding local tracks and creating answer', html.includes('await pc.setRemoteDescription(incoming.offer);await flushCallIce();addPrivateCallTracks(localStream);const answer=await pc.createAnswer()')],
+    ['outgoing video call adds local tracks before creating offer', html.includes('addPrivateCallTracks(localStream);const offer=await pc.createOffer()')],
+    ['private call obtains server ICE configuration and preserves STUN fallback', html.includes("api('/api/rtc-config')") && html.includes('function configureCallPeer(peerName,iceServers)')],
+    ['server supports authenticated optional TURN configuration', serverText.includes("app.get('/api/rtc-config',requireAuth") && serverText.includes('process.env.TURN_URLS') && serverText.includes('process.env.TURN_USERNAME') && serverText.includes('process.env.TURN_CREDENTIAL')],
+    ['camera-call dimensions remain at the previously approved medium size', html.includes('.call.cameraCall{width:min(390px,calc(100% - 36px));height:min(560px,calc(100% - 110px))}')],
+  ];
+  for (const [label, ok] of videoChecks) ok ? pass(label) : fail(label);
+  const deployedHtml = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
+  if (html === deployedHtml) pass('v46.61 browser entry files remain identical'); else fail('v46.61 browser entry files remain identical');
+} catch (error) { fail('v46.61 private video-call repair checks', error.message); }
