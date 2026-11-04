@@ -54,6 +54,7 @@ try {
   const checks = [
     ['voice room uses server-authorized mic seats and emits a peer roster', source.includes("socket.emit('voice-mic-granted'") && source.includes("socket.on('request-mic'") && source.includes('voice-peer-joined')],
     ['voice WebRTC offers, answers, and ICE are room- and speaker-validated', source.includes("socket.on('voice-peer-offer'") && source.includes("socket.on('voice-peer-answer'") && source.includes("socket.on('voice-peer-ice'") && source.includes('speakers?.has(sid)')],
+    ['room-mic signaling has a separate rate limit from private calls', source.includes('const voiceSignalWindows = new Map()') && source.includes('function allowVoiceSignal(sid)') && source.includes("socket.on('voice-peer-offer',d=>") && source.includes('allowVoiceSignal(sid)') && source.includes('voiceSignalWindows.delete(sid)')],
     ['voice peers are removed on room leave and disconnect', source.includes("socketBySession(peerSid)?.emit('voice-peer-left'") && source.includes("socket.on('disconnect'")],
     ['client captures microphone audio and creates room peer connections', html.includes('navigator.mediaDevices.getUserMedia({audio:') && html.includes('new RTCPeerConnection') && html.includes("'voice-peer-offer'" )],
     ['client stops local microphone tracks and closes remote peer audio on lowering', html.includes('voiceLocalStream.getTracks().forEach(t=>t.stop())') && html.includes('closeVoicePeer(peerSid)')],
@@ -587,3 +588,23 @@ try {
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
 } catch (error) { fail('v46.49 member profile room navigation', error.message); }
+
+// v46.57: private WebRTC calls queue early ICE and bind remote media after call UI exists;
+// voice-room media remains on its own independent stream/peer graph.
+try {
+  const html = fs.readFileSync(mainPath, 'utf8');
+  const callChecks = [
+    ['private call remote stream is retained until audio/video element is ready', html.includes('let pc=null,localStream=null,callMode=\'voice\',callRemoteStream=null') && html.includes('function attachCallRemote(stream)') && html.includes('if(callRemoteStream)attachCallRemote(callRemoteStream)')],
+    ['private call ICE candidates are queued until remote description is installed', html.includes('const pendingCallIce=[]') && html.includes('async function flushCallIce()') && html.includes('if(!pc.remoteDescription){pendingCallIce.push(d.candidate);return}')],
+    ['audio-only private calls use a dedicated remote audio element', html.includes('id="remoteAudio"') && html.includes("callMode==='camera'?'remoteVideo':'remoteAudio'")],
+    ['incoming private calls create the media UI before remote negotiation completes', html.includes('configureCallPeer(d.from);showCall(!!d.video);') && html.includes('await pc.setRemoteDescription(d.offer)')],
+    ['private-call cleanup stops only private-call tracks and clears private-call ICE', html.includes('function endCall(showToast=true)') && html.includes('pendingCallIce.length=0')],
+    ['voice room keeps independent local stream and peer map', html.includes('voiceLocalStream=null') && html.includes('const voicePeers=new Map()') && html.includes('function voicePeerConnection(peerSid)')],
+    ['voice-room ICE candidates are buffered independently by peer and room', html.includes('const voicePeers=new Map(),pendingVoiceIce=new Map()') && html.includes('async function receiveVoiceIce(d)') && html.includes('pendingVoiceIce.set(peerSid,q)')],
+    ['private call and room mic signaling do not share peer connections or local stream variables', html.includes('let pc=null,localStream=null') && html.includes('let micRaised=false,voiceMuted=false,voiceLocalStream=null') && html.includes('const voicePeers=new Map()')],
+  ];
+  for (const [label, ok] of callChecks) ok ? pass(label) : fail(label);
+  const deployedHtml = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
+  if (html === deployedHtml) pass('v46.57 browser entry files remain identical');
+  else fail('v46.57 browser entry files remain identical');
+} catch (error) { fail('v46.57 private call and voice-room media isolation checks', error.message); }

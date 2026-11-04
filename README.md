@@ -1,3 +1,25 @@
+# Rimaz Chat v46.57 — Private WebRTC and Room Mic Isolation
+
+## v46.57 changes
+- Repaired private-call media attachment so early remote tracks are retained and attached after the call UI is mounted.
+- Added a dedicated remote audio element for audio-only calls; camera calls use the remote video element.
+- Queued private-call ICE candidates until the remote session description is installed, then flushed them in order.
+- Incoming calls now mount their media UI before remote negotiation can trigger track events.
+- Private-call cleanup stops only private-call tracks and clears only private-call peer/ICE state.
+- Kept room microphone capture, peer connections, remote audio elements, and ICE queues in their own independent state.
+- Split room-microphone signaling rate limits from private-call signaling rate limits, so activity in one feature cannot consume the other's signaling budget.
+- Preserved server-side room/speaker validation for room-mic offers, answers, and ICE candidates.
+
+## Validation
+- `node --check server.js`
+- `node --check verify.js`
+- `node verify.js` — all local static/regression checks passed, including new call/media-isolation assertions.
+- `index.html` and `public/index.html` are byte-identical.
+- ZIP archive integrity check passed.
+- **Not yet live-tested:** camera/microphone permissions, autoplay behavior, actual two-phone media, restrictive mobile NAT, and hosted deployment. A TURN relay may still be required on networks where STUN-only peer connectivity fails.
+
+---
+
 # Rimaz Chat v46.46 — Complete Voice Room Audio
 
 ## v46.46 changes
