@@ -333,6 +333,5 @@ Run `npm test` before deployment. These local checks do not replace staging test
 
 
 ## v46.51
-- Rebuilt the member-card room badge sizing rule as one source of truth.
-- Reduced only the black room-strip width to 32% of the metadata row.
-- Preserved the room-name font styling and the room image at 38×38px; no other card dimensions changed.
+- Adjusted only the member profile room badge width and room thumbnail proportions to match the supplied reference.
+- Preserved the room name font size/weight, profile card dimensions, buttons, and all behavior.
