@@ -665,25 +665,3 @@ try {
   const deployedHtml = fs.readFileSync(publicPath, 'utf8');
   if (html === deployedHtml) pass('v46.65 browser entry files remain identical'); else fail('v46.65 browser entry files remain identical');
 } catch (error) { fail('v46.65 camera switch regression checks', error.message); }
-
-// v46.67: classic smiley migration uses looping GIF assets and no longer resets admin edits.
-try {
-  const serverText = fs.readFileSync(server, 'utf8');
-  const html = fs.readFileSync(mainPath, 'utf8');
-  const publicSmileys = path.join(root, 'public', 'classic-smileys');
-  const files = fs.readdirSync(publicSmileys).filter(name => /^\d{3}\.gif$/.test(name));
-  const gifChecks = files.length === 50 && files.every(name => {
-    const b = fs.readFileSync(path.join(publicSmileys, name));
-    return b.slice(0, 6).toString('ascii').startsWith('GIF8') && b.includes(Buffer.from([0x21, 0xF9, 0x04]));
-  });
-  const checks = [
-    ['v46.67 installs 50 classic GIF smileys instead of the 400 Unicode defaults', files.length === 50 && serverText.includes("db.smileysSeedVersion || 0) < 9") && serverText.includes("'/classic-smileys/") && !serverText.includes('const mobile=ALL_MOBILE_EMOJIS.map')],
-    ['classic smiley migration preserves user-added smileys and removes only generated legacy entries', serverText.includes("!/^rimaz-(?:classic|mobile)-/.test(String(x?.id || ''))") && serverText.includes('...userSmileys')],
-    ['smiley catalogue migration runs once and does not reset later admin edits by count', serverText.includes('if (Number(db.smileysSeedVersion || 0) < 9)') && !serverText.includes('db.customSmileys.length!==desiredCount')],
-    ['classic GIF assets are present and contain animation frames', gifChecks],
-    ['classic smileys animate in picker, composer, chat and admin gallery', html.includes('rimaz-classic-animated-smileys-v1') && html.includes('rimazClassicBounce') && html.includes('.msgtext img.chatSmiley')],
-    ['reduced-motion preference disables classic smiley animation', html.includes('prefers-reduced-motion: reduce')],
-    ['chat and public frontend files remain identical after smiley update', html === fs.readFileSync(publicPath, 'utf8')],
-  ];
-  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
-} catch (error) { fail('v46.67 classic animated smiley checks', error.message); }

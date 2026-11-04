@@ -708,38 +708,6 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 #layer .overlayHead{height:34px!important;min-height:34px!important;max-height:34px!important;flex:0 0 34px!important;padding-top:1px!important;padding-bottom:1px!important;box-sizing:border-box!important;}
 #layer .overlayHead>.close{flex:0 0 32px!important;width:32px!important;height:32px!important;min-height:32px!important;margin:0!important;align-self:center!important;}
 </style>
-
-<style id="rimaz-classic-animated-smileys-v1">
-/* Classic golden smileys: subtle looping motion in picker, composer, chat and admin gallery. */
-@keyframes rimazClassicBounce {
-  0%,100% { transform: translateY(0) rotate(0deg) scale(1); }
-  22% { transform: translateY(-2px) rotate(-2deg) scale(1.035, .985); }
-  48% { transform: translateY(0) rotate(1deg) scale(.985, 1.025); }
-  72% { transform: translateY(-1px) rotate(2deg) scale(1.02, .99); }
-}
-@keyframes rimazClassicWiggle {
-  0%,100% { transform: rotate(0deg) translateY(0); }
-  25% { transform: rotate(-4deg) translateY(-1px); }
-  50% { transform: rotate(0deg) translateY(0); }
-  75% { transform: rotate(4deg) translateY(-1px); }
-}
-.emojiGrid .smileyImageBtn img, #smileyAdminGrid .smileyAdminTile img,
-.composerRichInput .composerSmiley, .msgtext img.chatSmiley,
-.pmsg .chatSmiley, .wallText .chatSmiley {
-  animation: rimazClassicBounce 2.25s ease-in-out infinite;
-  transform-origin: 50% 72%;
-  will-change: transform;
-}
-.emojiGrid .smileyImageBtn:nth-child(3n) img,
-#smileyAdminGrid .smileyAdminTile:nth-child(3n) img { animation-name: rimazClassicWiggle; animation-duration: 2.8s; }
-.emojiGrid .smileyImageBtn:nth-child(4n) img,
-#smileyAdminGrid .smileyAdminTile:nth-child(4n) img { animation-delay: -.7s; }
-@media (prefers-reduced-motion: reduce) {
-  .emojiGrid .smileyImageBtn img, #smileyAdminGrid .smileyAdminTile img,
-  .composerRichInput .composerSmiley, .msgtext img.chatSmiley,
-  .pmsg .chatSmiley, .wallText .chatSmiley { animation: none !important; will-change: auto; }
-}
-</style>
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={},privatePeerUser=null;
@@ -1036,7 +1004,7 @@ function adminLikes(d){const all=[...(d.users||[]),...(d.guests||[])].sort((a,b)
 function likesRows(rows){return rows.map(u=>`<div class="adminUser"><div><b>${esc(u.name)}</b><br><small>${u.type==='guest'?'زائر':'عضو'} · ${u.online?'متصل':'غير متصل'} · المستوى ${Number(u.level)||1}</small></div><b>❤️ ${Number(u.likes)||0}</b></div>`).join('')||'<p>لا توجد حسابات.</p>'}
 function filterLikesTable(){const q=key(document.getElementById('likesSearch')?.value||''),all=[...(window.adminCachedData?.users||[]),...(window.adminCachedData?.guests||[])];const box=document.getElementById('likesRows');if(box)box.innerHTML=likesRows(all.filter(u=>key(u.name).includes(q)).sort((a,b)=>(Number(b.likes)||0)-(Number(a.likes)||0)))}
 function adminShortcuts(d){const list=d.chatShortcuts||[];return `<div class="adminCard"><h3>⚡ إضافة اختصار رسالة</h3><p>اكتب رمز الاختصار (مثلاً s2) في خانة الدردشة؛ سيبقى ظاهراً أثناء الكتابة ويتحول إلى نصه المحفوظ عند الضغط على إرسال.</p><div class="adminGrid"><input id="shortcutTitle" maxlength="50" placeholder="اسم الاختصار"><textarea id="shortcutText" maxlength="500" placeholder="النص الذي سيُدرج عند اختيار الاختصار"></textarea><button onclick="saveNewShortcut()">إضافة الاختصار</button></div></div><div class="adminCard"><h3>الاختصارات الحالية (${list.length})</h3>${list.map(x=>`<div class="adminUser"><div><b>${esc(x.title)}</b><br><small>${esc(x.text)}</small></div><button class="red" onclick="deleteChatTool('shortcut',${jsq(x.id)})">حذف</button></div>`).join('')||'<p class="muted">لا توجد اختصارات بعد.</p>'}</div>`}
-function adminSmileys(d){const list=d.customSmileys||[];return `<div class="adminCard"><h3>شبكة السمايلات الكلاسيكية المتحركة (${list.length})</h3><p>اختار سمايل كلاسيكي متحرك من الشبكة، واكتب اختصاره مثل ض1 ثم اضغط حفظ. السمايلات تظهر متحركة في زر السمايلات ورسائل الدردشة.</p><input id="smileyGridSearch" placeholder="ابحث بالاختصار أو الاسم" oninput="filterSmileyGrid()" style="width:100%;margin:6px 0"><div class="smileyAdminGrid" id="smileyAdminGrid">${list.map(x=>`<div class="smileyAdminTile" data-smiley-search="${esc((x.name||'')+' '+(x.shortcut||''))}">${(String(x.icon||'').startsWith('/')||String(x.icon||'').startsWith('data:image/'))?`<img src="${esc(x.icon)}" alt="" loading="lazy">`:String(x.icon||'').startsWith('http')?`<img src="${esc(x.icon)}" alt="" loading="lazy">`:`<span class="smileyEmoji">${esc(x.icon)}</span>`}<b>${esc(x.name||'سميل')}</b><input class="smileyShortcutInput" id="smiley-shortcut-${esc(x.id)}" maxlength="24" value="${esc(x.shortcut||'')}" placeholder="اختصار مثل ض1"><button type="button" onclick="saveSmileyShortcut(${jsq(x.id)})">حفظ الاختصار</button><button type="button" class="red" onclick="deleteChatTool('smiley',${jsq(x.id)})">حذف</button></div>`).join('')||'<p class="muted">لا توجد سميلات في الشبكة.</p>'}</div></div><div class="adminCard"><h3>إضافة سميلات أخرى</h3><p>تقدر ترفع ملفات GIF متحركة أو PNG/JPG/WEBP وتضيفها إلى الشبكة.</p><div class="smileyUploadRow"><input id="smileyFile" type="file" accept="image/gif,image/png,image/jpeg,image/webp"><input id="smileyName" maxlength="40" placeholder="اسم السميل (اختياري)"><input id="smileyShortcut" maxlength="24" placeholder="الاختصار مثل ض301"></div><button style="margin-top:7px;width:100%" onclick="uploadSmiley()">رفع السميل وإضافته للشبكة</button><hr><h3>إضافة إيموجي نصي</h3><div class="adminGrid"><input id="smileyIcon" maxlength="24" placeholder="مثال 😍"><input id="smileyTextShortcut" maxlength="24" placeholder="اختصار مثل ض302"><button onclick="saveNewSmiley()">إضافة الإيموجي</button></div></div>`}
+function adminSmileys(d){const list=d.customSmileys||[];return `<div class="adminCard"><h3>🙂 شبكة السميلات الجاهزة (${list.length})</h3><p>اختار أي سمايل من الشبكة، واكتب اختصاره مثل ض1 ثم اضغط حفظ. هذه السميلات جاهزة داخل ريماز، وتظهر أيضاً في زر السميلات بالدردشة.</p><input id="smileyGridSearch" placeholder="ابحث بالاختصار أو الاسم" oninput="filterSmileyGrid()" style="width:100%;margin:6px 0"><div class="smileyAdminGrid" id="smileyAdminGrid">${list.map(x=>`<div class="smileyAdminTile" data-smiley-search="${esc((x.name||'')+' '+(x.shortcut||''))}">${(String(x.icon||'').startsWith('/')||String(x.icon||'').startsWith('data:image/'))?`<img src="${esc(x.icon)}" alt="" loading="lazy">`:String(x.icon||'').startsWith('http')?`<img src="${esc(x.icon)}" alt="" loading="lazy">`:`<span class="smileyEmoji">${esc(x.icon)}</span>`}<b>${esc(x.name||'سميل')}</b><input class="smileyShortcutInput" id="smiley-shortcut-${esc(x.id)}" maxlength="24" value="${esc(x.shortcut||'')}" placeholder="اختصار مثل ض1"><button type="button" onclick="saveSmileyShortcut(${jsq(x.id)})">حفظ الاختصار</button><button type="button" class="red" onclick="deleteChatTool('smiley',${jsq(x.id)})">حذف</button></div>`).join('')||'<p class="muted">لا توجد سميلات في الشبكة.</p>'}</div></div><div class="adminCard"><h3>إضافة سميلات أخرى</h3><p>تقدر ترفع ملفات GIF متحركة أو PNG/JPG/WEBP وتضيفها إلى الشبكة.</p><div class="smileyUploadRow"><input id="smileyFile" type="file" accept="image/gif,image/png,image/jpeg,image/webp"><input id="smileyName" maxlength="40" placeholder="اسم السميل (اختياري)"><input id="smileyShortcut" maxlength="24" placeholder="الاختصار مثل ض301"></div><button style="margin-top:7px;width:100%" onclick="uploadSmiley()">رفع السميل وإضافته للشبكة</button><hr><h3>إضافة إيموجي نصي</h3><div class="adminGrid"><input id="smileyIcon" maxlength="24" placeholder="مثال 😍"><input id="smileyTextShortcut" maxlength="24" placeholder="اختصار مثل ض302"><button onclick="saveNewSmiley()">إضافة الإيموجي</button></div></div>`}
 async function saveChatTools(shortcuts,smileys){if(!canUseChatPermission('shortcuts_manage')&&!canUseChatPermission('smileys_manage'))throw new Error('ما عندك صلاحية إدارة أدوات الدردشة');const r=await api('/api/admin/chat-tools',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({shortcuts,smileys})});if(!r||r.ok!==true)throw new Error(r?.error||'لم يؤكد الخادم حفظ الاختصارات والسميلات');window.adminCachedData=window.adminCachedData||{};window.adminCachedData.chatShortcuts=r.shortcuts||[];window.adminCachedData.customSmileys=r.smileys||[];window.chatShortcutCache=r.shortcuts||[];window.chatSmileyCache=r.smileys||[];return r}
 async function saveNewShortcut(){const title=document.getElementById('shortcutTitle')?.value.trim(),text=document.getElementById('shortcutText')?.value.trim();if(!title||!text)return toast('اكتب اسم الاختصار ونصه');try{const d=window.adminCachedData||{};await saveChatTools([...(d.chatShortcuts||[]),{title,text}],d.customSmileys||[]);toast('تمت إضافة الاختصار');adminTab('shortcuts')}catch(e){toast(e.message)}}
 async function saveNewSmiley(){const icon=document.getElementById('smileyIcon')?.value.trim(),name=document.getElementById('smileyName')?.value.trim(),shortcut=document.getElementById('smileyTextShortcut')?.value.trim();if(!icon||!shortcut)return toast('اكتب الإيموجي والاختصار');try{const d=window.adminCachedData||{};await saveChatTools(d.chatShortcuts||[],[...(d.customSmileys||[]),{icon,name:name||icon,shortcut}]);toast('تمت إضافة السميل');adminTab('smileys')}catch(e){toast(e.message)}}
