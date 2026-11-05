@@ -26,6 +26,21 @@ try {
   else fail('index.html and public/index.html differ');
 } catch (error) { fail('HTML files readable', error.message); }
 
+// The replacement smiley library must be complete, deterministic, and free of legacy catalogues.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const assets = path.join(root, 'public', 'smileys');
+  const files = fs.existsSync(assets) ? fs.readdirSync(assets).filter(name => /^smiley-\d{3}\.(?:gif|png|jpe?g|bmp)$/i.test(name)) : [];
+  if (files.length === 238) pass('all 238 supplied smiley image assets are packaged');
+  else fail('supplied smiley image asset count', String(files.length));
+  if (source.includes('smileysSeedVersion||0)<9') && source.includes("'/smileys/'+file") && source.includes('MOBILE_EMOJIS.map')) pass('smiley migration replaces old catalog once and appends the mobile set');
+  else fail('smiley migration definition');
+  if (!source.includes('BUILTIN_SMILEYS') && !source.includes('EXTRA_MOBILE_EMOJIS') && !source.includes('ALL_MOBILE_EMOJIS')) pass('legacy embedded and broad default smiley catalogs are removed');
+  else fail('legacy smiley catalogs remain in server source');
+  if (html.includes("icon.startsWith('/smileys/')") && html.includes("icon.startsWith('/smileys/')")) pass('client picker and message rendering recognize packaged smiley assets');
+  else fail('client smiley asset rendering paths');
+} catch (error) { fail('smiley library regression checks', error.message); }
+
 // Privileged login and role-aware presence visibility are enforced server-side.
 try {
   const source = fs.readFileSync(server, 'utf8');
