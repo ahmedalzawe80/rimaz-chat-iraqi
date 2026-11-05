@@ -419,3 +419,10 @@ Version 46.55: private conversation header height now exactly matches the existi
 - استبدال مسار الفيديو في WebRTC باستخدام `RTCRtpSender.replaceTrack` مع إبقاء اتصال الصوت ومسار روم المايك مستقلين.
 - لم تتغير أبعاد أو موضع بطاقة الاتصال، ولا شكل الزر، ولا أي واجهة خارج الاتصال الخاص.
 - الاختبارات المحلية تتحقق من منطق الاختيار والاسترجاع وتطابق ملفات المتصفح؛ يلزم اختبار عملي على أجهزة أندرويد فعلية لتأكيد توافق عتاد الكاميرا.
+
+
+## Smiley gallery refresh (migration v9)
+- Replaces the previous built-in smiley catalogue with the supplied smiley pack shipped in `public/smileys/`.
+- Adds the 33 requested mobile Unicode emojis.
+- The complete smiley pack is included in this project ZIP; no individual file uploads are needed.
+- On first startup, only the smiley catalogue is refreshed. Accounts, messages, uploads, and chat shortcuts are preserved.
