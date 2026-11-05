@@ -7,7 +7,10 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { Server } = require('socket.io');
 
-// The mobile emoji set requested for the final section of the smiley gallery.
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { maxHttpBufferSize: 12 * 1024 * 1024 });
+
 const MOBILE_EMOJIS = ["🤣", "😂", "😊", "😘", "😍", "💋", "😎", "😔", "👍", "💪", "♥️", "🤨", "😒", "🤢", "😏", "🤔", "😋", "😶", "🖕", "💔", "😆", "👌", "😭", "😁", "☺️", "😮‍💨", "🤮", "🤧", "🥰", "🥶", "🫣", "😢", "🥹", "🥺", "😳", "😮", "😲", "😓", "☹️", "😡", "😠", "🤌", "🫵", "👌", "🤝", "🖕", "👄", "🫦"];
 
 const PORT = Number(process.env.PORT || 3000);
@@ -99,23 +102,25 @@ if(!Array.isArray(db.adminAuditLogs)) db.adminAuditLogs=[];
 if(!db.chatFilter || typeof db.chatFilter!=='object') db.chatFilter={enabled:false,words:[]};
 if(!Array.isArray(db.chatFilter.words)) db.chatFilter.words=[];
 if(!Array.isArray(db.chatShortcuts)) db.chatShortcuts=[]; if(!Array.isArray(db.customSmileys)) db.customSmileys=[];
-// Smiley catalogue migration v9: replace every previous built-in/default catalogue
-// with the supplied 238-image pack, then append only the mobile emojis requested by the owner.
-// This migration touches smileys only; accounts, messages, uploads and chat shortcuts are preserved.
+// Smiley catalogue migration v10: replace the legacy gallery with the supplied image pack
+// and append the exact mobile emoji list requested by the owner. This migration only
+// changes smileys; user accounts, messages, media, and chat shortcuts remain untouched.
 {
   const smileyDir=path.join(ROOT,'public','smileys');
-  const imageFiles=fs.existsSync(smileyDir)?fs.readdirSync(smileyDir).filter(name=>/^smiley-\d{3}\.(?:gif|png|jpe?g|bmp)$/i.test(name)).sort():[];
-  if(Number(db.smileysSeedVersion||0)<9){
+  const imageFiles=fs.existsSync(smileyDir)
+    ? fs.readdirSync(smileyDir).filter(name=>/^smiley-\d{3}\.(?:gif|png|jpe?g|bmp|webp)$/i.test(name)).sort()
+    : [];
+  if(Number(db.smileysSeedVersion||0)<10){
     if(imageFiles.length!==238){
-      console.error(`Smiley pack incomplete: expected 238 images, found ${imageFiles.length}. Keeping the existing catalogue.`);
+      console.error(`Smiley pack incomplete: expected 238 images, found ${imageFiles.length}; existing gallery preserved.`);
     } else {
-    const images=imageFiles.map((file,i)=>({id:'rimaz-pack-'+String(i+1).padStart(3,'0'),icon:'/smileys/'+file,name:'سميل '+String(i+1),shortcut:''}));
-    const mobile=MOBILE_EMOJIS.map((icon,i)=>({id:'rimaz-mobile-'+String(i+1).padStart(3,'0'),icon,name:'إيموجي '+String(i+1),shortcut:''}));
-    db.customSmileys=[...images,...mobile];
-    db.smileysSeedVersion=9;
-    db.smileysSeeded=true;
-    try { save(); console.log(`Installed ${images.length} supplied image smileys + ${mobile.length} mobile emojis (migration v9).`); }
-    catch(e) { console.error('Could not persist smiley gallery migration:',e.message); }
+      const images=imageFiles.map((file,i)=>({id:'rimaz-pack-'+String(i+1).padStart(3,'0'),icon:'/smileys/'+file,name:'سميل '+String(i+1),shortcut:''}));
+      const mobile=MOBILE_EMOJIS.map((icon,i)=>({id:'rimaz-mobile-'+String(i+1).padStart(3,'0'),icon,name:'إيموجي '+String(i+1),shortcut:''}));
+      db.customSmileys=[...images,...mobile];
+      db.smileysSeedVersion=10;
+      db.smileysSeeded=true;
+      try { save(); console.log(`Installed ${images.length} supplied smiley images + ${mobile.length} requested mobile emojis (migration v10).`); }
+      catch(e) { console.error('Could not persist smiley gallery migration:',e.message); }
     }
   }
 }

@@ -1,0 +1,5 @@
+Rimaz v46.68 smiley update
+- Replaces the old smiley catalogue with 238 supplied image assets.
+- Appends the 48 requested mobile emojis at the end.
+- Preserves accounts, messages, uploads, and chat shortcuts during migration.
+- Deploy this ZIP as a complete project package; files are at the archive root.
