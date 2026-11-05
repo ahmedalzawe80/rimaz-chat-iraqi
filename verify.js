@@ -204,8 +204,9 @@ try {
 try {
   const source = fs.readFileSync(server, 'utf8');
   const uploadRoutes = source.split('\n').filter(line => line.includes("app.post('") && line.includes(".single('file')"));
-  if (uploadRoutes.length >= 6 && uploadRoutes.every(x => x.includes('validateUploadedContent('))) pass(`all ${uploadRoutes.length} upload routes validate file content`);
-  else fail('all upload routes validate file content', `validated ${uploadRoutes.filter(x=>x.includes('validateUploadedContent(')).length}/${uploadRoutes.length}`);
+  const activeUploadRoutes = uploadRoutes.filter(x => !x.includes('/api/admin/chat-tools/smiley-upload'));
+  if (activeUploadRoutes.length >= 5 && activeUploadRoutes.every(x => x.includes('validateUploadedContent('))) pass(`all ${activeUploadRoutes.length} active upload routes validate file content; fixed smiley uploads are disabled`);
+  else fail('all active upload routes validate file content', `validated ${activeUploadRoutes.filter(x=>x.includes('validateUploadedContent(')).length}/${activeUploadRoutes.length}`);
   const messageRoute = source.match(/app\.post\('\/api\/message',[\s\S]*?\n\}\);/);
   if (messageRoute && messageRoute[0].includes('so.data?.sid===sessionId') && messageRoute[0].includes('so.rooms.has(room)')) pass('HTTP messages require active membership in the requested room');
   else fail('HTTP messages require active membership in the requested room');
@@ -665,3 +666,32 @@ try {
   const deployedHtml = fs.readFileSync(publicPath, 'utf8');
   if (html === deployedHtml) pass('v46.65 browser entry files remain identical'); else fail('v46.65 browser entry files remain identical');
 } catch (error) { fail('v46.65 camera switch regression checks', error.message); }
+
+// v46.68.0: the smiley gallery is a fixed, complete 303-face GIF catalogue.
+try {
+  const catalogue = JSON.parse(fs.readFileSync(path.join(root, 'smileys-catalog.json'), 'utf8'));
+  const smileyDir = path.join(root, 'public', 'smileys');
+  const files = fs.readdirSync(smileyDir).filter(name => name.toLowerCase().endsWith('.gif')).sort();
+  const expectedFiles = Array.from({length:303}, (_,i) => `rimaz-face-${String(i+1).padStart(3,'0')}.gif`);
+  const exactSet = files.length === 303 && expectedFiles.every((name,i) => files[i] === name);
+  if (catalogue.length === 303 && exactSet) pass('smiley catalogue and public asset directory contain exactly the 303 sequential face GIFs');
+  else fail('smiley catalogue and public asset directory contain exactly the 303 sequential face GIFs', `catalogue=${catalogue.length}, files=${files.length}`);
+  let assetsValid = catalogue.every((item,i) => {
+    const id = `rimaz-face-${String(i+1).padStart(3,'0')}`;
+    if (item.id !== id || item.icon !== `/smileys/${id}.gif`) return false;
+    const bytes = fs.readFileSync(path.join(smileyDir, `${id}.gif`));
+    return bytes.length > 20 && bytes.subarray(0,6).toString('ascii').startsWith('GIF8');
+  });
+  if (assetsValid) pass('all 303 catalogue paths resolve to readable GIF assets with valid signatures');
+  else fail('all 303 catalogue paths resolve to readable GIF assets with valid signatures');
+  const source = fs.readFileSync(server, 'utf8');
+  const html = fs.readFileSync(mainPath, 'utf8');
+  const fixedSeed = source.includes('desiredSmileyCount = 303') && source.includes('db.smileysSeedVersion || 0) !== 10');
+  if (fixedSeed) pass('startup migration enforces the fixed 303-smiley catalogue'); else fail('startup migration enforces the fixed 303-smiley catalogue');
+  const immutable = source.includes('شبكة السميلات ثابتة وتحتوي على 303 وجه فقط') && source.includes('لا يمكن إضافة أو حذف أو استبدال صور شبكة السميلات');
+  if (immutable) pass('server prevents legacy, uploaded, added, or deleted smileys from changing the fixed gallery'); else fail('server prevents legacy, uploaded, added, or deleted smileys from changing the fixed gallery');
+  const noLegacy = !html.includes('classic-smileys') && !html.includes('smileyFile') && !html.includes('uploadSmiley()') && html.includes('rimaz-smiley-display-v1');
+  if (noLegacy) pass('browser uses one non-cropping smiley display policy without legacy smiley paths or upload controls'); else fail('browser uses one non-cropping smiley display policy without legacy smiley paths or upload controls');
+  const deployedHtml = fs.readFileSync(publicPath, 'utf8');
+  if (html === deployedHtml) pass('v46.68.0 browser entry files remain identical'); else fail('v46.68.0 browser entry files remain identical');
+} catch (error) { fail('v46.68.0 fixed smiley gallery checks', error.message); }

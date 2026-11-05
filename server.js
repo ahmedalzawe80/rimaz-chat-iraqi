@@ -100,18 +100,27 @@ if(!Array.isArray(db.adminAuditLogs)) db.adminAuditLogs=[];
 if(!db.chatFilter || typeof db.chatFilter!=='object') db.chatFilter={enabled:false,words:[]};
 if(!Array.isArray(db.chatFilter.words)) db.chatFilter.words=[];
 if(!Array.isArray(db.chatShortcuts)) db.chatShortcuts=[]; if(!Array.isArray(db.customSmileys)) db.customSmileys=[];
-// Smiley gallery migration v9: replace the complete legacy catalogue with the supplied face-only GIF set.
-// Only the smiley catalogue is replaced; accounts, messages, uploads, and shortcuts are preserved.
-{
-  const suppliedSmileys = require('./smileys-catalog.json');
-  const desiredCount = suppliedSmileys.length;
-  if (Number(db.smileysSeedVersion || 0) !== 9 || !Array.isArray(db.customSmileys) || db.customSmileys.length !== desiredCount || db.customSmileys.some((x,i) => x?.id !== suppliedSmileys[i]?.id || x?.icon !== suppliedSmileys[i]?.icon)) {
-    db.customSmileys = suppliedSmileys.map(x => ({...x}));
-    db.smileysSeedVersion = 9;
-    db.smileysSeeded = true;
-    try { save(); console.log(`Installed ${desiredCount} supplied face smileys (migration v9).`); }
-    catch(e) { console.error('Could not persist smiley gallery migration:', e.message); }
+// Fixed face-only smiley catalogue v10. The bundled catalogue is the sole source of smileys.
+// Existing accounts, messages, uploads and chat shortcuts are intentionally preserved.
+const suppliedSmileys = require('./smileys-catalog.json');
+const desiredSmileyCount = 303;
+if (!Array.isArray(suppliedSmileys) || suppliedSmileys.length !== desiredSmileyCount) {
+  throw new Error(`Invalid bundled smiley catalogue: expected exactly ${desiredSmileyCount} entries.`);
+}
+for (let i = 0; i < suppliedSmileys.length; i++) {
+  const item = suppliedSmileys[i];
+  const expectedId = `rimaz-face-${String(i + 1).padStart(3, '0')}`;
+  const expectedIcon = `/smileys/${expectedId}.gif`;
+  if (item?.id !== expectedId || item?.icon !== expectedIcon || !fs.existsSync(path.join(ROOT, 'public', expectedIcon.slice(1)))) {
+    throw new Error(`Missing or invalid bundled smiley asset: ${expectedId}`);
   }
+}
+if (Number(db.smileysSeedVersion || 0) !== 10 || !Array.isArray(db.customSmileys) || db.customSmileys.length !== desiredSmileyCount || db.customSmileys.some((x,i) => x?.id !== suppliedSmileys[i]?.id || x?.icon !== suppliedSmileys[i]?.icon || x?.name !== suppliedSmileys[i]?.name)) {
+  db.customSmileys = suppliedSmileys.map(x => ({...x}));
+  db.smileysSeedVersion = 10;
+  db.smileysSeeded = true;
+  try { save(); console.log(`Installed exactly ${desiredSmileyCount} bundled face smileys (migration v10).`); }
+  catch(e) { console.error('Could not persist smiley gallery migration:', e.message); }
 }
 
 
@@ -1107,21 +1116,27 @@ app.put('/api/admin/member-permissions/:name',requireAuth,(req,res)=>{if(!isAdmi
 app.get('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))return res.status(403).json({error:'ما عندك صلاحية عرض أو تعديل رسائل الترحيب'});res.json({messages:db.welcomeMessages||[]});});
 app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))return res.status(403).json({error:'تعديل رسائل الترحيب متاح للمالك والإداري فقط'});try{const raw=Array.isArray(req.body?.messages)?req.body.messages:[];if(raw.length>12)return res.status(400).json({error:'الحد الأعلى 12 رسالة ترحيب'});const messages=[];for(const item of raw){const title=String(item?.title||'').trim().slice(0,80),text=String(item?.text||'').trim().slice(0,1200);if(!title&&!text)continue;if(!text)return res.status(400).json({error:'اكتب نص كل رسالة قبل الحفظ'});messages.push({id:String(item?.id||crypto.randomUUID()).slice(0,80),title:title||'الترحيب',text,enabled:item?.enabled!==false});}const previous=db.welcomeMessages;db.welcomeMessages=messages;try{save()}catch(saveError){db.welcomeMessages=previous;console.error('Welcome messages save failed:',saveError);return res.status(500).json({error:'تعذر حفظ الرسائل على التخزين. تحقق من صلاحية ومسار /data ثم أعد المحاولة.'});}return res.json({ok:true,messages});}catch(error){console.error('Welcome messages update failed:',error);return res.status(500).json({error:'حدث خطأ أثناء معالجة رسائل الترحيب'});}});
 app.get('/api/chat-tools',requireAuth,(req,res)=>res.json({shortcuts:(db.chatShortcuts||[]).map(x=>({id:x.id,title:x.title,text:x.text})),smileys:(db.customSmileys||[]).map(x=>({id:x.id,icon:x.icon,name:x.name,shortcut:x.shortcut||''}))}));
-app.post('/api/admin/chat-tools/smiley-upload',requirePermission('smileys_manage'),uploadSmallImage.single('file'),validateUploadedContent('image'),(req,res)=>{
-  try{
-    if(!req.file||!/^image\/(gif|png|jpeg|webp)$/i.test(req.file.mimetype)){removeUploadedFile(req.file);return res.status(400).json({error:'ارفع صورة GIF أو PNG أو JPG أو WEBP'});}
-    if((db.customSmileys||[]).length>=450){removeUploadedFile(req.file);return res.status(400).json({error:'وصلت إلى الحد الأعلى 450 سميل'});}
-    const name=String(req.body.name||'').trim().slice(0,40)||'سميل جديد';
-    const shortcut=String(req.body.shortcut||'').trim().slice(0,24);
-    if(!shortcut){removeUploadedFile(req.file);return res.status(400).json({error:'اكتب اختصاراً لهذا السميل مثل ض1'});}
-    if((db.customSmileys||[]).some(x=>String(x.shortcut||'').toLowerCase()===shortcut.toLowerCase())){removeUploadedFile(req.file);return res.status(409).json({error:'هذا الاختصار مستخدم لسميل آخر'});}
-    const item={id:crypto.randomUUID(),icon:'/uploads/'+req.file.filename,name,shortcut};
-    db.customSmileys.push(item);
-    try{save()}catch(e){db.customSmileys.pop();removeUploadedFile(req.file);throw e;}
-    res.json({ok:true,smiley:item});
-  }catch(e){console.error('smiley upload failed:',e);res.status(500).json({error:'تعذر حفظ السميل المرفوع'});}
-});
-app.put('/api/admin/chat-tools',requireAuth,(req,res)=>{try{const shortcuts=Array.isArray(req.body?.shortcuts)?req.body.shortcuts:[],smileys=Array.isArray(req.body?.smileys)?req.body.smileys:[];const same=(a,b)=>JSON.stringify(a||[])===JSON.stringify(b||[]);if(!same(shortcuts,db.chatShortcuts||[])&&!hasPermission(req.user,'shortcuts_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة الاختصارات'});if(!same(smileys,db.customSmileys||[])&&!hasPermission(req.user,'smileys_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة السميلات'});if(shortcuts.length>100)return res.status(400).json({error:'الحد الأعلى 100 اختصار'});if(smileys.length>450)return res.status(400).json({error:'الحد الأعلى 450 سميل'});const cleanShortcuts=[];for(const x of shortcuts){const title=String(x?.title||'').trim().slice(0,50),text=String(x?.text||'').trim().slice(0,500);if(!title&&!text)continue;if(!title||!text)return res.status(400).json({error:'كل اختصار يحتاج اسماً ونصاً'});cleanShortcuts.push({id:String(x.id||crypto.randomUUID()).slice(0,80),title,text});}const cleanSmileys=[];for(const x of smileys){const icon=String(x?.icon||'').trim().slice(0,12000),name=String(x?.name||'').trim().slice(0,40),shortcut=String(x?.shortcut||'').trim().slice(0,24);if(!icon&&!name)continue;if(!icon)return res.status(400).json({error:'رمز السميل مطلوب'});cleanSmileys.push({id:String(x.id||crypto.randomUUID()).slice(0,80),icon,name:name||'سميل',shortcut});}const oldS=db.chatShortcuts,oldM=db.customSmileys;db.chatShortcuts=cleanShortcuts;db.customSmileys=cleanSmileys;try{save()}catch(e){db.chatShortcuts=oldS;db.customSmileys=oldM;throw e;}return res.json({ok:true,shortcuts:cleanShortcuts,smileys:cleanSmileys});}catch(e){console.error('chat-tools save failed:',e);return res.status(500).json({error:'تعذر حفظ الاختصارات والسميلات'});}});
+app.post('/api/admin/chat-tools/smiley-upload',requirePermission('smileys_manage'),(req,res)=>res.status(403).json({error:'شبكة السميلات ثابتة وتحتوي على 303 وجه فقط'}));
+app.put('/api/admin/chat-tools',requireAuth,(req,res)=>{try{
+ const shortcuts=Array.isArray(req.body?.shortcuts)?req.body.shortcuts:[];
+ const smileys=Array.isArray(req.body?.smileys)?req.body.smileys:[];
+ const same=(a,b)=>JSON.stringify(a||[])===JSON.stringify(b||[]);
+ if(!same(shortcuts,db.chatShortcuts||[])&&!hasPermission(req.user,'shortcuts_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة الاختصارات'});
+ if(!same(smileys,db.customSmileys||[])&&!hasPermission(req.user,'smileys_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة السميلات'});
+ if(shortcuts.length>100)return res.status(400).json({error:'الحد الأعلى 100 اختصار'});
+ if(smileys.length!==desiredSmileyCount)return res.status(400).json({error:'شبكة السميلات ثابتة وتحتوي على 303 وجه فقط'});
+ const cleanShortcuts=[];
+ for(const x of shortcuts){const title=String(x?.title||'').trim().slice(0,50),text=String(x?.text||'').trim().slice(0,500);if(!title&&!text)continue;if(!title||!text)return res.status(400).json({error:'كل اختصار يحتاج اسماً ونصاً'});cleanShortcuts.push({id:String(x.id||crypto.randomUUID()).slice(0,80),title,text});}
+ const cleanSmileys=[];
+ for(let i=0;i<desiredSmileyCount;i++){
+   const x=smileys[i],base=suppliedSmileys[i];
+   if(!x||x.id!==base.id||x.icon!==base.icon||x.name!==base.name)return res.status(400).json({error:'لا يمكن إضافة أو حذف أو استبدال صور شبكة السميلات'});
+   cleanSmileys.push({...base,shortcut:String(x.shortcut||'').trim().slice(0,24)});
+ }
+ const oldS=db.chatShortcuts,oldM=db.customSmileys;db.chatShortcuts=cleanShortcuts;db.customSmileys=cleanSmileys;
+ try{save()}catch(e){db.chatShortcuts=oldS;db.customSmileys=oldM;throw e;}
+ return res.json({ok:true,shortcuts:cleanShortcuts,smileys:cleanSmileys});
+ }catch(e){console.error('chat-tools save failed:',e);return res.status(500).json({error:'تعذر حفظ الاختصارات والسميلات'});}});
 app.put('/api/admin/chat-filter',requireAdmin,(req,res)=>{try{const enabled=req.body?.enabled===true;const raw=Array.isArray(req.body?.words)?req.body.words:[];if(raw.length>200)return res.status(400).json({error:'الحد الأعلى 200 كلمة'});const words=[...new Set(raw.map(x=>String(x||'').trim().replace(/\s+/g,' ').slice(0,60)).filter(Boolean))];const old=db.chatFilter;db.chatFilter={enabled,words};try{save()}catch(e){db.chatFilter=old;throw e;}res.json({ok:true,chatFilter:db.chatFilter});}catch(e){console.error('chat filter save failed:',e);res.status(500).json({error:'تعذر حفظ إعدادات الفلتر'});}});
 app.get('/api/admin/audit-logs',requireAdmin,(req,res)=>{res.set('Cache-Control','no-store');res.json({items:(db.adminAuditLogs||[]).slice(0,500),total:(db.adminAuditLogs||[]).length});});
 app.get('/api/admin/data',requireAuth,(req,res)=>{

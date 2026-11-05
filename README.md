@@ -426,3 +426,11 @@ Version 46.55: private conversation header height now exactly matches the existi
 - Replaced the full persisted smiley catalogue at startup with 303 bundled face-smiley GIF assets extracted from the supplied archive.
 - Bundled smiley files are served locally from `/smileys/`; no manual uploads or admin setup are required.
 - Existing account data, messages, private media, uploads, and chat shortcuts are preserved by the catalogue-only migration.
+
+
+## v46.68.0 — fixed 303-face smiley gallery
+- Re-seed the smiley catalogue as exactly 303 bundled face GIFs; validate every sequential ID and asset path before server startup.
+- Prevent legacy or uploaded smileys from being reintroduced; preserve shortcut editing while keeping each bundled image, name, and ID fixed.
+- Remove legacy classic-smiley path handling and consolidate image rendering into one non-cropping `object-fit: contain` rule across picker, composer, messages, private chat, wall, and admin gallery.
+- Preserve the original GIF canvases and animation frames; no destructive image cropping or resampling is performed.
+- Migration changes only the smiley catalogue and seed version; accounts, messages, uploads, and chat shortcuts are preserved.
