@@ -43,6 +43,7 @@ let PRIVATE_MEDIA_DIR = path.join(DATA_DIR, 'private-media');
 try { fs.mkdirSync(PRIVATE_MEDIA_DIR, { recursive: true }); }
 catch (error) { console.error(`Cannot initialize private media directory ${PRIVATE_MEDIA_DIR}: ${error.message}`); throw error; }
 
+const app = express();
 app.disable('x-powered-by');
 app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','SAMEORIGIN');res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');res.setHeader('Permissions-Policy','camera=(self), microphone=(self), geolocation=()');if(req.path.startsWith('/api/'))res.setHeader('Cache-Control','no-store');next();});
 app.use(express.json({ limit: '2mb' }));
@@ -51,6 +52,9 @@ app.use('/uploads', express.static(UP_DIR, { maxAge: '7d' }));
 app.use(express.static(path.join(ROOT, 'public')));
 // Serve the approved single-file UI at the site root without changing its design.
 app.get('/', (req, res) => { if (!INDEX_FILE) return res.status(500).send('Rimaz setup error: index.html is missing from the deployment package.'); res.sendFile(INDEX_FILE); });
+
+const server = http.createServer(app);
+const io = new Server(server, { maxHttpBufferSize: 12 * 1024 * 1024 });
 
 const defaults = () => ({
   users: {}, guests: {}, sessions: {}, messages: [], wall: [], notifications: {}, announcements: [], adminAuditLogs: [], chatFilter: {enabled:false, words:[]}, welcomeMessages: [
