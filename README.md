@@ -1,3 +1,27 @@
+# Rimaz Chat v46.72.0 — التدقيق الإداري النهائي
+
+## v46.72.0 — مدير الإضافات المدمجة والمراجعة النهائية
+- إعادة تسمية قسم وحدات الدردشة إلى «إدارة الإضافات والوحدات المدمجة» لتوضيح أنه يتحكم بوحدات ريماز الأصلية ولا ينفذ شيفرات خارجية مرفوعة.
+- تدقيق صلاحيات الغرف وكتالوج الهدايا وسجل الدخول والنسخ الاحتياطي واستعادة قاعدة البيانات.
+- اجتياز جميع اختبارات المشروع المحلية؛ يبقى اختبار الاستضافة الحية بعد النشر.
+
+## v46.71.0 — وحدات الدردشة والصلاحيات والنسخ الكامل
+- إضافة تحكم لصاحب الموقع بتشغيل/إيقاف الحائط، الخاص، الغرف الصوتية، مكالمات الصوت/الفيديو، والهدايا.
+- التبديلات محفوظة ضمن إعدادات الموقع ومطبقة على الخادم وSocket.IO، ولا تحذف بيانات الميزة عند إيقافها.
+- تحسين أزرار تنقل لوحة الإدارة على الهاتف من حيث المساحة وسهولة اللمس والتمرير.
+- الإبقاء على صلاحيات الرتب الحالية المستقلة، مع حصر إعدادات الموقع والنسخ الاحتياطي والتحكم بالوحدات بصاحب الموقع.
+- لا يوجد تحميل أو تنفيذ لإضافات خارجية؛ الإدارة تتحكم فقط بوحدات ريماز المدمجة.
+- فصل صلاحيات الغرف إلى إنشاء وتعديل وحذف وقفل/كلمة مرور وإدارة الصور، وفصل إدارة كتالوج الهدايا عن إرسال الهدية، مع ترحيل الصلاحيات القديمة للحفاظ على الوصول السابق.
+
+## التحقق
+- `node --check server.js`
+- `node --check verify.js`
+- `node verify.js`
+- اختبارات ثابتة لتأكد تطبيق إيقاف الوحدات على الخادم.
+- يلزم اختبار نشر حي قبل اعتماد سلوك الاستضافة النهائي.
+
+---
+
 # Rimaz Chat v46.67.1 — Animated gift catalogue
 
 ## إصلاحات هذه النسخة
@@ -464,3 +488,11 @@ All 24 built-in animated GIFs are bundled in `public/gifts-pack.json`, matching 
 - Added a broader mix of romantic, floral, luxury, celebration, vehicle, music, sport, and animal gifts.
 - Kept all built-in GIF data in the single `public/gifts-pack.json` file.
 - Added a one-time v3 catalogue migration that replaces old built-ins while preserving gifts manually uploaded from the admin panel.
+
+- Added owner-only streaming full backup (`.tar.gz`) containing a session-free database snapshot, `uploads`, and `private-media`; symbolic links are excluded and media files are streamed to avoid loading the entire archive into RAM. Restore remains intentionally disabled pending a safe preview/confirmation workflow.
+
+- إضافة نسخة احتياطية كاملة مضغوطة لصاحب الموقع تشمل قاعدة البيانات دون جلسات نشطة ومجلدي uploads و private-media، مع بث الملفات واستبعاد الروابط الرمزية. الاستعادة مؤجلة إلى أن تكتمل آلية معاينة وتأكيد آمنة.
+
+
+## Safe restore (v46.71.0)
+From the owner-only Site Administration tab, select a database JSON backup, preview the record counts, then type `استعادة ريماز` to confirm. Restore preserves stored rank definitions, permission customization and feature-state metadata, and creates a timestamped recovery copy of the current database first, clears active sessions, and restores database data only. The full TAR.GZ backup still includes `uploads` and `private-media`; archive restore is not enabled in this release.

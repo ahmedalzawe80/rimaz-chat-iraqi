@@ -505,12 +505,22 @@ try {
   pass('v46.28 role-specific admin buttons and reference gift notice');
 } catch (error) { fail('v46.28 admin visibility and gift notice checks', error.message); }
 
-if (failures.length) {
-  console.error(`\n${failures.length} verification check(s) failed.`);
-  process.exitCode = 1;
-} else {
-  console.log('\nAll local static verification checks passed. This does not replace live-server/database testing.');
-}
+// v46.69 administration tools: persistent login history, owner-only settings and safe DB backup.
+try {
+  const src=fs.readFileSync(server,'utf8');
+  const html=fs.readFileSync(mainPath,'utf8');
+  const checks=[
+    ['v46.69 stores bounded login history without raw full IP addresses',src.includes('loginHistory=db.loginHistory.slice(0,1000)')&&src.includes("split('.').slice(0,3).join('.')+'.0'")&&src.includes("recordLoginEvent(req,real,'member','normal')")],
+    ['v46.69 site settings are owner-only and registration/guest gates are server-enforced',src.includes("app.put('/api/admin/site-settings',requireAuth")&&src.includes("تعديل إعدادات الموقع متاح لصاحب الموقع فقط")&&src.includes('db.siteSettings?.allowRegistration===false')&&src.includes('db.siteSettings?.allowGuests===false')],
+    ['v46.69 database backup is owner-only and excludes active sessions',src.includes("app.get('/api/admin/backup/database',requireAuth")&&src.includes('database:{...db,sessions:{}}')&&src.includes("app.get('/api/admin/login-history',requireAuth")],
+    ['v46.69 owner-only health diagnostics report database and uploads sizes without destructive actions',src.includes("app.get('/api/admin/health',requireAuth")&&src.includes('const uploads=walk(UP_DIR)')&&src.includes('heapUsed:memory.heapUsed')],
+    ['v46.69 VIP grants support bounded durations and explicit revocation',src.includes('days<1||days>365')&&src.includes("app.post('/api/admin/vip/:name/revoke',requireAuth")&&src.includes('delete p.vipGrantedAt')],
+    ['v46.69 owner admin UI includes settings, login history export and database backup',html.includes("adminTab('site')")&&html.includes('saveSiteSettings()')&&html.includes('exportLoginHistory()')&&html.includes('downloadDatabaseBackup()')&&html.includes('loadPublicSiteSettings()')],
+  ];
+  for(const [label,ok] of checks) ok?pass(label):fail(label);
+  if(html===fs.readFileSync(publicPath,'utf8'))pass('v46.69 browser entry files remain identical');else fail('v46.69 browser entry files remain identical');
+} catch(error){fail('v46.69 admin tools verification',error.message)}
+
 
 
 
@@ -525,7 +535,7 @@ try {
     if (!permissionHtml.includes(label)) throw new Error(`missing Arabic label ${label}`);
   }
   if (!permissionHtml.includes('عدم توافق نسخة الواجهة والسيرفر')) throw new Error('client compatibility preflight missing');
-  if (!permissionServer.includes('permissionSchemaVersion:2') || !permissionServer.includes('permissionKeys:ALL_PERMISSION_KEYS')) throw new Error('server permission schema metadata missing');
+  if (!permissionServer.includes('permissionSchemaVersion:3') || !permissionServer.includes('permissionKeys:ALL_PERMISSION_KEYS')) throw new Error('server permission schema metadata missing');
   if (!permissionHtml.includes("['الأدوات والإضافات الجديدة',['audit_view','stats_view','chat_filter_manage','member_status_manage']]")) throw new Error('custom rank editor missing new permission group');
   pass('v46.27 Arabic permission labels and client/server schema compatibility');
 } catch (error) { fail('v46.27 permission compatibility checks', error.message); }
@@ -714,3 +724,110 @@ try {
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
   if (html === fs.readFileSync(publicPath, 'utf8')) pass('v46.67 browser entry files remain identical'); else fail('v46.67 browser entry files remain identical');
 } catch (error) { fail('v46.67 animated gift catalogue checks', error.message); }
+
+
+
+// v46.70: owner-managed built-in modules are persisted and enforced server-side.
+try {
+  const serverText = fs.readFileSync(server, 'utf8');
+  const htmlText = fs.readFileSync(mainPath, 'utf8');
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const checks = [
+    ['v46.72 package version is current', pkg.version === '46.72.0'],
+    ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
+    ['owner site settings API persists only the known module switches', serverText.includes("if(!isOwner(req.user))return res.status(403).json({error:'تعديل إعدادات الموقع متاح لصاحب الموقع فقط'})") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
+    ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
+    ['private chat module is enforced on history, contacts, media, and Socket.IO send', serverText.includes("app.get('/api/private/history',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))") && serverText.includes("app.get('/api/private/contacts',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))") && serverText.includes("socket.on('private-message',d=>{const u=socket.data.user;if(!u||!d?.to)return;if(!siteModuleEnabled('privateChat'))")],
+    ['voice room module is enforced on join, mic requests, and peer signaling', serverText.includes("targetRoom.kind==='voice'&&!siteModuleEnabled('voiceRooms')") && serverText.includes("if(!siteModuleEnabled('voiceRooms'))return socket.emit('error-msg'") && serverText.includes("socket.on('voice-peer-offer',d=>{if(!siteModuleEnabled('voiceRooms'))return")],
+    ['video-call module is enforced on call offer and answer', serverText.includes("socket.on('call-offer',d=>{if(!siteModuleEnabled('videoCalls'))") && serverText.includes("socket.on('call-answer',d=>{if(!siteModuleEnabled('videoCalls'))return")],
+    ['gift module is enforced on send, upload, and catalogue deletion', serverText.includes("app.post('/api/admin/gift',(req,res)=>{requireAuth(req,res,()=>{if(!siteModuleEnabled('gifts'))") && serverText.includes("app.post('/api/admin/gifts/catalog/upload',requireAuth,uploadSmallImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!siteModuleEnabled('gifts'))") && serverText.includes("app.post('/api/admin/gifts/catalog/delete',requireAuth,(req,res)=>{if(!siteModuleEnabled('gifts'))")],
+    ['admin UI exposes all five module switches and saves them', ['moduleWall','modulePrivateChat','moduleVoiceRooms','moduleVideoCalls','moduleGifts'].every(id=>htmlText.includes(id)) && htmlText.includes('saveSiteSettings()') && htmlText.includes('إدارة الإضافات والوحدات المدمجة')],
+    ['mobile admin navigation has larger touch targets and bounded sticky scrolling', htmlText.includes('position:sticky;top:0;z-index:5;max-height:32vh;overflow-y:auto') && htmlText.includes('min-height:34px')],
+    ['module flags are included in public settings and server health diagnostics', serverText.includes('modules:{...(s.modules||{})}') && serverText.includes('modules:{...DEFAULT_SITE_MODULES,...(db.siteSettings?.modules||{})}')],
+    ['external executable plugin loading is intentionally not introduced', !serverText.includes('eval(') && !serverText.includes('new Function(')],
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+  if (htmlText === fs.readFileSync(publicPath, 'utf8')) pass('v46.70 browser entry files remain identical');
+  else fail('v46.70 browser entry files remain identical');
+} catch (error) { fail('v46.70 module administration checks', error.message); }
+
+
+// v46.70.1: room operations and gift catalogue permissions are independently enforceable.
+try {
+  const serverText = fs.readFileSync(server, 'utf8');
+  const htmlText = fs.readFileSync(mainPath, 'utf8');
+  const checks = [
+    ['room create, edit, delete, lock, and image permissions are separate catalog entries', ['room_create','room_edit','room_delete','room_lock','room_image_manage'].every(k=>serverText.includes(k+':'))],
+    ['legacy rooms_manage access migrates to all room sub-permissions', serverText.includes("if(next.has('rooms_manage')) for(const k of ['room_create','room_edit','room_delete','room_lock','room_image_manage']) next.add(k)")],
+    ['room route permission resolver distinguishes each operation', serverText.includes("if(p==='/api/admin/room'&&req.method==='POST')return 'room_create'") && serverText.includes("if(/\\/lock$/.test(p))return 'room_lock'") && serverText.includes("if(req.method==='PATCH')return 'room_edit'") && serverText.includes("return 'room_delete'")],
+    ['gift catalogue upload and deletion require gift_catalog_manage separately from gift sending', serverText.includes("hasPermission(req.user,'gift_catalog_manage')") && serverText.includes("if(!hasPermission(req.user,'gifts'))return res.status(403)")],
+    ['legacy gifts permission migrates to preserve previous catalogue management access', serverText.includes("if(next.has('gifts')) next.add('gift_catalog_manage')")],
+    ['room UI hides create/edit/delete/lock/image actions without their matching permissions', htmlText.includes("hasClientPermission('room_create')") && htmlText.includes("hasClientPermission('room_image_manage')") && htmlText.includes("hasClientPermission('room_lock')") && htmlText.includes("hasClientPermission('room_edit')") && htmlText.includes("hasClientPermission('room_delete')")],
+    ['gift catalogue UI visibility uses its own permission', htmlText.includes("hasClientPermission('gift_catalog_manage')")],
+    ['role permission editor exposes all room sub-permissions and separate gift catalogue control', ['room_create','room_edit','room_delete','room_lock','room_image_manage','gift_catalog_manage'].every(k=>htmlText.includes(k)) && htmlText.includes('function rankPermissionOptions')],
+    ['admin navigation filters the real tab buttons and recognizes granular room/gift access', htmlText.includes("document.querySelectorAll('.overlay.admin .tabs button')") && htmlText.includes("rooms:['rooms_manage','room_create','room_edit','room_delete','room_lock','room_image_manage'].some(can)") && htmlText.includes("gifts:can('gifts')||can('gift_catalog_manage')||can('vip')")],
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+} catch (error) { fail('v46.70.1 granular permission checks', error.message); }
+
+
+
+// v46.70.2: full owner-only backup streams database and private media in USTAR/GZIP.
+// v46.71.0: database restore is owner-only, two-phase, bounded, and rollback-protected.
+try {
+  const serverText = fs.readFileSync(server, 'utf8');
+  const htmlText = fs.readFileSync(mainPath, 'utf8');
+  const checks = [
+    ['restore preview and confirm routes are owner-only', serverText.includes("app.post('/api/admin/restore/database/preview',requireAuth") && serverText.includes("app.post('/api/admin/restore/database/confirm',requireAuth") && (serverText.match(/if\(!isOwner\(req\.user\)\)return res\.status\(403\)/g)||[]).length>=2],
+    ['restore upload is memory-only and capped at 20MB', serverText.includes('multer.memoryStorage()') && serverText.includes('fileSize:20*1024*1024')],
+    ['restore accepts only known versioned Rimaz JSON formats and validates schema', serverText.includes("['rimaz-database-backup','rimaz-full-backup']") && serverText.includes('function validateDatabaseRestoreFile') && serverText.includes('النسخة لا تحتوي البنية الأساسية لقاعدة بيانات ريماز') && serverText.includes('function restoreContainsOwner') && serverText.includes('النسخة لا تحتوي حساب صاحب الموقع الحالي')],
+    ['restore preview uses a short-lived random token bound to owner identity', serverText.includes('crypto.randomBytes(32).toString(\'hex\')') && serverText.includes('expiresAt:Date.now()+5*60*1000') && serverText.includes('pending.owner!==keyName(req.user.name)')],
+    ['restore confirmation requires exact Arabic phrase and creates recovery copy before atomic save', serverText.includes("confirmation!=='استعادة ريماز'") && serverText.includes(".pre-restore-") && serverText.includes('db=pending.database') && serverText.includes('db=previous')],
+    ['restore clears sessions and disconnects active sockets', serverText.includes('db.sessions={};db.privateMessages=[];') && serverText.includes('io.disconnectSockets(true)')],
+    ['admin UI previews counts and requires typed confirmation before restore', htmlText.includes('previewDatabaseRestore()') && htmlText.includes('confirmDatabaseRestore()') && htmlText.includes('استعادة ريماز') && htmlText.includes('accept=".json,application/json"')],
+    ['browser entry files remain identical after restore UI update', fs.readFileSync(mainPath,'utf8')===fs.readFileSync(publicPath,'utf8')]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+  const helperStart=serverText.indexOf('function validateDatabaseRestoreFile(buffer){');
+  const helperEnd=serverText.indexOf('function purgeExpiredDatabaseRestores()',helperStart);
+  let runtimeRestoreChecks=false;
+  try{
+    const helperSource=serverText.slice(helperStart,helperEnd);
+    const defaultsFixture=()=>({users:{},guests:{},sessions:{old:'session'},messages:[],wall:[],wallEnabled:true,notifications:{},announcements:[],adminAuditLogs:[],loginHistory:[],ownerSetupCompleted:false,giftCatalogV3Initialized:false,smileysSeedVersion:0,smileysSeeded:false,rankDefinitions:[],rolePermissionMeta:{customized:{}},siteSettings:{},chatFilter:{},welcomeMessages:[],profiles:{},lastLike:{},permissionOverrides:{},rolePermissions:{},rankAudit:[],giftCatalog:[],chatShortcuts:[],customSmileys:[],rooms:[],roomBans:{},roomMutes:{},roomKicks:{},globalBans:{},globalIpBans:{},wallLikes:{},wallComments:{},privateMessages:[{text:'ephemeral'}],privateHidden:{},privateRead:{},ignored:{}});
+    const validate=vm.runInNewContext(helperSource+';validateDatabaseRestoreFile;',{Buffer,defaults:defaultsFixture});
+    const database=defaultsFixture();database.users={Ali:{role:'owner'}};database.guests={Guest:{}};database.rooms=[{id:'public'}];database.messages=[{text:'hello'}];database.sessions={secret:'must-not-restore'};database.privateMessages=[{text:'not-persisted'}];
+    const valid=validate(Buffer.from(JSON.stringify({format:'rimaz-database-backup',version:1,createdAt:'2026-01-01T00:00:00Z',appVersion:'test',database})));
+    const badFormat=(()=>{try{validate(Buffer.from(JSON.stringify({format:'unknown',version:1,database})));return false;}catch(_){return true;}})();
+    const badSchema=(()=>{try{validate(Buffer.from(JSON.stringify({format:'rimaz-database-backup',version:1,database:{users:[],guests:{},rooms:[],messages:[]}})));return false;}catch(_){return true;}})();
+    runtimeRestoreChecks=valid.summary.members===1&&valid.summary.guests===1&&valid.summary.rooms===1&&valid.summary.messages===1&&Object.keys(valid.clean.sessions).length===0&&valid.clean.privateMessages.length===0&&badFormat&&badSchema;
+  }catch(_){runtimeRestoreChecks=false;}
+  runtimeRestoreChecks?pass('restore validator runtime fixtures accept valid backup, clear sessions, and reject bad format/schema'):fail('restore validator runtime fixtures');
+} catch (error) { fail('v46.71.0 database restore checks', error.message); }
+
+
+try {
+  const serverText = fs.readFileSync(server, 'utf8');
+  const htmlText = fs.readFileSync(mainPath, 'utf8');
+  const checks = [
+    ['full backup route is owner-only and streams gzip archive', serverText.includes("app.get('/api/admin/backup/full',requireAuth") && serverText.includes('source=Readable.from(fullBackupTar()),archive=zlib.createGzip') && serverText.includes('source.pipe(archive).pipe(res)')],
+    ['full backup includes sanitized database snapshot, uploads, and private-media', serverText.includes("name:'database/rimaz-database.json'") && serverText.includes("['uploads',UP_DIR],['private-media',PRIVATE_MEDIA_DIR]") && serverText.includes('sessions:{}')],
+    ['archive traversal skips symbolic links and streams file data instead of loading all media into RAM', serverText.includes('if(item.isSymbolicLink())continue') && serverText.includes('fs.createReadStream(entry.disk)')],
+    ['admin page offers both database-only and full media backup downloads', htmlText.includes("downloadFullBackup()") && htmlText.includes("'/api/admin/backup/full'") && htmlText.includes('نسخة كاملة مع الصور والوسائط')],
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+  const start = serverText.indexOf('function tarOctal('), end = serverText.indexOf('// Owner-only site controls', start);
+  if (start < 0 || end < 0) throw new Error('tar helper not found');
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-backup-test-'));
+  try {
+    fs.mkdirSync(path.join(temp, 'uploads')); fs.mkdirSync(path.join(temp, 'private-media'));
+    fs.writeFileSync(path.join(temp, 'uploads', 'sample.txt'), 'rimaz backup sample');
+    const context = {Buffer,fs,path,Date,db:{users:{sample:{name:'sample'}},sessions:{secret:'must-not-export'}},UP_DIR:path.join(temp,'uploads'),PRIVATE_MEDIA_DIR:path.join(temp,'private-media'),require:(id)=>id==='./package.json'?{version:'test'}:require(id)};
+    vm.runInNewContext(serverText.slice(start,end)+"\nthis.make=async()=>{const parts=[];for await(const part of fullBackupTar())parts.push(part);return Buffer.concat(parts)};",context);
+    context.make().then(buf=>{
+      const ok=buf.length%512===0&&buf.subarray(257,263).toString()==='ustar\0'&&buf.includes(Buffer.from('database/rimaz-database.json'))&&buf.includes(Buffer.from('uploads/sample.txt'))&&buf.includes(Buffer.from('rimaz backup sample'))&&!buf.includes(Buffer.from('must-not-export'));
+      ok?pass('full backup USTAR stream includes media and excludes active session tokens'):fail('full backup USTAR stream content and alignment');
+      fs.rmSync(temp,{recursive:true,force:true});
+      if(failures.length){console.error(`\n${failures.length} verification check(s) failed.`);process.exitCode=1;}else console.log('\nAll local static and archive checks passed. Live-server testing is still required.');
+    }).catch(error=>{fail('full backup USTAR stream test',error.message);fs.rmSync(temp,{recursive:true,force:true});process.exitCode=1;});
+  } catch(error) { fs.rmSync(temp,{recursive:true,force:true}); throw error; }
+} catch (error) { fail('v46.70.2 full backup checks', error.message); }
