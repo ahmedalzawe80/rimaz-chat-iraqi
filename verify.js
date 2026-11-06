@@ -280,7 +280,7 @@ try {
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
   const levels = { 'super-red':400, 'super-white':500, 'super-black':600, 'crown-silver':700, 'crown-gold':800, 'admin-shield':900, 'admin-full':1000 };
-  const simulate = new Function('levels', `const isOwner = user => !!user?.owner; const isOwnerName = name => name === 'site-owner'; const coreRankLevelForName = name => levels[name] ?? null; ${source.match(/function higherRankTargetError\(actor,targetName\)\{[\s\S]*?\n\}/)[0]}; return higherRankTargetError;`)(levels);
+  const simulate = new Function('levels', `const isOwner = user => !!user?.owner; const isOwnerName = name => name === 'site-owner'; const hasPermission = (user,p) => p==='permission_manage' && !!user?.fullAdmin; const coreRankLevelForName = name => levels[name] ?? null; ${source.match(/function higherRankTargetError\(actor,targetName\)\{[\s\S]*?\n\}/)[0]}; return higherRankTargetError;`)(levels);
   const scenarios = [
     ['lower super cannot act on admin', simulate({name:'super-red'}, 'admin-shield') === true],
     ['admin can act on lower super', simulate({name:'admin-shield'}, 'super-red') === false],
@@ -514,10 +514,10 @@ try {
   const hasBlock=src.match(/function hasPermission\(user, permission\)\{([\s\S]*?)\n\}/)?.[1]||'';
   if(!hasBlock.includes('if(isOwner(user)) return true;')) throw new Error('owner is not the sole unconditional principal');
   if(hasBlock.includes("if(role==='admin')")||hasBlock.includes('return true;\n  }')) throw new Error('legacy admin still bypasses rank permissions');
-  if(!hasBlock.includes('if(rankDef){')||!hasBlock.includes('return allowed.includes(permission);')) throw new Error('active rank definition is not authoritative');
+  if(!hasBlock.includes('rankWasCustomized')||!hasBlock.includes('baseWasCustomized')||!hasBlock.includes('rankAllowed.includes(permission)')) throw new Error('explicit base-role/rank permission precedence is missing');
   if(hasBlock.includes("if(permission==='permission_manage') return false;")) throw new Error('explicit permission_manage grants are still blocked');
   if(!src.includes("if(p==='/api/admin/gifts/catalog')return 'gift_catalog_manage';")) throw new Error('gift catalog route is not separated from sending gifts');
-  if(!src.includes("if(role==='admin'&&!isOwner(actor))")) throw new Error('non-owner can still grant legacy admin role');
+  if(src.includes("if(role==='admin'&&!isOwner(actor))")) throw new Error('delegated role assignment is still hard-coded owner-only');
   if(!html.includes("const owner=!!(me?.owner||me?.role==='owner');")||html.includes('if(owner||admin)')) throw new Error('admin tabs still bypass granular filtering');
   for(const key of ['room_create','room_edit','room_delete','room_lock','room_image_manage','gift_catalog_manage','private_chat_override','presence_hidden_view','hidden_login','ghost_login','staff_notice','staff_media']) if(!html.includes(key)) throw new Error(`missing granular permission UI: ${key}`);
   if(!html.includes("function canManageRolePermissions(){return !!(me?.owner||me?.role==='owner'||hasClientPermission('permission_manage'));}")) throw new Error('permission editor does not honor delegated permission_manage');
@@ -530,7 +530,7 @@ try {
   const src=fs.readFileSync(server,'utf8');
   const route=src.slice(src.indexOf("app.get('/api/admin/data'"),src.indexOf("app.post('/api/rooms'",src.indexOf("app.get('/api/admin/data'")));
   if(!route.includes('panel_access')||!route.includes('never grants access to every dataset')) throw new Error('permission-shaped response guard missing');
-  for(const gate of ["if(!can('messages_delete'))payload.messages=[];","if(!can('audit_view'))payload.adminAuditLogs=[];","if(!can('stats_view'))payload.stats={};","if(!isOwner(req.user))payload.rolePermissions={};","if(!can('rank_assign'))payload.rankDefinitions=[];"]){if(!route.includes(gate))throw new Error('missing data gate '+gate)}
+  for(const gate of ["if(!can('messages_delete'))payload.messages=[];","if(!can('audit_view'))payload.adminAuditLogs=[];","if(!can('stats_view'))payload.stats={};","if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))payload.rolePermissions={};","if(!can('rank_assign'))payload.rankDefinitions=[];"]){if(!route.includes(gate))throw new Error('missing data gate '+gate)}
   if(src.includes("if(permission==='panel_access' && !['member','owner'].includes(role)) return true;"))throw new Error('legacy staff panel access remains implicit');
   if(!src.includes("voice_mic_override:'تجاوز شرط اللايكات للمايكات'"))throw new Error('voice mic override is not individually permissioned');
   if(src.includes("['panel_access',...requested.filter(x=>allowed.includes(x))]"))throw new Error('panel access is still forced on every role');
@@ -558,7 +558,11 @@ try {
   defs['admin-shield'].permissions=[];if(check(staff,'panel_access'))throw new Error('panel_access cannot be disabled for a rank');
   db.permissionOverrides.staff=['kick_room','permission_manage'];
   if(!check(staff,'kick_room')||check(staff,'permission_manage'))throw new Error('manual override safety is incorrect');
-  pass('v46.73 runtime permission checks enforce owner-only and rank-specific access');
+  db.rolePermissionMeta={customized:{admin:true},updatedAt:{admin:2000}};db.rolePermissions.admin=['panel_access','users_view','kick_room','permission_manage'];
+  if(!check(staff,'kick_room')||!check(staff,'permission_manage'))throw new Error('most recently customized admin base role did not apply to the admin badge');
+  db.permissionOverrides.staff=[];defs['admin-shield'].permissions=['panel_access'];defs['admin-shield'].updatedAt=3000;db.rolePermissionMeta.customized['admin-shield']=true;
+  if(check(staff,'kick_room'))throw new Error('most recently customized rank did not take priority');
+  pass('v46.73 runtime permission checks enforce owner boundary and explicit rank/base-role precedence');
 } catch(error) { fail('v46.73 runtime permission behavior',error.message); }
 
 // v46.69 administration tools: persistent login history, owner-only settings and safe DB backup.
@@ -568,8 +572,8 @@ try {
   const checks=[
     ['v46.69 stores bounded login history without raw full IP addresses',src.includes('loginHistory=db.loginHistory.slice(0,1000)')&&src.includes("split('.').slice(0,3).join('.')+'.0'")&&src.includes("recordLoginEvent(req,real,'member','normal')")],
     ['v46.69 site settings are owner/delegated-site-admin protected and registration/guest gates are server-enforced',src.includes("app.put('/api/admin/site-settings',requireAuth")&&src.includes("hasPermission(req.user,'site_admin')")&&src.includes('db.siteSettings?.allowRegistration===false')&&src.includes('db.siteSettings?.allowGuests===false')],
-    ['v46.69 database backup is owner-only and excludes active sessions',src.includes("app.get('/api/admin/backup/database',requireAuth")&&src.includes('database:{...db,sessions:{}}')&&src.includes("app.get('/api/admin/login-history',requireAuth")],
-    ['v46.69 owner-only health diagnostics report database and uploads sizes without destructive actions',src.includes("app.get('/api/admin/health',requireAuth")&&src.includes('const uploads=walk(UP_DIR)')&&src.includes('heapUsed:memory.heapUsed')],
+    ['v46.69 database backup is protected and excludes active sessions',src.includes("app.get('/api/admin/backup/database',requireAuth")&&src.includes('database:{...db,sessions:{}}')&&src.includes("app.get('/api/admin/login-history',requireAuth")],
+    ['v46.69 delegated health diagnostics report database and uploads sizes without destructive actions',src.includes("app.get('/api/admin/health',requireAuth")&&src.includes('const uploads=walk(UP_DIR)')&&src.includes('heapUsed:memory.heapUsed')],
     ['v46.69 VIP grants support bounded durations and explicit revocation',src.includes('days<1||days>365')&&src.includes("app.post('/api/admin/vip/:name/revoke',requireAuth")&&src.includes('delete p.vipGrantedAt')],
     ['v46.69 owner admin UI includes settings, login history export and database backup',html.includes("adminTab('site')")&&html.includes('saveSiteSettings()')&&html.includes('exportLoginHistory()')&&html.includes('downloadDatabaseBackup()')&&html.includes('loadPublicSiteSettings()')],
   ];
@@ -789,7 +793,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.73.1 package version is current', pkg.version === '46.73.1'],
+    ['v46.73.2 package version is current', pkg.version === '46.73.2'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -834,10 +838,10 @@ try {
   const serverText = fs.readFileSync(server, 'utf8');
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const checks = [
-    ['restore preview and confirm routes are owner-only', serverText.includes("app.post('/api/admin/restore/database/preview',requireAuth") && serverText.includes("app.post('/api/admin/restore/database/confirm',requireAuth") && (serverText.match(/if\(!isOwner\(req\.user\)\)return res\.status\(403\)/g)||[]).length>=2],
+    ['restore preview and confirm routes support delegated site_admin while preserving owner in backup', serverText.includes("app.post('/api/admin/restore/database/preview',requireAuth") && serverText.includes("app.post('/api/admin/restore/database/confirm',requireAuth") && (serverText.match(/hasPermission\(req\.user,'site_admin'\)/g)||[]).length>=2 && serverText.includes("protectedOwnerName=process.env.OWNER_NAME||\'owner\'")],
     ['restore upload is memory-only and capped at 20MB', serverText.includes('multer.memoryStorage()') && serverText.includes('fileSize:20*1024*1024')],
-    ['restore accepts only known versioned Rimaz JSON formats and validates schema', serverText.includes("['rimaz-database-backup','rimaz-full-backup']") && serverText.includes('function validateDatabaseRestoreFile') && serverText.includes('النسخة لا تحتوي البنية الأساسية لقاعدة بيانات ريماز') && serverText.includes('function restoreContainsOwner') && serverText.includes('النسخة لا تحتوي حساب صاحب الموقع الحالي')],
-    ['restore preview uses a short-lived random token bound to owner identity', serverText.includes('crypto.randomBytes(32).toString(\'hex\')') && serverText.includes('expiresAt:Date.now()+5*60*1000') && serverText.includes('pending.owner!==keyName(req.user.name)')],
+    ['restore accepts only known versioned Rimaz JSON formats and validates schema', serverText.includes("['rimaz-database-backup','rimaz-full-backup']") && serverText.includes('function validateDatabaseRestoreFile') && serverText.includes('النسخة لا تحتوي البنية الأساسية لقاعدة بيانات ريماز') && serverText.includes('function restoreContainsOwner') && serverText.includes('النسخة لا تحتوي حساب صاحب الموقع')],
+    ['restore preview uses a short-lived random token bound to the requesting admin', serverText.includes('crypto.randomBytes(32).toString(\'hex\')') && serverText.includes('expiresAt:Date.now()+5*60*1000') && serverText.includes('pending.owner!==keyName(req.user.name)')],
     ['restore confirmation requires exact Arabic phrase and creates recovery copy before atomic save', serverText.includes("confirmation!=='استعادة ريماز'") && serverText.includes(".pre-restore-") && serverText.includes('db=pending.database') && serverText.includes('db=previous')],
     ['restore clears sessions and disconnects active sockets', serverText.includes('db.sessions={};db.privateMessages=[];') && serverText.includes('io.disconnectSockets(true)')],
     ['admin UI previews counts and requires typed confirmation before restore', htmlText.includes('previewDatabaseRestore()') && htmlText.includes('confirmDatabaseRestore()') && htmlText.includes('استعادة ريماز') && htmlText.includes('accept=".json,application/json"')],
@@ -865,7 +869,7 @@ try {
   const serverText = fs.readFileSync(server, 'utf8');
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const checks = [
-    ['full backup route is owner-only and streams gzip archive', serverText.includes("app.get('/api/admin/backup/full',requireAuth") && serverText.includes('source=Readable.from(fullBackupTar()),archive=zlib.createGzip') && serverText.includes('source.pipe(archive).pipe(res)')],
+    ['full backup route supports delegated site_admin and streams gzip archive', serverText.includes("app.get('/api/admin/backup/full',requireAuth") && serverText.includes('source=Readable.from(fullBackupTar()),archive=zlib.createGzip') && serverText.includes('source.pipe(archive).pipe(res)')],
     ['full backup includes sanitized database snapshot, uploads, and private-media', serverText.includes("name:'database/rimaz-database.json'") && serverText.includes("['uploads',UP_DIR],['private-media',PRIVATE_MEDIA_DIR]") && serverText.includes('sessions:{}')],
     ['archive traversal skips symbolic links and streams file data instead of loading all media into RAM', serverText.includes('if(item.isSymbolicLink())continue') && serverText.includes('fs.createReadStream(entry.disk)')],
     ['admin page offers both database-only and full media backup downloads', htmlText.includes("downloadFullBackup()") && htmlText.includes("'/api/admin/backup/full'") && htmlText.includes('نسخة كاملة مع الصور والوسائط')],
@@ -893,6 +897,7 @@ try {
   const src=fs.readFileSync(server,'utf8'); const html=fs.readFileSync(mainPath,'utf8');
   const checks=[
     ['permission_manage is grantable only through an explicit rank permission',!src.includes("if(permission==='permission_manage') return false;")&&src.includes("hasPermission(req.user,'permission_manage')")],
+    ['legacy customized admin role gets precedence timestamps during upgrade',src.includes('permissionPrecedenceMigrationChanged')&&src.includes('db.rolePermissionMeta.updatedAt[role]=Date.now()')],
     ['delegated permission editors cannot grant permissions they do not hold',src.includes('const excessive=requested.filter(k=>!own.has(k))')],
     ['site administration is a separate explicit permission',src.includes("site_admin:'إدارة الموقع الكاملة")&&html.includes("site:can('site_admin')")],
     ['site settings, login history, health, backups and restore honor site_admin', (src.match(/hasPermission\(req.user,'site_admin'\)/g)||[]).length>=6],

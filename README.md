@@ -523,6 +523,13 @@ From the owner-only Site Administration tab, select a database JSON backup, prev
 - احتفظ بنسخة احتياطية مستقلة قبل أي تحديث.
 
 
-## v46.73.1 — Delegated administration
+## v46.73.2 — Delegated administration
 
 تمت إضافة صلاحية `site_admin` للتحكم في قسم إدارة الموقع، والسماح بتفويض `permission_manage` صراحةً. يمكن للمفوّض إدارة صلاحيات الرتب ضمن مجموعة الصلاحيات التي يمتلكها فقط؛ لا يمكنه منح صلاحيات أعلى من صلاحياته.
+
+
+## Delegated administration (v46.73.2)
+
+The owner can grant `site_admin`, `permission_manage`, `rank_assign`, and `role_assign` to an admin or a lower visual rank. The most recently saved custom permission profile (base role or active rank) controls the account. Delegates can only pass on permissions they already possess; the site-owner account remains protected.
+
+For databases from v46.73.1 or earlier, the one-time permission-precedence migration prefers an already customized generic role such as `admin` when legacy timestamps are unavailable. Saving a specific visual rank later makes that rank's permission set take priority.
