@@ -16,6 +16,33 @@ const serverCheck = spawnSync(process.execPath, ['--check', server], { encoding:
 if (serverCheck.status === 0) pass('server.js syntax');
 else fail('server.js syntax', serverCheck.stderr || serverCheck.stdout);
 
+// Regression checks for the production startup bootstrap and packed smiley assets.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const appInit = source.indexOf('const app = express();');
+  const serverInit = source.indexOf('const server = http.createServer(app);');
+  const ioInit = source.indexOf('const io = new Server(server);');
+  const firstUse = source.indexOf("app.disable('x-powered-by');");
+  if (appInit >= 0 && serverInit > appInit && ioInit > serverInit && firstUse > ioInit) pass('Express, HTTP, and Socket.IO are initialized before first use');
+  else fail('server bootstrap initialization order');
+  const packPath = path.join(root, 'public', 'smileys-pack.json');
+  const pack = JSON.parse(fs.readFileSync(packPath, 'utf8'));
+  const names = Object.keys(pack).filter(name => /^smiley-\d+\.(?:gif|png|jpe?g|webp)$/i.test(name));
+  const valid = names.length === 238 && names.every(name => {
+    const item = pack[name];
+    let bytes;
+    try { bytes = Buffer.from(item.data, 'base64'); } catch { return false; }
+    if (!bytes.length || !item.type) return false;
+    if (bytes.subarray(0, 6).toString() === 'GIF87a' || bytes.subarray(0, 6).toString() === 'GIF89a') return item.type === 'image/gif';
+    if (bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) return item.type === 'image/png';
+    if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return item.type === 'image/jpeg';
+    if (bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP') return item.type === 'image/webp';
+    return false;
+  });
+  if (valid) pass('all 238 packed smileys have valid base64 and matching MIME signatures');
+  else fail('packed smiley asset integrity or MIME signature');
+} catch (error) { fail('startup and smiley-pack regression checks', error.message); }
+
 const mainPath = path.join(root, 'index.html');
 const publicPath = path.join(root, 'public', 'index.html');
 let html = '';

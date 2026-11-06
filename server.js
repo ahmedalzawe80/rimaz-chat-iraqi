@@ -7,6 +7,12 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { Server } = require('socket.io');
 
+// Initialize the Express application and its HTTP/Socket.IO servers before
+// registering middleware, routes, or socket handlers below.
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
 // All supplied smiley images are bundled into one JSON asset file.
 // The browser still uses normal /smileys/<file> URLs, served from this packed asset.
 const SMILEY_PACK_FILE = path.join(__dirname, 'public', 'smileys-pack.json');
