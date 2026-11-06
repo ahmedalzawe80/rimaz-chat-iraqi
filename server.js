@@ -1158,7 +1158,7 @@ app.put('/api/admin/member-decoration',requireAuth,(req,res)=>{
 });
 
 // Rank definitions are editable independently from chat UI, buttons and colors.
-app.get('/api/admin/ranks' ,requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'rank_assign'))return res.status(403).json({error:'ما عندك صلاحية عرض الرتب أو منحها'});res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:7,permissionKeys:ALL_PERMISSION_KEYS,ranks:(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)),catalog:PERMISSION_CATALOG});});
+app.get('/api/admin/ranks' ,requireAuth,(req,res)=>{const canAssign=isOwner(req.user)||hasPermission(req.user,'rank_assign');const canArt=canManageRankArt(req.user);if(!canAssign&&!canArt)return res.status(403).json({error:'ما عندك صلاحية عرض الرتب أو أشكالها'});const ranks=(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)).map(r=>{const item={...r};if(!canAssign)delete item.permissions;return item;});res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:7,permissionKeys:canAssign?ALL_PERMISSION_KEYS:[],ranks,catalog:canAssign?PERMISSION_CATALOG:{}});});
 // Rank definitions are fixed: only the seven built-in ranks can be assigned or permission-edited.
 app.get('/api/admin/permissions',requireAuth,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الرتب'});

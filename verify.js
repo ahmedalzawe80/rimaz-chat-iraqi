@@ -783,7 +783,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.75.0 package version is current', pkg.version === '46.75.0'],
+    ['v46.75.1 package version is current', pkg.version === '46.75.1'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -904,13 +904,14 @@ try {
 try {
   const src=fs.readFileSync(server,'utf8'),html=fs.readFileSync(mainPath,'utf8');
   const checks=[
+    ['rank artwork manager can read rank labels without rank-assignment permission and does not receive permission arrays',src.includes('const canAssign=isOwner(req.user)||hasPermission(req.user,\'rank_assign\');const canArt=canManageRankArt(req.user);if(!canAssign&&!canArt)')&&src.includes('if(!canAssign)delete item.permissions;')],
     ['rank art and per-member decoration are independent permission keys',src.includes("rank_art_manage:'إدارة مكتبة أشكال الرتب وربطها بالرتب'")&&src.includes("member_decoration_manage:'تخصيص وإزالة زخرفة عضو محدد'")],
     ['rank art library upload validates supported image types and stores metadata',src.includes("/api/admin/rank-art/upload")&&src.includes("['image/gif','image/png','image/jpeg','image/webp']")&&src.includes('db.rankArtCatalog.push(item)')],
     ['rank artwork assignment is permission-gated and restricted to the seven ranks',src.includes("/api/admin/rank-art/assign")&&src.includes("hasPermission(req.user,'rank_art_manage')")&&src.includes('RANK_PERMISSION_PROFILES.includes(rank)')],
     ['rank art deletion clears references without deleting ranks or members',src.includes("app.delete('/api/admin/rank-art/:id'")&&src.includes('delete profileData.customDecorationImage')&&src.includes('delete rank.artUrl')],
     ['individual member decoration assignment is permission-gated and protects the owner',src.includes("/api/admin/member-decoration")&&src.includes("hasPermission(req.user,'member_decoration_manage')")&&src.includes('isOwnerName(n)')],
     ['rank and member artwork render beside names',html.includes('x.profile.rankArt')&&html.includes('x.profile.customDecorationImage')],
-    ['rank art controls are inside the rank permissions tab and tab visibility is permission-based',html.includes('adminRankArtManager()')&&html.includes("rankpermissions:can('permission_manage')||can('rank_art_manage')||can('member_decoration_manage')")&&html.includes("if(canManageRolePermissions()||hasClientPermission('rank_art_manage')||hasClientPermission('member_decoration_manage'))b.innerHTML+=await adminRankPermissionEditor()")&&html.includes("rankpermissions:canManageRolePermissions()||hasClientPermission('rank_art_manage')||hasClientPermission('member_decoration_manage')")],
+    ['rank artwork controls live in ranks tab while permission keys only gate access',html.includes('const artworkPanel=(canArt||canMemberDecor)?await adminRankArtManager():')&&html.includes("roles:can('rank_assign')||can('rank_art_manage')||can('member_decoration_manage')")&&html.includes("rankpermissions:can('permission_manage')")&&html.includes("roles:hasClientPermission('rank_assign')||hasClientPermission('rank_art_manage')||hasClientPermission('member_decoration_manage')")&&html.includes("rankpermissions:canManageRolePermissions()")&&!html.slice(html.indexOf('async function adminRankPermissionEditor'),html.indexOf('function setAllRankPermissions')).includes('adminRankArtManager()')],
     ['member profile exposes individual decoration picker only with its permission',html.includes("can('member_decoration_manage')")&&html.includes('openMemberDecorationPicker')],
     ['entry HTML files remain identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')]
   ];
