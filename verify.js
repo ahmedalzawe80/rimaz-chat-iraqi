@@ -692,3 +692,25 @@ try {
   const deployedHtml = fs.readFileSync(publicPath, 'utf8');
   if (html === deployedHtml) pass('v46.65 browser entry files remain identical'); else fail('v46.65 browser entry files remain identical');
 } catch (error) { fail('v46.65 camera switch regression checks', error.message); }
+
+// v46.67: independently managed animated gift catalogue and GIF delivery pipeline.
+try {
+  const html = fs.readFileSync(mainPath, 'utf8');
+  const serverText = fs.readFileSync(server, 'utf8');
+  const giftPackPath = path.join(root, 'public', 'gifts-pack.json');
+  const giftPack = JSON.parse(fs.readFileSync(giftPackPath, 'utf8'));
+  const giftFiles = Object.keys(giftPack);
+  const checks = [
+    ['v46.67 ships a varied set of 24 independent animated GIF gifts in one JSON pack', giftFiles.length === 24],
+    ['v46.67 packed GIF gift assets have GIF89a/GIF87a signatures', giftFiles.every(x => { const b=Buffer.from(giftPack[x].data,'base64'); return b.subarray(0,6).toString('ascii').startsWith('GIF8'); })],
+    ['v46.67 replaces old built-in gift arrays with server-managed catalogue', html.includes('const RIMAZ_GIFTS=[];const RIMAZ_EXTRA_GIFTS=[];const RIMAZ_NEW_GIFTS=[];') && html.includes('function giftCatalogAll(extra=[])')],
+    ['v46.67 admin panel supports GIF upload and catalogue deletion', html.includes('uploadGiftToCatalog()') && html.includes('/api/admin/gifts/catalog/upload') && html.includes('deleteCatalogGift(${jsq(g.id)})')],
+    ['v46.67 built-in gifts are served from a single packed JSON file', serverText.includes('GIFT_PACK_FILE') && serverText.includes("app.get('/gifts/:file'") && !fs.existsSync(path.join(root,'public','gifts'))],
+    ['v46.67 server accepts only animated GIF gift uploads and validates frame count', serverText.includes("req.file.mimetype!=='image/gif'") && serverText.includes('gifFrames<2')],
+    ['v46.67 sent gifts resolve image path from trusted server catalogue', serverText.includes("find(x=>String(x.id||'')===giftId)") && serverText.includes('giftImage')],
+    ['v46.67 gift receipt animation renders the GIF image', html.includes('function showGiftAnimation(') && html.includes('giftArtLarge') && html.includes('d.giftImage||\'\'')],
+    ['v46.67 one-time gift migration preserves member and chat data while replacing catalogue', serverText.includes('db.giftCatalogV2Initialized!==true') && serverText.includes('db.giftCatalogV2Initialized=true')],
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+  if (html === fs.readFileSync(publicPath, 'utf8')) pass('v46.67 browser entry files remain identical'); else fail('v46.67 browser entry files remain identical');
+} catch (error) { fail('v46.67 animated gift catalogue checks', error.message); }

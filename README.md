@@ -1,4 +1,4 @@
-# Rimaz Chat v46.66.1 — Startup and smiley-pack repair
+# Rimaz Chat v46.67.1 — Animated gift catalogue
 
 ## إصلاحات هذه النسخة
 - استعادة تهيئة Express وHTTP وSocket.IO قبل تسجيل الوسائط والمسارات ومعالجات الاتصال؛ كانت النسخة السابقة تستخدم `app` و`server` و`io` دون تعريفها، ما يؤدي إلى فشل بدء التشغيل.
@@ -15,7 +15,7 @@
 
 ---
 
-# Rimaz Chat v46.66.1 — Startup and smiley-pack repair
+# Rimaz Chat v46.67.1 — Animated gift catalogue
 
 ## v46.62 — تثبيت نافذة الفيديو وزر تبديل الكاميرا
 - إصلاح تموضع نافذة مكالمة الفيديو: تبقى في منتصف الشاشة أفقياً وعمودياً بدلاً من الانزياح إلى اليسار.
@@ -443,3 +443,16 @@ Version 46.55: private conversation header height now exactly matches the existi
 - Adds the 33 requested mobile Unicode emojis.
 - The complete smiley pack is included in this project ZIP; no individual file uploads are needed.
 - On first startup, only the smiley catalogue is refreshed. Accounts, messages, uploads, and chat shortcuts are preserved.
+
+
+## v46.67.1 — Animated gift catalogue
+
+- Replaced the previous built-in emoji gift catalogue with 24 individually animated transparent GIF gifts.
+- Added an admin GIF upload and catalogue deletion workflow.
+- Gift selection, delivery events, recipient animation cards, and member badges now carry the selected GIF image.
+- Gift catalogue migration is one-time and does not clear accounts, rooms, messages, or uploaded media. Previously granted profile gifts are retained.
+- GIF uploads are limited to 1 MB and require an animated GIF with multiple image frames.
+
+
+### Built-in animated gifts (v46.67.1)
+All 24 built-in animated GIFs are bundled in `public/gifts-pack.json`, matching the single-file smiley-pack approach. The server serves `/gifts/<filename>` directly from that JSON pack, so deployment does not require uploading a `public/gifts/` directory or individual GIF files. Newly uploaded gifts from the admin panel remain individually stored in the uploads directory.
