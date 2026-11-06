@@ -33,3 +33,9 @@
 - Uploads accept GIF, PNG, JPG, and WEBP (maximum 1 MB per file) and are stored in the persistent `uploads` directory; catalogue metadata is stored in `data.json`.
 - Rank artwork replaces the built-in rank glyph; member decoration is an additional badge. Deleting a catalogue item clears its rank/member references without deleting ranks or accounts.
 - These controls are rendered inside the existing **صلاحيات الرتب** panel; no new admin tab is added.
+
+## v46.76.0 Administration additions
+- Subscription plans are manually administered; renewals extend from the later of now or the existing expiry. Optional VIP follows subscription expiry. This release does not integrate payment processing.
+- Ad campaigns accept validated image files and optional HTTP(S) destination links with start/end scheduling. Active campaigns appear on the login page and chat.
+- Control Center toggles the existing wall, private chat, voice rooms, video calls, and gifts modules.
+- Grant `subscriptions_manage`, `ads_manage`, or `control_center_manage` from the existing Rank Permissions editor to show and authorize each new section.
