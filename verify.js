@@ -59,10 +59,10 @@ try {
   const privileged = source.match(/app\.post\('\/api\/login-privileged',[\s\S]*?\n\}\);/);
   const html = fs.readFileSync(mainPath, 'utf8');
   const checks = [
-    ['ghost login is restricted to owner or explicitly authorized admin', privileged && privileged[0].includes("mode==='ghost'&&!isOwner(account)&&!(isAdmin(account)&&hasPermission(account,'panel_access'))")],
-    ['hidden login remains restricted to staff or panel-authorized rank', privileged && privileged[0].includes("mode==='hidden'&&!isStaff(account)&&!hasPermission(account,'panel_access')")],
+    ['ghost login is restricted to owner or explicitly authorized admin', privileged && privileged[0].includes("mode==='ghost'&&!isOwner(account)&&!hasPermission(account,'ghost_login')")],
+    ['hidden login remains restricted to staff or panel-authorized rank', privileged && privileged[0].includes("mode==='hidden'&&!isOwner(account)&&!hasPermission(account,'hidden_login')")],
     ['presence visibility is viewer-aware and ghost is invisible to others', source.includes('function canSeePresence(viewer,target)') && source.includes('if(target.ghost)return false')],
-    ['hidden presence is visible only to staff and self', source.includes("if(target.hidden)return !!viewer&&isStaff(viewer)")],
+    ['hidden presence is visible only to staff and self', source.includes("if(target.hidden)return !!viewer&&(isOwner(viewer)||hasPermission(viewer,'presence_hidden_view'))")],
     ['live presence state is emitted individually per viewer', source.includes("so.emit('live-state',{online:getOnlineUsers(viewer),rooms:visibleRooms(viewer)})")],
     ['member directory omits accounts hidden from the current viewer', source.includes('if(hasInvisibleActiveSession(name,req.user))continue')],
     ['hidden join/leave notices are staff-only and ghost emits no presence notices', source.includes("presenceVisibility:u.hidden?'staff':'public'") && source.includes('function emitPresenceToRoom(room,notice)')],
@@ -168,8 +168,9 @@ try {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   if (pkg.main === 'server.js' && pkg.scripts?.start === 'node server.js') pass('package entrypoint and start command');
   else fail('package entrypoint/start command');
-  JSON.parse(fs.readFileSync(path.join(root, 'data.json'), 'utf8'));
-  pass('data.json is valid JSON');
+  const dataPath=path.join(root,'data.json');
+  if(fs.existsSync(dataPath)){JSON.parse(fs.readFileSync(dataPath,'utf8'));pass('data.json is valid JSON');}
+  else pass('data.json intentionally omitted from update archive to preserve live site data; server creates defaults on a fresh install');
 } catch (error) { fail('package/data JSON validation', error.message); }
 
 
@@ -497,13 +498,68 @@ try {
   for (const key of ['users_view','grant_likes','reset_likes','rooms_manage','announcement_post','announcement_delete','member_status_manage','wall_delete_user']) {
     if (!permissionHtml.includes(key)) throw new Error(`missing client permission ${key}`);
   }
-  if (!permissionHtml.includes("welcome:(me?.owner||me?.admin||hasClientPermission('welcome_manage'))")) throw new Error('welcome tab is not aligned with its permission');
+  if (!permissionHtml.includes("welcome:hasClientPermission('welcome_manage')")) throw new Error('welcome tab is not aligned with its permission');
   if (!permissionHtml.includes("can('profile_edit')") || !permissionHtml.includes("can('member_ip')")) throw new Error('member action buttons are not individually filtered');
   if (!permissionServer.includes('fromDisplayName:displayName(req.user.name)') || !permissionServer.includes('fromProfile:profile(req.user.name)')) throw new Error('gift sender identity is incomplete');
   if (permissionServer.includes("req.user.name+' (admin) هدية:")) throw new Error('gift sender name can still be duplicated');
   if (!permissionHtml.includes('rimaz-gift-alert-title') || !permissionHtml.includes('rimaz-gift-sender')) throw new Error('reference gift alert layout is missing');
   pass('v46.28 role-specific admin buttons and reference gift notice');
 } catch (error) { fail('v46.28 admin visibility and gift notice checks', error.message); }
+
+
+// v46.73 granular permissions: rank-specific permissions must override legacy admin role.
+try {
+  const src=fs.readFileSync(server,'utf8');
+  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+  const hasBlock=src.match(/function hasPermission\(user, permission\)\{([\s\S]*?)\n\}/)?.[1]||'';
+  if(!hasBlock.includes('if(isOwner(user)) return true;')) throw new Error('owner is not the sole unconditional principal');
+  if(hasBlock.includes("if(role==='admin')")||hasBlock.includes('return true;\n  }')) throw new Error('legacy admin still bypasses rank permissions');
+  if(!hasBlock.includes('if(rankDef){')||!hasBlock.includes('return allowed.includes(permission);')) throw new Error('active rank definition is not authoritative');
+  if(!hasBlock.includes("if(permission==='permission_manage') return false;")) throw new Error('permission administration is not owner-only');
+  if(!src.includes("if(p==='/api/admin/gifts/catalog')return 'gift_catalog_manage';")) throw new Error('gift catalog route is not separated from sending gifts');
+  if(!src.includes("if(role==='admin'&&!isOwner(actor))")) throw new Error('non-owner can still grant legacy admin role');
+  if(!html.includes("const owner=!!(me?.owner||me?.role==='owner');")||html.includes('if(owner||admin)')) throw new Error('admin tabs still bypass granular filtering');
+  for(const key of ['room_create','room_edit','room_delete','room_lock','room_image_manage','gift_catalog_manage','private_chat_override','presence_hidden_view','hidden_login','ghost_login','staff_notice','staff_media']) if(!html.includes(key)) throw new Error(`missing granular permission UI: ${key}`);
+  if(!html.includes("function canManageRolePermissions(){return !!(me?.owner||me?.role==='owner');}")) throw new Error('permission editor is not owner-only');
+  pass('v46.73 granular role permissions override legacy admin status and gate every admin tab');
+} catch(error) { fail('v46.73 granular role permission regression',error.message); }
+
+
+// v46.73 data API must never disclose every admin dataset just because panel_access is granted.
+try {
+  const src=fs.readFileSync(server,'utf8');
+  const route=src.slice(src.indexOf("app.get('/api/admin/data'"),src.indexOf("app.post('/api/rooms'",src.indexOf("app.get('/api/admin/data'")));
+  if(!route.includes('panel_access')||!route.includes('never grants access to every dataset')) throw new Error('permission-shaped response guard missing');
+  for(const gate of ["if(!can('messages_delete'))payload.messages=[];","if(!can('audit_view'))payload.adminAuditLogs=[];","if(!can('stats_view'))payload.stats={};","if(!isOwner(req.user))payload.rolePermissions={};","if(!can('rank_assign'))payload.rankDefinitions=[];"]){if(!route.includes(gate))throw new Error('missing data gate '+gate)}
+  if(src.includes("if(permission==='panel_access' && !['member','owner'].includes(role)) return true;"))throw new Error('legacy staff panel access remains implicit');
+  if(!src.includes("voice_mic_override:'تجاوز شرط اللايكات للمايكات'"))throw new Error('voice mic override is not individually permissioned');
+  if(src.includes("['panel_access',...requested.filter(x=>allowed.includes(x))]"))throw new Error('panel access is still forced on every role');
+  if(!src.includes("const allowed=Object.keys(PERMISSION_CATALOG).some(p=>hasPermission(req.user,p));"))throw new Error('specific permissions cannot open the admin API');
+  if(!html.includes("socket.on('permissions-updated'"))throw new Error('live permission refresh listener missing');
+  pass('v46.73 admin data payload is filtered by exact permission, not panel access');
+} catch(error) { fail('v46.73 admin data permission filtering',error.message); }
+
+
+// Runtime test the actual hasPermission function with fake accounts/rank definitions.
+try {
+  const src=fs.readFileSync(server,'utf8');
+  const fn=src.match(/function hasPermission\(user, permission\)\{[\s\S]*?\n\}/)?.[0];
+  if(!fn)throw new Error('hasPermission function not found');
+  const db={permissionOverrides:{},rolePermissions:{admin:['panel_access']}};
+  const profiles={staff:{rank:'admin-shield'},legacy:{rank:'none'}};
+  const defs={'admin-shield':{permissions:['panel_access','users_view']}};
+  const context={db,PERMISSION_CATALOG:{panel_access:1,users_view:1,kick_room:1,permission_manage:1},isOwner:u=>!!u.owner,profile:n=>profiles[n]||{},rankDefinition:id=>defs[id]||null,roleOf:u=>u.role||'member',keyName:n=>String(n||'').toLowerCase(),Object};
+  vm.runInNewContext(fn,context);
+  const check=vm.runInNewContext('hasPermission',context);
+  const staff={name:'staff',role:'admin'},legacy={name:'legacy',role:'admin'},owner={name:'owner',owner:true};
+  if(!check(staff,'panel_access')||!check(staff,'users_view')||check(staff,'kick_room'))throw new Error('active admin-shield rank permissions are not authoritative');
+  if(!check(legacy,'panel_access')||check(legacy,'kick_room'))throw new Error('legacy admin role still has implicit full access');
+  if(!check(owner,'permission_manage')||!check(owner,'kick_room')||check(staff,'permission_manage'))throw new Error('owner boundary is incorrect');
+  defs['admin-shield'].permissions=[];if(check(staff,'panel_access'))throw new Error('panel_access cannot be disabled for a rank');
+  db.permissionOverrides.staff=['kick_room','permission_manage'];
+  if(!check(staff,'kick_room')||check(staff,'permission_manage'))throw new Error('manual override safety is incorrect');
+  pass('v46.73 runtime permission checks enforce owner-only and rank-specific access');
+} catch(error) { fail('v46.73 runtime permission behavior',error.message); }
 
 // v46.69 administration tools: persistent login history, owner-only settings and safe DB backup.
 try {
@@ -535,8 +591,8 @@ try {
     if (!permissionHtml.includes(label)) throw new Error(`missing Arabic label ${label}`);
   }
   if (!permissionHtml.includes('عدم توافق نسخة الواجهة والسيرفر')) throw new Error('client compatibility preflight missing');
-  if (!permissionServer.includes('permissionSchemaVersion:3') || !permissionServer.includes('permissionKeys:ALL_PERMISSION_KEYS')) throw new Error('server permission schema metadata missing');
-  if (!permissionHtml.includes("['الأدوات والإضافات الجديدة',['audit_view','stats_view','chat_filter_manage','member_status_manage']]")) throw new Error('custom rank editor missing new permission group');
+  if (!permissionServer.includes('permissionSchemaVersion:4') || !permissionServer.includes('permissionKeys:ALL_PERMISSION_KEYS')) throw new Error('server permission schema metadata missing');
+  if (!permissionHtml.includes("['الأدوات والإضافات الجديدة',['audit_view','stats_view','chat_filter_manage','member_status_manage','private_chat_override','presence_hidden_view','hidden_login','ghost_login','staff_notice','staff_media','voice_mic_override']]")) throw new Error('custom rank editor missing new permission group');
   pass('v46.27 Arabic permission labels and client/server schema compatibility');
 } catch (error) { fail('v46.27 permission compatibility checks', error.message); }
 
@@ -551,7 +607,7 @@ try {
   if (!membersRoute || !membersRoute[0].includes('registeredKeys.has(normalized)') || !membersRoute[0].includes('seenMemberKeys.has(normalized)')) throw new Error('member directory does not suppress legacy guest/registered duplicates');
   if (!repairServer.includes('const registeredAccountKeys=new Set(Object.keys(db.users||{}).map(keyName))') || !repairServer.includes('registeredAccountKeys.has(k)||seenAdminAccountKeys.has(k)')) throw new Error('admin data does not suppress duplicate account identities');
   if (!repairServer.includes("app.get('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")) throw new Error('welcome-message GET route still blocks rank permission');
-  if (!repairHtml.includes("async function welcomeMessagesEditor(){if(!me?.owner&&!me?.admin&&!hasClientPermission('welcome_manage'))")) throw new Error('welcome editor still checks only owner/admin roles');
+  if (!repairHtml.includes("async function welcomeMessagesEditor(){if(!me?.owner&&!hasClientPermission('welcome_manage'))")) throw new Error('welcome editor still checks only owner/admin roles');
   pass('online-members CSS cleanup, legacy duplicate identity suppression, and rank-based welcome permissions');
 } catch (error) { fail('v46.29 regression checks', error.message); }
 
@@ -733,7 +789,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.72 package version is current', pkg.version === '46.72.0'],
+    ['v46.73 package version is current', pkg.version === '46.73.0'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['owner site settings API persists only the known module switches', serverText.includes("if(!isOwner(req.user))return res.status(403).json({error:'تعديل إعدادات الموقع متاح لصاحب الموقع فقط'})") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],

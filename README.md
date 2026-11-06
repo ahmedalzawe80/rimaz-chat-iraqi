@@ -1,3 +1,23 @@
+# Rimaz Chat v46.73.0 — صلاحيات إدارية دقيقة
+
+## v46.73.0 — إصلاح تجاوز صلاحيات الرتب
+- إزالة تجاوز الصلاحيات التلقائي لحسابات `admin`؛ الصلاحيات تُحسب من تعريف الرتبة النشطة أو قائمة المنصب المحفوظة.
+- اعتماد إعدادات افتراضية آمنة بأقل صلاحيات للرتب، مع مزامنة التعريفات الافتراضية القديمة عند بدء التشغيل فقط إذا لم يخصصها المالك.
+- تطبيق صلاحيات مستقلة على كل تبويب وزر إداري، وفصل إدارة كتالوج الهدايا عن إرسالها، وإظهار أقسام لوحة الإدارة حسب الصلاحيات الفعلية.
+- حماية إدارة تعريفات الرتب والصلاحيات اليدوية للمالك، ومنع ترقية حساب غير المالك إلى منصب admin الكامل أو منح رتبة تحتوي صلاحيات أعلى من صلاحيات المنفذ.
+- إضافة صلاحيات مستقلة لدخول الشبح/المخفي، وتجاوز إغلاق الخاص، ورؤية الأعضاء المخفيين، والتنبيهات والوسائط الإدارية، وتجاوز شرط المايك.
+- جعل `panel_access` اختيارياً لكل رتبة، وتصفية بيانات `/api/admin/data` حسب كل صلاحية بدلاً من كشف جميع البيانات لمن يملك `panel_access` فقط.
+- تحديث مخطط الصلاحيات إلى الإصدار 4 وإضافة اختبارات سلوكية مباشرة لدالة الصلاحيات.
+
+## التحقق
+- `node --check server.js` و`node --check verify.js`
+- فحص JavaScript المضمن في `index.html`
+- `node verify.js`
+- تطابق `index.html` و`public/index.html` وسلامة أرشيف ZIP.
+- يلزم اختبار تشغيل حي على استضافة Deplexo قبل تأكيد عمل كل تدفقات الواجهة على الخادم الفعلي.
+
+---
+
 # Rimaz Chat v46.72.0 — التدقيق الإداري النهائي
 
 ## v46.72.0 — مدير الإضافات المدمجة والمراجعة النهائية
@@ -496,3 +516,8 @@ All 24 built-in animated GIFs are bundled in `public/gifts-pack.json`, matching 
 
 ## Safe restore (v46.71.0)
 From the owner-only Site Administration tab, select a database JSON backup, preview the record counts, then type `استعادة ريماز` to confirm. Restore preserves stored rank definitions, permission customization and feature-state metadata, and creates a timestamped recovery copy of the current database first, clears active sessions, and restores database data only. The full TAR.GZ backup still includes `uploads` and `private-media`; archive restore is not enabled in this release.
+
+## ملاحظة النشر والتحديث
+- أرشيف v46.73.0 لا يتضمن `data.json` ولا مجلدي `uploads` و`private-media` عمداً، حتى لا يستبدل بيانات الموقع أو وسائط الأعضاء عند فك الضغط فوق المشروع الحالي.
+- فك الضغط فوق مجلد التطبيق الحالي مع استبدال ملفات التطبيق، واترك قاعدة البيانات ومجلدات الوسائط الحالية كما هي.
+- احتفظ بنسخة احتياطية مستقلة قبل أي تحديث.
