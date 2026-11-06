@@ -456,3 +456,11 @@ Version 46.55: private conversation header height now exactly matches the existi
 
 ### Built-in animated gifts (v46.67.1)
 All 24 built-in animated GIFs are bundled in `public/gifts-pack.json`, matching the single-file smiley-pack approach. The server serves `/gifts/<filename>` directly from that JSON pack, so deployment does not require uploading a `public/gifts/` directory or individual GIF files. Newly uploaded gifts from the admin panel remain individually stored in the uploads directory.
+
+
+## v46.68.0 — Expanded premium animated gifts
+
+- Replaced the earlier low-detail built-in gift artwork with 56 distinct animated transparent GIF gifts.
+- Added a broader mix of romantic, floral, luxury, celebration, vehicle, music, sport, and animal gifts.
+- Kept all built-in GIF data in the single `public/gifts-pack.json` file.
+- Added a one-time v3 catalogue migration that replaces old built-ins while preserving gifts manually uploaded from the admin panel.
