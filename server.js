@@ -297,7 +297,16 @@ function roomHistoryWithAnnouncements(roomId,viewer,createdAt=0){
       items.push(announcementMessageForRoom(item,roomId,now,'active-'+slot));
     }
   }
-  return items.sort((a,b)=>Number(a.at||0)-Number(b.at||0)).slice(-200);
+  // Message identity is account-backed, not a stale snapshot captured when the
+  // message was sent. Resolve the current display name and profile on every history
+  // delivery so rank/name changes are consistent across browsers and old messages.
+  const currentItems=items.map(item=>{
+    if(!item?.from || ['announcement','welcome'].includes(item.type))return item;
+    const currentProfile=profile(item.from);
+    const account=getUser(item.from)||getGuest(item.from);
+    return {...item,displayName:displayName(item.from),profile:currentProfile,role:roleOf({name:item.from,role:account?.role})};
+  });
+  return currentItems.sort((a,b)=>Number(a.at||0)-Number(b.at||0)).slice(-200);
 }
 function publishAnnouncement(item){
   if(!item||!item.id)return [];

@@ -150,9 +150,23 @@ try {
   else fail('wall likes are unique per account');
 } catch (error) { fail('wall-like protection checks', error.message); }
 
+
+// Chat identity is independent from visual rank and browser translation; likes remain intact.
+try {
+  const client = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const history = fs.readFileSync(server, 'utf8').match(/function roomHistoryWithAnnouncements\([\s\S]*?\n}\nfunction publishAnnouncement/);
+  if (client.includes('translate=\"no\"') && client.includes('class=\"notranslate\"') && client.includes('nameEl.setAttribute(\'translate\',\'no\')')) pass('chat display names are protected from browser translation');
+  else fail('chat display names are protected from browser translation');
+  if (!client.includes("m.likes>=500?'<span class=\"badge\">500+</span>'")) pass('500+ likes badge is removed from chat message headers');
+  else fail('500+ likes badge is removed from chat message headers');
+  if (history && history[0].includes('displayName:displayName(item.from)') && history[0].includes('profile:currentProfile')) pass('room history resolves current account name and rank profile for old messages');
+  else fail('room history resolves current account name and rank profile for old messages');
+} catch (error) { fail('chat identity regression checks', error.message); }
+
 if (html) {
-  const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)]
-    .map(match => match[1]).filter(source => source.trim());
+  const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)]
+    .filter(match => !/\btype\s*=\s*["']application\/ld\+json["']/i.test(match[1]))
+    .map(match => match[2]).filter(source => source.trim());
   if (!scripts.length) fail('inline browser scripts found');
   else {
     let valid = true;
