@@ -1,3 +1,15 @@
+# Rimaz v46.77.0 — Final performance and memory cleanup
+
+- Start the Socket.IO connection immediately after chat render; load optional shortcuts/smileys/gift catalogue asynchronously so the tools request no longer blocks joining the room.
+- Fetch notifications and private contacts concurrently during boot, and stop the login-page online polling timer after authentication.
+- Mark private conversations as read with one write request; remove the redundant contacts-list request on every incoming private message.
+- Fetch private-list contacts and live members concurrently.
+- Revoke protected private-media object URLs and close media viewers when leaving the private panel; cancel stale media fetch results if the conversation was closed or changed.
+- Hide the voice-room speaker strip from the initial HTML state to prevent a brief black speaker bar flash before room initialization.
+- Move the private-call media stylesheet into the document head; remove the obsolete, unreferenced inline.js duplicate.
+- Preserve existing private-message disconnect cleanup and 24-hour public/wall retention behavior.
+- Exclude the placeholder database file and duplicate root hero image from the update archive; persistent site data remains untouched.
+
 # Rimaz v46.74.0
 
 - توحيد نموذج الإدارة على الرتب السبع الثابتة فقط.

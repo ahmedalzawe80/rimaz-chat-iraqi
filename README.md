@@ -1,4 +1,4 @@
-# Rimaz Chat — v46.74.0
+# Rimaz Chat — v46.77.0
 
 ## صلاحيات الإدارة
 
@@ -39,3 +39,18 @@
 - Ad campaigns accept validated image files and optional HTTP(S) destination links with start/end scheduling. Active campaigns appear on the login page and chat.
 - Control Center toggles the existing wall, private chat, voice rooms, video calls, and gifts modules.
 - Grant `subscriptions_manage`, `ads_manage`, or `control_center_manage` from the existing Rank Permissions editor to show and authorize each new section.
+
+
+## v46.77.0 — Final performance and memory cleanup
+- Socket.IO starts without waiting for the optional chat-tools request.
+- Boot requests and private-list requests run concurrently where independent.
+- Private read receipts no longer trigger an unnecessary full contacts refresh for every incoming message.
+- Private media object URLs are revoked when the private view is closed or replaced.
+- The voice-room speaker strip is hidden from the initial DOM state to prevent a flash on entry.
+- Removed the unused `inline.js` duplicate; the active browser client remains embedded in the two identical index files.
+
+
+## نشر الإصدار 46.77.0
+- الحزمة لا تتضمن `data.json` ولا مجلدات البيانات أو الوسائط حتى لا تستبدل بيانات الموقع الدائمة عند رفع ملفات المشروع.
+- احتفظ بمجلد البيانات الدائم `DATA_DIR` وبداخله `data.json` و`uploads` و`private-media` كما هي.
+- لا تمسح تخزين الاستضافة الدائم أثناء التحديث.

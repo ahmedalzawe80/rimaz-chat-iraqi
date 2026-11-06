@@ -783,7 +783,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.76.0 package version is current', pkg.version === '46.76.1'],
+    ['v46.76.0 package version is current', pkg.version === '46.77.0'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -882,6 +882,24 @@ try {
   } catch(error) { fs.rmSync(temp,{recursive:true,force:true}); throw error; }
 } catch (error) { fail('v46.70.2 full backup checks', error.message); }
 
+
+// v46.77.0: startup latency, private media memory, and voice-bar flash regressions.
+try {
+  const htmlText=fs.readFileSync(mainPath,'utf8');
+  const checks=[
+    ['v46.77.0 Socket.IO starts before optional chat-tools request',htmlText.includes("async function connect(){if(socket)socket.disconnect();socket=io();api('/api/chat-tools').then(")],
+    ['v46.77.0 independent boot requests run concurrently and login polling stops after authentication',htmlText.includes("Promise.all([api('/api/notifications'),api('/api/private/contacts')])")&&htmlText.includes('clearInterval(window.rimazOnlineTimer)')],
+    ['v46.77.0 private read receipt no longer refreshes the entire contacts list per message',htmlText.includes('async function markPrivateRead(name){')&&htmlText.slice(htmlText.indexOf('async function markPrivateRead(name){'),htmlText.indexOf('function countryName',htmlText.indexOf('async function markPrivateRead(name){'))).includes("api('/api/private/read'")&&!htmlText.slice(htmlText.indexOf('async function markPrivateRead(name){'),htmlText.indexOf('function countryName',htmlText.indexOf('async function markPrivateRead(name){'))).includes("api('/api/private/contacts'")],
+    ['v46.77.0 private media object URLs are tracked and revoked on panel exit',htmlText.includes('const privateMediaObjectUrls=new Set()')&&htmlText.includes('URL.revokeObjectURL(url)')&&htmlText.includes("activeOverlay==='private'&&name!=='private'")&&htmlText.includes('privateMediaObjectUrls.add(objectUrl)')],
+    ['v46.77.0 stale private media fetches are discarded after conversation changes',htmlText.includes('!document.contains(area)||!privateOpen||key(privateTo)!==conversationKey')&&htmlText.includes('URL.revokeObjectURL(objectUrl)')],
+    ['v46.77.0 voice speaker strip starts hidden and cannot flash before room initialization',htmlText.includes('<div class="roombar" style="display:none" aria-hidden="true">')&&htmlText.includes('.chat .roombar[aria-hidden="true"]{display:none!important')],
+    ['v46.77.0 trailing stylesheet is inside head and document has no content after html close',htmlText.indexOf('rimaz-private-video-call-media')<htmlText.indexOf('</head>')&&htmlText.slice(htmlText.indexOf('</html>')+7).trim()===''],
+    ['v46.77.0 obsolete inline.js duplicate is removed and not referenced',!fs.existsSync(path.join(root,'inline.js'))&&!htmlText.includes('inline.js')],
+    ['v46.77.0 browser entry files remain byte-identical',htmlText===fs.readFileSync(path.join(root,'public','index.html'),'utf8')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+}catch(error){fail('v46.77.0 performance and memory cleanup',error.message)}
+
 // v46.73.1: explicitly delegated all-permissions ranks must expose all admin sections.
 try {
   const src=fs.readFileSync(server,'utf8'); const html=fs.readFileSync(mainPath,'utf8');
@@ -934,6 +952,6 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.76.1 package version',pkgNow.version==='46.76.1']
+  ['v46.76.1 package version',pkgNow.version==='46.77.0']
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error){fail('v46.76.0 feature checks',error.message)}
