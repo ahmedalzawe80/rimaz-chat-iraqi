@@ -98,7 +98,7 @@ app.use(express.static(path.join(ROOT, 'public')));
 app.get('/', (req, res) => { if (!INDEX_FILE) return res.status(500).send('Rimaz setup error: index.html is missing from the deployment package.'); res.sendFile(INDEX_FILE); });
 
 const defaults = () => ({
-  users: {}, guests: {}, sessions: {}, messages: [], wall: [], wallEnabled:true, notifications: {}, announcements: [], adminAuditLogs: [], loginHistory: [], ownerSetupCompleted:false, giftCatalogV3Initialized:false, smileysSeedVersion:0, smileysSeeded:false, rankDefinitions:[], siteSettings: {siteName:'دردشة ريماز عراقية',tagline:'أهلاً بكم في ريماز',notice:'',allowRegistration:true,allowGuests:true,modules:{wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}}, chatFilter: {enabled:false, words:[]}, welcomeMessages: [
+  users: {}, guests: {}, sessions: {}, messages: [], wall: [], wallEnabled:true, notifications: {}, announcements: [], adminAuditLogs: [], loginHistory: [], ownerSetupCompleted:false, giftCatalogV3Initialized:false, smileysSeedVersion:0, smileysSeeded:false, rankDefinitions:[], rankArtCatalog:[], siteSettings: {siteName:'دردشة ريماز عراقية',tagline:'أهلاً بكم في ريماز',notice:'',allowRegistration:true,allowGuests:true,modules:{wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}}, chatFilter: {enabled:false, words:[]}, welcomeMessages: [
     {id:'welcome-visitors',title:'دردشة ريماز عراقية',text:'إعزإئنا زوإر (دردشة ريماز عراقية)\nحياَكم الله منـورين الشاَت . الاعضاء الجدد نتمنيُ لكم اوقاَت سعيده',enabled:true},
     {id:'welcome-search',title:'الترحيب',text:'عزيزي الزائر للرجوع الينا اكتب في محرك البحث ( دردشة ريماز عراقية )\nنتمنا لكم وقت ممتعا',enabled:true}
   ],
@@ -446,7 +446,7 @@ function roleOf(u){if(!u)return 'member';return isOwnerName(u.name)?'owner':'mem
 function canMessageClosedPrivate(u){return !!(u&&(isOwner(u)||hasPermission(u,'private_chat_override')));}
 function isOwner(u){return !!u&&isOwnerName(u.name);}
 function isAdmin(u){return !!u&&(isOwner(u)||hasPermission(u,'panel_access'));}
-function isStaff(u){return !!u&&(isOwner(u)||['panel_access','presence_hidden_view','kick_room','ban_room','mute_room','global_kick','global_ban'].some(p=>hasPermission(u,p)));}
+function isStaff(u){return !!u&&(isOwner(u)||['panel_access','presence_hidden_view','kick_room','ban_room','mute_room','global_kick','global_ban','rank_art_manage','member_decoration_manage'].some(p=>hasPermission(u,p)));}
 function findKey(obj,name){ const wanted=keyName(name); return Object.keys(obj||{}).find(k=>keyName(k)===wanted); }
 function getUser(name){ const k=findKey(db.users,name); return k ? db.users[k] : null; }
 function getGuest(name){ const k=findKey(db.guests,name); return k ? db.guests[k] : null; }
@@ -461,6 +461,9 @@ function profile(name){
   if (!db.profiles[name]) db.profiles[name]={displayName:cleanName(name),avatar:'',status:defaultStatus(name),bio:'عضو في دردشة ريماز عراقية',nameColor:'#222222',fontColor:'#222222',bgColor:'#ffffff',privateOpen:true,notificationsOpen:true};
   const p=db.profiles[name];
   if(!p.displayName) p.displayName=cleanName(name);
+  const visualRank=rankDefinition(p.rank);
+  p.rankArt=visualRank?.artUrl||'';
+  p.customDecorationImage=String(p.customDecorationImage||'');
   // Expire temporary visual ranks without changing the existing badge artwork or staff role.
   if(p.rankUntil && Number(p.rankUntil)<=Date.now()) { p.rank='none'; delete p.rankUntil; delete p.rankPreviousRole; delete p.rankDurationDays; save(); }
   // Never let the old automatic status survive as a default. Custom statuses remain untouched.
@@ -500,7 +503,7 @@ const PERMISSION_CATALOG = {
   messages_delete:'حذف الرسائل', announcement_post:'نشر الإعلانات', announcement_delete:'حذف الإعلانات',
   gifts:'إرسال الهدايا', vip:'منح VIP', profile_edit:'تعديل ألوان الملف الشخصي',
   avatar_delete:'حذف الصور', grant_likes:'منح اللايكات',
-  rank_assign:'منح الشارات ومدتها', permission_manage:'تعديل صلاحيات الرتب', member_ip:'عرض IP',
+  rank_assign:'منح الشارات ومدتها', rank_art_manage:'إدارة مكتبة أشكال الرتب وربطها بالرتب', member_decoration_manage:'تخصيص وإزالة زخرفة عضو محدد', permission_manage:'تعديل صلاحيات الرتب', member_ip:'عرض IP',
   reset_likes:'تصفير اللايكات', shortcuts_manage:'إدارة الاختصارات', smileys_manage:'إدارة السميلات', room_move:'نقل عضو بين الغرف', room_create:'إنشاء غرفة', room_edit:'تعديل بيانات الغرفة', room_delete:'حذف غرفة', room_lock:'تعيين أو إزالة كلمة مرور الغرفة', room_image_manage:'إدارة صور الغرف', gift_catalog_manage:'إضافة وحذف هدايا الكتالوج', wall_stop:'إيقاف الحائط', wall_restart:'تشغيل الحائط', wall_clear:'حذف جميع منشورات الحائط', wall_delete_user:'حذف منشورات عضو محدد من الحائط', welcome_manage:'إدارة رسائل الترحيب',
   audit_view:'عرض سجل العمليات وتصديره', stats_view:'عرض إحصائيات الموقع', chat_filter_manage:'إدارة فلتر الكلمات', member_status_manage:'إدارة حالات الأعضاء', private_chat_override:'تجاوز إغلاق المحادثات الخاصة', presence_hidden_view:'مشاهدة الأعضاء المخفيين', hidden_login:'الدخول المخفي', ghost_login:'دخول الشبح', staff_notice:'إرسال تنبيهات إدارية', staff_media:'إرسال وسائط إدارية', voice_mic_override:'تجاوز شرط اللايكات للمايكات', site_admin:'إدارة الموقع الكاملة (الإعدادات والسجلات وصحة الخادم والنسخ والاستعادة)'
 };
@@ -1106,8 +1109,56 @@ app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{
   res.json({ok:true,rank,rankName:definition?.name||'بدون رتبة إضافية',rankUntil:p.rankUntil||null,name:n,type:guest?'guest':'member',cardQueued:!!definition,notificationId:inboxItem.id});
 });});
 app.get('/api/admin/member-ip/:name' ,requireAuth,(req,res)=>{if(!hasPermission(req.user,'member_ip'))return res.status(403).json({error:'ما عندك صلاحية عرض IP'});const n=keyName(req.params.name);if(isOwnerName(n))return res.status(403).json({error:'معلومات اتصال صاحب الموقع محمية'});const matches=[];for(const so of io.sockets.sockets.values()){const sid2=so.data?.sid,u2=so.data?.user||socketUsers.get(sid2);if(u2&&keyName(u2.name)===n){matches.push({ip:socketClientIp(so),room:u2.room||'',connected:true});}}res.json({name:req.params.name,connections:matches});});
+// Rank artwork and per-member decoration are separate from rank permissions and rank assignment.
+function rankArtItem(id){return (db.rankArtCatalog||[]).find(x=>String(x.id)===String(id))||null;}
+function canManageRankArt(user){return isOwner(user)||hasPermission(user,'rank_art_manage')||hasPermission(user,'member_decoration_manage');}
+app.get('/api/admin/rank-art',requireAuth,(req,res)=>{
+ if(!canManageRankArt(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة زخارف الرتب'});
+ res.set('Cache-Control','no-store');
+ res.json({items:(db.rankArtCatalog||[]).map(x=>({id:x.id,name:x.name,image:x.image,mime:x.mime})),ranks:(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).map(r=>({id:r.id,name:r.name,artId:r.artId||'',artUrl:r.artUrl||''}))});
+});
+app.post('/api/admin/rank-art/upload',requireAuth,(req,res,next)=>{if(!hasPermission(req.user,'rank_art_manage'))return res.status(403).json({error:'ما عندك صلاحية إضافة أشكال للرتب'});next();},uploadSmallImage.single('file'),validateUploadedContent('image'),(req,res)=>{
+ try{
+  if(!req.file||!['image/gif','image/png','image/jpeg','image/webp'].includes(String(req.file.mimetype||''))){removeUploadedFile(req.file);return res.status(400).json({error:'ارفع GIF أو PNG أو JPG أو WEBP'});}
+  if((db.rankArtCatalog||[]).length>=300){removeUploadedFile(req.file);return res.status(400).json({error:'وصلت مكتبة الأشكال إلى 300 ملف'});}
+  const name=String(req.body?.name||'').trim().slice(0,50)||'شكل رتبة جديد';
+  const item={id:crypto.randomUUID(),name,image:'/uploads/'+req.file.filename,mime:req.file.mimetype,createdAt:Date.now(),by:cleanName(req.user.name)};
+  db.rankArtCatalog=db.rankArtCatalog||[];db.rankArtCatalog.push(item);
+  try{save()}catch(error){db.rankArtCatalog.pop();removeUploadedFile(req.file);throw error;}
+  res.json({ok:true,item:{id:item.id,name:item.name,image:item.image,mime:item.mime}});
+ }catch(error){console.error('Rank artwork upload failed:',error);removeUploadedFile(req.file);res.status(500).json({error:'تعذر حفظ شكل الرتبة'});}
+});
+app.put('/api/admin/rank-art/assign',requireAuth,(req,res)=>{
+ if(!hasPermission(req.user,'rank_art_manage'))return res.status(403).json({error:'ما عندك صلاحية ربط أشكال الرتب'});
+ const rank=String(req.body?.rank||''),artId=String(req.body?.artId||'');if(!RANK_PERMISSION_PROFILES.includes(rank))return res.status(400).json({error:'اختر رتبة من الرتب السبع'});
+ const definition=rankDefinition(rank);if(!definition)return res.status(404).json({error:'الرتبة غير موجودة'});
+ const item=artId?rankArtItem(artId):null;if(artId&&!item)return res.status(404).json({error:'الشكل المحدد غير موجود'});
+ const old={artId:definition.artId,artUrl:definition.artUrl};if(item){definition.artId=item.id;definition.artUrl=item.image;}else{delete definition.artId;delete definition.artUrl;}
+ try{save()}catch(error){if(old.artId!==undefined)definition.artId=old.artId;else delete definition.artId;if(old.artUrl!==undefined)definition.artUrl=old.artUrl;else delete definition.artUrl;return res.status(500).json({error:'تعذر حفظ شكل الرتبة'});}
+ io.emit('rank-art-updated',{rank,artUrl:item?.image||''});res.json({ok:true,rank,artId:item?.id||'',artUrl:item?.image||''});
+});
+app.delete('/api/admin/rank-art/:id',requireAuth,(req,res)=>{
+ if(!hasPermission(req.user,'rank_art_manage'))return res.status(403).json({error:'ما عندك صلاحية حذف أشكال الرتب'});
+ const id=String(req.params.id||''),index=(db.rankArtCatalog||[]).findIndex(x=>String(x.id)===id);if(index<0)return res.status(404).json({error:'الشكل غير موجود'});
+ const item=db.rankArtCatalog[index];const previous=db.rankArtCatalog.slice();const oldRanks=(db.rankDefinitions||[]).map(r=>({r,artId:r.artId,artUrl:r.artUrl}));const oldProfiles=Object.entries(db.profiles||{}).map(([name,p])=>({name,customDecorationId:p.customDecorationId,customDecorationImage:p.customDecorationImage,customDecorationName:p.customDecorationName}));db.rankArtCatalog.splice(index,1);
+ for(const rank of db.rankDefinitions||[])if(String(rank.artId||'')===id){delete rank.artId;delete rank.artUrl;}
+ for(const profileData of Object.values(db.profiles||{}))if(String(profileData.customDecorationId||'')===id){delete profileData.customDecorationId;delete profileData.customDecorationImage;delete profileData.customDecorationName;}
+ try{save()}catch(error){db.rankArtCatalog=previous;for(const x of oldRanks){if(x.artId!==undefined)x.r.artId=x.artId;else delete x.r.artId;if(x.artUrl!==undefined)x.r.artUrl=x.artUrl;else delete x.r.artUrl;}for(const x of oldProfiles){const p=db.profiles[x.name];if(!p)continue;for(const k of ['customDecorationId','customDecorationImage','customDecorationName'])if(x[k]!==undefined)p[k]=x[k];else delete p[k];}return res.status(500).json({error:'تعذر حفظ حذف الشكل'});}
+ if(item.image?.startsWith('/uploads/')){const file=path.resolve(UP_DIR,path.basename(item.image));if(file.startsWith(path.resolve(UP_DIR)+path.sep)){try{fs.unlinkSync(file)}catch{}}}
+ io.emit('rank-art-updated',{deleted:id,ranks:(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).map(r=>({id:r.id,artUrl:r.artUrl||''}))});res.json({ok:true,deleted:id});
+});
+app.put('/api/admin/member-decoration',requireAuth,(req,res)=>{
+ if(!hasPermission(req.user,'member_decoration_manage'))return res.status(403).json({error:'ما عندك صلاحية تخصيص زخرفة الأعضاء'});
+ const n=accountKey(cleanName(req.body?.name||''));if(!n||isOwnerName(n))return res.status(400).json({error:'اختر عضواً صالحاً؛ حساب صاحب الموقع محمي'});
+ const target=getUser(n)||getGuest(n);if(!target)return res.status(404).json({error:'العضو غير موجود'});
+ const p=profile(n),old={customDecorationId:p.customDecorationId,customDecorationImage:p.customDecorationImage,customDecorationName:p.customDecorationName},artId=String(req.body?.artId||'');if(!artId){delete p.customDecorationId;delete p.customDecorationImage;delete p.customDecorationName;}
+ else{const item=rankArtItem(artId);if(!item)return res.status(404).json({error:'الزخرفة المحددة غير موجودة'});p.customDecorationId=item.id;p.customDecorationImage=item.image;p.customDecorationName=item.name;}
+ try{save()}catch(error){for(const k of Object.keys(old))if(old[k]!==undefined)p[k]=old[k];else delete p[k];return res.status(500).json({error:'تعذر حفظ زخرفة العضو'});}
+ io.emit('profile-changed',{name:n,profile:p});res.json({ok:true,name:n,decoration:p.customDecorationImage||'',decorationName:p.customDecorationName||''});
+});
+
 // Rank definitions are editable independently from chat UI, buttons and colors.
-app.get('/api/admin/ranks',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'rank_assign'))return res.status(403).json({error:'ما عندك صلاحية عرض الرتب أو منحها'});res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:7,permissionKeys:ALL_PERMISSION_KEYS,ranks:(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)),catalog:PERMISSION_CATALOG});});
+app.get('/api/admin/ranks' ,requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'rank_assign'))return res.status(403).json({error:'ما عندك صلاحية عرض الرتب أو منحها'});res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:7,permissionKeys:ALL_PERMISSION_KEYS,ranks:(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)),catalog:PERMISSION_CATALOG});});
 // Rank definitions are fixed: only the seven built-in ranks can be assigned or permission-edited.
 app.get('/api/admin/permissions',requireAuth,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الرتب'});

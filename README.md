@@ -24,3 +24,12 @@
 ## الفحص
 
 شغّل `npm test` لفحوصات التحقق المحلية. يلزم أيضاً اختبار حي على استضافة Deplexo بعد النشر؛ فنجاح الفحوصات المحلية لا يثبت اتصال الخادم أو إعدادات الاستضافة.
+
+
+## v46.75.0 — Rank artwork and member decorations
+
+- Open **صلاحيات الرتب**. Grant `rank_art_manage` to roles that may upload/delete artwork and bind it to one of the seven built-in ranks.
+- Grant `member_decoration_manage` to roles that may assign/remove a decorative badge on an individual member profile.
+- Uploads accept GIF, PNG, JPG, and WEBP (maximum 1 MB per file) and are stored in the persistent `uploads` directory; catalogue metadata is stored in `data.json`.
+- Rank artwork replaces the built-in rank glyph; member decoration is an additional badge. Deleting a catalogue item clears its rank/member references without deleting ranks or accounts.
+- These controls are rendered inside the existing **صلاحيات الرتب** panel; no new admin tab is added.
