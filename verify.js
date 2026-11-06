@@ -515,12 +515,12 @@ try {
   if(!hasBlock.includes('if(isOwner(user)) return true;')) throw new Error('owner is not the sole unconditional principal');
   if(hasBlock.includes("if(role==='admin')")||hasBlock.includes('return true;\n  }')) throw new Error('legacy admin still bypasses rank permissions');
   if(!hasBlock.includes('if(rankDef){')||!hasBlock.includes('return allowed.includes(permission);')) throw new Error('active rank definition is not authoritative');
-  if(!hasBlock.includes("if(permission==='permission_manage') return false;")) throw new Error('permission administration is not owner-only');
+  if(hasBlock.includes("if(permission==='permission_manage') return false;")) throw new Error('explicit permission_manage grants are still blocked');
   if(!src.includes("if(p==='/api/admin/gifts/catalog')return 'gift_catalog_manage';")) throw new Error('gift catalog route is not separated from sending gifts');
   if(!src.includes("if(role==='admin'&&!isOwner(actor))")) throw new Error('non-owner can still grant legacy admin role');
   if(!html.includes("const owner=!!(me?.owner||me?.role==='owner');")||html.includes('if(owner||admin)')) throw new Error('admin tabs still bypass granular filtering');
   for(const key of ['room_create','room_edit','room_delete','room_lock','room_image_manage','gift_catalog_manage','private_chat_override','presence_hidden_view','hidden_login','ghost_login','staff_notice','staff_media']) if(!html.includes(key)) throw new Error(`missing granular permission UI: ${key}`);
-  if(!html.includes("function canManageRolePermissions(){return !!(me?.owner||me?.role==='owner');}")) throw new Error('permission editor is not owner-only');
+  if(!html.includes("function canManageRolePermissions(){return !!(me?.owner||me?.role==='owner'||hasClientPermission('permission_manage'));}")) throw new Error('permission editor does not honor delegated permission_manage');
   pass('v46.73 granular role permissions override legacy admin status and gate every admin tab');
 } catch(error) { fail('v46.73 granular role permission regression',error.message); }
 
@@ -567,7 +567,7 @@ try {
   const html=fs.readFileSync(mainPath,'utf8');
   const checks=[
     ['v46.69 stores bounded login history without raw full IP addresses',src.includes('loginHistory=db.loginHistory.slice(0,1000)')&&src.includes("split('.').slice(0,3).join('.')+'.0'")&&src.includes("recordLoginEvent(req,real,'member','normal')")],
-    ['v46.69 site settings are owner-only and registration/guest gates are server-enforced',src.includes("app.put('/api/admin/site-settings',requireAuth")&&src.includes("تعديل إعدادات الموقع متاح لصاحب الموقع فقط")&&src.includes('db.siteSettings?.allowRegistration===false')&&src.includes('db.siteSettings?.allowGuests===false')],
+    ['v46.69 site settings are owner/delegated-site-admin protected and registration/guest gates are server-enforced',src.includes("app.put('/api/admin/site-settings',requireAuth")&&src.includes("hasPermission(req.user,'site_admin')")&&src.includes('db.siteSettings?.allowRegistration===false')&&src.includes('db.siteSettings?.allowGuests===false')],
     ['v46.69 database backup is owner-only and excludes active sessions',src.includes("app.get('/api/admin/backup/database',requireAuth")&&src.includes('database:{...db,sessions:{}}')&&src.includes("app.get('/api/admin/login-history',requireAuth")],
     ['v46.69 owner-only health diagnostics report database and uploads sizes without destructive actions',src.includes("app.get('/api/admin/health',requireAuth")&&src.includes('const uploads=walk(UP_DIR)')&&src.includes('heapUsed:memory.heapUsed')],
     ['v46.69 VIP grants support bounded durations and explicit revocation',src.includes('days<1||days>365')&&src.includes("app.post('/api/admin/vip/:name/revoke',requireAuth")&&src.includes('delete p.vipGrantedAt')],
@@ -591,7 +591,7 @@ try {
     if (!permissionHtml.includes(label)) throw new Error(`missing Arabic label ${label}`);
   }
   if (!permissionHtml.includes('عدم توافق نسخة الواجهة والسيرفر')) throw new Error('client compatibility preflight missing');
-  if (!permissionServer.includes('permissionSchemaVersion:4') || !permissionServer.includes('permissionKeys:ALL_PERMISSION_KEYS')) throw new Error('server permission schema metadata missing');
+  if (!permissionServer.includes('permissionSchemaVersion:5') || !permissionServer.includes('permissionKeys:ALL_PERMISSION_KEYS')) throw new Error('server permission schema metadata missing');
   if (!permissionHtml.includes("['الأدوات والإضافات الجديدة',['audit_view','stats_view','chat_filter_manage','member_status_manage','private_chat_override','presence_hidden_view','hidden_login','ghost_login','staff_notice','staff_media','voice_mic_override']]")) throw new Error('custom rank editor missing new permission group');
   pass('v46.27 Arabic permission labels and client/server schema compatibility');
 } catch (error) { fail('v46.27 permission compatibility checks', error.message); }
@@ -789,9 +789,9 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.73 package version is current', pkg.version === '46.73.0'],
+    ['v46.73.1 package version is current', pkg.version === '46.73.1'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
-    ['owner site settings API persists only the known module switches', serverText.includes("if(!isOwner(req.user))return res.status(403).json({error:'تعديل إعدادات الموقع متاح لصاحب الموقع فقط'})") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
+    ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
     ['private chat module is enforced on history, contacts, media, and Socket.IO send', serverText.includes("app.get('/api/private/history',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))") && serverText.includes("app.get('/api/private/contacts',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))") && serverText.includes("socket.on('private-message',d=>{const u=socket.data.user;if(!u||!d?.to)return;if(!siteModuleEnabled('privateChat'))")],
     ['voice room module is enforced on join, mic requests, and peer signaling', serverText.includes("targetRoom.kind==='voice'&&!siteModuleEnabled('voiceRooms')") && serverText.includes("if(!siteModuleEnabled('voiceRooms'))return socket.emit('error-msg'") && serverText.includes("socket.on('voice-peer-offer',d=>{if(!siteModuleEnabled('voiceRooms'))return")],
@@ -887,3 +887,20 @@ try {
     }).catch(error=>{fail('full backup USTAR stream test',error.message);fs.rmSync(temp,{recursive:true,force:true});process.exitCode=1;});
   } catch(error) { fs.rmSync(temp,{recursive:true,force:true}); throw error; }
 } catch (error) { fail('v46.70.2 full backup checks', error.message); }
+
+// v46.73.1: explicitly delegated all-permissions ranks must expose all admin sections.
+try {
+  const src=fs.readFileSync(server,'utf8'); const html=fs.readFileSync(mainPath,'utf8');
+  const checks=[
+    ['permission_manage is grantable only through an explicit rank permission',!src.includes("if(permission==='permission_manage') return false;")&&src.includes("hasPermission(req.user,'permission_manage')")],
+    ['delegated permission editors cannot grant permissions they do not hold',src.includes('const excessive=requested.filter(k=>!own.has(k))')],
+    ['site administration is a separate explicit permission',src.includes("site_admin:'إدارة الموقع الكاملة")&&html.includes("site:can('site_admin')")],
+    ['site settings, login history, health, backups and restore honor site_admin', (src.match(/hasPermission\(req.user,'site_admin'\)/g)||[]).length>=6],
+    ['permission editor exposes site_admin and permission_manage toggles',html.includes("['إدارة الموقع والصلاحيات الحساسة',['site_admin','permission_manage']]")],
+    ['permission editor offers select-all and clear-all controls',html.includes('setAllRolePermissions(true)')&&html.includes('setAllRolePermissions(false)')],
+    ['delegated permission editor is available to ranks explicitly granted permission_manage',html.includes("hasClientPermission('permission_manage')")&&html.includes("rankpermissions:can('permission_manage')")],
+    ['site tab is shown to ranks explicitly granted site_admin',html.includes("hasClientPermission('site_admin')")],
+    ['browser entry files remain identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')]
+  ];
+  for(const [label,ok] of checks) ok?pass(label):fail(label);
+}catch(error){fail('v46.73.1 delegated permissions regression',error.message)}
