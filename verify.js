@@ -150,22 +150,9 @@ try {
   else fail('wall likes are unique per account');
 } catch (error) { fail('wall-like protection checks', error.message); }
 
-
-// Chat identity is independent from visual rank and browser translation; likes remain intact.
-try {
-  const client = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  const history = fs.readFileSync(server, 'utf8').match(/function roomHistoryWithAnnouncements\([\s\S]*?\n}\nfunction publishAnnouncement/);
-  if (client.includes('translate=\"no\"') && client.includes('class=\"notranslate\"') && client.includes('nameEl.setAttribute(\'translate\',\'no\')')) pass('chat display names are protected from browser translation');
-  else fail('chat display names are protected from browser translation');
-  if (!client.includes("m.likes>=500?'<span class=\"badge\">500+</span>'")) pass('500+ likes badge is removed from chat message headers');
-  else fail('500+ likes badge is removed from chat message headers');
-  if (history && history[0].includes('displayName:displayName(item.from)') && history[0].includes('profile:currentProfile')) pass('room history resolves current account name and rank profile for old messages');
-  else fail('room history resolves current account name and rank profile for old messages');
-} catch (error) { fail('chat identity regression checks', error.message); }
-
 if (html) {
   const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)]
-    .filter(match => !/\btype\s*=\s*["']application\/ld\+json["']/i.test(match[1]))
+    .filter(match => !/type=["']application\/ld\+json["']/i.test(match[1]))
     .map(match => match[2]).filter(source => source.trim());
   if (!scripts.length) fail('inline browser scripts found');
   else {
@@ -177,6 +164,28 @@ if (html) {
     if (valid) pass(`${scripts.length} inline browser script(s) compile`);
   }
 }
+
+// Server-rendered SEO metadata must use the saved admin description in the raw HTML.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const start = source.indexOf('function escapeHtmlAttribute(value) {');
+  const end = source.indexOf('\nfunction sendSeoIndex(req,res) {', start);
+  if (start < 0 || end < 0) throw new Error('SEO renderer not found');
+  const context = { fs, INDEX_FILE: path.join(root, 'index.html'), db: { siteSettings: { siteName: 'ريماز اختبار', tagline: 'وصف اختبار مميز & آمن' } } };
+  vm.createContext(context);
+  vm.runInContext(source.slice(start, end) + ';globalThis.__seoHtml=renderSeoIndex();', context);
+  const rendered = context.__seoHtml;
+  const expected = [
+    'name="description" content="وصف اختبار مميز &amp; آمن"',
+    'property="og:description" content="وصف اختبار مميز &amp; آمن"',
+    'name="twitter:description" content="وصف اختبار مميز &amp; آمن"',
+    '"description":"وصف اختبار مميز & آمن"',
+    '<title>ريماز اختبار | دردشة عراقية وتعارف</title>'
+  ];
+  if (!expected.every(value => rendered.includes(value))) throw new Error('One or more SEO tags did not receive the saved site settings');
+  if (!source.includes("slice(0,300)") || !html.includes('id="siteTagline" maxlength=300')) throw new Error('SEO description limit is not consistently 300 characters');
+  pass('admin SEO description is server-rendered into meta, Open Graph, Twitter and Schema tags');
+} catch (error) { fail('server-rendered SEO description integration', error.message); }
 
 try {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));

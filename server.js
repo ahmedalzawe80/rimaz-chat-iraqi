@@ -93,12 +93,58 @@ app.get('/gifts/:file', (req,res)=>{
   res.setHeader('Cache-Control','public, max-age=31536000, immutable');
   res.send(Buffer.from(item.data,'base64'));
 });
-app.use(express.static(path.join(ROOT, 'public')));
-// Serve the approved single-file UI at the site root without changing its design.
-app.get('/', (req, res) => { if (!INDEX_FILE) return res.status(500).send('Rimaz setup error: index.html is missing from the deployment package.'); res.sendFile(INDEX_FILE); });
+// Static assets must not serve index.html before the dynamic SEO-aware page handler.
+app.get('/index.html', (req,res)=>res.redirect(301,'/'));
+app.use(express.static(path.join(ROOT, 'public'), { index: false }));
+
+function escapeHtmlAttribute(value) {
+  return String(value ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function renderSeoIndex() {
+  if (!INDEX_FILE) return null;
+  let html = fs.readFileSync(INDEX_FILE, 'utf8');
+  const settings = db?.siteSettings || {};
+  const siteName = String(settings.siteName || 'دردشة ريماز العراقية').trim().slice(0,60);
+  const description = String(settings.tagline || 'دردشة ريماز العراقية - دردشة عراقية للتواصل والتعارف والغرف والمحادثات العامة والخاصة.').trim().slice(0,300);
+  const title = `${siteName} | دردشة عراقية وتعارف`;
+  const setMeta = (key, value, attr='name') => {
+    const escaped = escapeHtmlAttribute(value);
+    html = html.replace(/<meta\b[^>]*>/gi, tag => {
+      const match = tag.match(attr === 'property' ? /\bproperty=["']([^"']+)["']/i : /\bname=["']([^"']+)["']/i);
+      if (!match || match[1].toLowerCase() !== key.toLowerCase()) return tag;
+      if (/\bcontent=["'][^"']*["']/i.test(tag)) return tag.replace(/(\bcontent=["'])[^"']*(["'])/i, `$1${escaped}$2`);
+      return tag.replace(/\s*\/?>$/, ` content="${escaped}">`);
+    });
+  };
+  html = html.replace(/<title>[^<]*<\/title>/i, `<title>${escapeHtmlAttribute(title)}</title>`);
+  setMeta('description', description, 'name');
+  setMeta('og:site_name', siteName, 'property');
+  setMeta('og:title', siteName, 'property');
+  setMeta('og:description', description, 'property');
+  setMeta('twitter:title', siteName, 'name');
+  setMeta('twitter:description', description, 'name');
+  html = html.replace(/(<script\s+type=["']application\/ld\+json["'][^>]*>)([\s\S]*?)(<\/script>)/i, (whole, open, body, close) => {
+    try { const schema = JSON.parse(body); schema.name = siteName; schema.description = description; return open + JSON.stringify(schema).replace(/</g,'\\u003c') + close; }
+    catch { return whole; }
+  });
+  return html;
+}
+function sendSeoIndex(req,res) {
+  if (!INDEX_FILE) return res.status(500).send('Rimaz setup error: index.html is missing from the deployment package.');
+  try {
+    const html = renderSeoIndex();
+    res.set({ 'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'no-store, no-cache, must-revalidate', 'X-Robots-Tag':'index, follow' });
+    return res.status(200).send(html);
+  } catch (error) {
+    console.error('SEO page rendering failed:', error);
+    return res.sendFile(INDEX_FILE);
+  }
+}
+// Render SEO metadata on the server so search engines receive the saved description in raw HTML.
+app.get('/', sendSeoIndex);
 
 const defaults = () => ({
-  users: {}, guests: {}, sessions: {}, messages: [], wall: [], wallEnabled:true, notifications: {}, announcements: [], adminAuditLogs: [], loginHistory: [], adCampaigns: [], subscriptionPlans: [], subscriptions: [], ownerSetupCompleted:false, giftCatalogV3Initialized:false, smileysSeedVersion:0, smileysSeeded:false, rankDefinitions:[], rankArtCatalog:[], siteSettings: {siteName:'دردشة ريماز عراقية',tagline:'أهلاً بكم في ريماز',notice:'',allowRegistration:true,allowGuests:true,modules:{wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}}, chatFilter: {enabled:false, words:[]}, welcomeMessages: [
+  users: {}, guests: {}, sessions: {}, messages: [], wall: [], wallEnabled:true, notifications: {}, announcements: [], adminAuditLogs: [], loginHistory: [], adCampaigns: [], subscriptionPlans: [], subscriptions: [], ownerSetupCompleted:false, giftCatalogV3Initialized:false, smileysSeedVersion:0, smileysSeeded:false, rankDefinitions:[], rankArtCatalog:[], siteSettings: {siteName:'دردشة ريماز عراقية',tagline:'دردشة ريماز العراقية - دردشة عراقية للتواصل والتعارف والغرف والمحادثات العامة والخاصة.',notice:'',allowRegistration:true,allowGuests:true,modules:{wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}}, chatFilter: {enabled:false, words:[]}, welcomeMessages: [
     {id:'welcome-visitors',title:'دردشة ريماز عراقية',text:'إعزإئنا زوإر (دردشة ريماز عراقية)\nحياَكم الله منـورين الشاَت . الاعضاء الجدد نتمنيُ لكم اوقاَت سعيده',enabled:true},
     {id:'welcome-search',title:'الترحيب',text:'عزيزي الزائر للرجوع الينا اكتب في محرك البحث ( دردشة ريماز عراقية )\nنتمنا لكم وقت ممتعا',enabled:true}
   ],
@@ -142,11 +188,11 @@ if(!Array.isArray(db.loginHistory)) db.loginHistory=[];
 if(!Array.isArray(db.adCampaigns)) db.adCampaigns=[];
 if(!Array.isArray(db.subscriptionPlans)) db.subscriptionPlans=[];
 if(!Array.isArray(db.subscriptions)) db.subscriptions=[];
-if(!db.siteSettings||typeof db.siteSettings!=='object') db.siteSettings={siteName:'دردشة ريماز عراقية',tagline:'أهلاً بكم في ريماز',notice:'',allowRegistration:true,allowGuests:true,modules:{}};
+if(!db.siteSettings||typeof db.siteSettings!=='object') db.siteSettings={siteName:'دردشة ريماز عراقية',tagline:'دردشة ريماز العراقية - دردشة عراقية للتواصل والتعارف والغرف والمحادثات العامة والخاصة.',notice:'',allowRegistration:true,allowGuests:true,modules:{}};
 const DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true};
 if(!db.siteSettings.modules||typeof db.siteSettings.modules!=='object')db.siteSettings.modules={};
 for(const [key,value] of Object.entries(DEFAULT_SITE_MODULES))db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false;
-Object.assign(db.siteSettings,{siteName:String(db.siteSettings.siteName||'دردشة ريماز عراقية').slice(0,60),tagline:String(db.siteSettings.tagline||'أهلاً بكم في ريماز').slice(0,100),notice:String(db.siteSettings.notice||'').slice(0,300),allowRegistration:db.siteSettings.allowRegistration!==false,allowGuests:db.siteSettings.allowGuests!==false});
+Object.assign(db.siteSettings,{siteName:String(db.siteSettings.siteName||'دردشة ريماز عراقية').slice(0,60),tagline:String(db.siteSettings.tagline||'دردشة ريماز العراقية - دردشة عراقية للتواصل والتعارف والغرف والمحادثات العامة والخاصة.').slice(0,300),notice:String(db.siteSettings.notice||'').slice(0,300),allowRegistration:db.siteSettings.allowRegistration!==false,allowGuests:db.siteSettings.allowGuests!==false});
 function siteModuleEnabled(name){return db.siteSettings?.modules?.[name]!==false;}
 if(!db.chatFilter || typeof db.chatFilter!=='object') db.chatFilter={enabled:false,words:[]};
 if(!Array.isArray(db.chatFilter.words)) db.chatFilter.words=[];
@@ -297,16 +343,7 @@ function roomHistoryWithAnnouncements(roomId,viewer,createdAt=0){
       items.push(announcementMessageForRoom(item,roomId,now,'active-'+slot));
     }
   }
-  // Message identity is account-backed, not a stale snapshot captured when the
-  // message was sent. Resolve the current display name and profile on every history
-  // delivery so rank/name changes are consistent across browsers and old messages.
-  const currentItems=items.map(item=>{
-    if(!item?.from || ['announcement','welcome'].includes(item.type))return item;
-    const currentProfile=profile(item.from);
-    const account=getUser(item.from)||getGuest(item.from);
-    return {...item,displayName:displayName(item.from),profile:currentProfile,role:roleOf({name:item.from,role:account?.role})};
-  });
-  return currentItems.sort((a,b)=>Number(a.at||0)-Number(b.at||0)).slice(-200);
+  return items.sort((a,b)=>Number(a.at||0)-Number(b.at||0)).slice(-200);
 }
 function publishAnnouncement(item){
   if(!item||!item.id)return [];
@@ -1294,7 +1331,7 @@ app.put('/api/admin/control-center',(req,res)=>{requireAuth(req,res,()=>{if(!isO
 // Existing site settings, login history and backup endpoints.
 app.get('/api/public/settings',(req,res)=>{const s=db.siteSettings||{};res.set('Cache-Control','no-store');res.json({siteName:s.siteName||'دردشة ريماز عراقية',tagline:s.tagline||'',notice:s.notice||'',allowRegistration:s.allowRegistration!==false,allowGuests:s.allowGuests!==false,modules:{...(s.modules||{})}});});
 app.get('/api/admin/site-settings',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية إدارة الموقع'});res.set('Cache-Control','no-store');res.json({settings:db.siteSettings||{}});});
-app.put('/api/admin/site-settings',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية إدارة الموقع'});const b=req.body||{};const modules={...(db.siteSettings?.modules||DEFAULT_SITE_MODULES)};for(const key of Object.keys(DEFAULT_SITE_MODULES))if(Object.prototype.hasOwnProperty.call(b.modules||{},key))modules[key]=b.modules[key]===true;const next={siteName:String(b.siteName||'').trim().slice(0,60),tagline:String(b.tagline||'').trim().slice(0,100),notice:String(b.notice||'').trim().slice(0,300),allowRegistration:b.allowRegistration!==false,allowGuests:b.allowGuests!==false,modules};if(!next.siteName)return res.status(400).json({error:'اسم الموقع مطلوب'});const old=db.siteSettings;db.siteSettings=next;db.adminAuditLogs=db.adminAuditLogs||[];db.adminAuditLogs.unshift({id:crypto.randomUUID(),at:Date.now(),actor:String(req.user.name||'المالك').slice(0,32),method:'PUT',path:'/api/admin/site-settings',status:200});db.adminAuditLogs=db.adminAuditLogs.slice(0,500);try{save()}catch(e){db.siteSettings=old;return res.status(500).json({error:'تعذر حفظ إعدادات الموقع'});}io.emit('site-settings-changed',{siteName:next.siteName,tagline:next.tagline,notice:next.notice,modules:next.modules});res.json({ok:true,settings:next});});
+app.put('/api/admin/site-settings',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية إدارة الموقع'});const b=req.body||{};const modules={...(db.siteSettings?.modules||DEFAULT_SITE_MODULES)};for(const key of Object.keys(DEFAULT_SITE_MODULES))if(Object.prototype.hasOwnProperty.call(b.modules||{},key))modules[key]=b.modules[key]===true;const next={siteName:String(b.siteName||'').trim().slice(0,60),tagline:String(b.tagline||'').trim().slice(0,300),notice:String(b.notice||'').trim().slice(0,300),allowRegistration:b.allowRegistration!==false,allowGuests:b.allowGuests!==false,modules};if(!next.siteName)return res.status(400).json({error:'اسم الموقع مطلوب'});const old=db.siteSettings;db.siteSettings=next;db.adminAuditLogs=db.adminAuditLogs||[];db.adminAuditLogs.unshift({id:crypto.randomUUID(),at:Date.now(),actor:String(req.user.name||'المالك').slice(0,32),method:'PUT',path:'/api/admin/site-settings',status:200});db.adminAuditLogs=db.adminAuditLogs.slice(0,500);try{save()}catch(e){db.siteSettings=old;return res.status(500).json({error:'تعذر حفظ إعدادات الموقع'});}io.emit('site-settings-changed',{siteName:next.siteName,tagline:next.tagline,notice:next.notice,modules:next.modules});res.json({ok:true,settings:next});});
 app.get('/api/admin/login-history',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية عرض سجل الدخول'});res.set('Cache-Control','no-store');res.json({items:(db.loginHistory||[]).slice(0,500),total:(db.loginHistory||[]).length});});
 app.get('/api/admin/health',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية فحص النظام'});const walk=(dir)=>{let files=0,bytes=0;try{for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const full=path.join(dir,entry.name);if(entry.isDirectory()){const child=walk(full);files+=child.files;bytes+=child.bytes;}else if(entry.isFile()){const st=fs.statSync(full);files++;bytes+=st.size;}}}catch{}return {files,bytes};};let dbBytes=0;try{dbBytes=fs.statSync(DB_FILE).size}catch{}const uploads=walk(UP_DIR),memory=process.memoryUsage();res.set('Cache-Control','no-store');res.json({appVersion:require('./package.json').version||'unknown',node:process.version,uptimeSeconds:Math.floor(process.uptime()),dbBytes,uploads,heapUsed:memory.heapUsed,rss:memory.rss,online:getOnlineUsers(req.user).length,rooms:(db.rooms||[]).length,modules:{...DEFAULT_SITE_MODULES,...(db.siteSettings?.modules||{})}});});
 app.get('/api/admin/backup/database',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخ الاحتياطي'});try{const snapshot={format:'rimaz-database-backup',version:1,createdAt:new Date().toISOString(),appVersion:require('./package.json').version||'unknown',database:{...db,sessions:{}}};const body=JSON.stringify(snapshot,null,2);res.set('Cache-Control','no-store, no-cache, must-revalidate');res.set('Content-Type','application/json; charset=utf-8');res.set('Content-Disposition',`attachment; filename="rimaz-database-backup-${new Date().toISOString().slice(0,10)}.json"`);res.send(body);}catch(e){console.error('Database backup failed:',e);res.status(500).json({error:'تعذر إنشاء النسخة الاحتياطية'});}});
@@ -1560,7 +1597,7 @@ app.use((err,req,res,next)=>{
   console.error('Unhandled request error:',err);
   return res.status(500).json({error:'حدث خطأ غير متوقع في الخادم'});
 });
-app.get(/.*/,(req,res)=>{ if (!INDEX_FILE) return res.status(500).send('Rimaz setup error: index.html is missing from the deployment package.'); res.sendFile(INDEX_FILE); });
+app.get(/.*/,(req,res)=>sendSeoIndex(req,res));
 server.listen(PORT,()=>console.log(`Rimaz server listening on ${PORT}`));
 function gracefulShutdown(signal){
   if(messageSaveTimer){clearTimeout(messageSaveTimer);messageSaveTimer=null;}
