@@ -98,11 +98,11 @@ app.use(express.static(path.join(ROOT, 'public')));
 app.get('/', (req, res) => { if (!INDEX_FILE) return res.status(500).send('Rimaz setup error: index.html is missing from the deployment package.'); res.sendFile(INDEX_FILE); });
 
 const defaults = () => ({
-  users: {}, guests: {}, sessions: {}, messages: [], wall: [], wallEnabled:true, notifications: {}, announcements: [], adminAuditLogs: [], loginHistory: [], ownerSetupCompleted:false, giftCatalogV3Initialized:false, smileysSeedVersion:0, smileysSeeded:false, rankDefinitions:[], rolePermissionMeta:{customized:{}}, siteSettings: {siteName:'دردشة ريماز عراقية',tagline:'أهلاً بكم في ريماز',notice:'',allowRegistration:true,allowGuests:true,modules:{wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}}, chatFilter: {enabled:false, words:[]}, welcomeMessages: [
+  users: {}, guests: {}, sessions: {}, messages: [], wall: [], wallEnabled:true, notifications: {}, announcements: [], adminAuditLogs: [], loginHistory: [], ownerSetupCompleted:false, giftCatalogV3Initialized:false, smileysSeedVersion:0, smileysSeeded:false, rankDefinitions:[], siteSettings: {siteName:'دردشة ريماز عراقية',tagline:'أهلاً بكم في ريماز',notice:'',allowRegistration:true,allowGuests:true,modules:{wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}}, chatFilter: {enabled:false, words:[]}, welcomeMessages: [
     {id:'welcome-visitors',title:'دردشة ريماز عراقية',text:'إعزإئنا زوإر (دردشة ريماز عراقية)\nحياَكم الله منـورين الشاَت . الاعضاء الجدد نتمنيُ لكم اوقاَت سعيده',enabled:true},
     {id:'welcome-search',title:'الترحيب',text:'عزيزي الزائر للرجوع الينا اكتب في محرك البحث ( دردشة ريماز عراقية )\nنتمنا لكم وقت ممتعا',enabled:true}
   ],
-  profiles: {}, lastLike: {}, permissionOverrides: {}, rolePermissions: {}, rankAudit: [], giftCatalog: [],
+  profiles: {}, lastLike: {}, accountPermissions: {}, permissionModelVersion:0, rankAudit: [], giftCatalog: [],
   chatShortcuts: [], customSmileys: [],
   rooms: [
     { id:'public', name:'الغرفة العامة', desc:'غرفة عامة ..', kind:'public', capacity:200, mics:0, owner:'admin' },
@@ -184,33 +184,10 @@ if(expiredAnnouncementIds.size){db.announcements=(db.announcements||[]).filter(a
 // Direct private conversations and the wall are separate from db.rooms.
 // Keep room announcements available in every configured room, including rooms
 // whose access kind is private; only one-to-one DMs and the wall are excluded.
-// Normalize legacy saved role permissions at startup so old arrays cannot invert rank hierarchy.
-const ROLE_PERMISSION_CEILINGS={super:['panel_access','users_view','shortcuts_manage','smileys_manage'],banner:['panel_access','users_view','moderation','messages_delete','gifts','announcements','shortcuts_manage','smileys_manage'],admin:Object.keys({panel_access:1,users_view:1,moderation:1,kick_room:1,ban_room:1,mute_room:1,global_kick:1,global_ban:1,messages_delete:1,gifts:1,announcements:1,announcement_post:1,announcement_delete:1,rooms_manage:1,vip:1,profile_edit:1,avatar_delete:1,grant_likes:1,role_assign:1,rank_assign:1,permission_manage:1,member_ip:1,reset_likes:1,chat_tools_manage:1,shortcuts_manage:1,smileys_manage:1,room_move:1,wall_stop:1,wall_restart:1,wall_clear:1,wall_delete_user:1,welcome_manage:1,audit_view:1,stats_view:1,chat_filter_manage:1,member_status_manage:1,site_admin:1})};
-const RANK_PERMISSION_PROFILES=['admin-full','super-red','super-white','super-black','crown-silver','crown-gold','admin-shield'];
-const RANK_BASE_ROLE={'admin-full':'admin','super-red':'super','super-white':'super','super-black':'super','crown-silver':'banner','crown-gold':'banner','admin-shield':'admin'};
-
-const PROTECTED_ROLE_PERMISSIONS=[]; // permission_manage is enforced as owner-only inside hasPermission().
-db.rolePermissions=db.rolePermissions||{};
-db.rolePermissionMeta=db.rolePermissionMeta||{customized:{}};
-db.rolePermissionMeta.customized=db.rolePermissionMeta.customized||{};
-db.rolePermissionMeta.updatedAt=db.rolePermissionMeta.updatedAt||{};
-// One-time migration for installations that customized permissions before save timestamps existed.
-// When both a base role and its visual rank were customized in the older build, prefer the base
-// role on first upgrade; the owner can then save the visual rank again to make it take precedence.
-let permissionPrecedenceMigrationChanged=false;
-for(const rank of RANK_PERMISSION_PROFILES){
- if(db.rolePermissionMeta.customized[rank]&&!Number(db.rolePermissionMeta.updatedAt[rank])){
-  const def=(db.rankDefinitions||[]).find(x=>String(x.id)===rank);
-  db.rolePermissionMeta.updatedAt[rank]=Number(def?.updatedAt)||Date.now();
-  permissionPrecedenceMigrationChanged=true;
- }
-}
-for(const role of ['admin','super','banner'])if(db.rolePermissionMeta.customized[role]&&!Number(db.rolePermissionMeta.updatedAt[role])){
- db.rolePermissionMeta.updatedAt[role]=Date.now();permissionPrecedenceMigrationChanged=true;
-}
-if(permissionPrecedenceMigrationChanged)try{save()}catch(error){console.warn('Could not persist permission precedence migration:',error.message)}
-const VALID_PERMISSION_KEYS=new Set(['panel_access','users_view','moderation','kick_room','ban_room','mute_room','global_kick','global_ban','messages_delete','gifts','announcements','announcement_post','announcement_delete','rooms_manage','vip','profile_edit','avatar_delete','grant_likes','role_assign','rank_assign','permission_manage','member_ip','reset_likes','chat_tools_manage','shortcuts_manage','smileys_manage','room_move','wall_stop','wall_restart','wall_clear','wall_delete_user','welcome_manage','audit_view','stats_view','chat_filter_manage','member_status_manage','private_chat_override','presence_hidden_view','hidden_login','ghost_login','staff_notice','staff_media','voice_mic_override','room_create','room_edit','room_delete','room_lock','room_image_manage','gift_catalog_manage','site_admin']);
-for(const role of Object.keys(ROLE_PERMISSION_CEILINGS)) if(Array.isArray(db.rolePermissions[role])) db.rolePermissions[role]=[...new Set(db.rolePermissions[role].filter(p=>VALID_PERMISSION_KEYS.has(p)))];
+// One permission model: the seven visible ranks. Legacy generic roles are migrated once below.
+const RANK_PERMISSION_PROFILES=['admin-full','admin-shield','crown-gold','crown-silver','super-black','super-white','super-red'];
+const CORE_RANK_LEVELS=Object.freeze({'admin-full':1000,'admin-shield':900,'crown-gold':800,'crown-silver':700,'super-black':600,'super-white':500,'super-red':400});
+db.accountPermissions=db.accountPermissions&&typeof db.accountPermissions==='object'?db.accountPermissions:{};
 function save(){
   // Keep the existing synchronous/atomic contract for every route, but avoid
   // pretty-printing the entire database and forcing two disk flushes per event.
@@ -299,7 +276,7 @@ function isAnnouncementRoom(room){
 function announcementRooms(){return (Array.isArray(db.rooms)?db.rooms:[]).filter(isAnnouncementRoom);}
 function announcementMessageForRoom(item,roomId,at=Date.now(),idSuffix=String(at)){
   if(item.duration==='15m')return {id:String(item.id)+'-'+roomId+'-'+idSuffix,announcementId:String(item.id),room:String(roomId),from:item.from,displayName:item.displayName||displayName(item.from),role:item.role||roleOf({name:item.from}),type:'announcement',text:item.text,at,duration:item.duration,profile:item.profile||profile(item.from)};
-  return {id:String(item.id)+'-'+roomId+'-'+idSuffix,announcementId:String(item.id),room:String(roomId),from:'الإدارة',displayName:'الإدارة',title:item.title||'إعلان إداري',role:'admin',type:'announcement',text:item.text,at,duration:item.duration,profile:{}};
+  return {id:String(item.id)+'-'+roomId+'-'+idSuffix,announcementId:String(item.id),room:String(roomId),from:'الإدارة',displayName:'الإدارة',title:item.title||'إعلان إداري',role:'member',type:'announcement',text:item.text,at,duration:item.duration,profile:{}};
 }
 // db.messages has a global size limit, so busy rooms can evict an announcement
 // belonging to a quieter room. Rehydrate each still-active announcement into the
@@ -465,16 +442,16 @@ function cancelPrivateConversationCleanup(name){const key=keyName(name),timer=pr
 function cleanName(v){ return String(v||'').trim().replace(/\s+/g,' ').slice(0,32); }
 function keyName(n){ return cleanName(n).toLowerCase(); }
 function isOwnerName(name){ const n=keyName(name); if(n==='owner'||(!!process.env.OWNER_NAME&&n===keyName(process.env.OWNER_NAME)))return true; const userEntry=Object.entries(db.users||{}).find(([k])=>keyName(k)===n); if(userEntry&&String(userEntry[1]?.role||'')==='owner')return true; const guestEntry=Object.entries(db.guests||{}).find(([k])=>keyName(k)===n); return !!(guestEntry&&String(guestEntry[1]?.role||'')==='owner'); }
-function roleOf(u){ if(!u)return 'member'; const n=keyName(u.name); if(isOwnerName(n))return 'owner'; if(n==='admin' || n===keyName(process.env.ADMIN_NAME||'admin'))return 'admin'; const valid=['member','super','banner','admin']; const member=getUser(u.name); const guest=getGuest(u.name); const account=member||guest; const stored=String(account?.role||u.role||'member'); const visualRank=profile(u.name)?.rank; const dynamicBase=visualRank&&(!profile(u.name).rankUntil||Number(profile(u.name).rankUntil)>Date.now())?rankBaseRole(visualRank):null; /* Legacy and custom rank base roles remain operational without changing chat presentation. */ if(stored==='admin'||dynamicBase==='admin'||visualRank==='admin-shield'||visualRank==='admin-full')return 'admin'; if(dynamicBase==='super'||dynamicBase==='banner')return dynamicBase; if(account)return valid.includes(stored)?stored:'member'; return valid.includes(stored)?stored:'member'; }
+function roleOf(u){if(!u)return 'member';return isOwnerName(u.name)?'owner':'member';}
 function canMessageClosedPrivate(u){return !!(u&&(isOwner(u)||hasPermission(u,'private_chat_override')));}
-function isOwner(u){return roleOf(u)==='owner'}
-function isAdmin(u){return ['owner','admin'].includes(roleOf(u))}
-function isStaff(u){return ['owner','admin','super','banner'].includes(roleOf(u))}
+function isOwner(u){return !!u&&isOwnerName(u.name);}
+function isAdmin(u){return !!u&&(isOwner(u)||hasPermission(u,'panel_access'));}
+function isStaff(u){return !!u&&(isOwner(u)||['panel_access','presence_hidden_view','kick_room','ban_room','mute_room','global_kick','global_ban'].some(p=>hasPermission(u,p)));}
 function findKey(obj,name){ const wanted=keyName(name); return Object.keys(obj||{}).find(k=>keyName(k)===wanted); }
 function getUser(name){ const k=findKey(db.users,name); return k ? db.users[k] : null; }
 function getGuest(name){ const k=findKey(db.guests,name); return k ? db.guests[k] : null; }
 function accountKey(name){ return findKey(db.users,name) || findKey(db.guests,name) || cleanName(name); }
-function userLikes(u){ if (!u) return 0; if (isAdmin(u)) return 999999; return Number(getUser(u.name)?.likes ?? getGuest(u.name)?.likes ?? u.likes ?? 0); }
+function userLikes(u){ if(!u)return 0;if(isOwner(u))return 999999;return Number(getUser(u.name)?.likes??getGuest(u.name)?.likes??u.likes??0); }
 function level(l){ l=Number(l)||0; return l>=500?3:l>=400?2:1; }
 function canNotice(u){ return !!u&&(isOwner(u)||hasPermission(u,'staff_notice')||Number(getUser(u.name)?.likes??getGuest(u.name)?.likes??u.likes??0)>=400); }
 function canMedia(u){ return !!u&&(isOwner(u)||hasPermission(u,'staff_media')||Number(getUser(u.name)?.likes??getGuest(u.name)?.likes??u.likes??0)>=500); }
@@ -485,7 +462,7 @@ function profile(name){
   const p=db.profiles[name];
   if(!p.displayName) p.displayName=cleanName(name);
   // Expire temporary visual ranks without changing the existing badge artwork or staff role.
-  if(p.rankUntil && Number(p.rankUntil)<=Date.now()) { const expiredRank=p.rank; const account=getUser(name)||getGuest(name); const base=rankBaseRole(expiredRank); if(account&&base&&String(account.role||'member')===base) account.role=String(p.rankPreviousRole||'member'); p.rank='none'; delete p.rankUntil; delete p.rankPreviousRole; delete p.rankDurationDays; save(); }
+  if(p.rankUntil && Number(p.rankUntil)<=Date.now()) { p.rank='none'; delete p.rankUntil; delete p.rankPreviousRole; delete p.rankDurationDays; save(); }
   // Never let the old automatic status survive as a default. Custom statuses remain untouched.
   if(!p.status || p.status==='متصل الآن' || p.status==='زائر جديد' || p.status==='غير مسجل' || p.status==='عضو جديد') p.status=defaultStatus(name);
   if(!p.fontColor) p.fontColor=p.nameColor||'#222222';
@@ -499,7 +476,7 @@ for (const name of Object.keys(db.profiles||{})) {
 }
 if(statusMigrated) save();
 function displayName(name){ return profile(name).displayName || cleanName(name); }
-function sessionUser(sid){ const s=sessions.get(sid); if(!s)return null; const role=roleOf(s); return {...s, role, owner:isOwner(s), admin:isAdmin(s), staff:isStaff(s), myPermissions:Object.keys(PERMISSION_CATALOG).filter(permission=>hasPermission(s,permission)), panelAccess:isOwner(s)||hasPermission(s,'panel_access'), vip:vipActive(s.name), likes:isAdmin(s)?999999:userLikes(s.name)}; }
+function sessionUser(sid){ const s=sessions.get(sid); if(!s)return null; const role=roleOf(s); return {...s, role, owner:isOwner(s), admin:isAdmin(s), staff:isStaff(s), myPermissions:Object.keys(PERMISSION_CATALOG).filter(permission=>hasPermission(s,permission)), panelAccess:isOwner(s)||hasPermission(s,'panel_access'), vip:vipActive(s.name), likes:isOwner(s)?999999:userLikes(s)}; }
 function makeSession(name,type,visibility={}){
   const sid=crypto.randomBytes(24).toString('hex');
   const s={name,type,created:Date.now(),hidden:!!visibility.hidden,ghost:!!visibility.ghost}; sessions.set(sid,s); db.sessions[sid]=s; save(); return sid;
@@ -520,40 +497,24 @@ app.get('/api/private/media/:filename',requireAuth,(req,res)=>{if(!siteModuleEna
 });
 const PERMISSION_CATALOG = {
   panel_access:'فتح لوحة التحكم', users_view:'عرض الأعضاء', kick_room:'طرد من الغرفة', ban_room:'حظر من الغرفة', mute_room:'كتم العضو', global_kick:'طرد خارج الدردشة', global_ban:'حظر خارج الدردشة',
-  messages_delete:'حذف الرسائل', rooms_manage:'إدارة الغرف (صلاحية شاملة قديمة)', announcement_post:'نشر الإعلانات', announcement_delete:'حذف الإعلانات',
+  messages_delete:'حذف الرسائل', announcement_post:'نشر الإعلانات', announcement_delete:'حذف الإعلانات',
   gifts:'إرسال الهدايا', vip:'منح VIP', profile_edit:'تعديل ألوان الملف الشخصي',
-  avatar_delete:'حذف الصور', grant_likes:'منح اللايكات', role_assign:'تغيير المناصب الإدارية',
+  avatar_delete:'حذف الصور', grant_likes:'منح اللايكات',
   rank_assign:'منح الشارات ومدتها', permission_manage:'تعديل صلاحيات الرتب', member_ip:'عرض IP',
-  reset_likes:'تصفير اللايكات', chat_tools_manage:'إدارة الاختصارات والسميلات', shortcuts_manage:'إدارة الاختصارات', smileys_manage:'إدارة السميلات', room_move:'نقل عضو بين الغرف', room_create:'إنشاء غرفة', room_edit:'تعديل بيانات الغرفة', room_delete:'حذف غرفة', room_lock:'تعيين أو إزالة كلمة مرور الغرفة', room_image_manage:'إدارة صور الغرف', gift_catalog_manage:'إضافة وحذف هدايا الكتالوج', wall_stop:'إيقاف الحائط', wall_restart:'تشغيل الحائط', wall_clear:'حذف جميع منشورات الحائط', wall_delete_user:'حذف منشورات عضو محدد من الحائط', welcome_manage:'إدارة رسائل الترحيب',
+  reset_likes:'تصفير اللايكات', shortcuts_manage:'إدارة الاختصارات', smileys_manage:'إدارة السميلات', room_move:'نقل عضو بين الغرف', room_create:'إنشاء غرفة', room_edit:'تعديل بيانات الغرفة', room_delete:'حذف غرفة', room_lock:'تعيين أو إزالة كلمة مرور الغرفة', room_image_manage:'إدارة صور الغرف', gift_catalog_manage:'إضافة وحذف هدايا الكتالوج', wall_stop:'إيقاف الحائط', wall_restart:'تشغيل الحائط', wall_clear:'حذف جميع منشورات الحائط', wall_delete_user:'حذف منشورات عضو محدد من الحائط', welcome_manage:'إدارة رسائل الترحيب',
   audit_view:'عرض سجل العمليات وتصديره', stats_view:'عرض إحصائيات الموقع', chat_filter_manage:'إدارة فلتر الكلمات', member_status_manage:'إدارة حالات الأعضاء', private_chat_override:'تجاوز إغلاق المحادثات الخاصة', presence_hidden_view:'مشاهدة الأعضاء المخفيين', hidden_login:'الدخول المخفي', ghost_login:'دخول الشبح', staff_notice:'إرسال تنبيهات إدارية', staff_media:'إرسال وسائط إدارية', voice_mic_override:'تجاوز شرط اللايكات للمايكات', site_admin:'إدارة الموقع الكاملة (الإعدادات والسجلات وصحة الخادم والنسخ والاستعادة)'
 };
-// Permissions are tiered: super < banner < admin. Existing saved custom arrays
-// are intersected with each role's ceiling so old settings cannot invert hierarchy.
+// Every permission is an independent capability; no rank name grants implicit access.
 const ALL_PERMISSION_KEYS=Object.keys(PERMISSION_CATALOG);
-// Migrate saved bundled permissions to independent controls without losing existing access.
-let splitPermissionMigrationChanged=false;
-for(const [role, saved] of Object.entries(db.rolePermissions||{})){
-  if(!Array.isArray(saved)) continue;
-  const next=new Set(saved);
-  if(next.has('chat_tools_manage')) { next.add('shortcuts_manage'); next.add('smileys_manage'); }
-  if(next.has('moderation')) { for(const k of ['kick_room','ban_room','mute_room','global_kick','global_ban']) next.add(k); next.delete('moderation'); }
-  if(next.has('announcements')) { next.add('announcement_post'); next.add('announcement_delete'); next.delete('announcements'); }
-  // The old wall toggle controlled both stopping and restarting.
-  if(next.has('wall_stop')) next.add('wall_restart');
-  if(next.has('rooms_manage')) for(const k of ['room_create','room_edit','room_delete','room_lock','room_image_manage']) next.add(k);
-  if(next.has('gifts')) next.add('gift_catalog_manage');
-  const value=[...next];
-  if(JSON.stringify(value.slice().sort())!==JSON.stringify(saved.slice().sort())) { db.rolePermissions[role]=value; splitPermissionMigrationChanged=true; }
+// Convert old bundled permissions into the granular capabilities used by the current UI.
+function normalizePermissionList(list){
+ const set=new Set(Array.isArray(list)?list:[]);
+ if(set.has('rooms_manage')){for(const key of ['room_create','room_edit','room_delete','room_lock','room_image_manage'])set.add(key);set.delete('rooms_manage');}
+ if(set.has('chat_tools_manage')){set.add('shortcuts_manage');set.add('smileys_manage');set.delete('chat_tools_manage');}
+ if(set.has('gifts'))set.add('gift_catalog_manage');
+ return [...set].filter(key=>Object.hasOwn(PERMISSION_CATALOG,key));
 }
-for(const rank of (db.rankDefinitions||[])){if(!Array.isArray(rank.permissions))continue;const next=new Set(rank.permissions);if(next.has('rooms_manage'))for(const k of ['room_create','room_edit','room_delete','room_lock','room_image_manage'])next.add(k);if(next.has('gifts'))next.add('gift_catalog_manage');const value=[...next];if(JSON.stringify(value.slice().sort())!==JSON.stringify(rank.permissions.slice().sort())){rank.permissions=value;splitPermissionMigrationChanged=true;}}
-if(splitPermissionMigrationChanged) save();
-const without=(...blocked)=>ALL_PERMISSION_KEYS.filter(p=>!blocked.includes(p));
-const DEFAULT_ROLE_PERMISSIONS = {
-  // Least-privilege defaults: the owner explicitly enables each additional control.
-  // A full administrator profile exists, but is assigned only by the owner.
-  super:['panel_access','users_view'],
-  banner:['panel_access','users_view','kick_room'],
-  admin:['panel_access','users_view','kick_room','mute_room','messages_delete'],
+const DEFAULT_RANK_PERMISSIONS = {
   'admin-full':[...ALL_PERMISSION_KEYS],
   'admin-shield':['panel_access','users_view','kick_room','mute_room','messages_delete'],
   'crown-gold':['panel_access','users_view','kick_room','mute_room','announcement_post'],
@@ -561,152 +522,84 @@ const DEFAULT_ROLE_PERMISSIONS = {
   'super-black':['panel_access','users_view','mute_room'],
   'super-white':['panel_access','users_view'],
   'super-red':['panel_access'],
-  member:[]
 };
-// Dynamic rank catalogue. Legacy IDs are retained so existing assignments keep working.
 const LEGACY_RANK_DEFINITIONS=[
- {id:'admin-full',name:'ADMIN كامل الصلاحيات',level:1000,icon:'👑',baseRole:'admin',permissions:[...ALL_PERMISSION_KEYS]},
- {id:'admin-shield',name:'الإداري',level:900,icon:'⬟',baseRole:'admin',permissions:DEFAULT_ROLE_PERMISSIONS['admin-shield']||[]},
- {id:'crown-gold',name:'البنر الذهبي',level:800,icon:'♛',baseRole:'banner',permissions:DEFAULT_ROLE_PERMISSIONS['crown-gold']||[]},
- {id:'crown-silver',name:'البنر الفضي',level:700,icon:'♛',baseRole:'banner',permissions:DEFAULT_ROLE_PERMISSIONS['crown-silver']||[]},
- {id:'super-black',name:'السوبر الأسود',level:600,icon:'★',baseRole:'super',permissions:DEFAULT_ROLE_PERMISSIONS['super-black']||[]},
- {id:'super-white',name:'السوبر الأبيض',level:500,icon:'★',baseRole:'super',permissions:DEFAULT_ROLE_PERMISSIONS['super-white']||[]},
- {id:'super-red',name:'السوبر الأحمر',level:400,icon:'★',baseRole:'super',permissions:DEFAULT_ROLE_PERMISSIONS['super-red']||[]}
+ {id:'admin-full',name:'ADMIN كامل الصلاحيات',level:1000,icon:'👑',permissions:[...DEFAULT_RANK_PERMISSIONS['admin-full']]},
+ {id:'admin-shield',name:'الإداري',level:900,icon:'⬟',permissions:[...DEFAULT_RANK_PERMISSIONS['admin-shield']]},
+ {id:'crown-gold',name:'البنر الذهبي',level:800,icon:'♛',permissions:[...DEFAULT_RANK_PERMISSIONS['crown-gold']]},
+ {id:'crown-silver',name:'البنر الفضي',level:700,icon:'♛',permissions:[...DEFAULT_RANK_PERMISSIONS['crown-silver']]},
+ {id:'super-black',name:'السوبر الأسود',level:600,icon:'★',permissions:[...DEFAULT_RANK_PERMISSIONS['super-black']]},
+ {id:'super-white',name:'السوبر الأبيض',level:500,icon:'★',permissions:[...DEFAULT_RANK_PERMISSIONS['super-white']]},
+ {id:'super-red',name:'السوبر الأحمر',level:400,icon:'★',permissions:[...DEFAULT_RANK_PERMISSIONS['super-red']]}
 ];
 if(!Array.isArray(db.rankDefinitions))db.rankDefinitions=[];
-let rankDefinitionsMigrated=false;
-for(const legacy of LEGACY_RANK_DEFINITIONS){if(!db.rankDefinitions.some(r=>String(r.id)===legacy.id)){db.rankDefinitions.push({...legacy,permissions:[...legacy.permissions]});rankDefinitionsMigrated=true;}}
-if(rankDefinitionsMigrated)save();
-for(const r of db.rankDefinitions){if(!Array.isArray(r.permissions))r.permissions=[];if(!Number.isFinite(Number(r.level)))r.level=0;if(!r.baseRole)r.baseRole='member';}
-function rankDefinition(id){return (db.rankDefinitions||[]).find(r=>String(r.id)===String(id))||null;}
-function rankBaseRole(id){return RANK_BASE_ROLE[id]||rankDefinition(id)?.baseRole||null;}
+for(const legacy of LEGACY_RANK_DEFINITIONS){
+ const existing=db.rankDefinitions.find(r=>String(r.id)===legacy.id);
+ if(!existing){const saved=Array.isArray(db.rolePermissions?.[legacy.id])?db.rolePermissions[legacy.id]:null;db.rankDefinitions.push({...legacy,permissions:saved?normalizePermissionList(saved):[...legacy.permissions]});}
+ else {if(!Array.isArray(existing.permissions)){existing.permissions=[...legacy.permissions];}if(existing.baseRole!==undefined){delete existing.baseRole;}}
+}
+for(const r of db.rankDefinitions){r.permissions=normalizePermissionList(r.permissions);if(!Number.isFinite(Number(r.level)))r.level=0;delete r.baseRole;}
+const validBuiltInRanks=new Set(RANK_PERMISSION_PROFILES);const rankCountBeforePrune=db.rankDefinitions.length;db.rankDefinitions=db.rankDefinitions.filter(r=>validBuiltInRanks.has(r.id));if(db.rankDefinitions.length!==rankCountBeforePrune)for(const p of Object.values(db.profiles||{})){if(p?.rank&&p.rank!=='none'&&!validBuiltInRanks.has(p.rank)){p.rank='none';delete p.rankUntil;delete p.rankPreviousRole;delete p.rankDurationDays;}}
+function rankDefinition(id){const rank=String(id||'');if(!RANK_PERMISSION_PROFILES.includes(rank))return null;return (db.rankDefinitions||[]).find(r=>String(r.id)===rank)||null;}
+function coreRankLevelForName(name){const canonical=accountKey(name)||cleanName(name);if(!canonical||isOwnerName(canonical))return null;const p=profile(canonical),rank=String(p?.rank||'');return Object.hasOwn(CORE_RANK_LEVELS,rank)&&(!p.rankUntil||Number(p.rankUntil)>Date.now())?CORE_RANK_LEVELS[rank]:null;}
+function higherRankTargetError(actor,targetName){if(!actor||isOwner(actor)||!targetName||isOwnerName(targetName))return false;if(hasPermission(actor,'permission_manage'))return false;const actorLevel=coreRankLevelForName(actor.name),targetLevel=coreRankLevelForName(targetName);return actorLevel!==null&&targetLevel!==null&&targetLevel>actorLevel;}
+function denyHigherRankTarget(actor,targetName,res){if(!higherRankTargetError(actor,targetName))return false;res.status(403).json({error:'صلاحية هذه الرتبة أعلى منك',code:'HIGHER_RANK_PROTECTED'});return true;}
+function effectivePermissionsForUser(user){
+ if(!user)return new Set();
+ if(isOwner(user))return new Set(ALL_PERMISSION_KEYS);
+ const name=keyName(user.name||''),accountSet=db.accountPermissions?.[name];
+ if(Array.isArray(accountSet))return new Set(accountSet.filter(p=>Object.hasOwn(PERMISSION_CATALOG,p)));
+ const p=user.name?profile(user.name):null;
+ const rank=p&&p.rank&&p.rank!=='none'&&(!p.rankUntil||Number(p.rankUntil)>Date.now())?rankDefinition(p.rank):null;
+ const inherited=Array.isArray(rank?.permissions)?rank.permissions:[];
+ return new Set(inherited.filter(p=>Object.hasOwn(PERMISSION_CATALOG,p)));
+}
+function hasPermission(user,permission){if(!user||!permission||!Object.hasOwn(PERMISSION_CATALOG,permission))return false;if(isOwner(user))return true;return effectivePermissionsForUser(user).has(permission);}
+function hasActiveVisualRank(p){return !!(p&&p.rank&&p.rank!=='none'&&(!p.rankUntil||Number(p.rankUntil)>Date.now())&&!!rankDefinition(p.rank));}
+function denyBadgeForRank(name,p,res){if(!hasActiveVisualRank(p))return false;res.status(409).json({error:'لا يمكن استبدالها بهدية أو VIP؛ أزل الرتبة أولاً'});return true;}
 
-// The seven built-in ranks have a strict server-side hierarchy. Ordinary members/guests
-// are deliberately outside this comparison; owner protection remains on its existing path.
-const CORE_RANK_LEVELS=Object.freeze({
-  'super-red':400,
-  'super-white':500,
-  'super-black':600,
-  'crown-silver':700,
-  'crown-gold':800,
-  'admin-shield':900,
-  'admin-full':1000
-});
-function coreRankLevelForName(name){
-  const canonical=accountKey(name)||cleanName(name);
-  if(!canonical||isOwnerName(canonical))return null;
-  const p=profile(canonical),rank=String(p?.rank||'');
-  if(Object.hasOwn(CORE_RANK_LEVELS,rank)&&(!p.rankUntil||Number(p.rankUntil)>Date.now()))return CORE_RANK_LEVELS[rank];
-  const account=getUser(canonical)||getGuest(canonical);
-  const role=roleOf({name:canonical,role:account?.role||'member'});
-  // Legacy staff accounts without an explicit badge still map to their nearest built-in tier.
-  if(role==='admin')return CORE_RANK_LEVELS['admin-shield'];
-  return null;
+// One-time migration only: convert the former generic role/override stores into the single seven-rank model.
+function migrateLegacyPermissionModel(){
+ if(Number(db.permissionModelVersion)>=3)return;
+const legacyRankMap={admin:'admin-full',super:'super-red',banner:'crown-silver'};
+const oldGenericProfiles={admin:[...ALL_PERMISSION_KEYS],super:['panel_access','users_view','shortcuts_manage','smileys_manage'],banner:['panel_access','users_view','kick_room','ban_room','mute_room','messages_delete','gifts','announcement_post','announcement_delete','shortcuts_manage','smileys_manage']};
+const legacyMeta=db.rolePermissionMeta||{};
+for(const [name,account] of [...Object.entries(db.users||{}),...Object.entries(db.guests||{})]){
+ const oldRole=String(account?.role||'member');if(!Object.hasOwn(legacyRankMap,oldRole))continue;
+ const p=profile(name),mapped=legacyRankMap[oldRole],active=!!p.rank&&p.rank!=='none'&&(!p.rankUntil||Number(p.rankUntil)>Date.now());
+ if(!active){p.rank=mapped;delete p.rankUntil;p.rankGrantedName=rankDefinition(mapped)?.name||mapped;}
+ const assignedRank=active?p.rank:mapped,rankDef=rankDefinition(assignedRank);
+ const oldRolePermissions=normalizePermissionList(Array.isArray(db.rolePermissions?.[oldRole])?db.rolePermissions[oldRole]:oldGenericProfiles[oldRole]);
+ const rankPermissions=normalizePermissionList(rankDef?.permissions);
+ const baseWasCustomized=legacyMeta.customized?.[oldRole]===true,rankWasCustomized=!!(rankDef&&legacyMeta.customized?.[assignedRank]===true);
+ const baseUpdated=Number(legacyMeta.updatedAt?.[oldRole]||0),rankUpdated=Number(rankDef?.updatedAt||legacyMeta.updatedAt?.[assignedRank]||0);
+ const baseWins=baseWasCustomized?(!rankWasCustomized||baseUpdated>rankUpdated):!rankWasCustomized;
+ const selected=baseWins?oldRolePermissions:rankPermissions;
+ const key=keyName(name),oldManual=Array.isArray(db.permissionOverrides?.[key])?db.permissionOverrides[key]:[];
+ if(rankDef&&assignedRank===mapped&&baseWins){rankDef.permissions=normalizePermissionList(selected);if(baseUpdated)rankDef.updatedAt=baseUpdated;}
+ else if(assignedRank!==mapped&&baseWins){db.accountPermissions[key]=normalizePermissionList([...selected,...oldManual]);}
+ account.role='member';
 }
-function higherRankTargetError(actor,targetName){
-  if(!actor||isOwner(actor)||!targetName||isOwnerName(targetName))return false;
-  if(hasPermission(actor,'permission_manage'))return false;
-  const actorLevel=coreRankLevelForName(actor.name),targetLevel=coreRankLevelForName(targetName);
-  return actorLevel!==null&&targetLevel!==null&&targetLevel>actorLevel;
+// Convert old additive per-member arrays to an exact permission set without reducing current access.
+for(const [name,legacy] of Object.entries(db.permissionOverrides||{})){
+ const key=keyName(name);
+ if(Array.isArray(legacy)){
+  const p=profile(name),rank=p.rank&&(!p.rankUntil||Number(p.rankUntil)>Date.now())?rankDefinition(p.rank):null;
+  const inherited=Array.isArray(rank?.permissions)?rank.permissions:[];
+  if(!Array.isArray(db.accountPermissions[key]))db.accountPermissions[key]=normalizePermissionList([...inherited,...legacy]);
+ }else if(legacy&&typeof legacy==='object'&&legacy.mode==='replace'&&Array.isArray(legacy.permissions)&&!Array.isArray(db.accountPermissions[key])){
+  db.accountPermissions[key]=normalizePermissionList(legacy.permissions);
+ }
+ if(name!==key)delete db.permissionOverrides[name];
 }
-function denyHigherRankTarget(actor,targetName,res){
-  if(!higherRankTargetError(actor,targetName))return false;
-  res.status(403).json({error:'صلاحية هذه الرتبة أعلى منك',code:'HIGHER_RANK_PROTECTED'});
-  return true;
+// Normalize exact per-account sets, then retire all duplicate legacy stores.
+for(const [name,permissions] of Object.entries(db.accountPermissions||{}))if(Array.isArray(permissions))db.accountPermissions[name]=normalizePermissionList(permissions);
+delete db.rolePermissions;delete db.rolePermissionMeta;delete db.permissionOverrides;
+db.permissionModelVersion=3;
+ try{save()}catch(error){console.error('Rank permission model migration could not be saved:',error.message)}
 }
+migrateLegacyPermissionModel();
 
-// One-time normalization for legacy profiles created before badge exclusivity was enforced.
-// Active rank wins over VIP/gift; otherwise active VIP wins over an older gift.
-let badgeExclusivityMigrationChanged=false;
-for(const [name,stored] of Object.entries(db.profiles||{})){
-  if(!stored||typeof stored!=='object')continue;
-  const p=stored,rankActive=!!p.rank&&p.rank!=='none'&&(!p.rankUntil||Number(p.rankUntil)>Date.now());
-  const vipActiveNow=Number(p.vipUntil)>Date.now();
-  if(rankActive){if(Array.isArray(p.gifts)&&p.gifts.length){p.gifts=[];badgeExclusivityMigrationChanged=true;}if(p.vipUntil){delete p.vipUntil;badgeExclusivityMigrationChanged=true;}}
-  else if(vipActiveNow&&Array.isArray(p.gifts)&&p.gifts.length){p.gifts=[];badgeExclusivityMigrationChanged=true;}
-}
-if(badgeExclusivityMigrationChanged)save();
-
-// A member can have only one visible distinction at a time: gift, VIP, or rank.
-// A real rank always wins; gifts/VIP may replace each other, never a rank.
-function hasActiveVisualRank(p){return !!p?.rank&&p.rank!=='none'&&(!p.rankUntil||Number(p.rankUntil)>Date.now());}
-function denyBadgeForRank(name,p,res){
-  if(!hasActiveVisualRank(p))return false;
-  let changed=false;
-  if(Array.isArray(p.gifts)&&p.gifts.length){p.gifts=[];changed=true;}
-  if(p.vipUntil){delete p.vipUntil;changed=true;}
-  if(changed){save();io.emit('profile-changed',{name,profile:p});emitState();}
-  res.status(409).json({error:'هذا العضو يحمل رتبة حالية؛ لا يمكن استبدالها بهدية أو VIP'});
-  return true;
-}
-function syncActiveAccountRole(name,role,from='rank-assignment'){
-  for(const [sid,u] of sessions){if(keyName(u.name)===keyName(name)){u.role=role;if(db.sessions?.[sid])db.sessions[sid].role=role;}}
-  for(const [sid,u] of socketUsers){if(keyName(u.name)===keyName(name)){u.role=role;const so=socketBySession(sid);if(so?.data?.user)so.data.user.role=role;so?.emit('role-changed',{name,role,from});}}
-  io.emit('member-role-updated',{name,role});
-}
-
-// Migrate legacy rank profiles that were saved with only the first two basic permissions.
-// Preserve any profile that already contains a richer custom selection.
-let rankPermissionMigrationChanged=false;
-for(const rank of RANK_PERMISSION_PROFILES){
-  const defaults=DEFAULT_ROLE_PERMISSIONS[rank]||[];
-  const saved=db.rolePermissions[rank];
-  // Apply new default profiles once unless the owner explicitly customized this rank.
-  if(!db.rolePermissionMeta.customized[rank] && (!Array.isArray(saved) || JSON.stringify([...new Set(saved)].sort())!==JSON.stringify([...new Set(defaults)].sort()))){
-    db.rolePermissions[rank]=[...defaults];
-    rankPermissionMigrationChanged=true;
-  } else if(!Array.isArray(saved)) {
-    db.rolePermissions[rank]=[...defaults];
-    rankPermissionMigrationChanged=true;
-  }
-}
-// Upgrade the legacy admin profile to the new operational default once; the owner still controls rank permissions.
-if(!db.rolePermissionMeta.customized.admin && JSON.stringify([...(db.rolePermissions.admin||[])].sort())!==JSON.stringify([...DEFAULT_ROLE_PERMISSIONS.admin].sort())){db.rolePermissions.admin=[...DEFAULT_ROLE_PERMISSIONS.admin];rankPermissionMigrationChanged=true;}
-if(rankPermissionMigrationChanged) save();
-let defaultRankDefinitionsSynced=false;
-for(const rank of RANK_PERMISSION_PROFILES){
-  const def=rankDefinition(rank);
-  if(!def||db.rolePermissionMeta.customized[rank])continue;
-  const desired=[...(db.rolePermissions[rank]||DEFAULT_ROLE_PERMISSIONS[rank]||[])];
-  if(JSON.stringify([...new Set(def.permissions||[])].sort())!==JSON.stringify([...new Set(desired)].sort())){
-    def.permissions=desired;def.updatedAt=Date.now();defaultRankDefinitionsSynced=true;
-  }
-}
-if(defaultRankDefinitionsSynced)save();
-let legacyRankPermissionsMigrated=false;
-for(const rank of RANK_PERMISSION_PROFILES){const def=rankDefinition(rank);if(def&&db.rolePermissionMeta?.customized?.[rank]&&Array.isArray(db.rolePermissions[rank])){const next=[...new Set(['panel_access',...db.rolePermissions[rank].filter(p=>Object.hasOwn(PERMISSION_CATALOG,p))])];if(JSON.stringify(next.slice().sort())!==JSON.stringify((def.permissions||[]).slice().sort())){def.permissions=next;legacyRankPermissionsMigrated=true;}}}
-if(legacyRankPermissionsMigrated)save();
-function hasPermission(user, permission){
-  if(!user||!permission||!Object.hasOwn(PERMISSION_CATALOG,permission)) return false;
-  // The owner is the only unconditional principal. Every other account, including
-  // accounts whose legacy role is `admin`, is evaluated against its active rank
-  // definition or its explicitly configured role permission list.
-  if(isOwner(user)) return true;
-  // Sensitive administration is delegated only when the owner explicitly grants the key.
-  // Non-owner permission editors are restricted to permissions they already hold.
-  const p=user?.name?profile(user.name):null;
-  const rank=p&&p.rank&&p.rank!=='none'&&(!p.rankUntil||Number(p.rankUntil)>Date.now())?p.rank:null;
-  const rankDef=rank?rankDefinition(rank):null;
-  const manual=db.permissionOverrides&&Array.isArray(db.permissionOverrides[keyName(user.name||'')])?db.permissionOverrides[keyName(user.name)]:[];
-  // Explicit per-member grants are additive, but never grant owner-only controls.
-  if(manual.includes(permission)&&!['permission_manage'].includes(permission)) return true;
-  const role=roleOf(user);
-  const profileKey=['admin','super','banner'].includes(role)?role:'member';
-  const baseAllowed=Array.isArray(db.rolePermissions?.[profileKey])?db.rolePermissions[profileKey]:(DEFAULT_ROLE_PERMISSIONS[profileKey]||[]);
-  const rankAllowed=rankDef&&Array.isArray(rankDef.permissions)?rankDef.permissions:[];
-  const baseWasCustomized=db.rolePermissionMeta?.customized?.[profileKey]===true;
-  const rankWasCustomized=!!rank&&db.rolePermissionMeta?.customized?.[rank]===true;
-  const baseUpdatedAt=Number(db.rolePermissionMeta?.updatedAt?.[profileKey]||0);
-  const rankUpdatedAt=Number(rankDef?.updatedAt||db.rolePermissionMeta?.updatedAt?.[rank]||0);
-  // An explicitly customized rank takes priority. If the owner customized the
-  // generic base role instead, that explicit choice applies to accounts on that
-  // role whose visual rank has not itself been customized. This makes the
-  // generic `admin` selector work for the admin account without breaking
-  // per-rank permissions such as a separately customized super-red profile.
-  const rankTakesPriority=rankDef&&(rankWasCustomized&&!baseWasCustomized||rankWasCustomized&&baseWasCustomized&&rankUpdatedAt>=baseUpdatedAt||!baseWasCustomized);
-  if(rankTakesPriority)return rankAllowed.includes(permission);
-  return baseAllowed.includes(permission);
-}
 function requirePermission(permission){return (req,res,next)=>requireAuth(req,res,()=>hasPermission(req.user,permission)?next():res.status(403).json({error:'ما عندك صلاحية لهذا الإجراء'}));}
 function permissionForAdminPath(req){
  const p=req.path;
@@ -719,7 +612,6 @@ function permissionForAdminPath(req){
  if(p==='/api/admin/chat-filter')return 'chat_filter_manage';
  if(p==='/api/admin/profile/status')return 'member_status_manage';
  if(p==='/api/admin/chat-tools')return req.method==='GET'?'shortcuts_manage':(req.body&&Array.isArray(req.body.smileys)&&req.body.smileys.length?'smileys_manage':'shortcuts_manage');
- if(p==='/api/admin/role')return 'role_assign';
  if(p==='/api/admin/rank')return 'rank_assign';
  if(p==='/api/admin/permissions')return 'permission_manage';
  if(p.startsWith('/api/admin/member-ip/'))return 'member_ip';
@@ -729,7 +621,7 @@ function permissionForAdminPath(req){
  if(p.startsWith('/api/admin/message/'))return 'messages_delete';
  if(p==='/api/admin/move-member')return 'room_move';
  if(p.startsWith('/api/admin/wall/control')){const a=String(req.body?.action||'');return a==='stop'?'wall_stop':a==='restart'?'wall_restart':a==='clear'?'wall_clear':a==='delete-user'?'wall_delete_user':'wall_stop';}
- if(p.startsWith('/api/admin/room')){if(p==='/api/admin/room'&&req.method==='POST')return 'room_create';if(/\/lock$/.test(p))return 'room_lock';if(/\/image(?:\/delete)?$/.test(p))return 'room_image_manage';if(req.method==='DELETE'&&/^\/api\/admin\/room\/[^/]+$/.test(p))return 'room_delete';if(req.method==='PATCH')return 'room_edit';return 'rooms_manage';}
+ if(p.startsWith('/api/admin/room')){if(p==='/api/admin/room'&&req.method==='POST')return 'room_create';if(/\/lock$/.test(p))return 'room_lock';if(/\/image(?:\/delete)?$/.test(p))return 'room_image_manage';if(req.method==='DELETE'&&/^\/api\/admin\/room\/[^/]+$/.test(p))return 'room_delete';if(req.method==='PATCH')return 'room_edit';return 'room_edit';}
  if(p.startsWith('/api/admin/profile/'))return 'profile_edit';
  if(p.startsWith('/api/admin/avatar/'))return 'avatar_delete';
  if(p==='/api/admin/welcome-messages')return 'welcome_manage';
@@ -1038,7 +930,7 @@ app.get('/api/state',requireAuth,(req,res)=>{
   res.json({user:{...u,likes,level:level(likes),admin:isAdmin(u),owner:isOwner(u),staff:isStaff(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name),notice:canNotice(u),media:canMedia(u)}, rooms, online:getOnlineUsers(u).map(x=>({name:x.name,type:x.type,likes:x.likes,level:x.level,profile:x.profile,online:true,role:x.role||roleOf(x),admin:isAdmin(x),vip:vipActive(x.name)}))});
 });
 app.get('/api/history',requireAuth,(req,res)=>{ const room=String(req.query.room||'public'),started=Number(req.user.created)||0;res.set('Cache-Control','no-store');res.json(roomHistoryWithAnnouncements(room,req.user,started)); });
-app.get('/api/members',requireAuth,(req,res)=>{const online=new Map(getOnlineUsers(req.user).map(x=>[keyName(x.name),x]));const rows=[];const registeredKeys=new Set(Object.keys(db.users).map(keyName));const seenMemberKeys=new Set();for(const [name,u] of Object.entries(db.users)){const normalized=keyName(name);if(hasInvisibleActiveSession(name,req.user))continue;if(seenMemberKeys.has(normalized))continue;seenMemberKeys.add(normalized);const x=online.get(keyName(name));rows.push({name,type:'member',likes:Number(u.likes)||0,points:Number(u.points)||0,level:level(Number(u.likes)||0),profile:profile(name),online:!!x,room:x?.room||'',countryCode:x?.countryCode||'',role:u.role||(keyName(name)==='owner' || (!!process.env.OWNER_NAME && keyName(name)===keyName(process.env.OWNER_NAME))?'owner':(keyName(name)==='admin'?'admin':'member')),vip:vipActive(name)});}for(const [name,g] of Object.entries(db.guests)){const normalized=keyName(name);if(registeredKeys.has(normalized)||seenMemberKeys.has(normalized)||hasInvisibleActiveSession(name,req.user))continue;const x=online.get(normalized);if(x){seenMemberKeys.add(normalized);rows.push({name,type:'guest',likes:Number(g.likes)||0,points:Number(g.points)||0,level:level(Number(g.likes)||0),profile:profile(name),online:true,room:x?.room||'',countryCode:x?.countryCode||'',ignoredByMe:(db.ignored?.[keyName(req.user.name)]||[]).some(x=>keyName(x)===normalized),role:g.role||'member',vip:false});}}const rank=x=>{if(x.role==='owner')return 0;if(x.role==='admin')return 1;const r=x.profile?.rank||'';const rankOrder={'crown-gold':2,'crown-silver':3,'super-black':4,'super-white':5,'super-red':6,'admin-shield':1};if(rankOrder[r]!==undefined)return rankOrder[r];if(x.role==='banner')return 2;if(x.role==='super')return 4;if(x.vip)return 7;if((x.profile?.gifts||[]).length)return 8;if(x.type==='guest')return 10;return 9;};rows.sort((a,b)=>rank(a)-rank(b)||b.likes-a.likes||a.name.localeCompare(b.name,'ar'));res.json(rows);});
+app.get('/api/members',requireAuth,(req,res)=>{const online=new Map(getOnlineUsers(req.user).map(x=>[keyName(x.name),x]));const rows=[];const registeredKeys=new Set(Object.keys(db.users).map(keyName));const seenMemberKeys=new Set();for(const [name,u] of Object.entries(db.users)){const normalized=keyName(name);if(hasInvisibleActiveSession(name,req.user))continue;if(seenMemberKeys.has(normalized))continue;seenMemberKeys.add(normalized);const x=online.get(keyName(name));rows.push({name,type:'member',likes:Number(u.likes)||0,points:Number(u.points)||0,level:level(Number(u.likes)||0),profile:profile(name),online:!!x,room:x?.room||'',countryCode:x?.countryCode||'',role:isOwnerName(name)?'owner':'member',vip:vipActive(name)});}for(const [name,g] of Object.entries(db.guests)){const normalized=keyName(name);if(registeredKeys.has(normalized)||seenMemberKeys.has(normalized)||hasInvisibleActiveSession(name,req.user))continue;const x=online.get(normalized);if(x){seenMemberKeys.add(normalized);rows.push({name,type:'guest',likes:Number(g.likes)||0,points:Number(g.points)||0,level:level(Number(g.likes)||0),profile:profile(name),online:true,room:x?.room||'',countryCode:x?.countryCode||'',ignoredByMe:(db.ignored?.[keyName(req.user.name)]||[]).some(x=>keyName(x)===normalized),role:isOwnerName(name)?'owner':'member',vip:false});}}const rank=x=>{if(x.role==='owner')return 0;const r=x.profile?.rank||'';const rankOrder={'admin-full':1,'admin-shield':2,'crown-gold':3,'crown-silver':4,'super-black':5,'super-white':6,'super-red':7};if(rankOrder[r]!==undefined)return rankOrder[r];if(x.vip)return 8;if((x.profile?.gifts||[]).length)return 9;if(x.type==='guest')return 11;return 10;};rows.sort((a,b)=>rank(a)-rank(b)||b.likes-a.likes||a.name.localeCompare(b.name,'ar'));res.json(rows);});
 app.get('/api/wall/status',requireAuth,(req,res)=>{res.set('Cache-Control','no-store');res.json({enabled:db.wallEnabled!==false&&siteModuleEnabled('wall')});});
 app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))return res.status(403).json({error:'ميزة الحائط متوقفة من إدارة الموقع'});const started=Number(req.user.created)||0;res.set('Cache-Control','no-store');res.json(db.wall.filter(x=>Number(x.at||0)>=started).slice(-100).reverse());});
 app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))return res.status(403).json({error:'ميزة الحائط متوقفة من إدارة الموقع'});if(db.wallEnabled===false)return res.status(403).json({error:'الجدار متوقف مؤقتاً من الإدارة'});const text=String(req.body.text||'').trim();if(!text)return res.status(400).json({error:'اكتب منشورك'});const previous=db.wall.slice();const p={id:crypto.randomUUID(),from:req.user.name,text:text.slice(0,2000),media:null,at:Date.now(),likes:0};db.wall.push(p);db.wall=db.wall.slice(-300);try{save()}catch(e){db.wall=previous;console.error('Wall post save failed:',e.message);return res.status(500).json({error:'تعذر حفظ المنشور'});}io.emit('wall-new',p);res.json(p);});
@@ -1110,7 +1002,6 @@ app.post('/api/like',requireAuth,(req,res)=>{
 });
 app.post('/api/admin/grant-like',requireAdmin,(req,res)=>{const n=accountKey(req.body.name),amount=Math.max(1,Math.min(100000,Number(req.body.amount)||1)),u=getUser(n),g=getGuest(n);if(denyHigherRankTarget(req.user,n,res))return;if(!u&&!g)return res.status(404).json({error:'المستخدم غير موجود'});if((isOwnerName(n)||isOwner({name:n,role:(u||g).role}))&&!(isOwner(req.user)&&keyName(req.user.name)===keyName(n)))return res.status(403).json({error:'صاحب الموقع محمي من تعديل اللايكات'});if(u)u.likes=Number(u.likes||0)+amount;else g.likes=Number(g.likes||0)+amount;const likes=Number((u||g).likes||0);save();io.emit('likes-changed',{name:n,likes,level:level(likes)});emitToUser(n,'admin-action-notice',{title:'❤️ لايكات جديدة',text:'حصلت على '+amount+' لايك من '+req.user.name+' (admin)'});res.json({ok:true,likes});});
 app.post('/api/admin/reset-likes',(req,res,next)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'reset_likes'))return res.status(403).json({error:'ما عندك صلاحية تصفير اللايكات'});const n=accountKey(req.body.name),u=getUser(n),g=getGuest(n);if(denyHigherRankTarget(req.user,n,res))return;if(!u&&!g)return res.status(404).json({error:'المستخدم غير موجود'});if(isOwner({name:n,role:(u||g).role})&&!(isOwner(req.user)&&keyName(req.user.name)===keyName(n)))return res.status(403).json({error:'لا يمكن تعديل لايكات صاحب الموقع'});if(u)u.likes=0;else g.likes=0;save();io.emit('likes-changed',{name:n,likes:0,level:1});res.json({ok:true});});});
-app.post('/api/admin/role',(req,res)=>{requireAuth(req,res,()=>{const actor=req.user,n=accountKey(req.body.name),role=String(req.body.role||'member');if(!hasPermission(actor,'role_assign'))return res.status(403).json({error:'ما عندك صلاحية تغيير الرتب'});const target=getUser(n)||getGuest(n);if(denyHigherRankTarget(actor,n,res))return;if(!target||isOwnerName(n)||roleOf({name:n,role:target.role})==='owner')return res.status(400).json({error:'العضو غير صحيح أو أن حساب المالك محمي'});if(!['member','super','admin','banner'].includes(role))return res.status(400).json({error:'الدور غير صحيح'});if(!isOwner(actor)&&role!=='member'){const granted=Array.isArray(db.rolePermissions?.[role])?db.rolePermissions[role]:(DEFAULT_ROLE_PERMISSIONS[role]||[]);const actorPerms=ALL_PERMISSION_KEYS.filter(k=>hasPermission(actor,k));if(granted.some(k=>!actorPerms.includes(k)))return res.status(403).json({error:'لا يمكنك منح منصب يحتوي صلاحيات أعلى من صلاحياتك'});}const previousRole=target.role,sessionSnapshots=[];target.role=role;for(const [sid2,x] of sessions){if(keyName(x.name)===keyName(n)){sessionSnapshots.push([sid2,x.role,db.sessions[sid2]?.role]);x.role=role;db.sessions[sid2]=x;}}try{save();}catch(error){target.role=previousRole;for(const [sid2,oldRole,storedRole] of sessionSnapshots){const x=sessions.get(sid2);if(x)x.role=oldRole;if(db.sessions[sid2])db.sessions[sid2].role=storedRole??oldRole;}console.error('Role update persistence failed:',error.message);return res.status(500).json({error:'تعذر حفظ تغيير المنصب؛ لم يتم تطبيق التغيير'});}for(const [sid2,x] of sessions){if(keyName(x.name)===keyName(n)){socketBySession(sid2)?.emit('role-changed',{name:n,role,from:actor.name});if(['admin','super','banner'].includes(role))socketBySession(sid2)?.emit('rank-granted',{id:crypto.randomUUID(),name:n,rank:role,rankName:({'super':'السوبر','banner':'البنر','admin':'الإداري'}[role]),durationText:'دائمة',from:actor.name,fromDisplayName:displayName(actor.name),fromProfile:{...profile(actor.name)},fromRole:roleOf(actor)});else socketBySession(sid2)?.emit('admin-action-notice',{title:'تغيير المنصب',text:'قام '+actor.name+' بتغيير منصبك إلى عضو'});}}for(const [sid2,x] of socketUsers){if(keyName(x.name)===keyName(n)){x.role=role;const so=socketBySession(sid2);if(so?.data?.user)so.data.user.role=role;so?.emit('role-changed',{name:n,role,from:actor.name});}}emitState();res.json({ok:true,role,type:getUser(n)?'member':'guest',panelAccess:['admin','super','banner'].includes(role)});});});
 app.post('/api/admin/gift',(req,res)=>{requireAuth(req,res,()=>{if(!siteModuleEnabled('gifts'))return res.status(403).json({error:'الهدايا متوقفة من إدارة الموقع'});if(!hasPermission(req.user,'gifts'))return res.status(403).json({error:'ما عندك صلاحية إرسال الهدايا'});const n=accountKey(req.body.name);if(denyHigherRankTarget(req.user,n,res))return;const gift=cleanName(req.body.gift||'هدية');if(!getUser(n)&&!getGuest(n))return res.status(404).json({error:'المستخدم غير موجود'});if(isOwnerName(n))return res.status(403).json({error:'حساب صاحب الموقع محمي من الهدايا الإدارية'});const giftId=String(req.body.giftId||'').trim().slice(0,120);const catalogItem=(db.giftCatalog||[]).find(x=>String(x.id||'')===giftId);if(!catalogItem)return res.status(400).json({error:'الهدية غير موجودة في الكتالوج الحالي؛ حدّث قائمة الهدايا'});const giftIcon=String(catalogItem.icon||'🎁').trim().slice(0,24)||'🎁';const giftImage=String(catalogItem.image||'').startsWith('/')?String(catalogItem.image):'';const record={id:crypto.randomBytes(8).toString('hex'),gift,giftIcon,giftId,giftImage,from:req.user.name,at:Date.now()};const p=profile(n);if(denyBadgeForRank(n,p,res))return;delete p.vipUntil;p.gifts=[record];save();emitToUser(n,'gift',{name:n,gift,giftIcon,giftId,giftImage,from:req.user.name,fromDisplayName:displayName(req.user.name),fromProfile:profile(req.user.name),fromRole:roleOf(req.user)});io.emit('profile-changed',{name:n,profile:p});emitState();res.json({ok:true,gift,giftIcon,giftId,giftImage});});});
 app.post('/api/admin/gift/delete',(req,res)=>{requireAuth(req,res,()=>{try{if(!hasPermission(req.user,'gifts'))return res.status(403).json({error:'ما عندك صلاحية حذف الهدايا'});const n=accountKey(req.body.name),target=getUser(n)||getGuest(n);if(denyHigherRankTarget(req.user,n,res))return;if(!target)return res.status(404).json({error:'المستخدم غير موجود'});if((isOwnerName(n)||isOwner({name:n,role:target.role}))&&!(isOwner(req.user)&&keyName(req.user.name)===keyName(n)))return res.status(403).json({error:'حساب صاحب الموقع محمي من حذف الهدايا بواسطة الآخرين'});const p=profile(n);p.gifts=Array.isArray(p.gifts)?p.gifts:[];let index=-1;const requestedId=String(req.body.giftId||'');if(requestedId)index=p.gifts.findIndex(g=>String(g.id||'')===requestedId);if(index<0&&req.body.gift&&req.body.from!==undefined){const gift=String(req.body.gift),from=String(req.body.from||''),at=Number(req.body.at)||0;index=p.gifts.findIndex(g=>String(g.gift||'')===gift&&String(g.from||'')===from&&Number(g.at||0)===at);}if(index<0&&!requestedId&&req.body.gift===undefined&&Number.isInteger(Number(req.body.index)))index=Number(req.body.index);if(!Number.isInteger(index)||index<0||index>=p.gifts.length)return res.status(404).json({error:'الهدية المحددة غير موجودة. حدّث النافذة وافتحها من جديد.'});const removed=p.gifts.splice(index,1)[0];save();io.emit('profile-changed',{name:n,profile:p});emitState();return res.json({ok:true,removed,profile:p});}catch(err){console.error('gift-delete failed:',err);return res.status(500).json({error:'تعذر حذف الهدية من الخادم. راجع سجل الخادم.'});}});});
 function countGifImageFrames(buffer){try{if(!Buffer.isBuffer(buffer)||buffer.length<14||!/^GIF8[79]a$/.test(buffer.subarray(0,6).toString('ascii')))return 0;let offset=13;const packed=buffer[10];if(packed&0x80)offset+=3*(1<<((packed&7)+1));let frames=0,guard=0;while(offset<buffer.length&&guard++<10000){const marker=buffer[offset++];if(marker===0x3B)break;if(marker===0x21){if(offset>=buffer.length)return 0;const label=buffer[offset++];if(label===0xF9){if(offset>=buffer.length)return 0;const size=buffer[offset++];offset+=size;if(buffer[offset]===0)offset++;}else{while(offset<buffer.length){const size=buffer[offset++];if(size===0)break;offset+=size;}}continue;}if(marker===0x2C){if(offset+9>buffer.length)return 0;const imagePacked=buffer[offset+8];offset+=9;if(imagePacked&0x80)offset+=3*(1<<((imagePacked&7)+1));if(offset>=buffer.length)return 0;offset++;while(offset<buffer.length){const size=buffer[offset++];if(size===0)break;offset+=size;}frames++;continue;}return 0;}return frames;}catch{return 0;}}
@@ -1124,27 +1015,16 @@ app.post('/api/admin/member-action',(req,res)=>{requireAuth(req,res,()=>{
   if(!n)return res.status(400).json({error:'الاسم مطلوب'});
   if(denyHigherRankTarget(actor,n,res))return;
   if((isOwnerName(n)||isOwner({name:n,role:(getUser(n)||getGuest(n)||{}).role})) && !isOwner(actor)) return res.status(403).json({error:'حساب صاحب الموقع محمي ولا يمكن للإداري طرده أو حظره أو تعديل لايكاته'});
-  const actionPermission=({'global-kick':'global_kick','global-ban':'global_ban','kick':'kick_room','ban':'ban_room','mute':'mute_room','grant-like':'grant_likes','reset-likes':'reset_likes','grant-admin':'role_assign','grant-super':'role_assign','grant-banner':'role_assign','grant-vip':'vip','gift':'gifts'})[action]||'moderation';if(!hasPermission(actor,actionPermission))return res.status(403).json({error:'ما عندك صلاحية لهذا الإجراء'});
+  const actionPermission=({'global-kick':'global_kick','global-ban':'global_ban','kick':'kick_room','ban':'ban_room','mute':'mute_room','grant-like':'grant_likes','reset-likes':'reset_likes','grant-vip':'vip','gift':'gifts'})[action];if(!actionPermission)return res.status(400).json({error:'الإجراء غير معروف'});if(!hasPermission(actor,actionPermission))return res.status(403).json({error:'ما عندك صلاحية لهذا الإجراء'});
   if(action==='global-kick'){ emitToUser(n,'admin-action-notice',{title:'🚪 طرد من الدردشة',text:'قام '+actor.name+' (admin) بطردك من الدردشة'}); removeFromChat(n,false); return res.json({ok:true}); }
   if(action==='global-ban'){ emitToUser(n,'admin-action-notice',{title:'⛔ حظر من الدردشة',text:'قام '+actor.name+' (admin) بحظرك من الدردشة لمدة 5 دقائق'}); db.globalBans=db.globalBans||{}; db.globalIpBans=db.globalIpBans||{}; const until=Date.now()+5*60*1000; const targetIps=new Set(); for(const so of io.sockets.sockets.values()){const sid2=so.data?.sid,u2=so.data?.user||socketUsers.get(sid2);if(u2&&keyName(u2.name)===keyName(n)){const ip=socketClientIp(so);if(ip)targetIps.add(ip);}} db.globalBans[keyName(n)]={name:keyName(n),until}; for(const ip of targetIps)db.globalIpBans[ip]={ip,name:keyName(n),until}; save(); removeFromChat(n,true); return res.json({ok:true,until,ipCount:targetIps.size}); }
   const target=getUser(n)||getGuest(n);
   if(!target && !['kick','ban','mute'].includes(action))return res.status(404).json({error:'المستخدم غير موجود'});
   if(action==='grant-like'&&!hasPermission(actor,'grant_likes'))return res.status(403).json({error:'ما عندك صلاحية منح اللايكات'});
   if(action==='reset-likes'&&!hasPermission(actor,'reset_likes'))return res.status(403).json({error:'ما عندك صلاحية تصفير اللايكات'});
-  if(action==='grant-admin'&&!hasPermission(actor,'role_assign'))return res.status(403).json({error:'ما عندك صلاحية منح منصب الإداري'});
-  if(action==='grant-admin'&&!isOwner(actor)){const own=ALL_PERMISSION_KEYS.filter(k=>hasPermission(actor,k)),need=db.rolePermissions.admin||DEFAULT_ROLE_PERMISSIONS.admin||[];if(need.some(k=>!own.includes(k)))return res.status(403).json({error:'صلاحيات الإداري أعلى من صلاحياتك'});}
   if(action==='grant-vip'&&!hasPermission(actor,'vip'))return res.status(403).json({error:'ما عندك صلاحية منح VIP'});
-  if(action==='grant-banner'&&!hasPermission(actor,'rank_assign'))return res.status(403).json({error:'ما عندك صلاحية منح البنر'});
-  if(action==='grant-banner'&&!isOwner(actor)){const own=ALL_PERMISSION_KEYS.filter(k=>hasPermission(actor,k)),need=db.rolePermissions.banner||DEFAULT_ROLE_PERMISSIONS.banner||[];if(need.some(k=>!own.includes(k)))return res.status(403).json({error:'صلاحيات البنر أعلى من صلاحياتك'});}
-  if(action==='grant-super'&&!hasPermission(actor,'rank_assign'))return res.status(403).json({error:'ما عندك صلاحية منح السوبر'});
-  if(action==='grant-super'&&!isOwner(actor)){const own=ALL_PERMISSION_KEYS.filter(k=>hasPermission(actor,k)),need=db.rolePermissions.super||DEFAULT_ROLE_PERMISSIONS.super||[];if(need.some(k=>!own.includes(k)))return res.status(403).json({error:'صلاحيات السوبر أعلى من صلاحياتك'});}
   if(action==='grant-like'){const amount=Math.max(1,Math.min(10000,Number(req.body.amount)||1));target.likes=Number(target.likes||0)+amount;save();io.emit('likes-changed',{name:n,likes:target.likes,level:level(target.likes)});emitToUser(n,'admin-action-notice',{title:'❤️ لايكات جديدة',text:'حصلت على '+amount+' لايك من '+actor.name+' (admin)'});return res.json({ok:true,likes:target.likes});}
   if(action==='reset-likes'){if(isOwner({name:n,role:target.role})&&!(isOwner(actor)&&keyName(actor.name)===keyName(n)))return res.status(403).json({error:'لا يمكن تعديل لايكات صاحب الموقع'});target.likes=0;save();io.emit('likes-changed',{name:n,likes:0,level:1});return res.json({ok:true});}
-  if(action==='grant-admin'||action==='grant-super'||action==='grant-banner'){
-    const role=action==='grant-admin'?'admin':action==='grant-banner'?'banner':'super';
-    const roleTarget=getUser(n)||getGuest(n);if(!roleTarget)return res.status(404).json({error:'العضو غير صحيح'});
-    roleTarget.role=role;save();for(const [sid2,x] of sessions){if(keyName(x.name)===keyName(n)){x.role=role;db.sessions[sid2]=x;}}for(const [sid2,x] of socketUsers){if(keyName(x.name)===keyName(n)){x.role=role;const so=socketBySession(sid2);if(so?.data?.user)so.data.user.role=role;}}emitToUser(n,'role-changed',{name:n,role,from:actor.name});emitToUser(n,'rank-granted',{id:crypto.randomUUID(),name:n,rank,rankName:({'admin':'الإداري','super':'السوبر','banner':'البنر'}[role]),durationText:'دائمة',from:actor.name,fromDisplayName:displayName(actor.name),fromProfile:{...profile(actor.name)},fromRole:roleOf(actor)});emitState();return res.json({ok:true,role,cardQueued:true});
-  }
   if(action==='grant-vip'){const until=Date.now()+24*60*60*1000;const p=profile(n);if(denyBadgeForRank(n,p,res))return;p.vipUntil=until;p.gifts=[];save();io.emit('profile-changed',{name:n,profile:p});emitToUser(n,'vip-changed',{name:n,vipUntil:until,from:actor.name});emitToUser(n,'admin-action-notice',{title:'👑 عضوية VIP',text:'منحك '+actor.name+' (admin) عضوية VIP لمدة 24 ساعة'});emitState();return res.json({ok:true,vipUntil:until});}
   if(action==='gift'){const gift=cleanName(req.body.gift||'هدية');const giftId=String(req.body.giftId||'').trim().slice(0,120);const item=(db.giftCatalog||[]).find(x=>String(x.id||'')===giftId);if(!item)return res.status(400).json({error:'الهدية غير موجودة في الكتالوج الحالي'});const giftIcon=String(item.icon||'🎁').slice(0,24),giftImage=String(item.image||'').startsWith('/')?item.image:'';const record={id:crypto.randomBytes(8).toString('hex'),gift,giftIcon,giftId,giftImage,from:actor.name,at:Date.now()};const p=profile(n);if(denyBadgeForRank(n,p,res))return;delete p.vipUntil;p.gifts=[record];save();io.emit('profile-changed',{name:n,profile:p});emitToUser(n,'gift',{name:n,gift,giftIcon,giftId,giftImage,from:actor.name,fromDisplayName:displayName(actor.name),fromProfile:profile(actor.name),fromRole:roleOf(actor)});emitState();return res.json({ok:true,gift,giftIcon,giftId,giftImage});}
   if(action==='kick'){emitToUser(n,'admin-action-notice',{title:'🚪 طرد من الغرفة',text:'قام '+actor.name+' (admin) بطردك من الغرفة'});for(const [sid2,u2] of socketUsers){if(keyName(u2.name)===keyName(n)&&u2.room===room){const so=socketBySession(sid2);so?.leave(room);roomSockets.get(room)?.delete(sid2);if(so?.data?.user)so.data.user.room='';if(socketUsers.get(sid2))socketUsers.get(sid2).room='';so?.emit('kicked',{room,banned:false});}}emitState();return res.json({ok:true});}
@@ -1159,7 +1039,7 @@ app.post('/api/admin/broadcast',requireAdmin,(req,res)=>{
   const title=temporary?'':(String(req.body.title||'').trim().slice(0,60)||'إعلان إداري');
   const item=temporary
     ?{id:crypto.randomUUID(),text:text.slice(0,2000),from:req.user.name,displayName:displayName(req.user.name),role:roleOf(req.user),at:Date.now(),duration,profile:profile(req.user.name)}
-    :{id:crypto.randomUUID(),title,text:text.slice(0,2000),from:'الإدارة',displayName:'الإدارة',role:'admin',at:Date.now(),duration,profile:{}};
+    :{id:crypto.randomUUID(),title,text:text.slice(0,2000),from:'الإدارة',displayName:'الإدارة',role:'member',at:Date.now(),duration,profile:{}};
   const previousAnnouncements=db.announcements,previousMessages=db.messages;
   db.announcements=[...(db.announcements||[]),item].slice(-100).reverse();
   try{save()}catch(e){if(previousAnnouncements===undefined)delete db.announcements;else db.announcements=previousAnnouncements;if(previousMessages===undefined)delete db.messages;else db.messages=previousMessages;console.error('Announcement save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الإعلان'});}
@@ -1179,7 +1059,7 @@ app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{
   if(!n||!target)return res.status(404).json({error:'العضو غير موجود'});
   if(denyHigherRankTarget(actor,n,res))return;
   if(isOwnerName(n)||roleOf({name:n,role:target.role})==='owner')return res.status(403).json({error:'رتبة صاحب الموقع محمية'});
-  const definition=rank==='none'?null:rankDefinition(rank);
+  const definition=rank==='none'?null:(RANK_PERMISSION_PROFILES.includes(rank)?rankDefinition(rank):null);
   if(rank!=='none'&&!definition)return res.status(400).json({error:'الرتبة غير موجودة'});
   const rawDays=req.body.durationDays,days=rawDays===undefined||rawDays===null||rawDays===''?0:Number(rawDays);
   if(!Number.isInteger(days)||days<0||days>36500)return res.status(400).json({error:'المدة يجب أن تكون 0 أو عدد أيام صحيح بين 1 و36500'});
@@ -1188,14 +1068,10 @@ app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{
     const actorPermissions=ALL_PERMISSION_KEYS.filter(k=>hasPermission(actor,k));
     if(!actorCanGrantElevatedRank&&definition.permissions.some(k=>!actorPermissions.includes(k)))return res.status(403).json({error:'لا يمكنك منح رتبة تحتوي صلاحيات أعلى من صلاحياتك'});
   }
-  const p=profile(n),previousProfile=JSON.parse(JSON.stringify(p)),previousTargetRole=target.role;
+  const p=profile(n),previousProfile=JSON.parse(JSON.stringify(p));
   const previousRankAudit=db.rankAudit,previousNotifications=db.notifications?.[n]?JSON.parse(JSON.stringify(db.notifications[n])):undefined;
-  const grantedAt=Date.now(),oldRank=p.rank,oldBase=rankBaseRole(oldRank);
-  const oldRankStillActive=!!oldRank&&oldRank!=='none'&&(!p.rankUntil||Number(p.rankUntil)>grantedAt);
-  let baselineRole=String(target.role||'member');
-  if(oldRankStillActive&&oldBase&&baselineRole===oldBase)baselineRole=String(p.rankPreviousRole||'member');
-  if(definition&&['admin','super','banner'].includes(definition.baseRole)){p.rankPreviousRole=baselineRole;target.role=definition.baseRole;}
-  else{if(oldRankStillActive&&oldBase&&String(target.role||'member')===oldBase)target.role=baselineRole;delete p.rankPreviousRole;}
+  const grantedAt=Date.now();
+  delete p.rankPreviousRole;
   if(definition){p.gifts=[];delete p.vipUntil;}
   p.rank=rank;p.rankGrantedBy=cleanName(actor.name);p.rankGrantedAt=grantedAt;p.rankGrantedName=definition?.name||'بدون رتبة إضافية';
   db.rankAudit=Array.isArray(db.rankAudit)?db.rankAudit:[];
@@ -1213,13 +1089,12 @@ app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{
   db.notifications[n]=[inboxItem,...(Array.isArray(db.notifications[n])?db.notifications[n]:[])].slice(0,100);
   try{save();}
   catch(error){
-    target.role=previousTargetRole;db.profiles[n]=previousProfile;db.rankAudit=previousRankAudit;
+    db.profiles[n]=previousProfile;db.rankAudit=previousRankAudit;
     if(previousNotifications===undefined)delete db.notifications[n];else db.notifications[n]=previousNotifications;
     console.error('Rank assignment persistence failed:',error.message);
     return res.status(500).json({error:'تعذر حفظ منح الرتبة وإشعارها؛ لم يتم تطبيق التغيير'});
   }
 
-  if(String(previousTargetRole||'member')!==String(target.role||'member'))syncActiveAccountRole(n,target.role,actor.name);
   io.emit('profile-changed',{name:n,profile:p});
   // This is the same recipient-specific realtime path used by the working gift card.
   if(definition)emitToUser(n,'rank-granted',{
@@ -1232,24 +1107,42 @@ app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{
 });});
 app.get('/api/admin/member-ip/:name' ,requireAuth,(req,res)=>{if(!hasPermission(req.user,'member_ip'))return res.status(403).json({error:'ما عندك صلاحية عرض IP'});const n=keyName(req.params.name);if(isOwnerName(n))return res.status(403).json({error:'معلومات اتصال صاحب الموقع محمية'});const matches=[];for(const so of io.sockets.sockets.values()){const sid2=so.data?.sid,u2=so.data?.user||socketUsers.get(sid2);if(u2&&keyName(u2.name)===n){matches.push({ip:socketClientIp(so),room:u2.room||'',connected:true});}}res.json({name:req.params.name,connections:matches});});
 // Rank definitions are editable independently from chat UI, buttons and colors.
-app.get('/api/admin/ranks',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'rank_assign'))return res.status(403).json({error:'ما عندك صلاحية عرض الرتب أو منحها'});res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:5,permissionKeys:ALL_PERMISSION_KEYS,ranks:(db.rankDefinitions||[]).slice().sort((a,b)=>Number(b.level)-Number(a.level)),catalog:PERMISSION_CATALOG});});
-app.post('/api/admin/ranks',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة تعريفات الرتب'});const name=cleanName(req.body.name),id=String(req.body.id||'').trim().toLowerCase(),level=Number(req.body.level),icon=String(req.body.icon||'★').trim().slice(0,8),baseRole=String(req.body.baseRole||'member'),permissions=Array.isArray(req.body.permissions)?req.body.permissions:[];if(!name||name.length>48)return res.status(400).json({error:'اسم الرتبة مطلوب وبحد أقصى 48 حرفاً'});if(!/^[a-z0-9][a-z0-9_-]{1,39}$/.test(id)||rankDefinition(id))return res.status(400).json({error:'معرّف الرتبة غير صالح أو مستخدم'});if(!Number.isInteger(level)||level<1||level>999)return res.status(400).json({error:'المستوى يجب أن يكون رقماً صحيحاً من 1 إلى 999'});if(baseRole!=='member')return res.status(400).json({error:'الرتب الجديدة مستقلة عن مناصب الدردشة ولا تغيّر نوع العضو'});if(Number(req.body.permissionSchemaVersion||1)>5)return res.status(409).json({error:'نسخة محرر الرتب أحدث من السيرفر. حدّث ملفات الموقع كاملة.'});if(permissions.some(k=>!Object.hasOwn(PERMISSION_CATALOG,k)))return res.status(400).json({error:'توجد صلاحية غير معروفة في نسخة السيرفر الحالية. حدّث ملفات الموقع كاملة.'});if(!isOwner(req.user)){const own=new Set(ALL_PERMISSION_KEYS.filter(k=>hasPermission(req.user,k)));if(permissions.some(k=>!own.has(k)))return res.status(403).json({error:'لا يمكنك منح رتبة صلاحيات أعلى من صلاحياتك'});}db.rankDefinitions.push({id,name,level,icon,baseRole,permissions:[...new Set(permissions)],createdAt:Date.now(),updatedAt:Date.now()});save();res.json({ok:true,rank:rankDefinition(id)});});
-app.put('/api/admin/ranks/:id',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية تعديل تعريفات الرتب'});const r=rankDefinition(req.params.id);if(!r){removeUploadedFile(req.file);return res.status(404).json({error:'الرتبة غير موجودة'});}const name=cleanName(req.body.name),level=Number(req.body.level),icon=String(req.body.icon||'★').trim().slice(0,8),baseRole=String(req.body.baseRole||'member'),permissions=Array.isArray(req.body.permissions)?req.body.permissions:[];if(!name||name.length>48||!Number.isInteger(level)||level<1||level>999)return res.status(400).json({error:'تحقق من اسم الرتبة ومستواها'});if(baseRole!=='member'&&baseRole!==RANK_BASE_ROLE[r.id])return res.status(400).json({error:'الرتب المخصصة لا تغيّر نوع العضو أو مظهره في الدردشة'});if(RANK_BASE_ROLE[r.id]&&baseRole!==RANK_BASE_ROLE[r.id])return res.status(400).json({error:'لا يمكن تغيير نوع الرتبة الأساسية القديمة'});if(Number(req.body.permissionSchemaVersion||1)>5)return res.status(409).json({error:'نسخة محرر الرتب أحدث من السيرفر. حدّث ملفات الموقع كاملة.'});if(permissions.some(k=>!Object.hasOwn(PERMISSION_CATALOG,k)))return res.status(400).json({error:'الصلاحيات المختارة غير معروفة'});if(!isOwner(req.user)){const own=new Set(ALL_PERMISSION_KEYS.filter(k=>hasPermission(req.user,k)));if(permissions.some(k=>!own.has(k)))return res.status(403).json({error:'لا يمكنك منح رتبة صلاحيات أعلى من صلاحياتك'});}Object.assign(r,{name,level,icon,baseRole,permissions:[...new Set(permissions)],updatedAt:Date.now()});save();io.emit('permissions-updated',{rank:r.id});res.json({ok:true,rank:r});});
-app.delete('/api/admin/ranks/:id',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية حذف تعريفات الرتب'});const id=String(req.params.id),r=rankDefinition(id);if(!r)return res.status(404).json({error:'الرتبة غير موجودة'});if(!isOwner(req.user)&&RANK_PERMISSION_PROFILES.includes(id))return res.status(403).json({error:'الإداري يستطيع حذف الرتب المخصصة فقط؛ الرتب الأساسية محمية'});if(RANK_PERMISSION_PROFILES.includes(id))return res.status(400).json({error:'لا يمكن حذف رتبة أساسية قديمة؛ يمكن تعديل اسمها وصلاحياتها'});const assigned=Object.values(db.profiles||{}).some(p=>p&&p.rank===id&&(!p.rankUntil||Number(p.rankUntil)>Date.now()));if(assigned)return res.status(409).json({error:'لا يمكن حذف رتبة ممنوحة لأعضاء. أزلها من الأعضاء أولاً'});db.rankDefinitions=db.rankDefinitions.filter(x=>x.id!==id);delete db.rolePermissions[id];save();res.json({ok:true,id});});
-app.post('/api/admin/ranks/:id/icon',requireAuth,uploadSmallImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage')){removeUploadedFile(req.file);return res.status(403).json({error:'ما عندك صلاحية تغيير صور الرتب'});}const r=rankDefinition(req.params.id);if(!r){removeUploadedFile(req.file);return res.status(404).json({error:'الرتبة غير موجودة'});}if(!req.file||!/^image\/(gif|png|jpeg|webp)$/i.test(req.file.mimetype)){removeUploadedFile(req.file);return res.status(400).json({error:'اختر صورة GIF أو PNG أو JPG أو WEBP'});}if(req.file.size>1024*1024){try{fs.unlinkSync(path.join(UP_DIR,req.file.filename))}catch{}return res.status(413).json({error:'حجم صورة الرتبة يجب ألا يتجاوز 1 ميغابايت'});}const old=r.image;r.image='/uploads/'+req.file.filename;r.updatedAt=Date.now();try{save()}catch(e){r.image=old;try{fs.unlinkSync(path.join(UP_DIR,req.file.filename))}catch{}return res.status(500).json({error:'تعذر حفظ صورة الرتبة'});}if(old&&old.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(old)))}catch{}}res.json({ok:true,image:r.image});});
-app.delete('/api/admin/ranks/:id/icon',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية حذف صور الرتب'});const r=rankDefinition(req.params.id);if(!r)return res.status(404).json({error:'الرتبة غير موجودة'});const old=r.image;delete r.image;r.updatedAt=Date.now();save();if(old&&old.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(old)))}catch{}}res.json({ok:true});});
+app.get('/api/admin/ranks',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'rank_assign'))return res.status(403).json({error:'ما عندك صلاحية عرض الرتب أو منحها'});res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:7,permissionKeys:ALL_PERMISSION_KEYS,ranks:(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)),catalog:PERMISSION_CATALOG});});
+// Rank definitions are fixed: only the seven built-in ranks can be assigned or permission-edited.
 app.get('/api/admin/permissions',requireAuth,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الرتب'});
- const roles=Object.fromEntries(['admin','banner','super',...RANK_PERMISSION_PROFILES].map(r=>{
-  const def=rankDefinition(r);
-  const source=def?(def.permissions||[]):(Array.isArray(db.rolePermissions[r])?db.rolePermissions[r]:(DEFAULT_ROLE_PERMISSIONS[r]||[]));
-  return [r,[...new Set(source.filter(p=>Object.hasOwn(PERMISSION_CATALOG,p)&&!PROTECTED_ROLE_PERMISSIONS.includes(p)))]];
- }));
- res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:5,permissionKeys:ALL_PERMISSION_KEYS,catalog:PERMISSION_CATALOG,defaults:DEFAULT_ROLE_PERMISSIONS,roles});
+ const ranks=Object.fromEntries(RANK_PERMISSION_PROFILES.map(id=>[id,[...(rankDefinition(id)?.permissions||[])].filter(p=>Object.hasOwn(PERMISSION_CATALOG,p))]));
+ res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:7,permissionKeys:ALL_PERMISSION_KEYS,catalog:PERMISSION_CATALOG,defaults:DEFAULT_RANK_PERMISSIONS,ranks,rankIds:RANK_PERMISSION_PROFILES});
 });
-app.put('/api/admin/permissions',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الرتب'});const role=String(req.body.role||'');if(!['admin','super','banner',...RANK_PERMISSION_PROFILES].includes(role))return res.status(400).json({error:'الرتبة أو المنصب غير صحيح'});const allowed=ALL_PERMISSION_KEYS;const requested=Array.isArray(req.body.permissions)?req.body.permissions:[];if(Number(req.body.permissionSchemaVersion||1)>5)return res.status(409).json({error:'نسخة محرر الصلاحيات أحدث من السيرفر. حدّث ملفات الموقع كاملة.'});if(requested.some(x=>!allowed.includes(x)))return res.status(400).json({error:'توجد صلاحية غير معروفة في نسخة السيرفر الحالية. حدّث ملفات الموقع كاملة.'});if(!isOwner(req.user)){const own=new Set(ALL_PERMISSION_KEYS.filter(k=>hasPermission(req.user,k)));const excessive=requested.filter(k=>!own.has(k));if(excessive.length)return res.status(403).json({error:'لا يمكنك منح رتبة صلاحيات أعلى من صلاحياتك الحالية'});}const protectedPerms=PROTECTED_ROLE_PERMISSIONS;db.rolePermissions=db.rolePermissions||{};db.rolePermissionMeta=db.rolePermissionMeta||{customized:{}};db.rolePermissionMeta.customized=db.rolePermissionMeta.customized||{};const previousPermissions=db.rolePermissions[role],previousCustomized=db.rolePermissionMeta.customized[role],rankDef=rankDefinition(role),previousRankPermissions=rankDef?.permissions,previousRankUpdatedAt=rankDef?.updatedAt;db.rolePermissionMeta.updatedAt=db.rolePermissionMeta.updatedAt||{};const previousRoleUpdatedAt=db.rolePermissionMeta.updatedAt[role],permissionUpdatedAt=Date.now();db.rolePermissions[role]=[...new Set(requested.filter(x=>allowed.includes(x)))];if(rankDef){rankDef.permissions=[...db.rolePermissions[role]];rankDef.updatedAt=permissionUpdatedAt;}db.rolePermissionMeta.customized[role]=true;db.rolePermissionMeta.updatedAt[role]=permissionUpdatedAt;try{save();}catch(error){if(previousPermissions===undefined)delete db.rolePermissions[role];else db.rolePermissions[role]=previousPermissions;if(previousCustomized===undefined)delete db.rolePermissionMeta.customized[role];else db.rolePermissionMeta.customized[role]=previousCustomized;if(previousRoleUpdatedAt===undefined)delete db.rolePermissionMeta.updatedAt[role];else db.rolePermissionMeta.updatedAt[role]=previousRoleUpdatedAt;if(rankDef){rankDef.permissions=previousRankPermissions;rankDef.updatedAt=previousRankUpdatedAt;}console.error('Role permissions persistence failed:',error.message);return res.status(500).json({error:'تعذر حفظ الصلاحيات؛ لم يتم تطبيق التغيير'});}io.emit('permissions-updated',{role});res.json({ok:true,role,permissions:db.rolePermissions[role]});});
-app.get('/api/admin/member-permissions/:name',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة الصلاحيات اليدوية'});const n=accountKey(req.params.name),target=getUser(n)||getGuest(n);if(!target)return res.status(404).json({error:'العضو غير موجود'});if(isOwner({name:n,role:target.role}))return res.status(403).json({error:'حساب صاحب الموقع محمي'});const permissions=[...new Set((db.permissionOverrides?.[keyName(n)]||[]).filter(p=>Object.hasOwn(PERMISSION_CATALOG,p)))];res.json({name:n,permissions,catalog:PERMISSION_CATALOG});});
-app.put('/api/admin/member-permissions/:name',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة الصلاحيات اليدوية'});const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return;const target=getUser(n)||getGuest(n);if(!target)return res.status(404).json({error:'العضو غير موجود'});if(isOwner({name:n,role:target.role}))return res.status(403).json({error:'حساب صاحب الموقع محمي'});const requested=Array.isArray(req.body?.permissions)?req.body.permissions:[];if(requested.some(p=>!Object.hasOwn(PERMISSION_CATALOG,p)))return res.status(400).json({error:'توجد صلاحية غير مسموح منحها يدوياً'});if(!isOwner(req.user)){const own=new Set(ALL_PERMISSION_KEYS.filter(k=>hasPermission(req.user,k)));if(requested.some(p=>!own.has(p)))return res.status(403).json({error:'لا يمكنك منح صلاحيات أعلى من صلاحياتك'});}db.permissionOverrides=db.permissionOverrides||{};const key=keyName(n);db.permissionOverrides[key]=[...new Set(requested)];save();io.emit('permissions-updated',{name:n});res.json({ok:true,name:n,permissions:db.permissionOverrides[key]});});
+app.put('/api/admin/permissions',requireAuth,(req,res)=>{
+ if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الرتب'});
+ const rank=String(req.body.rank||'');if(!RANK_PERMISSION_PROFILES.includes(rank))return res.status(400).json({error:'اختر واحدة من الرتب السبع فقط'});
+ const definition=rankDefinition(rank);if(!definition)return res.status(404).json({error:'تعريف الرتبة غير موجود'});
+ const requested=Array.isArray(req.body.permissions)?req.body.permissions:[];if(requested.some(p=>!Object.hasOwn(PERMISSION_CATALOG,p)))return res.status(400).json({error:'توجد صلاحية غير معروفة'});
+ if(!isOwner(req.user)){const own=effectivePermissionsForUser(req.user);if(requested.some(p=>!own.has(p)))return res.status(403).json({error:'لا يمكنك منح صلاحيات أعلى من صلاحياتك الحالية'});}
+ const previous=[...(definition.permissions||[])];definition.permissions=[...new Set(requested)];definition.updatedAt=Date.now();
+ try{save()}catch(error){definition.permissions=previous;console.error('Rank permission save failed:',error.message);return res.status(500).json({error:'تعذر حفظ صلاحيات الرتبة؛ لم يتم تطبيق التغيير'});}
+ io.emit('permissions-updated',{rank});res.json({ok:true,rank,permissions:definition.permissions});
+});
+app.get('/api/admin/account-permissions/:name',requireAuth,(req,res)=>{
+ if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الأعضاء'});
+ const n=accountKey(req.params.name),target=getUser(n);if(!target)return res.status(404).json({error:'الحساب المسجل غير موجود'});if(isOwnerName(n))return res.status(403).json({error:'حساب صاحب الموقع محمي'});
+ const key=keyName(n),stored=db.accountPermissions?.[key],custom=Array.isArray(stored);
+ const inheritedRank=profile(n).rank,definition=rankDefinition(inheritedRank),inherited=[...(definition?.permissions||[])];
+ const permissions=custom?[...stored]:inherited;
+ res.json({name:n,rank:inheritedRank||'none',customized:custom,permissions,inheritedPermissions:inherited,catalog:PERMISSION_CATALOG});
+});
+app.put('/api/admin/account-permissions/:name',requireAuth,(req,res)=>{
+ if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الأعضاء'});
+ const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return;const target=getUser(n);if(!target)return res.status(404).json({error:'الحساب المسجل غير موجود'});if(isOwnerName(n))return res.status(403).json({error:'حساب صاحب الموقع محمي'});
+ db.accountPermissions=db.accountPermissions||{};const key=keyName(n);
+ if(req.body?.inherit===true){const previous=db.accountPermissions[key];delete db.accountPermissions[key];try{save()}catch(error){if(previous!==undefined)db.accountPermissions[key]=previous;return res.status(500).json({error:'تعذر إرجاع صلاحيات الرتبة'});}io.emit('permissions-updated',{name:n});return res.json({ok:true,name:n,customized:false,permissions:[...(rankDefinition(profile(n).rank)?.permissions||[])]});}
+ const requested=Array.isArray(req.body?.permissions)?req.body.permissions:[];if(requested.some(p=>!Object.hasOwn(PERMISSION_CATALOG,p)))return res.status(400).json({error:'توجد صلاحية غير معروفة'});
+ if(!isOwner(req.user)){const own=effectivePermissionsForUser(req.user);if(requested.some(p=>!own.has(p)))return res.status(403).json({error:'لا يمكنك منح صلاحيات أعلى من صلاحياتك الحالية'});}
+ const previous=db.accountPermissions[key];db.accountPermissions[key]=[...new Set(requested)];
+ try{save()}catch(error){if(previous===undefined)delete db.accountPermissions[key];else db.accountPermissions[key]=previous;return res.status(500).json({error:'تعذر حفظ صلاحيات العضو'});}
+ io.emit('permissions-updated',{name:n});res.json({ok:true,name:n,customized:true,permissions:db.accountPermissions[key]});
+});
 app.get('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))return res.status(403).json({error:'ما عندك صلاحية عرض أو تعديل رسائل الترحيب'});res.json({messages:db.welcomeMessages||[]});});
 app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))return res.status(403).json({error:'تعديل رسائل الترحيب متاح للمالك والإداري فقط'});try{const raw=Array.isArray(req.body?.messages)?req.body.messages:[];if(raw.length>12)return res.status(400).json({error:'الحد الأعلى 12 رسالة ترحيب'});const messages=[];for(const item of raw){const title=String(item?.title||'').trim().slice(0,80),text=String(item?.text||'').trim().slice(0,1200);if(!title&&!text)continue;if(!text)return res.status(400).json({error:'اكتب نص كل رسالة قبل الحفظ'});messages.push({id:String(item?.id||crypto.randomUUID()).slice(0,80),title:title||'الترحيب',text,enabled:item?.enabled!==false});}const previous=db.welcomeMessages;db.welcomeMessages=messages;try{save()}catch(saveError){db.welcomeMessages=previous;console.error('Welcome messages save failed:',saveError);return res.status(500).json({error:'تعذر حفظ الرسائل على التخزين. تحقق من صلاحية ومسار /data ثم أعد المحاولة.'});}return res.json({ok:true,messages});}catch(error){console.error('Welcome messages update failed:',error);return res.status(500).json({error:'حدث خطأ أثناء معالجة رسائل الترحيب'});}});
 app.get('/api/chat-tools',requireAuth,(req,res)=>res.json({shortcuts:(db.chatShortcuts||[]).map(x=>({id:x.id,title:x.title,text:x.text})),smileys:(db.customSmileys||[]).map(x=>({id:x.id,icon:x.icon,name:x.name,shortcut:x.shortcut||''})),gifts:hasPermission(req.user,'gifts')?(db.giftCatalog||[]):[]}));
@@ -1357,16 +1250,16 @@ app.get('/api/admin/data',requireAuth,(req,res)=>{
  const visibleOnline=new Map(getOnlineUsers(req.user).map(x=>[keyName(x.name),x]));
  const registeredAccountKeys=new Set(Object.keys(db.users||{}).map(keyName));
  const seenAdminAccountKeys=new Set();
- const payload={users:Object.entries(db.users).filter(([name])=>{const k=keyName(name);if(seenAdminAccountKeys.has(k))return false;seenAdminAccountKeys.add(k);return true;}).filter(([name])=>!hasInvisibleActiveSession(name,req.user)).sort(([a],[b])=>Number(isOwnerName(b))-Number(isOwnerName(a))).map(([name,u])=>({name,type:'member',likes:Number(u.likes)||0,points:Number(u.points)||0,level:level(Number(u.likes)||0),role:u.role||(keyName(name)==='owner' || (!!process.env.OWNER_NAME && keyName(name)===keyName(process.env.OWNER_NAME))?'owner':(keyName(name)==='admin'?'admin':'member')),vip:vipActive(name),online:visibleOnline.has(keyName(name)),room:visibleOnline.get(keyName(name))?.room||'',profile:profile(name)})),guests:Object.entries(db.guests).filter(([name])=>{const k=keyName(name);if(registeredAccountKeys.has(k)||seenAdminAccountKeys.has(k))return false;seenAdminAccountKeys.add(k);return true;}).sort(([a],[b])=>Number(isOwnerName(b))-Number(isOwnerName(a))).map(([name,g])=>({name,type:'guest',likes:Number(g.likes)||0,points:Number(g.points)||0,level:level(Number(g.likes)||0),role:g.role||'member',online:visibleOnline.has(keyName(name)),room:visibleOnline.get(keyName(name))?.room||'',profile:profile(name)})).filter(x=>x.online),rooms:db.rooms.map(r=>{const {passwordHash,...safe}=r;return {...safe,locked:!!passwordHash,online:onlineInRoom(r.id,req.user)};}),announcements:(db.announcements||[]).slice(0,100),messages:db.messages.slice(-100).reverse(),bans:Object.entries(db.roomBans||{}).flatMap(([room,items])=>(items||[]).map(x=>({room,name:typeof x==='string'?x:x.name,until:typeof x==='string'?null:x.until}))),mutes:Object.entries(db.roomMutes||{}).flatMap(([room,items])=>(items||[]).map(name=>({room,name}))),globalBans:Object.values(db.globalBans||{}).filter(x=>Number(x.until)>Date.now()),globalIpBans:Object.values(db.globalIpBans||{}).filter(x=>Number(x.until)>Date.now()),rankAudit:(db.rankAudit||[]).slice(0,200),adminAuditLogs:(db.adminAuditLogs||[]).slice(0,200),chatFilter:db.chatFilter||{enabled:false,words:[]},stats:{registeredUsers:Object.keys(db.users||{}).length,knownGuests:Object.keys(db.guests||{}).length,onlineUsers:getOnlineUsers(req.user).length,rooms:(db.rooms||[]).length,publicMessages:(db.messages||[]).length,privateMessages:(db.privateMessages||[]).length,wallPosts:(db.wall||[]).length,adminOperations:(db.adminAuditLogs||[]).length,rankChanges:(db.rankAudit||[]).length},rolePermissions:db.rolePermissions||{},rankDefinitions:(db.rankDefinitions||[]).slice().sort((a,b)=>Number(b.level)-Number(a.level)),myPermissions:Object.keys(PERMISSION_CATALOG).filter(permission=>hasPermission(req.user,permission)),wallEnabled:db.wallEnabled!==false,wallCount:(db.wall||[]).length,giftCatalog:Array.isArray(db.giftCatalog)?db.giftCatalog:[],chatShortcuts:db.chatShortcuts||[],customSmileys:db.customSmileys||[] };
+ const payload={users:Object.entries(db.users).filter(([name])=>{const k=keyName(name);if(seenAdminAccountKeys.has(k))return false;seenAdminAccountKeys.add(k);return true;}).filter(([name])=>!hasInvisibleActiveSession(name,req.user)).sort(([a],[b])=>Number(isOwnerName(b))-Number(isOwnerName(a))).map(([name,u])=>({name,type:'member',likes:Number(u.likes)||0,points:Number(u.points)||0,level:level(Number(u.likes)||0),role:isOwnerName(name)?'owner':'member',vip:vipActive(name),online:visibleOnline.has(keyName(name)),room:visibleOnline.get(keyName(name))?.room||'',profile:profile(name)})),guests:Object.entries(db.guests).filter(([name])=>{const k=keyName(name);if(registeredAccountKeys.has(k)||seenAdminAccountKeys.has(k))return false;seenAdminAccountKeys.add(k);return true;}).sort(([a],[b])=>Number(isOwnerName(b))-Number(isOwnerName(a))).map(([name,g])=>({name,type:'guest',likes:Number(g.likes)||0,points:Number(g.points)||0,level:level(Number(g.likes)||0),role:isOwnerName(name)?'owner':'member',online:visibleOnline.has(keyName(name)),room:visibleOnline.get(keyName(name))?.room||'',profile:profile(name)})).filter(x=>x.online),rooms:db.rooms.map(r=>{const {passwordHash,...safe}=r;return {...safe,locked:!!passwordHash,online:onlineInRoom(r.id,req.user)};}),announcements:(db.announcements||[]).slice(0,100),messages:db.messages.slice(-100).reverse(),bans:Object.entries(db.roomBans||{}).flatMap(([room,items])=>(items||[]).map(x=>({room,name:typeof x==='string'?x:x.name,until:typeof x==='string'?null:x.until}))),mutes:Object.entries(db.roomMutes||{}).flatMap(([room,items])=>(items||[]).map(name=>({room,name}))),globalBans:Object.values(db.globalBans||{}).filter(x=>Number(x.until)>Date.now()),globalIpBans:Object.values(db.globalIpBans||{}).filter(x=>Number(x.until)>Date.now()),rankAudit:(db.rankAudit||[]).slice(0,200),adminAuditLogs:(db.adminAuditLogs||[]).slice(0,200),chatFilter:db.chatFilter||{enabled:false,words:[]},stats:{registeredUsers:Object.keys(db.users||{}).length,knownGuests:Object.keys(db.guests||{}).length,onlineUsers:getOnlineUsers(req.user).length,rooms:(db.rooms||[]).length,publicMessages:(db.messages||[]).length,privateMessages:(db.privateMessages||[]).length,wallPosts:(db.wall||[]).length,adminOperations:(db.adminAuditLogs||[]).length,rankChanges:(db.rankAudit||[]).length},rankDefinitions:(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)),myPermissions:Object.keys(PERMISSION_CATALOG).filter(permission=>hasPermission(req.user,permission)),wallEnabled:db.wallEnabled!==false,wallCount:(db.wall||[]).length,giftCatalog:Array.isArray(db.giftCatalog)?db.giftCatalog:[],chatShortcuts:db.chatShortcuts||[],customSmileys:db.customSmileys||[] };
  // Always shape the response by the caller's exact permissions. panel_access
  // opens the panel only; it never grants access to every dataset or button.
  const can=p=>hasPermission(req.user,p);
- const needsTargets=['kick_room','ban_room','mute_room','global_kick','global_ban','grant_likes','reset_likes','vip','gifts','rank_assign','role_assign','profile_edit','avatar_delete','member_ip','member_status_manage','room_move','wall_delete_user'].some(can);
+ const needsTargets=['kick_room','ban_room','mute_room','global_kick','global_ban','grant_likes','reset_likes','vip','gifts','rank_assign','permission_manage','profile_edit','avatar_delete','member_ip','member_status_manage','room_move','wall_delete_user'].some(can);
  if(!can('users_view')){
    if(!needsTargets){payload.users=[];payload.guests=[];}
    else {const safe=u=>({name:u.name,type:u.type,role:u.role,online:u.online,room:u.room,profile:{status:u.profile?.status,displayName:u.profile?.displayName,rank:u.profile?.rank}});payload.users=payload.users.map(safe);payload.guests=payload.guests.map(safe);}
  }
- if(!['room_create','room_edit','room_delete','room_lock','room_image_manage','rooms_manage','kick_room','ban_room','mute_room','global_kick','global_ban','room_move'].some(can))payload.rooms=[];
+ if(!['room_create','room_edit','room_delete','room_lock','room_image_manage','kick_room','ban_room','mute_room','global_kick','global_ban','room_move'].some(can))payload.rooms=[];
  if(!can('announcement_post')&&!can('announcement_delete'))payload.announcements=[];
  if(!can('messages_delete'))payload.messages=[];
  if(!can('ban_room')&&!can('kick_room'))payload.bans=[];
@@ -1376,7 +1269,6 @@ app.get('/api/admin/data',requireAuth,(req,res)=>{
  if(!can('audit_view'))payload.adminAuditLogs=[];
  if(!can('chat_filter_manage'))payload.chatFilter={enabled:false,words:[]};
  if(!can('stats_view'))payload.stats={};
- if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))payload.rolePermissions={};
  if(!can('rank_assign'))payload.rankDefinitions=[];
  if(!can('gifts')&&!can('gift_catalog_manage'))payload.giftCatalog=[];
  if(!can('shortcuts_manage'))payload.chatShortcuts=[];

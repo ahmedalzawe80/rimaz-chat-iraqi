@@ -273,8 +273,8 @@ try {
     ['central member actions enforce hierarchy before moderation and global bans', source.includes("app.post('/api/admin/member-action'") && source.includes('denyHigherRankTarget(actor,n,res)')],
     ['room ban/mute helper enforces hierarchy server-side', source.includes('function roomAction(type,req,res)') && source.includes('denyHigherRankTarget(req.user,name,res)')],
     ['profile name/color edits and avatar deletion enforce hierarchy', source.includes("app.patch('/api/admin/profile/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return") && source.includes("app.delete('/api/admin/avatar/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return")],
-    ['direct rank assignment and role changes enforce hierarchy', source.includes("app.post('/api/admin/rank'") && source.includes('if(denyHigherRankTarget(actor,n,res))return') && source.includes("app.post('/api/admin/role'")],
-    ['additional member edits and removals enforce hierarchy', source.includes("app.patch('/api/admin/member-stats/:name',requireAuth,(req,res)=>{const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return") && source.includes("app.put('/api/admin/member-permissions/:name'") && source.includes("if(action==='delete-user')") && source.includes("app.post('/api/admin/unban'") && source.includes('if(denyHigherRankTarget(req.user,name,res))return')],
+    ['direct rank assignment enforces hierarchy and generic role route is retired', source.includes("app.post('/api/admin/rank'") && source.includes('if(denyHigherRankTarget(actor,n,res))return') && !source.includes("app.post('/api/admin/role'") && !source.includes('role_assign')],
+    ['additional member edits and removals enforce hierarchy', source.includes("app.patch('/api/admin/member-stats/:name',requireAuth,(req,res)=>{const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return") && source.includes("app.put('/api/admin/account-permissions/:name'") && source.includes("if(action==='delete-user')") && source.includes("app.post('/api/admin/unban'") && source.includes('if(denyHigherRankTarget(req.user,name,res))return')],
     ['rank badge cannot be replaced by gift or VIP', source.includes('function denyBadgeForRank(name,p,res)') && source.includes('if(!hasActiveVisualRank(p))return false') && source.includes('لا يمكن استبدالها بهدية أو VIP')],
     ['member-action gifts replace rather than accumulate', source.includes("if(action==='gift')") && source.includes('p.gifts=[record]') && !source.includes('p.gifts.unshift(record)')]
   ];
@@ -421,20 +421,17 @@ try {
   } finally { fs.rmSync(tempDir, { recursive: true, force: true }); }
 } catch (error) { fail('private media migration fixture', error.message); }
 
-// Administrative role/permission edits must be persisted before notifications and
-// must restore in-memory state if durable storage fails.
+// Unified rank/account permission edits are atomic; the duplicate generic role route is retired.
 try {
-  const source = fs.readFileSync(server, 'utf8');
-  const roleRoute = source.match(/app\.post\('\/api\/admin\/role',[\s\S]*?\n\}\);\}\);/);
-  const permissionRoute = source.split('\n').find(line => line.includes("app.put('/api/admin/permissions'"));
-  const rankRoute = source.match(/app\.post\('\/api\/admin\/rank',[\s\S]*?app\.get\('\/api\/admin\/member-ip/);
-  if (rankRoute && rankRoute[0].includes('previousProfile=JSON.parse(JSON.stringify(p))') && rankRoute[0].includes('Rank assignment persistence failed:') && rankRoute[0].includes('db.rankAudit=previousRankAudit') && rankRoute[0].includes('previousNotifications')) pass('rank grants restore member profile, base role, audit history, and inbox notifications if persistence fails');
-  else fail('rank grants restore member profile, base role, audit history, and inbox notifications if persistence fails');
-  if (roleRoute && roleRoute[0].includes('previousRole=target.role') && roleRoute[0].includes('Role update persistence failed:') && roleRoute[0].indexOf('try{save();}') < roleRoute[0].indexOf("emit('role-changed'")) pass('role changes roll back on persistence failure and notify only after durable save');
-  else fail('role changes roll back on persistence failure and notify only after durable save');
-  if (permissionRoute && permissionRoute.includes('previousPermissions=db.rolePermissions[role]') && permissionRoute.includes('Role permissions persistence failed:') && permissionRoute.includes('previousRankPermissions')) pass('rank permission edits restore role and rank metadata when save fails');
-  else fail('rank permission edits restore role and rank metadata when save fails');
-} catch (error) { fail('administration persistence checks', error.message); }
+ const source=fs.readFileSync(server,'utf8');
+ const permissionRoute=source.slice(source.indexOf("app.put('/api/admin/permissions'"),source.indexOf("app.get('/api/admin/account-permissions'"));
+ const accountRoute=source.slice(source.indexOf("app.put('/api/admin/account-permissions/:name'"),source.indexOf("app.get('/api/admin/welcome-messages'"));
+ const rankRoute=source.match(/app\.post\('\/api\/admin\/rank',[\s\S]*?app\.get\('\/api\/admin\/member-ip/);
+ if(source.includes("app.post('/api/admin/role'"))fail('obsolete generic role endpoint removed');else pass('obsolete generic role endpoint removed');
+ if(permissionRoute.includes('const previous=[...(definition.permissions||[])]')&&permissionRoute.includes('definition.permissions=previous'))pass('rank permission edits roll back on persistence failure');else fail('rank permission edits roll back on persistence failure');
+ if(accountRoute.includes('db.accountPermissions[key]=[...new Set(requested)]')&&accountRoute.includes('db.accountPermissions[key]=previous'))pass('per-account permission edits save exact replacement and roll back on failure');else fail('per-account permission edits save exact replacement and roll back on failure');
+ if(rankRoute&&rankRoute[0].includes('previousProfile=JSON.parse(JSON.stringify(p))')&&rankRoute[0].includes('Rank assignment persistence failed:')&&rankRoute[0].includes('db.rankAudit=previousRankAudit')&&rankRoute[0].includes('previousNotifications'))pass('rank grants restore profile, audit history, and inbox notifications if persistence fails');else fail('rank grants restore profile, audit history, and inbox notifications if persistence fails');
+} catch(error){fail('unified permission persistence checks',error.message)}
 
 // WebRTC signaling must be tied to a server-authorized offer, validate payloads,
 // and rate-limit relay events to prevent arbitrary signaling abuse.
@@ -495,7 +492,7 @@ try {
   const permissionServer = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
   if (!permissionHtml.includes("document.querySelectorAll('.overlay.admin .tabs button')")) throw new Error('admin tab filter does not target the actual tab container');
   if (permissionHtml.includes("document.querySelectorAll('.overlay.adminPanel .tabs button')")) throw new Error('stale incorrect admin tab selector remains');
-  for (const key of ['users_view','grant_likes','reset_likes','rooms_manage','announcement_post','announcement_delete','member_status_manage','wall_delete_user']) {
+  for (const key of ['users_view','grant_likes','reset_likes','room_create','announcement_post','announcement_delete','member_status_manage','wall_delete_user']) {
     if (!permissionHtml.includes(key)) throw new Error(`missing client permission ${key}`);
   }
   if (!permissionHtml.includes("welcome:hasClientPermission('welcome_manage')")) throw new Error('welcome tab is not aligned with its permission');
@@ -507,63 +504,59 @@ try {
 } catch (error) { fail('v46.28 admin visibility and gift notice checks', error.message); }
 
 
-// v46.73 granular permissions: rank-specific permissions must override legacy admin role.
+// v46.74: one seven-rank permission model + exact per-account overrides.
 try {
-  const src=fs.readFileSync(server,'utf8');
-  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
-  const hasBlock=src.match(/function hasPermission\(user, permission\)\{([\s\S]*?)\n\}/)?.[1]||'';
-  if(!hasBlock.includes('if(isOwner(user)) return true;')) throw new Error('owner is not the sole unconditional principal');
-  if(hasBlock.includes("if(role==='admin')")||hasBlock.includes('return true;\n  }')) throw new Error('legacy admin still bypasses rank permissions');
-  if(!hasBlock.includes('rankWasCustomized')||!hasBlock.includes('baseWasCustomized')||!hasBlock.includes('rankAllowed.includes(permission)')) throw new Error('explicit base-role/rank permission precedence is missing');
-  if(hasBlock.includes("if(permission==='permission_manage') return false;")) throw new Error('explicit permission_manage grants are still blocked');
-  if(!src.includes("if(p==='/api/admin/gifts/catalog')return 'gift_catalog_manage';")) throw new Error('gift catalog route is not separated from sending gifts');
-  if(src.includes("if(role==='admin'&&!isOwner(actor))")) throw new Error('delegated role assignment is still hard-coded owner-only');
-  if(!html.includes("const owner=!!(me?.owner||me?.role==='owner');")||html.includes('if(owner||admin)')) throw new Error('admin tabs still bypass granular filtering');
-  for(const key of ['room_create','room_edit','room_delete','room_lock','room_image_manage','gift_catalog_manage','private_chat_override','presence_hidden_view','hidden_login','ghost_login','staff_notice','staff_media']) if(!html.includes(key)) throw new Error(`missing granular permission UI: ${key}`);
-  if(!html.includes("function canManageRolePermissions(){return !!(me?.owner||me?.role==='owner'||hasClientPermission('permission_manage'));}")) throw new Error('permission editor does not honor delegated permission_manage');
-  pass('v46.73 granular role permissions override legacy admin status and gate every admin tab');
-} catch(error) { fail('v46.73 granular role permission regression',error.message); }
+ const src=fs.readFileSync(server,'utf8'),html=fs.readFileSync(mainPath,'utf8');
+ const block=src.match(/function hasPermission\(user,permission\)\{[^}]*\}/)?.[0]||'';
+ const api=src.slice(src.indexOf("app.get('/api/admin/permissions'"),src.indexOf("app.get('/api/admin/welcome-messages'"));
+ const ui=html.slice(html.indexOf('async function adminRankPermissionEditor'),html.indexOf('function filterAdminTabs'));
+ if(!src.includes("const RANK_PERMISSION_PROFILES=['admin-full','admin-shield','crown-gold','crown-silver','super-black','super-white','super-red'];"))throw new Error('the canonical seven ranks are not defined');
+ if(ui.includes('المنصب الإداري العام (admin)')||ui.includes('منصب السوبر العام (super)')||ui.includes('منصب البنر العام (banner)'))throw new Error('obsolete generic role selectors remain');
+ if(!api.includes("if(!RANK_PERMISSION_PROFILES.includes(rank))"))throw new Error('rank permissions API still accepts generic roles');
+ if(!block.includes('effectivePermissionsForUser(user).has(permission)'))throw new Error('permission resolver is not using a single effective set');
+ if(!src.includes('if(Array.isArray(accountSet))return new Set(accountSet.filter(p=>Object.hasOwn(PERMISSION_CATALOG,p)))'))throw new Error('per-account exact permission set missing');
+ if(!ui.includes('هذا التخصيص يستبدل صلاحيات الرتبة لهذا الحساب وحده'))throw new Error('per-account exact override is not explained in the UI');
+ if(!ui.includes('resetAccountPermissions'))throw new Error('reset-to-rank control missing');
+ if(!src.includes("db.accountPermissions[key]=[...new Set(requested)]"))throw new Error('member permissions are not saved as an exact replacement');
+ if(src.includes("if(p==='/api/admin/role')return 'role_assign'")||src.includes("role_assign:'تغيير المناصب الإدارية'"))throw new Error('obsolete generic role assignment still exists');
+ pass('v46.74 seven-rank-only model and exact account-level permission overrides');
+} catch(error) { fail('v46.74 permission architecture regression',error.message); }
 
-
-// v46.73 data API must never disclose every admin dataset just because panel_access is granted.
+// Runtime behavior: same rank inherits shared defaults; account override replaces them exactly.
 try {
-  const src=fs.readFileSync(server,'utf8');
-  const route=src.slice(src.indexOf("app.get('/api/admin/data'"),src.indexOf("app.post('/api/rooms'",src.indexOf("app.get('/api/admin/data'")));
-  if(!route.includes('panel_access')||!route.includes('never grants access to every dataset')) throw new Error('permission-shaped response guard missing');
-  for(const gate of ["if(!can('messages_delete'))payload.messages=[];","if(!can('audit_view'))payload.adminAuditLogs=[];","if(!can('stats_view'))payload.stats={};","if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))payload.rolePermissions={};","if(!can('rank_assign'))payload.rankDefinitions=[];"]){if(!route.includes(gate))throw new Error('missing data gate '+gate)}
-  if(src.includes("if(permission==='panel_access' && !['member','owner'].includes(role)) return true;"))throw new Error('legacy staff panel access remains implicit');
-  if(!src.includes("voice_mic_override:'تجاوز شرط اللايكات للمايكات'"))throw new Error('voice mic override is not individually permissioned');
-  if(src.includes("['panel_access',...requested.filter(x=>allowed.includes(x))]"))throw new Error('panel access is still forced on every role');
-  if(!src.includes("const allowed=Object.keys(PERMISSION_CATALOG).some(p=>hasPermission(req.user,p));"))throw new Error('specific permissions cannot open the admin API');
-  if(!html.includes("socket.on('permissions-updated'"))throw new Error('live permission refresh listener missing');
-  pass('v46.73 admin data payload is filtered by exact permission, not panel access');
-} catch(error) { fail('v46.73 admin data permission filtering',error.message); }
+ const src=fs.readFileSync(server,'utf8');
+ const fn=(src.match(/function effectivePermissionsForUser\(user\)\{[\s\S]*?\n\}/)?.[0]||'')+'\n'+(src.match(/function hasPermission\(user,permission\)\{[^}]*\}/)?.[0]||'');
+ const db={accountPermissions:{second:['panel_access','kick_room']}};
+ const profiles={first:{rank:'admin-full'},second:{rank:'admin-full'},limited:{rank:'super-red'},lowerFull:{rank:'super-red'}};
+ const defs={'admin-full':{permissions:['panel_access','users_view','kick_room','permission_manage','site_admin']},'super-red':{permissions:['panel_access']}};
+ const context={db,ALL_PERMISSION_KEYS:['panel_access','users_view','kick_room','permission_manage','site_admin'],PERMISSION_CATALOG:{panel_access:1,users_view:1,kick_room:1,permission_manage:1,site_admin:1},isOwner:u=>!!u.owner,profile:n=>profiles[n]||{},rankDefinition:id=>defs[id]||null,keyName:n=>String(n||'').toLowerCase(),Object};
+ vm.runInNewContext(fn,context);const check=vm.runInNewContext('hasPermission',context);
+ const first={name:'first'},second={name:'second'},limited={name:'limited'},owner={name:'owner',owner:true};
+ if(!check(first,'site_admin')||!check(first,'permission_manage'))throw new Error('full rank does not inherit full permissions');
+ if(check(second,'site_admin')||check(second,'permission_manage')||!check(second,'kick_room'))throw new Error('account override does not replace inherited permissions exactly');
+ if(check(limited,'site_admin')||!check(limited,'panel_access'))throw new Error('lower rank baseline is incorrect');
+ defs['super-red'].permissions=['panel_access','users_view','kick_room','permission_manage','site_admin'];const lowerFull={name:'lowerFull'};if(!check(lowerFull,'site_admin')||!check(lowerFull,'permission_manage'))throw new Error('a lower visual rank cannot receive the complete permission set');
+ if(!check(owner,'site_admin'))throw new Error('owner unconditional permission boundary failed');
+ pass('v46.74 runtime tests verify per-account restriction without affecting same-rank peers');
+} catch(error) { fail('v46.74 runtime permission behavior',error.message); }
 
-
-// Runtime test the actual hasPermission function with fake accounts/rank definitions.
+// Startup migration collapses generic roles into the seven-rank model and retires old stores.
 try {
-  const src=fs.readFileSync(server,'utf8');
-  const fn=src.match(/function hasPermission\(user, permission\)\{[\s\S]*?\n\}/)?.[0];
-  if(!fn)throw new Error('hasPermission function not found');
-  const db={permissionOverrides:{},rolePermissions:{admin:['panel_access']}};
-  const profiles={staff:{rank:'admin-shield'},legacy:{rank:'none'}};
-  const defs={'admin-shield':{permissions:['panel_access','users_view']}};
-  const context={db,PERMISSION_CATALOG:{panel_access:1,users_view:1,kick_room:1,permission_manage:1},isOwner:u=>!!u.owner,profile:n=>profiles[n]||{},rankDefinition:id=>defs[id]||null,roleOf:u=>u.role||'member',keyName:n=>String(n||'').toLowerCase(),Object};
-  vm.runInNewContext(fn,context);
-  const check=vm.runInNewContext('hasPermission',context);
-  const staff={name:'staff',role:'admin'},legacy={name:'legacy',role:'admin'},owner={name:'owner',owner:true};
-  if(!check(staff,'panel_access')||!check(staff,'users_view')||check(staff,'kick_room'))throw new Error('active admin-shield rank permissions are not authoritative');
-  if(!check(legacy,'panel_access')||check(legacy,'kick_room'))throw new Error('legacy admin role still has implicit full access');
-  if(!check(owner,'permission_manage')||!check(owner,'kick_room')||check(staff,'permission_manage'))throw new Error('owner boundary is incorrect');
-  defs['admin-shield'].permissions=[];if(check(staff,'panel_access'))throw new Error('panel_access cannot be disabled for a rank');
-  db.permissionOverrides.staff=['kick_room','permission_manage'];
-  if(!check(staff,'kick_room')||check(staff,'permission_manage'))throw new Error('manual override safety is incorrect');
-  db.rolePermissionMeta={customized:{admin:true},updatedAt:{admin:2000}};db.rolePermissions.admin=['panel_access','users_view','kick_room','permission_manage'];
-  if(!check(staff,'kick_room')||!check(staff,'permission_manage'))throw new Error('most recently customized admin base role did not apply to the admin badge');
-  db.permissionOverrides.staff=[];defs['admin-shield'].permissions=['panel_access'];defs['admin-shield'].updatedAt=3000;db.rolePermissionMeta.customized['admin-shield']=true;
-  if(check(staff,'kick_room'))throw new Error('most recently customized rank did not take priority');
-  pass('v46.73 runtime permission checks enforce owner boundary and explicit rank/base-role precedence');
-} catch(error) { fail('v46.73 runtime permission behavior',error.message); }
+ const src=fs.readFileSync(server,'utf8');
+ const start=src.indexOf('function migrateLegacyPermissionModel(){'),end=src.indexOf('migrateLegacyPermissionModel();',start)+'migrateLegacyPermissionModel();'.length;
+ if(start<0||end<0)throw new Error('startup rank migration block not found');
+ const normStart=src.indexOf('function normalizePermissionList('),normEnd=src.indexOf('const DEFAULT_RANK_PERMISSIONS',normStart);
+ const migration=src.slice(normStart,normEnd)+'\n'+src.slice(start,end);
+ const catalog={panel_access:1,users_view:1,site_admin:1,permission_manage:1,shortcuts_manage:1,smileys_manage:1,kick_room:1,room_create:1,room_edit:1,room_delete:1,room_lock:1,room_image_manage:1,gift_catalog_manage:1};
+ const db={permissionModelVersion:0,users:{primary:{role:'admin'},second:{role:'admin'},oldSuper:{role:'super'},manual:{role:'member'}},guests:{},profiles:{primary:{rank:'admin-full'},second:{rank:'admin-full'},oldSuper:{rank:'none'},manual:{rank:'super-red'}},rankDefinitions:[{id:'admin-full',permissions:['panel_access'],updatedAt:1000},{id:'super-red',permissions:['panel_access'],updatedAt:1000}],rolePermissions:{admin:['panel_access','users_view','site_admin','permission_manage','rooms_manage','chat_tools_manage'],super:['panel_access','users_view','shortcuts_manage','smileys_manage']},rolePermissionMeta:{customized:{admin:true},updatedAt:{admin:2000}},permissionOverrides:{manual:['kick_room']},accountPermissions:{}};
+ const profiles=db.profiles;const context={db,ALL_PERMISSION_KEYS:Object.keys(catalog),PERMISSION_CATALOG:catalog,RANK_PERMISSION_PROFILES:['admin-full','admin-shield','crown-gold','crown-silver','super-black','super-white','super-red'],profile:n=>profiles[n]||(profiles[n]={rank:'none'}),rankDefinition:id=>db.rankDefinitions.find(r=>r.id===id)||null,keyName:n=>String(n||'').toLowerCase(),save:()=>{context.saved=true},Date,Object,console};
+ vm.runInNewContext(migration,context);
+ if(db.users.primary.role!=='member'||db.users.second.role!=='member'||profiles.oldSuper.rank!=='super-red')throw new Error('legacy account roles were not folded into rank records');
+ const migratedAdmin=db.rankDefinitions.find(r=>r.id==='admin-full').permissions;if(!migratedAdmin.includes('site_admin')||!migratedAdmin.includes('room_create')||!migratedAdmin.includes('shortcuts_manage')||!migratedAdmin.includes('smileys_manage'))throw new Error('generic role and umbrella permissions were not folded into rank 1');
+ if(!Array.isArray(db.accountPermissions.manual)||!db.accountPermissions.manual.includes('kick_room'))throw new Error('legacy additive account permissions were not migrated to exact account permissions');
+ if(db.rolePermissions!==undefined||db.rolePermissionMeta!==undefined||db.permissionOverrides!==undefined)throw new Error('legacy generic permission stores were not retired');
+ pass('startup migration preserves existing access while retiring generic roles and permission stores');
+} catch(error) { fail('startup seven-rank migration behavior',error.message); }
 
 // v46.69 administration tools: persistent login history, owner-only settings and safe DB backup.
 try {
@@ -595,7 +588,7 @@ try {
     if (!permissionHtml.includes(label)) throw new Error(`missing Arabic label ${label}`);
   }
   if (!permissionHtml.includes('عدم توافق نسخة الواجهة والسيرفر')) throw new Error('client compatibility preflight missing');
-  if (!permissionServer.includes('permissionSchemaVersion:5') || !permissionServer.includes('permissionKeys:ALL_PERMISSION_KEYS')) throw new Error('server permission schema metadata missing');
+  if (!permissionServer.includes('permissionSchemaVersion:7') || !permissionServer.includes('permissionKeys:ALL_PERMISSION_KEYS')) throw new Error('server permission schema metadata missing');
   if (!permissionHtml.includes("['الأدوات والإضافات الجديدة',['audit_view','stats_view','chat_filter_manage','member_status_manage','private_chat_override','presence_hidden_view','hidden_login','ghost_login','staff_notice','staff_media','voice_mic_override']]")) throw new Error('custom rank editor missing new permission group');
   pass('v46.27 Arabic permission labels and client/server schema compatibility');
 } catch (error) { fail('v46.27 permission compatibility checks', error.message); }
@@ -611,7 +604,7 @@ try {
   if (!membersRoute || !membersRoute[0].includes('registeredKeys.has(normalized)') || !membersRoute[0].includes('seenMemberKeys.has(normalized)')) throw new Error('member directory does not suppress legacy guest/registered duplicates');
   if (!repairServer.includes('const registeredAccountKeys=new Set(Object.keys(db.users||{}).map(keyName))') || !repairServer.includes('registeredAccountKeys.has(k)||seenAdminAccountKeys.has(k)')) throw new Error('admin data does not suppress duplicate account identities');
   if (!repairServer.includes("app.get('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")) throw new Error('welcome-message GET route still blocks rank permission');
-  if (!repairHtml.includes("async function welcomeMessagesEditor(){if(!me?.owner&&!hasClientPermission('welcome_manage'))")) throw new Error('welcome editor still checks only owner/admin roles');
+  if (!repairHtml.includes("welcome:hasClientPermission('welcome_manage')") || !repairHtml.includes("if(!allowedTabs[t])")) throw new Error('welcome editor is not gated by the exact welcome_manage permission');
   pass('online-members CSS cleanup, legacy duplicate identity suppression, and rank-based welcome permissions');
 } catch (error) { fail('v46.29 regression checks', error.message); }
 
@@ -630,10 +623,7 @@ try {
   if (!rankHtml.includes('function showAwardNoticeCard(') || !rankHtml.includes('function showGiftAnimation(') || !rankHtml.includes('function showRankGrantCard(')) throw new Error('gift/rank cards do not share one renderer');
   if (!rankHtml.includes("socket.on('rank-granted'") || !rankHtml.includes('rimaz-rank-reference') || !rankHtml.includes('rimaz-rank-duration')) throw new Error('rank card listener or rank-specific content styles are missing');
   if (!rankHtml.includes("senderCaption:'أرسل لك هدية'") || !rankHtml.includes("senderCaption:'منحك رتبة جديدة'")) throw new Error('gift or rank sender caption is missing');
-  const roleRoute=rankServer.match(/app\.post\('\/api\/admin\/role',[\s\S]*?\n\}\);\}\);/);
-  const legacyAction=rankServer.match(/if\(action==='grant-admin'\|\|action==='grant-super'\|\|action==='grant-banner'\)\{[\s\S]*?return res\.json\(\{ok:true,role,cardQueued:true\}\);\}/);
-  if(!roleRoute || !roleRoute[0].includes("emit('rank-granted'") || roleRoute[0].includes("emit('admin-action-notice',{title:'🏅 تغيير المنصب'")) throw new Error('direct role promotion does not use the shared award card');
-  if(!rankServer.includes("emitToUser(n,'rank-granted',{id:crypto.randomUUID(),name:n,rank,rankName:")) throw new Error('legacy promotion action bypasses the shared award card');
+  if(rankServer.includes("app.post('/api/admin/role'") || rankServer.includes("grant-admin") || rankServer.includes("grant-super") || rankServer.includes("grant-banner")) throw new Error('obsolete generic role promotion path remains');
   if(rankHtml.includes('.rimaz-rank-reference .rimaz-gift-alert-title{')) throw new Error('rank card overrides the agreed shared header sizing');
   if (rankHtml.includes('.rimaz-gift-ribbon') || rankHtml.includes('.rimaz-gift-burst') || rankHtml.includes('@keyframes rgGiftFloat') || rankHtml.includes('@keyframes rgRibbon')) throw new Error('unused legacy gift-animation rules remain');
   pass('v46.35 rank-grant notice is durably queued before the same gift-card renderer is triggered');
@@ -793,7 +783,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.73.2 package version is current', pkg.version === '46.73.2'],
+    ['v46.74.0 package version is current', pkg.version === '46.74.0'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -818,14 +808,14 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const checks = [
     ['room create, edit, delete, lock, and image permissions are separate catalog entries', ['room_create','room_edit','room_delete','room_lock','room_image_manage'].every(k=>serverText.includes(k+':'))],
-    ['legacy rooms_manage access migrates to all room sub-permissions', serverText.includes("if(next.has('rooms_manage')) for(const k of ['room_create','room_edit','room_delete','room_lock','room_image_manage']) next.add(k)")],
+    ['legacy room umbrella migrates to all individual room permissions', serverText.includes("if(set.has('rooms_manage')){for(const key of ['room_create','room_edit','room_delete','room_lock','room_image_manage'])set.add(key);set.delete('rooms_manage');}")],
     ['room route permission resolver distinguishes each operation', serverText.includes("if(p==='/api/admin/room'&&req.method==='POST')return 'room_create'") && serverText.includes("if(/\\/lock$/.test(p))return 'room_lock'") && serverText.includes("if(req.method==='PATCH')return 'room_edit'") && serverText.includes("return 'room_delete'")],
     ['gift catalogue upload and deletion require gift_catalog_manage separately from gift sending', serverText.includes("hasPermission(req.user,'gift_catalog_manage')") && serverText.includes("if(!hasPermission(req.user,'gifts'))return res.status(403)")],
-    ['legacy gifts permission migrates to preserve previous catalogue management access', serverText.includes("if(next.has('gifts')) next.add('gift_catalog_manage')")],
+    ['legacy gift permission migrates to preserve catalogue management access', serverText.includes("if(set.has('gifts'))set.add('gift_catalog_manage')")],
     ['room UI hides create/edit/delete/lock/image actions without their matching permissions', htmlText.includes("hasClientPermission('room_create')") && htmlText.includes("hasClientPermission('room_image_manage')") && htmlText.includes("hasClientPermission('room_lock')") && htmlText.includes("hasClientPermission('room_edit')") && htmlText.includes("hasClientPermission('room_delete')")],
     ['gift catalogue UI visibility uses its own permission', htmlText.includes("hasClientPermission('gift_catalog_manage')")],
-    ['role permission editor exposes all room sub-permissions and separate gift catalogue control', ['room_create','room_edit','room_delete','room_lock','room_image_manage','gift_catalog_manage'].every(k=>htmlText.includes(k)) && htmlText.includes('function rankPermissionOptions')],
-    ['admin navigation filters the real tab buttons and recognizes granular room/gift access', htmlText.includes("document.querySelectorAll('.overlay.admin .tabs button')") && htmlText.includes("rooms:['rooms_manage','room_create','room_edit','room_delete','room_lock','room_image_manage'].some(can)") && htmlText.includes("gifts:can('gifts')||can('gift_catalog_manage')||can('vip')")],
+    ['role permission editor exposes all room sub-permissions and separate gift catalogue control', ['room_create','room_edit','room_delete','room_lock','room_image_manage','gift_catalog_manage'].every(k=>htmlText.includes(k)) && htmlText.includes("['الغرف والرسائل والنقل',['room_create','room_edit','room_delete','room_lock','room_image_manage','messages_delete','room_move']]")],
+    ['admin navigation filters the real tab buttons and recognizes granular room/gift access', htmlText.includes("document.querySelectorAll('.overlay.admin .tabs button')") && htmlText.includes("rooms:['room_create','room_edit','room_delete','room_lock','room_image_manage'].some(can)") && htmlText.includes("gifts:can('gifts')||can('gift_catalog_manage')||can('vip')")],
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
 } catch (error) { fail('v46.70.1 granular permission checks', error.message); }
@@ -853,7 +843,7 @@ try {
   let runtimeRestoreChecks=false;
   try{
     const helperSource=serverText.slice(helperStart,helperEnd);
-    const defaultsFixture=()=>({users:{},guests:{},sessions:{old:'session'},messages:[],wall:[],wallEnabled:true,notifications:{},announcements:[],adminAuditLogs:[],loginHistory:[],ownerSetupCompleted:false,giftCatalogV3Initialized:false,smileysSeedVersion:0,smileysSeeded:false,rankDefinitions:[],rolePermissionMeta:{customized:{}},siteSettings:{},chatFilter:{},welcomeMessages:[],profiles:{},lastLike:{},permissionOverrides:{},rolePermissions:{},rankAudit:[],giftCatalog:[],chatShortcuts:[],customSmileys:[],rooms:[],roomBans:{},roomMutes:{},roomKicks:{},globalBans:{},globalIpBans:{},wallLikes:{},wallComments:{},privateMessages:[{text:'ephemeral'}],privateHidden:{},privateRead:{},ignored:{}});
+    const defaultsFixture=()=>({users:{},guests:{},sessions:{old:'session'},messages:[],wall:[],wallEnabled:true,notifications:{},announcements:[],adminAuditLogs:[],loginHistory:[],ownerSetupCompleted:false,giftCatalogV3Initialized:false,smileysSeedVersion:0,smileysSeeded:false,rankDefinitions:[],siteSettings:{},chatFilter:{},welcomeMessages:[],profiles:{},lastLike:{},accountPermissions:{},rankAudit:[],giftCatalog:[],chatShortcuts:[],customSmileys:[],rooms:[],roomBans:{},roomMutes:{},roomKicks:{},globalBans:{},globalIpBans:{},wallLikes:{},wallComments:{},privateMessages:[{text:'ephemeral'}],privateHidden:{},privateRead:{},ignored:{}});
     const validate=vm.runInNewContext(helperSource+';validateDatabaseRestoreFile;',{Buffer,defaults:defaultsFixture});
     const database=defaultsFixture();database.users={Ali:{role:'owner'}};database.guests={Guest:{}};database.rooms=[{id:'public'}];database.messages=[{text:'hello'}];database.sessions={secret:'must-not-restore'};database.privateMessages=[{text:'not-persisted'}];
     const valid=validate(Buffer.from(JSON.stringify({format:'rimaz-database-backup',version:1,createdAt:'2026-01-01T00:00:00Z',appVersion:'test',database})));
@@ -897,12 +887,12 @@ try {
   const src=fs.readFileSync(server,'utf8'); const html=fs.readFileSync(mainPath,'utf8');
   const checks=[
     ['permission_manage is grantable only through an explicit rank permission',!src.includes("if(permission==='permission_manage') return false;")&&src.includes("hasPermission(req.user,'permission_manage')")],
-    ['legacy customized admin role gets precedence timestamps during upgrade',src.includes('permissionPrecedenceMigrationChanged')&&src.includes('db.rolePermissionMeta.updatedAt[role]=Date.now()')],
-    ['delegated permission editors cannot grant permissions they do not hold',src.includes('const excessive=requested.filter(k=>!own.has(k))')],
+    ['legacy generic role profiles are migrated then removed',src.includes('const legacyRankMap={admin:\'admin-full\',super:\'super-red\',banner:\'crown-silver\'}')&&src.includes('delete db.rolePermissions;delete db.rolePermissionMeta;')],
+    ['delegated permission editors cannot grant permissions they do not hold',src.includes('requested.some(p=>!own.has(p))')],
     ['site administration is a separate explicit permission',src.includes("site_admin:'إدارة الموقع الكاملة")&&html.includes("site:can('site_admin')")],
     ['site settings, login history, health, backups and restore honor site_admin', (src.match(/hasPermission\(req.user,'site_admin'\)/g)||[]).length>=6],
-    ['permission editor exposes site_admin and permission_manage toggles',html.includes("['إدارة الموقع والصلاحيات الحساسة',['site_admin','permission_manage']]")],
-    ['permission editor offers select-all and clear-all controls',html.includes('setAllRolePermissions(true)')&&html.includes('setAllRolePermissions(false)')],
+    ['permission editor exposes site_admin and permission_manage toggles',html.includes("['إدارة الموقع',['site_admin']]")&&html.includes("['الرتب والإدارة',['rank_assign','permission_manage']]")],
+    ['permission editor offers select-all and clear-all controls',html.includes('setAllRankPermissions(true)')&&html.includes('setAllRankPermissions(false)')],
     ['delegated permission editor is available to ranks explicitly granted permission_manage',html.includes("hasClientPermission('permission_manage')")&&html.includes("rankpermissions:can('permission_manage')")],
     ['site tab is shown to ranks explicitly granted site_admin',html.includes("hasClientPermission('site_admin')")],
     ['browser entry files remain identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')]
