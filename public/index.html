@@ -740,6 +740,19 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 .call.voiceCall #remoteAudio{display:none}
 </style>
 <style id="rimaz-voice-bar-initial-state">.chat .roombar[aria-hidden="true"]{display:none!important;height:0!important;min-height:0!important;padding:0!important;border:0!important;overflow:hidden!important}</style>
+
+<style id="rimaz-banner-height-and-mark-final">
+/* User-requested banner-only finishing: match the shallow reference banner; enlarge only the R glyph. */
+.rlLegacyBanner.rimazGoldBanner{height:clamp(96px,19vw,150px)!important;min-height:96px!important;max-height:150px!important;}
+.rlLegacyBanner.rimazGoldBanner>img{object-fit:fill!important;}
+.rlHeartLogo{width:40px!important;height:40px!important;flex:0 0 40px!important;}
+.rlHeartLogo .rlBMark{font-size:41px!important;line-height:1!important;}
+@media(max-width:520px){
+ .rlLegacyBanner.rimazGoldBanner{height:clamp(96px,19vw,116px)!important;min-height:96px!important;max-height:116px!important;}
+ .rlHeartLogo{width:40px!important;height:40px!important;flex:0 0 40px!important;}
+ .rlHeartLogo .rlBMark{font-size:39px!important;line-height:1!important;}
+}
+</style>
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');let sid=localStorage.getItem('rimaz_sid')||'',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,privatePeerProfile={},privatePeerUser=null;const privateMediaObjectUrls=new Set();function clearPrivateMediaObjectUrls(){document.querySelectorAll('#layer audio,#layer video,.privateMediaViewer audio,.privateMediaViewer video').forEach(media=>{try{media.pause();media.removeAttribute('src');media.load?.()}catch{}});for(const url of privateMediaObjectUrls){try{URL.revokeObjectURL(url)}catch{}}privateMediaObjectUrls.clear();document.querySelectorAll('.privateMediaViewer').forEach(viewer=>viewer.remove());}
@@ -753,7 +766,7 @@ async function loadPublicSiteSettings(){try{const r=await fetch('/api/public/set
 async function loadPublicAds(){try{const r=await fetch('/api/public/ads',{cache:'no-store'});if(!r.ok)return;const d=await r.json(),items=Array.isArray(d.items)?d.items:[];let box=document.getElementById('rimazPublicAdBanner');if(!items.length){box?.remove();return;}if(!box){box=document.createElement('div');box.id='rimazPublicAdBanner';box.className='rimazPublicAdBanner';const chat=document.querySelector('.chat'),login=document.querySelector('.rlLoginPanel');if(chat){const messages=chat.querySelector('#msgs');chat.insertBefore(box,messages||chat.firstChild);}else if(login)login.prepend(box);else return;}box.style.display='flex';box.innerHTML=items.map(x=>{const title=esc(x.title||'إعلان');const content=`<img src="${esc(x.image)}" alt="${title}" loading="lazy"><span>${title}<small>إعلان</small></span>`;return x.url?`<a class="rimazPublicAdItem" href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${content}</a>`:`<div class="rimazPublicAdItem">${content}</div>`}).join('');}catch(e){console.warn('Public ads unavailable:',e.message)}}
 function login(){
 app.innerHTML=`<div class="login rimazLogin"><header class="rlTop"><div class="rlBrand"><span class="rlHeartLogo" id="rlSecretLogo" role="button" tabindex="0" aria-label="شعار دردشة ريماز - اضغط خمس مرات للدخول الخاص"><span class="rlBMark">R</span></span><div class="rlBrandTag"><b>دردشة ريماز عراقية</b></div></div><button class="rlRefresh" type="button" onclick="loadPublicOnline()" aria-label="الإعدادات">⚙</button></header>
-<section class="rlHero rlLegacyBanner" aria-label="دردشة ريماز عراقية"><img src="rimaz-hero.jpg?v=2" alt="واجهة دردشة ريماز عراقية" onerror="this.onerror=null;this.src='/public/rimaz-hero.jpg?v=2'"><div class="rlBubble" aria-hidden="true">♡<br>دردشة<br>أصدقاء</div><div class="rlHeroPills"><span>◉ دردشة عراقية</span><span>▦ غرف متنوعة</span><span>☆ أصدقاء جدد</span></div><div class="rlHeroCopy"><small class="rlBannerKicker">دردشة</small><h1>ريماز<br><strong>عراقية</strong></h1><p>دردشة عراقية</p></div></section>
+<section class="rlHero rlLegacyBanner rimazGoldBanner" aria-label="دردشة ريماز عراقية"><img src="rimaz-hero.jpg?v=3" alt="بنر دردشة ريماز عراقية باللونين الأسود والذهبي" onerror="this.onerror=null;this.src='/public/rimaz-hero.jpg?v=3'"><div class="rlBannerTyping" aria-label="دردشة ريماز عراقية"><span id="rimazBannerTypedText"></span><i aria-hidden="true"></i></div></section>
 <section class="rlLoginPanel"><div class="rlTabs" dir="rtl">
 <button id="tabNew" onclick="loginMode('new')"><span>♟✚</span> تسجيل عضوية</button>
 <button id="tabIn" onclick="loginMode('in')"><span>♟</span> دخول الأعضاء</button>
@@ -2433,4 +2446,55 @@ sid='';localStorage.removeItem('rimaz_sid');login();
 #layer .profileOverlay .profileTop .close{display:grid!important;place-items:center!important;flex:0 0 25px!important;width:25px!important;height:25px!important;min-width:25px!important;min-height:25px!important;max-width:25px!important;max-height:25px!important;margin:0 0 0 auto!important;padding:0!important;border:0!important;border-radius:0!important;background:#d9534f!important;color:#fff!important;font-size:20px!important;line-height:25px!important;font-weight:900!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;}
 @media(max-width:650px){#layer .profileOverlay .profileTop{height:25px!important;min-height:25px!important;max-height:25px!important;flex-basis:25px!important;}#layer .profileOverlay .profileTop>b{display:block!important;}#layer .profileOverlay .profileTop .profileTopAvatar{display:block!important;}}
 </style>
+
+<style id="rimaz-gold-banner-only-v4678">
+/* Banner-only redesign: black/gold artwork with a live typewriter search phrase. */
+.rlLegacyBanner.rimazGoldBanner{
+  position:relative!important;display:block!important;width:100%!important;
+  height:clamp(126px,22vw,230px)!important;min-height:0!important;max-height:230px!important;
+  overflow:hidden!important;background:#050403!important;border:0!important;
+}
+.rlLegacyBanner.rimazGoldBanner>img{
+  position:absolute!important;inset:0!important;display:block!important;width:100%!important;height:100%!important;
+  object-fit:fill!important;object-position:center!important;opacity:1!important;filter:none!important;transform:none!important;
+}
+.rlLegacyBanner.rimazGoldBanner:after{display:none!important;content:none!important}
+.rlBannerTyping{
+  position:absolute!important;z-index:5!important;left:21.4%!important;top:23.2%!important;
+  width:39.2%!important;height:18.2%!important;display:flex!important;align-items:center!important;
+  justify-content:center!important;gap:2px!important;overflow:hidden!important;
+  background:#080706!important;color:#fff!important;border:0!important;border-radius:0!important;
+  direction:rtl!important;text-align:center!important;white-space:nowrap!important;
+  font-size:clamp(10px,1.65vw,22px)!important;font-weight:800!important;line-height:1!important;
+  text-shadow:0 0 7px #e8b94b88!important;pointer-events:none!important;
+}
+.rlBannerTyping span{display:inline-block!important;max-width:100%!important;overflow:hidden!important}
+.rlBannerTyping i{display:inline-block!important;flex:0 0 2px!important;width:2px!important;height:1.15em!important;background:#f5d27a!important;animation:rimazBannerCaret .75s steps(1,end) infinite!important}
+@keyframes rimazBannerCaret{50%{opacity:0}}
+@media(max-width:650px){
+ .rlLegacyBanner.rimazGoldBanner{height:clamp(126px,33vw,178px)!important;max-height:178px!important}
+ .rlBannerTyping{font-size:clamp(9px,2.45vw,15px)!important;left:21.4%!important;top:23.2%!important;width:39.2%!important;height:18.2%!important}
+}
+@media(prefers-reduced-motion:reduce){.rlBannerTyping i{animation:none!important}}
+</style>
+
+<script id="rimaz-banner-typewriter-v4678">
+(function(){
+  const start=()=>{
+    const node=document.getElementById('rimazBannerTypedText');
+    if(!node||node.dataset.started==='1')return;
+    node.dataset.started='1';
+    const phrase=Array.from('دردشة ريماز عراقية');
+    if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches){node.textContent=phrase.join('');return;}
+    let index=0, deleting=false;
+    const tick=()=>{
+      if(!document.body.contains(node))return;
+      if(!deleting){index=Math.min(index+1,phrase.length);node.textContent=phrase.slice(0,index).join('');if(index===phrase.length){deleting=true;window.setTimeout(tick,2100);return;}window.setTimeout(tick,115);}
+      else{index=Math.max(0,index-1);node.textContent=phrase.slice(0,index).join('');if(index===0){deleting=false;window.setTimeout(tick,500);return;}window.setTimeout(tick,65);}
+    };
+    tick();
+  };
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+})();
+</script>
 </body></html>
