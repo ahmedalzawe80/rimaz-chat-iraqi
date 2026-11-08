@@ -74,6 +74,32 @@ try {
   else fail('privileged login entry gesture remains intact');
 } catch (error) { fail('hidden/ghost login checks', error.message); }
 
+// Private chat window controls have distinct, non-destructive semantics.
+try {
+  const html = fs.readFileSync(mainPath, 'utf8');
+  const checks = [
+    ['private X closes only the window and preserves the conversation history', html.includes("function closePrivateConversation(){const other=String(privateTo||'').trim();if(!other){closeLayer();return;}privateOpen=false;privateTo='';privatePeerProfile={};privatePeerUser=null;clearPrivateMediaObjectUrls();closeLayer();toast('تم إغلاق نافذة المحادثة مع الاحتفاظ بسجل الرسائل');}")],
+    ['private minimize preserves a restorable peer entry instead of discarding the conversation', html.includes('privateMinimizedPeer={name:other') && html.includes("a.unshift({name:privateMinimizedPeer.name") && html.includes('محادثة مصغّرة')],
+    ['private contacts, members, and read receipts load concurrently', /Promise\.all\(\[api\('\/api\/private\/contacts'\),api\('\/api\/members'\),api\('\/api\/private\/read-all'/.test(html)],
+    ['conversation deletion remains an explicit action in the private contacts list', html.includes('onclick="event.stopPropagation();hidePrivate(') && html.includes("api('/api/private/hide'")]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+} catch (error) { fail('private conversation control regression checks', error.message); }
+
+// Navigation uses a lightweight rooms payload and welcome cards precede room history.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const html = fs.readFileSync(mainPath, 'utf8');
+  const joinStart = source.indexOf("socket.emit('room-joined',{room});", source.indexOf("socket.on('join'"));
+  const welcomeAt = source.indexOf('if(!welcomeSentSessions.has(sid))', joinStart);
+  const historyAt = source.indexOf("socket.emit('history',{room,items:roomHistoryWithAnnouncements", joinStart);
+  const checks = [
+    ['room navigation has a dedicated lightweight authenticated rooms endpoint', source.includes("app.get('/api/rooms',requireAuth,(req,res)=>{res.set('Cache-Control','no-store');res.json(visibleRooms(req.user));});") && html.includes("async function openRooms(){rooms=await api('/api/rooms');")],
+    ['welcome messages are emitted before room history and only once per session', joinStart>=0 && welcomeAt>joinStart && historyAt>welcomeAt && source.includes('welcomeSentSessions.add(sid)')]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+} catch (error) { fail('navigation and welcome-order regression checks', error.message); }
+
 // Voice rooms use one room-scoped WebRTC mesh and a single active mic-seat flow.
 try {
   const source = fs.readFileSync(server, 'utf8');
@@ -819,7 +845,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.76.0 package version is current', pkg.version === '46.77.0'],
+    ['v46.76.0 package version is current', pkg.version === '46.78.0'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -988,6 +1014,6 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.76.1 package version',pkgNow.version==='46.77.0']
+  ['v46.76.1 package version',pkgNow.version==='46.78.0']
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error){fail('v46.76.0 feature checks',error.message)}

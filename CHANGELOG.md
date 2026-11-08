@@ -1,3 +1,13 @@
+# Rimaz v46.78.0 — Private conversation controls and navigation flow
+
+- Separate closing the private-chat window from deleting/hiding its conversation history; the X control now closes the window without destructive side effects.
+- Make the minimize control preserve a restorable conversation entry, including conversations that have no messages yet.
+- Keep explicit conversation deletion in the private contacts list.
+- Load private contacts, member details, and read receipts concurrently.
+- Add a small authenticated rooms endpoint and use it instead of the heavier full-state endpoint when opening the rooms list.
+- Deliver welcome cards before room history so welcome and announcement order is predictable on room entry.
+- Keep root and public browser entry files identical; no database schema migration or persistent-data replacement is required.
+
 # Rimaz v46.77.0 — Final performance and memory cleanup
 
 - Start the Socket.IO connection immediately after chat render; load optional shortcuts/smileys/gift catalogue asynchronously so the tools request no longer blocks joining the room.
