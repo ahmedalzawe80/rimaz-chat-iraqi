@@ -1,8 +1,15 @@
+# Rimaz v46.79.1 — Entry-screen, welcome, and room-exit corrections
+
+- Show the login/entry screen on every fresh page load instead of silently restoring a previous session and opening the chat directly. The last username remains prefilled; passwords are not stored. The previous session is logged out in the background.
+- Keep the configured welcome cards on the first room entry after the member signs in with the new session. This avoids a stale reused session suppressing the welcome cards.
+- Restore the room-exit button to the left-side composer slot shown in the supplied reference, with a door-and-arrow icon; preserve its existing `exitRoom()` behavior.
+- Keep the existing incoming-call card and both client/server room-mic acceptance guards. The server remains authoritative if the room-mic state changes during acceptance.
+
 # Rimaz v46.79.0 — Scheduled ads, remembered sessions, room exit button, and call/mic guard
 
 - Stop replaying permanent announcements in room-entry history; announcements now arrive only through their scheduled live broadcast, independently of welcome messages.
 - Stagger first and recurring deliveries of multiple permanent announcements across separate slots within the 15-minute cycle, instead of sending a batch together.
-- Preserve a valid saved session across page reloads so returning members/guests can resume without entering credentials again; prefill the last used username when a fresh login is required. Passwords are never stored in browser storage.
+- Prefill the last used username on the entry screen. Passwords are never stored in browser storage.
 - Restyle the room-exit control only; its position and `exitRoom()` action remain unchanged.
 - Keep incoming private-call cards visible while a member is speaking on a voice-room mic; accepting is blocked with the requested explanation until the room mic is lowered.
 - Keep root and public browser entry files identical; do not replace persistent `data.json`, `uploads`, or `private-media`.

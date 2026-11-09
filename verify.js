@@ -239,14 +239,14 @@ try {
   else fail('permanent ads are queued on creation');
 } catch (error) { fail('announcement timing regression checks', error.message); }
 
-// Returning members reuse a valid saved session and only their username is remembered.
+// Fresh loads show the entry UI while remembering only the username.
 try {
   const html = fs.readFileSync(mainPath, 'utf8');
-  if (html.includes("if(sid)boot();else login();") && html.includes("localStorage.setItem('rimaz_last_name',String(n).trim())") && html.includes("localStorage.setItem('rimaz_last_name',String(name).trim())") && html.includes("value=\"${esc(localStorage.getItem('rimaz_last_name')||'')}\"")) pass('saved session resumes automatically and last username is prefilled without storing passwords');
-  else fail('remembered login session and username');
-  if (!html.includes("sid='';localStorage.removeItem('rimaz_sid');login();")) pass('page startup no longer clears the saved session token');
-  else fail('page startup preserves saved session token');
-} catch (error) { fail('remembered login regression checks', error.message); }
+  if (html.includes("localStorage.removeItem('rimaz_sid')") && html.includes("fetch('/api/logout'") && html.includes('login();') && !html.includes('if(sid)boot();else login();')) pass('fresh page load shows entry screen and revokes previous session');
+  else fail('fresh page load must show entry screen');
+  if (html.includes("localStorage.setItem('rimaz_last_name',String(n).trim())") && html.includes("localStorage.setItem('rimaz_last_name',String(name).trim())") && html.includes("localStorage.getItem('rimaz_last_name')||''")) pass('last username is prefilled without storing passwords');
+  else fail('remembered username remains available');
+} catch (error) { fail('remembered username regression checks', error.message); }
 
 // A room-microphone user sees the incoming call but cannot accept until lowering it.
 try {
@@ -268,11 +268,11 @@ try {
   else fail('room mic state is updated immediately on grant');
 } catch (error) { fail('incoming call persistence checks', error.message); }
 
-// Exit-room control keeps its original action and receives a visual-only redesign.
+// Exit-room control matches the supplied door-arrow reference and keeps its action.
 try {
   const html = fs.readFileSync(mainPath, 'utf8');
-  if (html.includes('<button class="exitComposer" onclick="exitRoom()">↪</button>') && html.includes('.composer .exitComposer{') && html.includes('linear-gradient(145deg,#183f5d,#0a2036)')) pass('exit-room button keeps its action and placement with updated styling only');
-  else fail('exit-room button visual-only redesign');
+  if (html.includes('class="exitComposer" type="button" onclick="exitRoom()"') && html.includes('<svg viewBox="0 0 32 32"') && html.includes('grid-template-columns:54px minmax(0,1fr) 48px 54px!important') && html.includes('linear-gradient(145deg,#183f5d,#0a2036)')) pass('exit-room button matches reference layout and retains exitRoom action');
+  else fail('exit-room button reference redesign');
 } catch (error) { fail('exit-room button regression checks', error.message); }
 
 try {
@@ -894,7 +894,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.79.0 package version is current', pkg.version === '46.79.0'],
+    ['v46.79.1 package version is current', pkg.version === '46.79.1'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -1063,6 +1063,6 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.79.0 package version',pkgNow.version==='46.79.0']
+  ['v46.79.1 package version',pkgNow.version==='46.79.1']
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error){fail('v46.76.0 feature checks',error.message)}
