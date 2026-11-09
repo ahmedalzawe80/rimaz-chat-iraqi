@@ -1,3 +1,7 @@
+## 46.79.2
+- Restored compact chat composer proportions to match the supplied Bunouta reference: exit, smiley, message input, and send button.
+- Kept the exit-room action and send action unchanged; adjusted only their presentation and composer sizing.
+
 # Rimaz v46.79.1 — Entry-screen, welcome, and room-exit corrections
 
 - Show the login/entry screen on every fresh page load instead of silently restoring a previous session and opening the chat directly. The last username remains prefilled; passwords are not stored. The previous session is logged out in the background.
