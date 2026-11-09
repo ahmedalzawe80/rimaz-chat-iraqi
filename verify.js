@@ -226,6 +226,55 @@ try {
   pass('admin SEO description is server-rendered into meta, Open Graph, Twitter and Schema tags');
 } catch (error) { fail('server-rendered SEO description integration', error.message); }
 
+// Scheduled announcements must not replay alongside welcome cards on room entry.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const historyFn = source.match(/function roomHistoryWithAnnouncements\([\s\S]*?\n}\nfunction publishAnnouncement/);
+  const scheduler = source.match(/function schedulePermanentAnnouncement\([\s\S]*?\n}\nfunction scheduleAllPermanentAnnouncements\([\s\S]*?\n}/);
+  if (historyFn && historyFn[0].includes("m.type==='presence'") && !historyFn[0].includes('db.announcements')) pass('room entry history excludes scheduled announcements and keeps presence notices');
+  else fail('room entry does not replay announcements with welcome cards');
+  if (scheduler && scheduler[0].includes('nextScheduledAt') && scheduler[0].includes('ANNOUNCEMENT_INTERVAL_MS') && scheduler[0].includes('lastPublishedAt') && scheduler[0].includes('pending.forEach') && scheduler[0].includes('firstOffset')) pass('permanent announcements are scheduled on staggered 15-minute cycles');
+  else fail('permanent announcement scheduler staggers multiple ads');
+  if (source.includes("if(duration==='15m'){publishAnnouncement(item);scheduleAnnouncementExpiry(item);}else scheduleAllPermanentAnnouncements();")) pass('permanent ads are queued instead of broadcast immediately on admin save');
+  else fail('permanent ads are queued on creation');
+} catch (error) { fail('announcement timing regression checks', error.message); }
+
+// Returning members reuse a valid saved session and only their username is remembered.
+try {
+  const html = fs.readFileSync(mainPath, 'utf8');
+  if (html.includes("if(sid)boot();else login();") && html.includes("localStorage.setItem('rimaz_last_name',String(n).trim())") && html.includes("localStorage.setItem('rimaz_last_name',String(name).trim())") && html.includes("value=\"${esc(localStorage.getItem('rimaz_last_name')||'')}\"")) pass('saved session resumes automatically and last username is prefilled without storing passwords');
+  else fail('remembered login session and username');
+  if (!html.includes("sid='';localStorage.removeItem('rimaz_sid');login();")) pass('page startup no longer clears the saved session token');
+  else fail('page startup preserves saved session token');
+} catch (error) { fail('remembered login regression checks', error.message); }
+
+// A room-microphone user sees the incoming call but cannot accept until lowering it.
+try {
+  const html = fs.readFileSync(mainPath, 'utf8');
+  const accept = html.match(/async function acceptIncomingCall\(\)\{[\s\S]*?\n?function rejectIncomingCall/);
+  if (html.includes('function handleOffer(d)') && accept && accept[0].includes('if(micRaised||voiceRequestPending)') && accept[0].includes('لا تستطيع الرد على المكالمة لأنك تتحدث باستخدام مايك الغرفة') && accept[0].indexOf('if(micRaised||voiceRequestPending)') < accept[0].indexOf('pendingIncomingCall=null')) pass('incoming call stays pending and acceptance is blocked while room mic is raised');
+  else fail('room microphone blocks private-call acceptance without hiding incoming call');
+} catch (error) { fail('room mic/private call regression checks', error.message); }
+
+// The server keeps an incoming call pending while its recipient is on a room mic and rejects premature answers.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const html = fs.readFileSync(mainPath, 'utf8');
+  if (source.includes('const timeoutCall=()=>{if(activeCallPairs.get(pair)!==state||state.answered)return;const callee=socketUsers.get(target[0]);if(callee&&voiceSpeakers.get(callee.room)?.has(target[0]))') && source.includes('waitingOnRoomMic') && source.includes('if(!state||state.callee!==sid||state.caller!==target[0])return;state.answered=true;')) pass('incoming call timeout is extended while the callee is speaking on a room mic');
+  else fail('incoming call remains pending during room-mic use');
+  if (source.includes("if(voiceSpeakers.get(u.room)?.has(sid))return socket.emit('call-answer-denied',{reason:'room-mic'})") && html.includes("socket.on('call-answer-denied'") && html.includes('acceptedIncomingCallForRetry')) pass('server blocks call answers during room-mic use and restores the incoming card');
+  else fail('server-side room-mic call-answer guard');
+  if (html.includes("socket.on('voice-mic-granted',d=>{voiceRequestPending=false;micRaised=true;startVoiceMesh(d)})")) pass('client marks the room mic active immediately when the server grants it');
+  else fail('room mic state is updated immediately on grant');
+} catch (error) { fail('incoming call persistence checks', error.message); }
+
+// Exit-room control keeps its original action and receives a visual-only redesign.
+try {
+  const html = fs.readFileSync(mainPath, 'utf8');
+  if (html.includes('<button class="exitComposer" onclick="exitRoom()">↪</button>') && html.includes('.composer .exitComposer{') && html.includes('linear-gradient(145deg,#183f5d,#0a2036)')) pass('exit-room button keeps its action and placement with updated styling only');
+  else fail('exit-room button visual-only redesign');
+} catch (error) { fail('exit-room button regression checks', error.message); }
+
 try {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   if (pkg.main === 'server.js' && pkg.scripts?.start === 'node server.js') pass('package entrypoint and start command');
@@ -845,7 +894,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.76.0 package version is current', pkg.version === '46.78.0'],
+    ['v46.79.0 package version is current', pkg.version === '46.79.0'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -1014,6 +1063,6 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.76.1 package version',pkgNow.version==='46.78.0']
+  ['v46.79.0 package version',pkgNow.version==='46.79.0']
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error){fail('v46.76.0 feature checks',error.message)}

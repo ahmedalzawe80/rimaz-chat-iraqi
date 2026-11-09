@@ -1,3 +1,12 @@
+# Rimaz v46.79.0 — Scheduled ads, remembered sessions, room exit button, and call/mic guard
+
+- Stop replaying permanent announcements in room-entry history; announcements now arrive only through their scheduled live broadcast, independently of welcome messages.
+- Stagger first and recurring deliveries of multiple permanent announcements across separate slots within the 15-minute cycle, instead of sending a batch together.
+- Preserve a valid saved session across page reloads so returning members/guests can resume without entering credentials again; prefill the last used username when a fresh login is required. Passwords are never stored in browser storage.
+- Restyle the room-exit control only; its position and `exitRoom()` action remain unchanged.
+- Keep incoming private-call cards visible while a member is speaking on a voice-room mic; accepting is blocked with the requested explanation until the room mic is lowered.
+- Keep root and public browser entry files identical; do not replace persistent `data.json`, `uploads`, or `private-media`.
+
 # Rimaz v46.78.0 — Private conversation controls and navigation flow
 
 - Separate closing the private-chat window from deleting/hiding its conversation history; the X control now closes the window without destructive side effects.

@@ -327,22 +327,11 @@ function announcementMessageForRoom(item,roomId,at=Date.now(),idSuffix=String(at
   if(item.duration==='15m')return {id:String(item.id)+'-'+roomId+'-'+idSuffix,announcementId:String(item.id),room:String(roomId),from:item.from,displayName:item.displayName||displayName(item.from),role:item.role||roleOf({name:item.from}),type:'announcement',text:item.text,at,duration:item.duration,profile:item.profile||profile(item.from)};
   return {id:String(item.id)+'-'+roomId+'-'+idSuffix,announcementId:String(item.id),room:String(roomId),from:'الإدارة',displayName:'الإدارة',title:item.title||'إعلان إداري',role:'member',type:'announcement',text:item.text,at,duration:item.duration,profile:{}};
 }
-// db.messages has a global size limit, so busy rooms can evict an announcement
-// belonging to a quieter room. Rehydrate each still-active announcement into the
-// room history when a member enters, without ever routing it to DMs or the wall.
+// Room history on entry contains presence notices only. Announcements are
+// live scheduled broadcasts; replaying them here made every room entry look like
+// a fresh ad delivery and caused multiple permanent ads to stack with greetings.
 function roomHistoryWithAnnouncements(roomId,viewer,createdAt=0){
-  const now=Date.now();
-  const items=(db.messages||[]).filter(m=>m.room===roomId&&Number(m.at||0)>=createdAt&&canSeePresenceNotice(viewer,m)&&(m.type==='presence'||(m.type==='announcement'&&(!m.announcementId||(db.announcements||[]).some(a=>String(a.id)===String(m.announcementId))))));
-  for(const item of (db.announcements||[])){
-    if(!item||!item.id)continue;
-    const temporary=item.duration==='15m';
-    if(temporary&&Number(item.at||0)+ANNOUNCEMENT_INTERVAL_MS<=now)continue;
-    const hasRecentCopy=items.some(m=>m.type==='announcement'&&String(m.announcementId||'')===String(item.id)&&Number(m.at||0)>=now-ANNOUNCEMENT_INTERVAL_MS);
-    if(!hasRecentCopy){
-      const slot=Math.floor(now/ANNOUNCEMENT_INTERVAL_MS);
-      items.push(announcementMessageForRoom(item,roomId,now,'active-'+slot));
-    }
-  }
+  const items=(db.messages||[]).filter(m=>m.room===roomId&&Number(m.at||0)>=createdAt&&m.type==='presence'&&canSeePresenceNotice(viewer,m));
   // Message identity is account-backed, not a stale snapshot captured when the
   // message was sent. Resolve the current display name and profile on every history
   // delivery so rank/name changes are consistent across browsers and old messages.
@@ -357,19 +346,23 @@ function roomHistoryWithAnnouncements(roomId,viewer,createdAt=0){
 function publishAnnouncement(item){
   if(!item||!item.id)return [];
   const at=Date.now();
+  if(item.duration==='permanent'){item.lastPublishedAt=at;delete item.nextScheduledAt;}
   const messages=announcementRooms().map(room=>announcementMessageForRoom(item,room.id,at,String(at)));
   db.messages=[...(db.messages||[]),...messages].slice(-1000);
   for(const message of messages)io.to(String(message.room)).emit('message',message);
   try{save()}catch(error){console.error('Announcement publish save failed:',error.message);}
   return messages;
 }
+const permanentAnnouncementTimers=new Map();
 function removeAnnouncement(itemId){
   const id=String(itemId);
+  const timer=permanentAnnouncementTimers.get(id);if(timer)clearTimeout(timer);permanentAnnouncementTimers.delete(id);
   db.announcements=(db.announcements||[]).filter(a=>String(a.id)!==id);
   const removed=(db.messages||[]).filter(m=>String(m.announcementId||'')===id||String(m.id||'').startsWith(id+'-'));
   db.messages=(db.messages||[]).filter(m=>String(m.announcementId||'')!==id&&!String(m.id||'').startsWith(id+'-'));
   for(const message of removed)io.emit('message-deleted',{id:message.id});
   try{save()}catch(error){console.error('Announcement cleanup save failed:',error.message);}
+  scheduleAllPermanentAnnouncements();
   return removed;
 }
 function scheduleAnnouncementExpiry(item){
@@ -379,18 +372,32 @@ function scheduleAnnouncementExpiry(item){
 }
 function schedulePermanentAnnouncement(item){
   if(!item||item.duration!=='permanent'||!item.id)return;
-  const tick=()=>{
-    if(!(db.announcements||[]).some(a=>String(a.id)===String(item.id)))return;
-    publishAnnouncement(item);
-    const timer=setTimeout(tick,ANNOUNCEMENT_INTERVAL_MS);timer.unref?.();
-  };
-  const firstDelay=Math.max(0,Number(item.at||Date.now())+ANNOUNCEMENT_INTERVAL_MS-Date.now());
-  const timer=setTimeout(tick,firstDelay);timer.unref?.();
+  const id=String(item.id),oldTimer=permanentAnnouncementTimers.get(id);if(oldTimer)clearTimeout(oldTimer);
+  const now=Date.now();
+  const due=Number(item.lastPublishedAt||0)>0?Number(item.lastPublishedAt)+ANNOUNCEMENT_INTERVAL_MS:Math.max(now,Number(item.nextScheduledAt||now));
+  const timer=setTimeout(()=>{
+    permanentAnnouncementTimers.delete(id);
+    const current=(db.announcements||[]).find(a=>String(a.id)===id&&a.duration==='permanent');
+    if(!current)return;
+    publishAnnouncement(current);
+    schedulePermanentAnnouncement(current);
+  },Math.max(0,due-now));
+  timer.unref?.();permanentAnnouncementTimers.set(id,timer);
 }
-for(const item of (db.announcements||[])){
-  if(['5m','15m'].includes(item.duration))scheduleAnnouncementExpiry(item);
-  else schedulePermanentAnnouncement(item);
+function scheduleAllPermanentAnnouncements(){
+  for(const timer of permanentAnnouncementTimers.values())clearTimeout(timer);
+  permanentAnnouncementTimers.clear();
+  const now=Date.now();
+  const items=(db.announcements||[]).filter(a=>a&&a.duration==='permanent'&&a.id).slice().sort((a,b)=>Number(a.at||0)-Number(b.at||0));
+  const pending=items.filter(a=>!(Number(a.lastPublishedAt)>0));
+  const slot=ANNOUNCEMENT_INTERVAL_MS/Math.max(1,items.length);
+  const firstOffset=items.some(a=>Number(a.lastPublishedAt)>0)?1:0;
+  pending.forEach((item,index)=>{item.nextScheduledAt=now+Math.round((index+firstOffset)*slot);schedulePermanentAnnouncement(item);});
+  items.filter(a=>Number(a.lastPublishedAt)>0).forEach(schedulePermanentAnnouncement);
 }
+
+for(const item of (db.announcements||[]))if(['5m','15m'].includes(item.duration))scheduleAnnouncementExpiry(item);
+scheduleAllPermanentAnnouncements();
 
 const PUBLIC_RETENTION_MS=24*60*60*1000;
 function containsStoredUrl(value,url,seen=new Set()){
@@ -1119,8 +1126,7 @@ app.post('/api/admin/broadcast',requireAdmin,(req,res)=>{
   const previousAnnouncements=db.announcements,previousMessages=db.messages;
   db.announcements=[...(db.announcements||[]),item].slice(-100).reverse();
   try{save()}catch(e){if(previousAnnouncements===undefined)delete db.announcements;else db.announcements=previousAnnouncements;if(previousMessages===undefined)delete db.messages;else db.messages=previousMessages;console.error('Announcement save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الإعلان'});}
-  publishAnnouncement(item);
-  if(duration==='15m')scheduleAnnouncementExpiry(item);else schedulePermanentAnnouncement(item);
+  if(duration==='15m'){publishAnnouncement(item);scheduleAnnouncementExpiry(item);}else scheduleAllPermanentAnnouncements();
   res.json({ok:true,announcement:item});
 });
 app.delete('/api/admin/announcement/:id',requireAdmin,(req,res)=>{const id=String(req.params.id);const existed=(db.announcements||[]).some(x=>String(x.id)===id);const removed=removeAnnouncement(id);res.json({ok:true,removedMessages:removed.length,existed});});
@@ -1575,8 +1581,8 @@ io.on('connection',socket=>{
   socket.on('leave-room',({room}={})=>{const u=socket.data.user,sid=socket.data.sid;if(!u||!room)return;socket.leave(room);roomSockets.get(room)?.delete(sid);voiceSpeakers.get(room)?.delete(sid);clearVoicePairsForSession(room,sid);for(const peerSid of (roomSockets.get(room)||new Set()))socketBySession(peerSid)?.emit('voice-peer-left',{room,sid});emitVoiceState(room);if(socketUsers.get(sid))socketUsers.get(sid).room='';if(socket.data.user)socket.data.user.room='';if(!u.ghost){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',exitKind:'room',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{addMessage(pm)}catch(e){console.warn('Leave presence could not be saved:',e.message)}emitPresenceToRoom(room,pm);}{const members=roomSockets.get(room)||new Set();for(const memberSid of [...members]){const active=socketUsers.get(memberSid);if(!active||active.room!==room)members.delete(memberSid);}if(members.size===0){roomSockets.delete(room);try{save()}catch(e){console.error('Room state save failed:',e.message)}}}emitState();});
   socket.on('send-message',d=>{const u=socket.data.user;if(!u)return;const room=String(d?.room||'');if(!room||u.room!==room||!socket.rooms.has(room))return socket.emit('error-msg',{error:'أنت خارج الغرفة'});const targetRoom=db.rooms.find(r=>r.id===room);if(!targetRoom)return socket.emit('error-msg',{error:'الغرفة غير موجودة'});if(roomMuted(u.name,room)||roomBanned(u.name,room))return socket.emit('error-msg',{error:'لا يمكنك الكتابة هنا'});const text=String(d?.text||'').trim();if(!text)return;if(blockedChatTerm(text))return socket.emit('error-msg',{error:'رسالتك تحتوي على كلمة غير مسموح بها'});const m={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'text',text:text.slice(0,2000),at:Date.now(),likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)};try{addMessage(m)}catch(e){console.error('Socket room message save failed:',e.message);return socket.emit('error-msg',{error:'تعذر حفظ الرسالة، حاول مرة أخرى'});}io.to(room).emit('message',m);});
   socket.on('private-message',d=>{const u=socket.data.user;if(!u||!d?.to)return;if(!siteModuleEnabled('privateChat'))return socket.emit('error-msg',{error:'المحادثات الخاصة متوقفة من إدارة الموقع'});if(globalBanned(u.name,socketClientIp(socket)))return socket.emit('error-msg',{error:'لا يمكنك المراسلة أثناء الحظر العام'});const toKey=keyName(d.to),to=accountKey(d.to),text=String(d.text||'').trim().slice(0,2000);if(!text)return;if(blockedChatTerm(text))return socket.emit('error-msg',{error:'رسالتك تحتوي على كلمة غير مسموح بها'});const tp=profile(to);if(tp.privateOpen===false&&!canMessageClosedPrivate(u))return socket.emit('error-msg',{error:`لقد أغلق ${displayName(to)} المحادثة الخاصة`});const ignored=(db.ignored?.[keyName(to)]||[]).some(x=>keyName(x)===keyName(u.name));if(ignored)return socket.emit('error-msg',{error:`لقد قام ${displayName(to)} بتجاهلك`});if(!getUser(to)&&!getGuest(to))return socket.emit('error-msg',{error:'هذا المستخدم غير موجود'});if(!hasConnectedSessionForUser(to))return socket.emit('error-msg',{error:'العضو غير متصل؛ المحادثات الخاصة مؤقتة بين المتصلين فقط'});const m={id:crypto.randomUUID(),from:u.name,fromDisplayName:displayName(u.name),to,toDisplayName:displayName(to),type:'text',text,at:Date.now(),profile:profile(u.name),role:roleOf(u),vip:vipActive(u.name),likes:userLikes(u)};const previousPrivateMessages=db.privateMessages;const fromKey=keyName(u.name);const previousHiddenTo=db.privateHidden?.[toKey];const previousHiddenFrom=db.privateHidden?.[fromKey];db.privateMessages=[...(db.privateMessages||[]),m].slice(-5000);if(db.privateHidden?.[toKey])db.privateHidden[toKey]=db.privateHidden[toKey].filter(x=>keyName(x)!==fromKey);if(db.privateHidden?.[fromKey])db.privateHidden[fromKey]=db.privateHidden[fromKey].filter(x=>keyName(x)!==toKey);emitToUser(to,'private-message',m);socket.emit('private-message',m);});
-  socket.on('call-offer',d=>{if(!siteModuleEnabled('videoCalls'))return socket.emit('call-failed',{error:'المكالمات متوقفة من إدارة الموقع'});const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||(!isOwner(u)&&!canMedia(u))||!d?.to)return;if(!allowCallSignal(sid))return socket.emit('call-failed',{error:'طلبات الاتصال كثيرة جداً، حاول بعد قليل'});if(!validSessionDescription(d.offer,'offer'))return socket.emit('call-failed',{error:'بيانات الاتصال غير صالحة'});const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return socket.emit('call-failed',{error:'المستخدم غير متصل'});if(!canMedia(target[1]))return socket.emit('call-failed',{error:'الاتصال يحتاج 500 إعجاب للطرفين'});for(const [oldPair,oldState] of activeCallPairs){if(!oldState.answered&&Date.now()-oldState.created>120000)activeCallPairs.delete(oldPair);else if(oldState.caller===sid||oldState.callee===sid||oldState.caller===target[0]||oldState.callee===target[0])return socket.emit('call-failed',{error:'أحد الطرفين مشغول باتصال آخر'});}const pair=callPairKey(sid,target[0]),state={caller:sid,callee:target[0],created:Date.now(),video:!!d.video,answered:false};activeCallPairs.set(pair,state);const timeout=setTimeout(()=>{if(activeCallPairs.get(pair)!==state||state.answered)return;activeCallPairs.delete(pair);socket.emit('call-timeout',{from:target[1].name});socketBySession(target[0])?.emit('call-timeout',{from:u.name})},60000);timeout.unref?.();socketBySession(target[0])?.emit('call-offer',{from:u.name,fromDisplayName:displayName(u.name),fromProfile:(()=>{const p=profile(u.name);return {avatar:p.avatar||'',displayName:p.displayName||'',rank:p.rank||'',rankUntil:p.rankUntil||0,gifts:(p.gifts||[]).slice(0,1),vipUntil:p.vipUntil||0}})(),fromRole:roleOf(u),fromVip:vipActive(u.name),fromLikes:userLikes(u),offer:d.offer,video:!!d.video});});
-  socket.on('call-answer',d=>{if(!siteModuleEnabled('videoCalls'))return;const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||(!isOwner(u)&&!canMedia(u))||!d?.to)return;if(!allowCallSignal(sid))return socket.emit('error-msg',{error:'طلبات الاتصال كثيرة جداً، حاول بعد قليل'});if(!validSessionDescription(d.answer,'answer'))return socket.emit('error-msg',{error:'بيانات الرد غير صالحة'});const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||state.callee!==sid||state.caller!==target[0]||Date.now()-state.created>120000)return;state.answered=true;socketBySession(target[0])?.emit('call-answer',{from:u.name,answer:d.answer,video:state.video});});
+  socket.on('call-offer',d=>{if(!siteModuleEnabled('videoCalls'))return socket.emit('call-failed',{error:'المكالمات متوقفة من إدارة الموقع'});const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||(!isOwner(u)&&!canMedia(u))||!d?.to)return;if(!allowCallSignal(sid))return socket.emit('call-failed',{error:'طلبات الاتصال كثيرة جداً، حاول بعد قليل'});if(!validSessionDescription(d.offer,'offer'))return socket.emit('call-failed',{error:'بيانات الاتصال غير صالحة'});const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return socket.emit('call-failed',{error:'المستخدم غير متصل'});if(!canMedia(target[1]))return socket.emit('call-failed',{error:'الاتصال يحتاج 500 إعجاب للطرفين'});for(const [oldPair,oldState] of activeCallPairs){const pendingCallee=socketUsers.get(oldState.callee),waitingOnRoomMic=!!pendingCallee&&voiceSpeakers.get(pendingCallee.room)?.has(oldState.callee);if(!oldState.answered&&Date.now()-oldState.created>120000&&!waitingOnRoomMic)activeCallPairs.delete(oldPair);else if(oldState.caller===sid||oldState.callee===sid||oldState.caller===target[0]||oldState.callee===target[0])return socket.emit('call-failed',{error:'أحد الطرفين مشغول باتصال آخر'});}const pair=callPairKey(sid,target[0]),state={caller:sid,callee:target[0],created:Date.now(),video:!!d.video,answered:false};activeCallPairs.set(pair,state);const timeoutCall=()=>{if(activeCallPairs.get(pair)!==state||state.answered)return;const callee=socketUsers.get(target[0]);if(callee&&voiceSpeakers.get(callee.room)?.has(target[0])){const next=setTimeout(timeoutCall,60000);next.unref?.();return;}activeCallPairs.delete(pair);socket.emit('call-timeout',{from:target[1].name});socketBySession(target[0])?.emit('call-timeout',{from:u.name})};const timeout=setTimeout(timeoutCall,60000);timeout.unref?.();socketBySession(target[0])?.emit('call-offer',{from:u.name,fromDisplayName:displayName(u.name),fromProfile:(()=>{const p=profile(u.name);return {avatar:p.avatar||'',displayName:p.displayName||'',rank:p.rank||'',rankUntil:p.rankUntil||0,gifts:(p.gifts||[]).slice(0,1),vipUntil:p.vipUntil||0}})(),fromRole:roleOf(u),fromVip:vipActive(u.name),fromLikes:userLikes(u),offer:d.offer,video:!!d.video});});
+  socket.on('call-answer',d=>{if(!siteModuleEnabled('videoCalls'))return;const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||(!isOwner(u)&&!canMedia(u))||!d?.to)return;if(!allowCallSignal(sid))return socket.emit('error-msg',{error:'طلبات الاتصال كثيرة جداً، حاول بعد قليل'});if(!validSessionDescription(d.answer,'answer'))return socket.emit('error-msg',{error:'بيانات الرد غير صالحة'});if(voiceSpeakers.get(u.room)?.has(sid))return socket.emit('call-answer-denied',{reason:'room-mic'});const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||state.callee!==sid||state.caller!==target[0])return;state.answered=true;socket.emit('call-answer-accepted');socketBySession(target[0])?.emit('call-answer',{from:u.name,answer:d.answer,video:state.video});});
   socket.on('call-reject',d=>{const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!d?.to||!allowCallSignal(sid))return;const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||state.callee!==sid||state.caller!==target[0])return;activeCallPairs.delete(pair);socketBySession(target[0])?.emit('call-rejected',{from:u.name,reason:String(d.reason||'declined').slice(0,32)});});
   socket.on('call-end',d=>{const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!d?.to)return;const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||(state.caller!==sid&&state.callee!==sid))return;activeCallPairs.delete(pair);socketBySession(target[0])?.emit('call-ended',{from:u.name});});
   socket.on('ice',d=>{const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!d?.to)return;if(!allowCallSignal(sid))return;if(!validIceCandidate(d.candidate))return;const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const state=activeCallPairs.get(callPairKey(sid,target[0]));if(!state||(!state.answered&&Date.now()-state.created>120000))return;socketBySession(target[0])?.emit('ice',{from:u.name,candidate:d.candidate});});
