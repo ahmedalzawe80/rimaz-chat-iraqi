@@ -794,7 +794,7 @@ const f=document.getElementById('loginForm');if(!f)return;
 if(mode==='guest'){
 f.innerHTML=`<form id="rimazCredentialForm" autocomplete="on" onsubmit="event.preventDefault();doGuest()"><div class="rlPasswordRow rlGuestRow"><input id="ln" name="username" class="rlNameInput" autocomplete="nickname" value="${esc(localStorage.getItem('rimaz_last_name')||'')}" placeholder="اكتب اسم الزائر (اسم فريد)" aria-label="اسم الزائر"><button type="submit" class="primary guest">دخول</button></div></form>`;
 }else if(mode==='in'||mode==='new'){
-f.innerHTML=`<form id="rimazCredentialForm" autocomplete="on" onsubmit="event.preventDefault();${mode==='new'?'doRegister()':'doLogin()'}"><input id="ln" name="username" class="rlNameInput" autocomplete="username" value="${mode==='new'?'':esc(localStorage.getItem('rimaz_last_name')||'')}" placeholder="${mode==='new'?'اختر اسم عضو غير مستخدم':'اكتب اسم العضو'}" aria-label="اسم العضو"><div class="rlPasswordRow"><input id="lp" name="password" type="password" autocomplete="${mode==='new'?'new-password':'current-password'}" placeholder="اكتب كلمة المرور" aria-label="كلمة المرور"><button type="submit" class="primary">دخول</button></div></form>`;
+f.innerHTML=`<form id="rimazCredentialForm" name="rimazLoginForm" autocomplete="on" onsubmit="event.preventDefault();${mode==='new'?'doRegister()':'doLogin()'}"><input id="ln" name="username" class="rlNameInput" autocomplete="username" value="${mode==='new'?'':esc(localStorage.getItem('rimaz_last_name')||'')}" placeholder="${mode==='new'?'اختر اسم عضو غير مستخدم':'اكتب اسم العضو'}" aria-label="اسم العضو"><div class="rlPasswordRow"><input id="lp" name="password" type="password" autocomplete="${mode==='new'?'new-password':'current-password'}" placeholder="اكتب كلمة المرور" aria-label="كلمة المرور"><button type="submit" class="primary">دخول</button></div></form>`;
 }else{
 f.innerHTML=`<form id="rimazCredentialForm" autocomplete="on" onsubmit="event.preventDefault();doPrivilegedLogin('${mode}')"><div class="rlPrivateNote">${mode==='ghost'?'دخول الشبح مخصص لمالك الموقع فقط':'الدخول المخفي مخصص للسوبر والإداري المخوّل'}</div><input id="ln" name="username" class="rlNameInput" autocomplete="username" placeholder="اسم الحساب" aria-label="اسم الحساب"><div class="rlPasswordRow"><input id="lp" name="password" type="password" autocomplete="current-password" placeholder="كلمة المرور" aria-label="كلمة المرور"><button type="submit" class="primary">${mode==='ghost'?'دخول الشبح':'دخول مخفي'} ←</button></div></form>`;
 }
@@ -1819,10 +1819,12 @@ if(sid)boot();else login();
   padding:0 4px!important;
 }
 #loginForm > input.rlNameInput{
+  /* Match the username field to the password field's 55% grid column. */
+  display:block!important;
   width:55%!important;
   max-width:55%!important;
   min-width:0!important;
-  justify-self:end!important;
+  justify-self:stretch!important;
   box-sizing:border-box!important;
 }
 /* Keep the banner width unchanged; reduce only its height slightly. */
