@@ -1,3 +1,16 @@
+## 46.80.1
+
+- Updated only the room-exit button SVG to match the supplied Bunouta reference: outlined door with a clear right-pointing exit arrow.
+- Preserved the existing button color, dimensions, position, and `exitRoom()` action.
+
+## 46.80.0
+
+- Reworked announcement delivery as one site-wide broadcast so connected users receive notices even outside chat rooms.
+- Publish both contest/advert notices and administrative notices immediately; temporary notices expire after 15 minutes and administrative notices repeat 15 minutes after each publication.
+- Simplified announcement author presentation to rank artwork and display name, removing redundant role-label text.
+- Consolidated the public chat composer and bottom navigation sizing into one authoritative compact style block while preserving the existing colors and exit icon treatment.
+- Added regression checks for global announcement delivery, immediate publication, repeat timing, and concise author identity.
+
 ## 46.79.2
 - Restored compact chat composer proportions to match the supplied Bunouta reference: exit, smiley, message input, and send button.
 - Kept the exit-room action and send action unchanged; adjusted only their presentation and composer sizing.

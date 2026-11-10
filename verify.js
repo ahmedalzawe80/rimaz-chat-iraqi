@@ -233,10 +233,15 @@ try {
   const scheduler = source.match(/function schedulePermanentAnnouncement\([\s\S]*?\n}\nfunction scheduleAllPermanentAnnouncements\([\s\S]*?\n}/);
   if (historyFn && historyFn[0].includes("m.type==='presence'") && !historyFn[0].includes('db.announcements')) pass('room entry history excludes scheduled announcements and keeps presence notices');
   else fail('room entry does not replay announcements with welcome cards');
-  if (scheduler && scheduler[0].includes('nextScheduledAt') && scheduler[0].includes('ANNOUNCEMENT_INTERVAL_MS') && scheduler[0].includes('lastPublishedAt') && scheduler[0].includes('pending.forEach') && scheduler[0].includes('firstOffset')) pass('permanent announcements are scheduled on staggered 15-minute cycles');
-  else fail('permanent announcement scheduler staggers multiple ads');
-  if (source.includes("if(duration==='15m'){publishAnnouncement(item);scheduleAnnouncementExpiry(item);}else scheduleAllPermanentAnnouncements();")) pass('permanent ads are queued instead of broadcast immediately on admin save');
-  else fail('permanent ads are queued on creation');
+  if (scheduler && scheduler[0].includes('ANNOUNCEMENT_INTERVAL_MS') && scheduler[0].includes('lastPublishedAt') && scheduler[0].includes('publishAnnouncement(current)')) pass('permanent announcements repeat 15 minutes after their last publication');
+  else fail('permanent announcement 15-minute repeat scheduler');
+  const publish = source.match(/function publishAnnouncement\([\s\S]*?\n}/);
+  if (publish && source.includes("room:'__broadcast__'") && publish[0].includes("io.emit('message',message)") && !publish[0].includes('io.to(')) pass('announcements are broadcast once to all connected users regardless of room');
+  else fail('announcements reach users outside rooms without duplicate room fan-out');
+  if (source.includes('publishAnnouncement(item);\n  if(temporary)scheduleAnnouncementExpiry(item);else schedulePermanentAnnouncement(item);')) pass('both temporary and administrative announcements publish immediately on save');
+  else fail('both announcement types publish immediately on creation');
+  if (html.includes("socket.on('message',m=>{if(m?.type==='announcement'||m.room===currentRoom)addMessage(m)})") && !html.includes("m.role==='owner'?'صاحب الموقع'")) pass('clients display global announcements and omit redundant owner/admin role text');
+  else fail('client global announcement display and concise author identity');
 } catch (error) { fail('announcement timing regression checks', error.message); }
 
 // Fresh loads show the entry UI while remembering only the username.
@@ -271,7 +276,7 @@ try {
 // Exit-room control matches the supplied door-arrow reference and keeps its action.
 try {
   const html = fs.readFileSync(mainPath, 'utf8');
-  if (html.includes('class="exitComposer" type="button" onclick="exitRoom()"') && html.includes('<svg viewBox="0 0 32 32"') && html.includes('grid-template-columns:54px minmax(0,1fr) 48px 54px!important') && html.includes('linear-gradient(145deg,#183f5d,#0a2036)')) pass('exit-room button matches reference layout and retains exitRoom action');
+  if (html.includes('class="exitComposer" type="button" onclick="exitRoom()"') && html.includes('<svg viewBox="0 0 24 24"') && html.includes('M10.5 12h10m-4-4 4 4-4 4') && html.includes('grid-template-columns:54px minmax(0,1fr) 48px 54px!important') && html.includes('linear-gradient(145deg,#183f5d,#0a2036)')) pass('exit-room button matches reference layout and retains exitRoom action');
   else fail('exit-room button reference redesign');
 } catch (error) { fail('exit-room button regression checks', error.message); }
 
@@ -472,8 +477,8 @@ try {
 try {
   const source = fs.readFileSync(server, 'utf8');
   const route = source.match(/app\.post\('\/api\/admin\/broadcast',[\s\S]*?\n\}\);/);
-  if (route && route[0].includes('previousAnnouncements') && route[0].includes('previousMessages') && route[0].includes("try{save()}catch(e)") && route[0].includes('publishAnnouncement(item)') && source.includes("const ANNOUNCEMENT_INTERVAL_MS=15*60*1000") && source.includes('function isAnnouncementRoom(room)') && source.includes('function announcementRooms(){return (Array.isArray(db.rooms)?db.rooms:[]).filter(isAnnouncementRoom);}') && source.includes("!['wall','__wall__','__private__'].includes(id)") && source.includes('function roomHistoryWithAnnouncements(roomId,viewer,createdAt=0)') && source.includes('roomHistoryWithAnnouncements(room,u,Number(u.created)||0)') && source.includes("title:item.title||'إعلان إداري'")) pass('announcement delivery covers every configured room, excludes only wall/DM channels, and restores active notices after history eviction');
-  else fail('announcement delivery is persisted atomically and reaches every configured room');
+  if (route && route[0].includes('previousAnnouncements') && route[0].includes('previousMessages') && route[0].includes("try{save()}catch(e)") && route[0].includes('publishAnnouncement(item)') && route[0].includes('scheduleAnnouncementExpiry(item)') && route[0].includes('schedulePermanentAnnouncement(item)') && source.includes("const ANNOUNCEMENT_INTERVAL_MS=15*60*1000") && source.includes("room:'__broadcast__'") && source.includes("io.emit('message',message)") && source.includes('function roomHistoryWithAnnouncements(roomId,viewer,createdAt=0)') && source.includes('roomHistoryWithAnnouncements(room,u,Number(u.created)||0)') && source.includes("title:item.title||'إعلان إداري'")) pass('site-wide announcement publication is atomic, live to all sessions, and timed from first publication');
+  else fail('site-wide announcement delivery is persisted atomically and timed correctly');
 } catch (error) { fail('announcement transaction checks', error.message); }
 
 // Session revocation: logout disconnects every socket using that session, and a
@@ -894,7 +899,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.79.2 package version is current', pkg.version === '46.79.2'],
+    ['v46.80.0 package version is current', pkg.version === '46.80.1'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -1063,6 +1068,6 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.79.2 package version',pkgNow.version==='46.79.2']
+  ['v46.80.0 package version',pkgNow.version==='46.80.1']
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error){fail('v46.76.0 feature checks',error.message)}

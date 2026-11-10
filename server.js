@@ -313,19 +313,9 @@ function purgePrivateHistoryAtStartup(){
 purgePrivateHistoryAtStartup();
 
 const ANNOUNCEMENT_INTERVAL_MS=15*60*1000;
-// Room announcements belong to configured chat rooms only. One-to-one private
-// conversations use the separate private-message channel and the wall uses db.wall;
-// neither is a room. Do not exclude rooms merely because their access kind is
-// 'private' (those are still ordinary multi-member chat rooms).
-function isAnnouncementRoom(room){
-  if(!room||room.id===undefined||room.id===null||!String(room.id).trim())return false;
-  const id=String(room.id).trim().toLowerCase();
-  return room.kind!=='wall'&&!['wall','__wall__','__private__'].includes(id);
-}
-function announcementRooms(){return (Array.isArray(db.rooms)?db.rooms:[]).filter(isAnnouncementRoom);}
-function announcementMessageForRoom(item,roomId,at=Date.now(),idSuffix=String(at)){
-  if(item.duration==='15m')return {id:String(item.id)+'-'+roomId+'-'+idSuffix,announcementId:String(item.id),room:String(roomId),from:item.from,displayName:item.displayName||displayName(item.from),role:item.role||roleOf({name:item.from}),type:'announcement',text:item.text,at,duration:item.duration,profile:item.profile||profile(item.from)};
-  return {id:String(item.id)+'-'+roomId+'-'+idSuffix,announcementId:String(item.id),room:String(roomId),from:'الإدارة',displayName:'الإدارة',title:item.title||'إعلان إداري',role:'member',type:'announcement',text:item.text,at,duration:item.duration,profile:{}};
+function announcementMessage(item,at=Date.now(),idSuffix=String(at)){
+  if(item.duration==='15m')return {id:String(item.id)+'-'+idSuffix,announcementId:String(item.id),room:'__broadcast__',from:item.from,displayName:item.displayName||displayName(item.from),role:item.role||roleOf({name:item.from}),type:'announcement',text:item.text,at,duration:item.duration,profile:item.profile||profile(item.from)};
+  return {id:String(item.id)+'-'+idSuffix,announcementId:String(item.id),room:'__broadcast__',from:'الإدارة',displayName:'الإدارة',title:item.title||'إعلان إداري',role:'member',type:'announcement',text:item.text,at,duration:item.duration,profile:{}};
 }
 // Room history on entry contains presence notices only. Announcements are
 // live scheduled broadcasts; replaying them here made every room entry look like
@@ -347,11 +337,14 @@ function publishAnnouncement(item){
   if(!item||!item.id)return [];
   const at=Date.now();
   if(item.duration==='permanent'){item.lastPublishedAt=at;delete item.nextScheduledAt;}
-  const messages=announcementRooms().map(room=>announcementMessageForRoom(item,room.id,at,String(at)));
-  db.messages=[...(db.messages||[]),...messages].slice(-1000);
-  for(const message of messages)io.to(String(message.room)).emit('message',message);
+  // Announcements are site-wide notices, not room chat messages. Keep one
+  // canonical record and broadcast it to every connected session, including
+  // users who deliberately left a room or are browsing another room.
+  const message=announcementMessage(item,at,String(at));
+  db.messages=[...(db.messages||[]),message].slice(-1000);
+  io.emit('message',message);
   try{save()}catch(error){console.error('Announcement publish save failed:',error.message);}
-  return messages;
+  return [message];
 }
 const permanentAnnouncementTimers=new Map();
 function removeAnnouncement(itemId){
@@ -1126,7 +1119,11 @@ app.post('/api/admin/broadcast',requireAdmin,(req,res)=>{
   const previousAnnouncements=db.announcements,previousMessages=db.messages;
   db.announcements=[...(db.announcements||[]),item].slice(-100).reverse();
   try{save()}catch(e){if(previousAnnouncements===undefined)delete db.announcements;else db.announcements=previousAnnouncements;if(previousMessages===undefined)delete db.messages;else db.messages=previousMessages;console.error('Announcement save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الإعلان'});}
-  if(duration==='15m'){publishAnnouncement(item);scheduleAnnouncementExpiry(item);}else scheduleAllPermanentAnnouncements();
+  // Both announcement types publish immediately. Temporary contest/advert
+  // notices expire after 15 minutes; administrative notices repeat 15 minutes
+  // after their actual publication time until explicitly deleted.
+  publishAnnouncement(item);
+  if(temporary)scheduleAnnouncementExpiry(item);else schedulePermanentAnnouncement(item);
   res.json({ok:true,announcement:item});
 });
 app.delete('/api/admin/announcement/:id',requireAdmin,(req,res)=>{const id=String(req.params.id);const existed=(db.announcements||[]).some(x=>String(x.id)===id);const removed=removeAnnouncement(id);res.json({ok:true,removedMessages:removed.length,existed});});
