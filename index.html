@@ -1784,10 +1784,12 @@ if(sid)boot();else login();
 }
 </style>
 
-<style id="rimaz-stable-login-banner-final">
-/* One stable layout for guest and member login rows. */
-#loginForm .rlGuestRow,
-#loginForm .rlPasswordRow{
+<style id="rimaz-login-layout">
+/* Single source of truth for login field geometry.
+   Username is a direct child of the generated form; password is in a 55% grid track.
+   Match the username to that same track instead of targeting #loginForm's direct children. */
+#loginForm .rlPasswordRow,
+#loginForm .rlGuestRow{
   display:grid!important;
   grid-template-columns:55% 86px minmax(0,1fr)!important;
   gap:7px!important;
@@ -1796,9 +1798,17 @@ if(sid)boot();else login();
   width:100%!important;
   min-width:0!important;
 }
-#loginForm .rlGuestRow input,
+#loginForm form > input.rlNameInput{
+  display:block!important;
+  grid-column:1!important;
+  width:55%!important;
+  min-width:0!important;
+  max-width:55%!important;
+  justify-self:left!important;
+  box-sizing:border-box!important;
+}
 #loginForm .rlPasswordRow input,
-#loginForm > input.rlNameInput{
+#loginForm .rlGuestRow input{
   grid-column:1!important;
   width:100%!important;
   min-width:0!important;
@@ -1806,8 +1816,8 @@ if(sid)boot();else login();
   justify-self:stretch!important;
   box-sizing:border-box!important;
 }
-#loginForm .rlGuestRow .primary,
-#loginForm .rlPasswordRow .primary{
+#loginForm .rlPasswordRow .primary,
+#loginForm .rlGuestRow .primary{
   grid-column:2!important;
   width:86px!important;
   min-width:86px!important;
@@ -1818,16 +1828,21 @@ if(sid)boot();else login();
   white-space:nowrap!important;
   padding:0 4px!important;
 }
-#loginForm > input.rlNameInput{
-  /* Match the username field to the password field's 55% grid column. */
-  display:block!important;
-  width:55%!important;
-  max-width:55%!important;
-  min-width:0!important;
-  justify-self:stretch!important;
-  box-sizing:border-box!important;
+@media(max-width:520px){
+  #loginForm .rlPasswordRow,
+  #loginForm .rlGuestRow{
+    grid-template-columns:55% 48px minmax(0,1fr)!important;
+    gap:4px!important;
+  }
+  #loginForm .rlPasswordRow .primary,
+  #loginForm .rlGuestRow .primary{
+    width:48px!important;
+    min-width:48px!important;
+    max-width:48px!important;
+    padding:0 2px!important;
+  }
 }
-/* Keep the banner width unchanged; reduce only its height slightly. */
+/* Preserve the existing banner sizing; unrelated to login field geometry. */
 .rlLegacyBanner{
   height:155px!important;
   min-height:155px!important;
