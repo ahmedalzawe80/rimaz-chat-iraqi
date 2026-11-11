@@ -65,3 +65,11 @@
 - تحويل صلاحيات الغرف وأدوات الدردشة الشاملة القديمة إلى مفاتيح منفصلة قابلة للتحكم.
 - تغطية كل مفاتيح الصلاحيات النشطة في محرر الرتب.
 \n\n## v46.80.5 — Root login layout correction and audit\n\n- Fixed the actual username selector: it now targets the input inside the dynamically generated credential form.\n- Username width and left alignment now match the password field's 55% grid track.\n- Kept mobile button sizing responsive in the final login layout rules.\n- Added `CODE-AUDIT.md` documenting CSS cascade findings and safe-cleanup boundaries.\n
+
+## v46.80.6 — توحيد المسافة والمحاذاة بين الصورة والرتبة والاسم
+
+- توحيد تخطيط صفوف الأعضاء في قائمة المتواجدين وقائمة المحادثات الخاصة.
+- إضافة تباعد بسيط ومتساوٍ بين الصورة والرتبة والاسم.
+- رفع محاذاة الرتبة والاسم لتبدأ قرب أعلى الصورة مع الحفاظ على أحجام العناصر.
+- إزالة قاعدة CSS قديمة خاصة بقائمة الخاص واستبدالها بقاعدة نهائية مشتركة.
+- مزامنة `index.html` و`public/index.html` وتشغيل اختبارات التحقق.

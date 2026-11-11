@@ -339,14 +339,6 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 .settings .avatarChoice .avatarThumb,.settings .avatarChoice .defaultAvatar{flex:0 0 38px!important;margin-left:0!important}
 </style>
 
-<style id="rimaz-private-contact-name-next-to-badge">
-.privateListOverlay .member{grid-template-columns:6px 48px 28px minmax(0,1fr) 66px!important;direction:ltr!important;column-gap:0!important;}
-.privateListOverlay .member .memberMain{grid-column:4!important;direction:ltr!important;text-align:left!important;justify-self:stretch!important;margin:0!important;padding:2px 4px!important;min-width:0!important;}
-.privateListOverlay .member .memberName{direction:ltr!important;text-align:left!important;display:flex!important;justify-content:flex-start!important;align-items:center!important;gap:4px!important;}
-.privateListOverlay .member .memberSub{display:none!important;}
-@media(max-width:600px){.privateListOverlay .member{grid-template-columns:5px 42px 24px minmax(0,1fr) 64px!important;}}
-</style>
-
 <style id="rimaz-unified-avatar-size-fix">
 /* توحيد قياس صور الأعضاء في العام والمتواجدين والخاص والغرف */
 .msg .avatar, .presence .presenceAvatar { width:54px!important;height:54px!important;object-fit:cover!important; }
@@ -2532,6 +2524,37 @@ if(sid)boot();else login();
 .chat .composer>.exitComposer{grid-column:4!important;grid-row:1!important;width:32px!important;min-width:32px!important;max-width:32px!important;height:34px!important;min-height:34px!important;padding:0!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;justify-content:center!important;background:#0c0c0c!important;color:#fff!important;border:1px solid #292929!important;border-radius:3px!important;box-shadow:none!important}
 .chat .composer>.exitComposer svg{width:21px!important;height:21px!important;display:block!important}
 @media(max-width:380px){.chat .composer{grid-template-columns:52px minmax(0,1fr) 26px 30px!important}.chat .composer>.exitComposer{width:30px!important;min-width:30px!important;max-width:30px!important}.chat .composer>.emojiBtn{width:26px!important;min-width:26px!important;max-width:26px!important}.chat .composer>.sendPublicBtn{font-size:11px!important}.chat .bottom button{font-size:10px!important}}
+</style>
+
+<style id="rimaz-member-avatar-rank-name-spacing-final-v1">
+/* One canonical layout for online members and private contacts: small, even gaps and top-aligned rank/name. */
+.member,.privateListOverlay .member{
+  grid-template-columns:5px 54px 27px minmax(0,1fr) 58px!important;
+  column-gap:4px!important;
+  align-items:center!important;
+}
+.member>img,.privateListOverlay .member>img{
+  grid-column:2!important;grid-row:1!important;
+  width:54px!important;height:54px!important;
+  align-self:center!important;margin:0!important;
+}
+.member>.memberBadges,.privateListOverlay .member>.memberBadges{
+  grid-column:3!important;grid-row:1!important;
+  justify-self:center!important;align-self:start!important;
+  margin:4px 0 0!important;
+}
+.member>.memberMain,.privateListOverlay .member>.memberMain{
+  grid-column:4!important;grid-row:1!important;
+  align-self:start!important;min-width:0!important;
+  margin:4px 0 0!important;padding:0 2px!important;
+}
+.member .memberName,.privateListOverlay .member .memberName{
+  margin:0!important;line-height:1.2!important;
+}
+.privateListOverlay .member>.privateContactDelete{grid-column:5!important;grid-row:1!important;}
+@media(max-width:600px){
+  .member,.privateListOverlay .member{grid-template-columns:5px 54px 27px minmax(0,1fr) 58px!important;column-gap:4px!important;}
+}
 </style>
 </body></html>
 
