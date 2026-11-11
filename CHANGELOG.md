@@ -130,3 +130,9 @@
 - Kept catalogue changes behind the existing `gift_catalog_manage` permission and the gifts module switch; upload validation still requires a genuinely animated GIF.
 - Added a one-time v4 catalogue migration that replaces old catalogue entries with the supplied packs. Existing account/profile gift receipts are not rewritten.
 - Kept root and public browser entry files identical and added regression checks for pack signatures, session-authenticated uploads, and VIP catalogue controls.
+
+## v46.84.0
+- Replaced the legacy text/crown VIP badge with the supplied VIP animated artwork.
+- Added a new one-time VIP catalogue migration that discards the previous VIP catalogue and removes legacy VIP gift assignments while preserving VIP membership and ordinary gifts.
+- Removed square backgrounds, borders, and shadows from member/rank/gift badges across online members, private contacts, chat messages, wall posts, and profile surfaces.
+- Kept the supplied VIP GIF as the canonical VIP asset.

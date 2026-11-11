@@ -277,15 +277,16 @@ if(db.giftCatalogV5Initialized!==true){
 }
 // v46.83.0: replace the legacy VIP gift catalogue with the exact latest user-supplied asset.
 // This is a one-time data migration, not a display filter: old VIP catalogue entries are discarded.
-if(db.vipGiftCatalogV6Initialized!==true){
+// v46.84.0: canonical VIP catalogue reset. Remove every legacy VIP catalogue item
+// and obsolete VIP gift assignment from profiles; retain VIP membership itself and ordinary gifts.
+if(db.vipGiftCatalogV7Initialized!==true){
   giftCatalogMigrationChanged=true;
-  db.vipGiftCatalog=[{id:'vip-gift-pack-001',name:'هدية VIP',icon:'👑',image:'/vip-gifts/vip-special.gif',builtin:true,packVersion:3,category:'vip'}];
-  db.vipGiftCatalogV6Initialized=true;
-  // Remove obsolete VIP gift records from member profiles while preserving all ordinary gifts.
-  for(const [profileName,profileData] of Object.entries(db.profiles||{})){
+  db.vipGiftCatalog=[{id:'vip-gift-pack-001',name:'هدية VIP',icon:'👑',image:'/vip-gifts/vip-special.gif',builtin:true,packVersion:4,category:'vip'}];
+  db.vipGiftCatalogV7Initialized=true;
+  for(const profileData of Object.values(db.profiles||{})){
     if(!profileData||!Array.isArray(profileData.gifts))continue;
     const before=profileData.gifts.length;
-    profileData.gifts=profileData.gifts.filter(g=>String(g?.category||'')!=='vip' && String(g?.giftId||'')!=='vip-gift-pack-001' && !String(g?.giftImage||'').startsWith('/vip-gifts/'));
+    profileData.gifts=profileData.gifts.filter(g=>String(g?.category||'')!=='vip' && !String(g?.giftId||'').toLowerCase().includes('vip') && !String(g?.giftImage||'').startsWith('/vip-gifts/'));
     if(profileData.gifts.length!==before)giftCatalogMigrationChanged=true;
   }
 }
