@@ -275,10 +275,19 @@ if(db.giftCatalogV5Initialized!==true){
   db.giftCatalog=Object.entries(GIFT_PACK).map(([file,item],i)=>({id:'gift-pack-'+String(i+1).padStart(3,'0'),name:'هدية',icon:'🎁',image:'/gifts/'+file,price:0,builtin:true,packVersion:5}));
   db.giftCatalogV5Initialized=true;
 }
-if(db.vipGiftCatalogV5Initialized!==true){
+// v46.83.0: replace the legacy VIP gift catalogue with the exact latest user-supplied asset.
+// This is a one-time data migration, not a display filter: old VIP catalogue entries are discarded.
+if(db.vipGiftCatalogV6Initialized!==true){
   giftCatalogMigrationChanged=true;
-  db.vipGiftCatalog=[{id:'vip-gift-pack-001',name:'هدية VIP',icon:'👑',image:'/vip-gifts/vip-special.gif',builtin:true,packVersion:2,category:'vip'}];
-  db.vipGiftCatalogV5Initialized=true;
+  db.vipGiftCatalog=[{id:'vip-gift-pack-001',name:'هدية VIP',icon:'👑',image:'/vip-gifts/vip-special.gif',builtin:true,packVersion:3,category:'vip'}];
+  db.vipGiftCatalogV6Initialized=true;
+  // Remove obsolete VIP gift records from member profiles while preserving all ordinary gifts.
+  for(const [profileName,profileData] of Object.entries(db.profiles||{})){
+    if(!profileData||!Array.isArray(profileData.gifts))continue;
+    const before=profileData.gifts.length;
+    profileData.gifts=profileData.gifts.filter(g=>String(g?.category||'')!=='vip' && String(g?.giftId||'')!=='vip-gift-pack-001' && !String(g?.giftImage||'').startsWith('/vip-gifts/'));
+    if(profileData.gifts.length!==before)giftCatalogMigrationChanged=true;
+  }
 }
 if(!Array.isArray(db.vipGiftCatalog))db.vipGiftCatalog=[];
 try{if(giftCatalogMigrationChanged)save();}catch(error){console.error('Could not persist gift catalogue migration:',error.message)}

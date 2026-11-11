@@ -1,3 +1,10 @@
+## 46.83.0
+
+- Fixed the member-card gift picker at its source: it now loads catalogues from the authenticated `/api/chat-tools` endpoint instead of the admin-only data endpoint, so members with gift permission can open it without admin access.
+- Preserved the gift category on every member-card and admin send path; VIP gifts are validated and stored against the VIP catalogue rather than being misrouted to the standard catalogue.
+- Replaced the VIP catalogue through a new one-time V6 migration with the exact latest `vip.zip` asset; the previous VIP catalogue entries are removed from the live catalogue and obsolete VIP gift records are cleared from member profiles while standard gifts remain intact.
+- Added regression checks for the member-card loading route, category propagation, VIP migration, and exact packed VIP asset.
+
 ## 46.82.0
 
 - Removed visible sequential numbering from the bundled standard gift labels while preserving stable internal asset identifiers.
