@@ -73,3 +73,12 @@
 - رفع محاذاة الرتبة والاسم لتبدأ قرب أعلى الصورة مع الحفاظ على أحجام العناصر.
 - إزالة قاعدة CSS قديمة خاصة بقائمة الخاص واستبدالها بقاعدة نهائية مشتركة.
 - مزامنة `index.html` و`public/index.html` وتشغيل اختبارات التحقق.
+
+## v46.80.7 — Member layout, room action placement, and persistent sign-in
+
+- Member rows now top-align the avatar, rank badge, and name; the rank/name columns have a deliberate small gap.
+- The room creation action is compact and positioned at the physical left edge of the room list.
+- Successful member, guest, and privileged sign-ins persist the opaque server session token in local storage; each tab prefers its own sessionStorage token first.
+- Logout, forced return to entry, and invalid-session recovery clear both session stores.
+- Passwords are never written to local storage. Returning users are restored through the server-issued session token; if the server invalidates/expires it, normal sign-in is required.
+- `index.html` and `public/index.html` remain byte-identical.
