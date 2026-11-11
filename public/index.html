@@ -2559,5 +2559,41 @@ login();
   .member,.privateListOverlay .member{grid-template-columns:5px 54px 30px minmax(0,1fr) 58px!important;column-gap:5px!important;}
 }
 </style>
+
+<style id="rimaz-v46-80-9-online-rank-compact-only">
+/* v46.80.9: constrain the rank column in the online-members overlay only.
+   Other member surfaces (private chat, room list, wall and tables) are untouched. */
+#layer .membersOverlay .member{
+  grid-template-columns:3px 44px 25px minmax(0,1fr) 27px 22px!important;
+  column-gap:4px!important;
+}
+#layer .membersOverlay .member>.memberBadges{
+  width:25px!important;min-width:25px!important;max-width:25px!important;
+  justify-self:center!important;overflow:hidden!important;
+}
+#layer .membersOverlay .member>.memberBadges .memberBadge{
+  flex:0 0 21px!important;width:21px!important;height:21px!important;
+  min-width:21px!important;min-height:21px!important;max-width:21px!important;
+  overflow:hidden!important;font-size:13px!important;
+}
+#layer .membersOverlay .member>.memberBadges .memberBadge img{
+  display:block!important;width:100%!important;height:100%!important;
+  max-width:100%!important;max-height:100%!important;object-fit:contain!important;
+}
+#layer .membersOverlay .member>.memberMain{min-width:0!important;padding:0 2px!important;}
+#layer .membersOverlay .member .memberName{font-size:14px!important;min-width:0!important;}
+@media(max-width:600px){
+  #layer .membersOverlay .member{
+    grid-template-columns:3px 44px 24px minmax(0,1fr) 27px 22px!important;
+    column-gap:4px!important;
+  }
+  #layer .membersOverlay .member>.memberBadges{width:24px!important;min-width:24px!important;max-width:24px!important;}
+  #layer .membersOverlay .member>.memberBadges .memberBadge{
+    flex-basis:20px!important;width:20px!important;height:20px!important;
+    min-width:20px!important;min-height:20px!important;max-width:20px!important;
+  }
+  #layer .membersOverlay .member .memberName{font-size:13px!important;}
+}
+</style>
 </body></html>
 
