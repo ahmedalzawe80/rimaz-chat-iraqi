@@ -82,3 +82,15 @@
 - Logout, forced return to entry, and invalid-session recovery clear both session stores.
 - Passwords are never written to local storage. Returning users are restored through the server-issued session token; if the server invalidates/expires it, normal sign-in is required.
 - `index.html` and `public/index.html` remain byte-identical.
+
+
+## v46.80.8 — Explicit sign-in with remembered credentials
+
+- Fresh page loads always show the login screen; a saved session token can no longer send the user directly into chat.
+- Legacy persistent session tokens are removed from browser storage on page load.
+- After a successful member login or registration, the username and password are remembered in this browser and prefilled in the login form; the password input remains masked and the user must press دخول.
+- Authenticated session tokens are now kept only in the current tab's `sessionStorage`; logout does not erase the remembered login fields.
+- The online-member and room UI changes from v46.80.7 are retained unchanged.
+- `index.html` and `public/index.html` remain byte-identical.
+
+**Security note:** the requested password prefill stores the password in this browser's local storage. Anyone with access to the same browser profile or device may be able to retrieve it; use this only on a trusted personal device.
