@@ -880,15 +880,17 @@ try {
   const giftPack = JSON.parse(fs.readFileSync(giftPackPath, 'utf8'));
   const giftFiles = Object.keys(giftPack);
   const checks = [
-    ['v46.68 ships an replacement set of 56 independent animated GIF gifts in one JSON pack', giftFiles.length === 56],
-    ['v46.67 packed GIF gift assets have GIF89a/GIF87a signatures', giftFiles.every(x => { const b=Buffer.from(giftPack[x].data,'base64'); return b.subarray(0,6).toString('ascii').startsWith('GIF8'); })],
+    ['v46.81 ships all 115 supplied gift images in one packed catalogue', giftFiles.length === 115],
+    ['v46.81 packed gift assets match their declared image MIME signatures', giftFiles.every(x => { const b=Buffer.from(giftPack[x].data,'base64'),t=giftPack[x].type; return t==='image/gif'?b.subarray(0,6).toString('ascii').startsWith('GIF8'):t==='image/png'?b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):t==='image/jpeg'?b[0]===255&&b[1]===216&&b[2]===255:t==='image/webp'?b.subarray(0,4).toString('ascii')==='RIFF'&&b.subarray(8,12).toString('ascii')==='WEBP':false; })],
     ['v46.67 replaces old built-in gift arrays with server-managed catalogue', html.includes('const RIMAZ_GIFTS=[];const RIMAZ_EXTRA_GIFTS=[];const RIMAZ_NEW_GIFTS=[];') && html.includes('function giftCatalogAll(extra=[])')],
     ['v46.67 admin panel supports GIF upload and catalogue deletion', html.includes('uploadGiftToCatalog()') && html.includes('/api/admin/gifts/catalog/upload') && html.includes('deleteCatalogGift(${jsq(g.id)})')],
     ['v46.67 built-in gifts are served from a single packed JSON file', serverText.includes('GIFT_PACK_FILE') && serverText.includes("app.get('/gifts/:file'") && !fs.existsSync(path.join(root,'public','gifts'))],
     ['v46.67 server accepts only animated GIF gift uploads and validates frame count', serverText.includes("req.file.mimetype!=='image/gif'") && serverText.includes('gifFrames<2')],
     ['v46.67 sent gifts resolve image path from trusted server catalogue', serverText.includes("find(x=>String(x.id||'')===giftId)") && serverText.includes('giftImage')],
     ['v46.67 gift receipt animation renders the GIF image', html.includes('function showGiftAnimation(') && html.includes('giftArtLarge') && html.includes('d.giftImage||\'\'')],
-    ['v46.68 one-time gift migration replaces built-ins and preserves manually uploaded gifts', serverText.includes('db.giftCatalogV3Initialized!==true') && serverText.includes('db.giftCatalogV3Initialized=true')],
+    ['v46.81 manual gift uploads send the active session token', html.includes("fetch('/api/admin/gifts/catalog/upload',{method:'POST',headers:{'x-session':sid},body:form})")],
+    ['v46.81 VIP gift pack is served independently and has an authenticated manual upload/delete UI', serverText.includes("app.get('/vip-gifts/:file'") && html.includes('uploadVipGiftToCatalog()') && html.includes('deleteVipCatalogGift(') && html.includes("category:'vip'")],
+    ['v46.81 one-time migration replaces old catalogues with supplied standard and VIP packs', serverText.includes('db.giftCatalogV4Initialized!==true') && serverText.includes('db.giftCatalogV4Initialized=true') && serverText.includes('db.vipGiftCatalog=')],
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
   if (html === fs.readFileSync(publicPath, 'utf8')) pass('v46.67 browser entry files remain identical'); else fail('v46.67 browser entry files remain identical');
@@ -902,7 +904,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.80.9 package version is current', pkg.version === '46.80.9'],
+    ['v46.81.0 package version is current', pkg.version === '46.81.0'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -1071,7 +1073,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.80.9 package version',pkgNow.version==='46.80.9'],
+  ['v46.81.0 package version',pkgNow.version==='46.81.0'],
   ['v46.80.6 member spacing has one final shared rule',html.includes('rimaz-member-avatar-rank-name-spacing-final-v1')],
   ['v46.80.6 obsolete private contact name override removed',!html.includes('rimaz-private-contact-name-next-to-badge')],
   ['v46.80.7 room creation button is compact and physically left aligned',html.includes('margin:4px auto 4px 4px;width:max-content')&&html.includes('font-size:15px')],

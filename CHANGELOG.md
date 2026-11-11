@@ -103,3 +103,13 @@
 - ترك مسافة واضحة بين الرتبة والاسم، مع تصغير بسيط لخط الاسم داخل قائمة المتواجدين فقط.
 - عدم تغيير تنسيق الاسم والرتبة في المحادثات الخاصة أو الجدول أو الحائط أو الغرف.
 - مزامنة ملفي الواجهة وتشغيل اختبارات التحقق.
+
+## v46.81.0 — Gift catalogue rebuild and authenticated manual uploads
+
+- Replaced the previous built-in gift set with all 115 supplied gift images in one packed JSON asset; image formats are identified by their actual file signatures, not their original filename extensions.
+- Added a separate packed VIP gift asset and an independent VIP gift catalogue.
+- Added VIP gift upload and deletion controls alongside the existing VIP grant/revoke controls.
+- Fixed manual standard/VIP gift uploads by sending the active `x-session` token with multipart requests; this resolves the false "يجب تسجيل الدخول" response caused by bypassing the shared authenticated API helper.
+- Kept catalogue changes behind the existing `gift_catalog_manage` permission and the gifts module switch; upload validation still requires a genuinely animated GIF.
+- Added a one-time v4 catalogue migration that replaces old catalogue entries with the supplied packs. Existing account/profile gift receipts are not rewritten.
+- Kept root and public browser entry files identical and added regression checks for pack signatures, session-authenticated uploads, and VIP catalogue controls.
