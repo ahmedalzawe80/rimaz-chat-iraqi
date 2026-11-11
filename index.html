@@ -2617,5 +2617,27 @@ login();
 #layer .membersOverlay .member>.memberBadges{width:auto!important;min-width:0!important;max-width:none!important;overflow:visible!important;}
 #layer .membersOverlay .member>.memberBadges .memberBadge{flex:0 0 auto!important;width:auto!important;height:auto!important;min-width:0!important;min-height:0!important;max-width:none!important;overflow:visible!important;}
 </style>
+
+<style id="rimaz-v46-85-online-badge-scale">
+/* Online members only: compact the VIP and last-gift artwork without changing private, wall, or profile sizing. */
+#layer .membersOverlay .member .memberBadge.roleVip .vipRankArt{width:19px!important;height:19px!important;min-width:19px!important;min-height:19px!important;max-width:19px!important;max-height:19px!important;object-fit:contain!important;display:block!important;}
+#layer .membersOverlay .member .memberBadge.giftArtBadge img{width:18px!important;height:18px!important;min-width:18px!important;min-height:18px!important;max-width:18px!important;max-height:18px!important;object-fit:contain!important;display:block!important;}
+#layer .membersOverlay .member .memberBadge.giftArtBadge .giftEmoji{font-size:16px!important;line-height:1!important;}
+#layer .membersOverlay .member .memberBadge.roleVip,#layer .membersOverlay .member .memberBadge.giftArtBadge{line-height:1!important;overflow:visible!important;}
+</style>
+
+<style id="rimaz-v46-86-member-gift-scale">
+/* Slightly smaller last-gift badge on member cards, consistently across member lists. */
+.member .memberBadge.giftArtBadge{
+  width:20px!important;height:20px!important;min-width:20px!important;min-height:20px!important;
+  padding:0!important;border-radius:0!important;box-sizing:border-box!important;
+}
+.member .memberBadge.giftArtBadge img{
+  width:17px!important;height:17px!important;min-width:17px!important;min-height:17px!important;
+  max-width:17px!important;max-height:17px!important;object-fit:contain!important;display:block!important;
+}
+.member .memberBadge.giftArtBadge .giftEmoji{font-size:15px!important;line-height:1!important;}
+</style>
+
 </body></html>
 

@@ -1,3 +1,13 @@
+## v46.86.0
+- Reduced last-gift artwork on member cards to 20px badge / 17px image across member lists.
+- Kept the online-list VIP sizing behavior and other gift catalog behavior unchanged.
+
+## v46.86.0
+- Reduced only the VIP animated badge size in the online-members panel to 19×19 px.
+- Reduced only the latest-gift artwork in the online-members panel to 18×18 px (emoji fallback 16 px).
+- Kept private contacts, wall posts, messages, profile badges, and gift-picker artwork unchanged.
+- Kept root and public browser entry files byte-identical.
+
 ## 46.83.0
 
 - Fixed the member-card gift picker at its source: it now loads catalogues from the authenticated `/api/chat-tools` endpoint instead of the admin-only data endpoint, so members with gift permission can open it without admin access.
