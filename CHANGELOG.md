@@ -94,3 +94,12 @@
 - `index.html` and `public/index.html` remain byte-identical.
 
 **Security note:** the requested password prefill stores the password in this browser's local storage. Anyone with access to the same browser profile or device may be able to retrieve it; use this only on a trusted personal device.
+
+
+## v46.80.9 — تصغير الرتبة في قائمة المتواجدين فقط
+
+- ضبط عمود الرتبة بعرض ثابت صغير داخل نافذة المتواجدين لمنع دفع الاسم أو تداخله.
+- تصغير شارة الرتبة وصورتها مع `object-fit: contain` حتى لا تتمدد خارج العمود.
+- ترك مسافة واضحة بين الرتبة والاسم، مع تصغير بسيط لخط الاسم داخل قائمة المتواجدين فقط.
+- عدم تغيير تنسيق الاسم والرتبة في المحادثات الخاصة أو الجدول أو الحائط أو الغرف.
+- مزامنة ملفي الواجهة وتشغيل اختبارات التحقق.
