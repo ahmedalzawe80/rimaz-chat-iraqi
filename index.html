@@ -820,7 +820,7 @@ async function doLogin(){const name=document.getElementById('ln')?.value||'',pas
 async function doGuest(){const name=document.getElementById('ln')?.value||'';try{const j=await api('/api/guest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});sid=j.sid;sessionStorage.setItem('rimaz_sid',sid);localStorage.setItem('rimaz_last_name',String(name).trim());await boot()}catch(e){showLoginFeedback(e.message||'تعذر دخول الزائر');document.getElementById('ln')?.focus();}}
 async function boot(){try{const s=await api('/api/state?entry=1');me=s.user;rooms=s.rooms;currentRoom='public';if(window.rimazOnlineTimer){clearInterval(window.rimazOnlineTimer);window.rimazOnlineTimer=null;}const [inbox,privateContacts]=await Promise.all([api('/api/notifications'),api('/api/private/contacts')]);notifications=inbox;privateUnread={};privateContacts.forEach(x=>{privateUnread[key(x.name)]=Number(x.unread)||0});renderChat();updatePrivateButton();connect();}catch(e){sid='';sessionStorage.removeItem('rimaz_sid');localStorage.removeItem('rimaz_sid');login()}}
 function displayFor(x){return x?.displayName||x?.profile?.displayName||x?.name||''}
-const DEFAULT_AVATAR_URL='/rimaz-default-avatar.png';
+const DEFAULT_AVATAR_URL='/rimaz-default-avatar.png?v=46.88.0';
 function avatarFor(profile){const custom=String(profile?.avatar||'').trim();return custom||DEFAULT_AVATAR_URL;}
 function rankIconSvg(rank){const common='viewBox="0 0 32 32" aria-hidden="true" focusable="false"';const paths={
 'admin-full':'<path d="M3 10 9 15 13 5 18 14 25 4 28 10 26 25 6 25Z" fill="currentColor" stroke="currentColor" stroke-width="1.4"/><path d="M7 20H25M8 28H24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>',
@@ -2619,12 +2619,25 @@ login();
 #layer .membersOverlay .member>.memberBadges .memberBadge{flex:0 0 auto!important;width:auto!important;height:auto!important;min-width:0!important;min-height:0!important;max-width:none!important;overflow:visible!important;}
 </style>
 
-<style id="rimaz-v46-85-online-badge-scale">
-/* Online members only: compact the VIP and last-gift artwork without changing private, wall, or profile sizing. */
-#layer .membersOverlay .member .memberBadge.roleVip .vipRankArt{width:19px!important;height:19px!important;min-width:19px!important;min-height:19px!important;max-width:19px!important;max-height:19px!important;object-fit:contain!important;display:block!important;}
-#layer .membersOverlay .member .memberBadge.giftArtBadge img{width:18px!important;height:18px!important;min-width:18px!important;min-height:18px!important;max-width:18px!important;max-height:18px!important;object-fit:contain!important;display:block!important;}
-#layer .membersOverlay .member .memberBadge.giftArtBadge .giftEmoji{font-size:16px!important;line-height:1!important;}
-#layer .membersOverlay .member .memberBadge.roleVip,#layer .membersOverlay .member .memberBadge.giftArtBadge{line-height:1!important;overflow:visible!important;}
+<style id="rimaz-v46-88-avatar-and-online-gift-sizing">
+/* One canonical size for the last-gift artwork in the online-members list. */
+#layer .membersOverlay .member>.memberBadges .memberBadge.giftArtBadge{
+  display:inline-flex!important;align-items:center!important;justify-content:center!important;
+  flex:0 0 18px!important;width:18px!important;height:18px!important;
+  min-width:18px!important;min-height:18px!important;max-width:18px!important;max-height:18px!important;
+  margin:0!important;padding:0!important;overflow:visible!important;line-height:1!important;
+}
+#layer .membersOverlay .member>.memberBadges .memberBadge.giftArtBadge img{
+  display:block!important;width:18px!important;height:18px!important;
+  min-width:18px!important;min-height:18px!important;max-width:18px!important;max-height:18px!important;
+  object-fit:contain!important;
+}
+#layer .membersOverlay .member>.memberBadges .memberBadge.giftArtBadge .giftEmoji{
+  font-size:18px!important;line-height:1!important;
+}
+/* Never crop the official default logo in any avatar surface. Custom member photos keep their existing crop behavior. */
+img[src*="rimaz-default-avatar.png"]{object-fit:contain!important;object-position:center!important;background:#fff!important;}
 </style>
+
 </body></html>
 

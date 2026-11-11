@@ -1,3 +1,8 @@
+## v46.88.0
+- Replaced the deployed default avatar asset with the new open-heart Arabic Rimaz logo.
+- Added cache-busting to the default avatar URL and ensured that only the default logo uses contain-fit (custom member photos unchanged).
+- Normalized online-members last-gift badge wrapper and artwork to exactly 18px.
+
 ## v46.87.0
 - Replaced the old text/SVG default-avatar fallback with one shared branded image asset.
 - Removed obsolete text-avatar markup and its CSS selectors; custom member avatars remain unchanged.
