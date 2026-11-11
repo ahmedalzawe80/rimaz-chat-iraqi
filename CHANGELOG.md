@@ -1,8 +1,13 @@
-## v46.86.0
+## v46.87.0
+- Replaced the old text/SVG default-avatar fallback with one shared branded image asset.
+- Removed obsolete text-avatar markup and its CSS selectors; custom member avatars remain unchanged.
+- Standardized gift badge artwork to 18px and removed the previous 17px override.
+
+## v46.87.0
 - Reduced last-gift artwork on member cards to 20px badge / 17px image across member lists.
 - Kept the online-list VIP sizing behavior and other gift catalog behavior unchanged.
 
-## v46.86.0
+## v46.87.0
 - Reduced only the VIP animated badge size in the online-members panel to 19×19 px.
 - Reduced only the latest-gift artwork in the online-members panel to 18×18 px (emoji fallback 16 px).
 - Kept private contacts, wall posts, messages, profile badges, and gift-picker artwork unchanged.
