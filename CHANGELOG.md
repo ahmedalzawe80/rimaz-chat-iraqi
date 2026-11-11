@@ -1,3 +1,13 @@
+## 46.82.0
+
+- Removed visible sequential numbering from the bundled standard gift labels while preserving stable internal asset identifiers.
+- Removed tile frames/backgrounds around gift artwork in the admin and send-gift pickers; selection remains visible with a simple outline.
+- Removed square backgrounds/borders from rank and owner artwork badges without changing the rank artwork itself.
+- Added a one-time migration that replaces legacy VIP gift catalog entries with the currently supplied VIP gift only.
+- Connected VIP gift catalog entries to the actual recipient gift picker and server-side send validation; the server now resolves gift IDs against the selected category, not the standard catalogue only.
+- Kept standard and VIP catalog management separate, including manual upload and deletion.
+- Added regression checks for catalog migration, category-aware VIP sending, unnumbered labels, and frameless artwork.
+
 ## 46.80.1
 
 - Updated only the room-exit button SVG to match the supplied Bunouta reference: outlined door with a clear right-pointing exit arrow.
