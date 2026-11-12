@@ -1,3 +1,8 @@
+## v46.91.0
+- Removed all older competing profile-photo sizing rules from both mirrored HTML entry points.
+- Applied one canonical rule to the default Rimaz avatar in profile cards: 250px display height, contain fit, centered, white background and slight inset padding. User-uploaded photos are unchanged.
+- Kept the online-members gift badge sizing from v46.90.0 unchanged.
+
 ## v46.90.0
 - Replaced the default avatar with the approved square logo reading “ريماز عراقية”; retained contain-fit so the full image is visible without cropping.
 - Replaced the previous 18px gift-badge rule with one shared 20px rule for online members, private contacts, message headers, presence, and wall posts.
