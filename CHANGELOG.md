@@ -217,3 +217,11 @@
 - Kept personal banners as shallow 13:1 strips in the online list and moved the profile banner to the top edge of the profile card, above its black title strip.
 - Bounded profile portraits to a fixed content area so oversized source images cannot expand the member card.
 - Kept banner data and upload routes unchanged; GIF image sources remain directly rendered.
+
+
+## v46.93.6 — Reference-aligned member layout foundation
+- Rebuilt both member-profile render paths so the member's personal banner is a compact image inside the dark identity header, beside the display name, rather than a separate full-width strip above it.
+- Reworked the profile portrait proportions and the online-member row geometry to follow the supplied reference screenshots more closely.
+- Kept banner data, upload permissions, and GIF image URLs intact.
+- Synchronized the public browser entry file with the main entry file.
+- Visual parity still requires a live browser check against the reference on the hosted deployment.

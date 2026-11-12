@@ -920,7 +920,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.5 package version is current', pkg.version === '46.93.5'],
+    ['v46.93.6 package version is current', pkg.version === '46.93.6'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -1089,7 +1089,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.87.0 package version',pkgNow.version==='46.93.5'],
+  ['v46.87.0 package version',pkgNow.version==='46.93.6'],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],
@@ -1116,17 +1116,16 @@ try {
 } catch(error){fail('v46.76.0 feature checks',error.message)}
 
 
-// v46.91: default profile artwork is fitted without crop and old profile-photo overrides are gone.
+// v46.93.6: the personal banner is structurally placed inside the dark profile identity bar.
 try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
-  const profilePhotoRules = htmlText.match(/[^{}]*\.profilePhoto[^{}]*\{[^{}]*\}/gs) || [];
-  const ok = profilePhotoRules.length === 1 &&
-    htmlText.includes('rimaz-profile-and-banner-layout-v4695') &&
-    profilePhotoRules[0].includes('height:150px!important') &&
-    profilePhotoRules[0].includes('object-fit:contain!important');
-  if (ok) pass('v46.93.5 profile portrait is bounded to 150px and legacy competing profilePhoto rules are removed');
-  else fail('v46.93.5 profile portrait is bounded to 150px and legacy competing profilePhoto rules are removed');
-} catch (error) { fail('v46.91 profile image fit checks', error.message); }
+  const memberProfileHeader = htmlText.includes('<div class="profileTop">${p.banner?`<img class="memberPersonalBannerProfile"') && !htmlText.includes('<div class="memberPersonalBannerProfile"><img');
+  const genericProfileHeader = htmlText.includes('<div class="profileTop">${x.profile?.banner?`<img class="memberPersonalBannerProfile"');
+  const coherentLayout = htmlText.includes('rimaz-reference-member-components-v4696') && htmlText.includes('aspect-ratio:4/3!important');
+  const ok = memberProfileHeader && genericProfileHeader && coherentLayout;
+  if (ok) pass('v46.93.6 personal banner is inside the profile identity bar and portrait has reference proportions');
+  else fail('v46.93.6 personal banner is inside the profile identity bar and portrait has reference proportions');
+} catch (error) { fail('v46.93.6 profile structure checks', error.message); }
 
 
 // v46.93.2: personal banners are independent and permission-gated.
@@ -1139,7 +1138,7 @@ try {
   ['v46.93.2 banners are separate from rank art and member decorations',src.includes('Personal banners are intentionally separate from rank artwork and member decorations')&&src.includes('p.banner=')],
   ['v46.93.2 rank permission editor exposes banner_upload',html.includes("['الملف الشخصي',['profile_edit','avatar_delete','banner_upload']]")],
   ['v46.93.2 authorized members can manage their personal banner and oversized images are compressed',html.includes('choosePersonalBanner')&&html.includes("canvas.toBlob(resolve,'image/webp',0.84)")&&html.includes('deletePersonalBanner')],
-  ['v46.93.2 member information panel renders the personal banner',html.includes('memberPersonalBanner')&&html.includes('alt=\"بنر العضو\"')],
+  ['v46.93.2 member information panel renders the personal banner',html.includes('memberPersonalBannerProfile')&&html.includes('profileTop')],
   ['v46.93.2 full-admin migration adds banner permission without broadening limited ranks',src.includes('bannerUploadPermissionMigrationVersion')&&src.includes("previous.every(key=>(adminFull.permissions||[]).includes(key))")],
   ['v46.93.2 browser entry files remain identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')]
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
