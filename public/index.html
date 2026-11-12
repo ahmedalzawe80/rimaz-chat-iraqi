@@ -281,7 +281,7 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 .member .memberBadge.emptyBadge{visibility:hidden!important;}
 .member .memberBadge.giftBlack{background:#111!important;color:#fff!important;border-color:#111!important;}
 .member .memberBadge.giftWhite{background:#fff!important;color:#111!important;border-color:#aaa!important;}
-.member .memberBadge.giftSilver{background:#e7e7e7!important;color:#333!important;border-color:#aaa!important;} .giftArtBadge{display:inline-flex!important;align-items:center!important;justify-content:center!important;overflow:hidden!important}.giftArtBadge img{width:18px!important;height:18px!important;min-width:18px!important;min-height:18px!important;max-width:18px!important;max-height:18px!important;object-fit:contain!important;display:block!important}
+.member .memberBadge.giftSilver{background:#e7e7e7!important;color:#333!important;border-color:#aaa!important;} 
 .member .memberBadge.giftRose{background:#fff0f2!important;border-color:#e68a99!important;}
 .member .memberBadge.roleAdmin{background:#111!important;border-color:#111!important;}
 .member .memberBadge.roleVip{background:#fff7d6!important;border-color:#d6b84a!important;width:auto!important;min-width:28px!important;padding:0 5px!important;font-size:11px!important;font-weight:800!important;letter-spacing:.2px!important;color:#765600!important;}
@@ -820,7 +820,7 @@ async function doLogin(){const name=document.getElementById('ln')?.value||'',pas
 async function doGuest(){const name=document.getElementById('ln')?.value||'';try{const j=await api('/api/guest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});sid=j.sid;sessionStorage.setItem('rimaz_sid',sid);localStorage.setItem('rimaz_last_name',String(name).trim());await boot()}catch(e){showLoginFeedback(e.message||'تعذر دخول الزائر');document.getElementById('ln')?.focus();}}
 async function boot(){try{const s=await api('/api/state?entry=1');me=s.user;rooms=s.rooms;currentRoom='public';if(window.rimazOnlineTimer){clearInterval(window.rimazOnlineTimer);window.rimazOnlineTimer=null;}const [inbox,privateContacts]=await Promise.all([api('/api/notifications'),api('/api/private/contacts')]);notifications=inbox;privateUnread={};privateContacts.forEach(x=>{privateUnread[key(x.name)]=Number(x.unread)||0});renderChat();updatePrivateButton();connect();}catch(e){sid='';sessionStorage.removeItem('rimaz_sid');localStorage.removeItem('rimaz_sid');login()}}
 function displayFor(x){return x?.displayName||x?.profile?.displayName||x?.name||''}
-const DEFAULT_AVATAR_URL='/rimaz-default-avatar.png?v=46.88.0';
+const DEFAULT_AVATAR_URL='/rimaz-default-avatar.png?v=46.90.0';
 function avatarFor(profile){const custom=String(profile?.avatar||'').trim();return custom||DEFAULT_AVATAR_URL;}
 function rankIconSvg(rank){const common='viewBox="0 0 32 32" aria-hidden="true" focusable="false"';const paths={
 'admin-full':'<path d="M3 10 9 15 13 5 18 14 25 4 28 10 26 25 6 25Z" fill="currentColor" stroke="currentColor" stroke-width="1.4"/><path d="M7 20H25M8 28H24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>',
@@ -2223,8 +2223,7 @@ login();
 #layer .profileGiftFoot{flex:0 0 auto!important;display:flex!important;gap:7px!important;padding:8px!important;border-top:1px solid #cbd3d8!important;background:#fff!important}
 #layer .profileGiftFoot button{flex:1 1 0!important;min-height:48px!important;border:1px solid #496779!important;border-radius:2px!important;background:#365d70!important;color:#fff!important;font-size:16px!important;font-weight:900!important}
 #layer .profileGiftFoot button:last-child{background:#59636a!important;border-color:#59636a!important}
-.member .giftArtBadge{width:22px!important;height:22px!important;min-width:22px!important;min-height:22px!important;padding:0!important;overflow:visible!important;box-sizing:border-box!important}
-.member .giftArtBadge .giftEmoji{font-size:18px!important}
+
 .giftGrid .giftTile .giftEmoji,.memberClassicGrid .giftEmoji{font-size:clamp(20px,4vw,28px)!important}
 @media(max-width:420px){#layer .profileGiftPanel{width:96vw!important;height:86dvh!important;max-height:86dvh!important}#layer .profileGiftGrid{grid-template-columns:repeat(8,minmax(0,1fr))!important;gap:4px!important;padding:7px!important}#layer .profileGiftGrid .giftTile .giftEmoji{font-size:clamp(21px,7vw,29px)!important}#layer .profileGiftHead{height:44px!important;min-height:44px!important;flex-basis:44px!important}#layer .profileGiftFoot button{min-height:46px!important;font-size:15px!important}}
 </style>
@@ -2565,41 +2564,6 @@ login();
 }
 </style>
 
-<style id="rimaz-v46-80-9-online-rank-compact-only">
-/* v46.80.9: constrain the rank column in the online-members overlay only.
-   Other member surfaces (private chat, room list, wall and tables) are untouched. */
-#layer .membersOverlay .member{
-  grid-template-columns:3px 44px 25px minmax(0,1fr) 27px 22px!important;
-  column-gap:4px!important;
-}
-#layer .membersOverlay .member>.memberBadges{
-  width:25px!important;min-width:25px!important;max-width:25px!important;
-  justify-self:center!important;overflow:hidden!important;
-}
-#layer .membersOverlay .member>.memberBadges .memberBadge{
-  flex:0 0 21px!important;width:21px!important;height:21px!important;
-  min-width:21px!important;min-height:21px!important;max-width:21px!important;
-  overflow:hidden!important;font-size:13px!important;
-}
-#layer .membersOverlay .member>.memberBadges .memberBadge img{
-  display:block!important;width:100%!important;height:100%!important;
-  max-width:100%!important;max-height:100%!important;object-fit:contain!important;
-}
-#layer .membersOverlay .member>.memberMain{min-width:0!important;padding:0 2px!important;}
-#layer .membersOverlay .member .memberName{font-size:14px!important;min-width:0!important;}
-@media(max-width:600px){
-  #layer .membersOverlay .member{
-    grid-template-columns:3px 44px 24px minmax(0,1fr) 27px 22px!important;
-    column-gap:4px!important;
-  }
-  #layer .membersOverlay .member>.memberBadges{width:24px!important;min-width:24px!important;max-width:24px!important;}
-  #layer .membersOverlay .member>.memberBadges .memberBadge{
-    flex-basis:20px!important;width:20px!important;height:20px!important;
-    min-width:20px!important;min-height:20px!important;max-width:20px!important;
-  }
-  #layer .membersOverlay .member .memberName{font-size:13px!important;}
-}
-</style>
 <style id="rimaz-gift-rank-flat-v1">
 /* Gift artwork stays fully clickable without tile frames or numbered labels. */
 #layer .profileGiftGrid .giftTile,.giftGrid .giftTile,.memberClassicGrid .giftTile{border:0!important;background:transparent!important;border-radius:0!important;box-shadow:none!important;padding:0!important;outline:0!important;}
@@ -2619,25 +2583,41 @@ login();
 #layer .membersOverlay .member>.memberBadges .memberBadge{flex:0 0 auto!important;width:auto!important;height:auto!important;min-width:0!important;min-height:0!important;max-width:none!important;overflow:visible!important;}
 </style>
 
-<style id="rimaz-v46-88-avatar-and-online-gift-sizing">
-/* One canonical size for the last-gift artwork in the online-members list. */
-#layer .membersOverlay .member>.memberBadges .memberBadge.giftArtBadge{
+<style id="rimaz-v46-90-unified-gift-badge-size">
+/* One shared 20px gift artwork size across online members, private contacts, messages, and wall posts. */
+.memberBadge.giftArtBadge,
+.memberBadges .memberBadge.giftArtBadge,
+.member .memberBadge.giftArtBadge,
+.privateListOverlay .member .memberBadge.giftArtBadge,
+.msg .msghead .memberBadge.giftArtBadge,
+.presence .memberBadge.giftArtBadge,
+.wallPost .memberBadge.giftArtBadge,
+#layer .memberBadge.giftArtBadge{
   display:inline-flex!important;align-items:center!important;justify-content:center!important;
-  flex:0 0 18px!important;width:18px!important;height:18px!important;
-  min-width:18px!important;min-height:18px!important;max-width:18px!important;max-height:18px!important;
-  margin:0!important;padding:0!important;overflow:visible!important;line-height:1!important;
+  flex:0 0 20px!important;width:20px!important;height:20px!important;
+  min-width:20px!important;min-height:20px!important;max-width:20px!important;max-height:20px!important;
+  margin:0!important;padding:0!important;overflow:visible!important;box-sizing:border-box!important;
+  line-height:1!important;vertical-align:middle!important;
 }
-#layer .membersOverlay .member>.memberBadges .memberBadge.giftArtBadge img{
-  display:block!important;width:18px!important;height:18px!important;
-  min-width:18px!important;min-height:18px!important;max-width:18px!important;max-height:18px!important;
-  object-fit:contain!important;
+.memberBadge.giftArtBadge img,
+.memberBadges .memberBadge.giftArtBadge img,
+#layer .memberBadge.giftArtBadge img{
+  display:block!important;width:20px!important;height:20px!important;
+  min-width:20px!important;min-height:20px!important;max-width:20px!important;max-height:20px!important;
+  object-fit:contain!important;object-position:center!important;margin:0!important;
 }
-#layer .membersOverlay .member>.memberBadges .memberBadge.giftArtBadge .giftEmoji{
-  font-size:18px!important;line-height:1!important;
+.memberBadge.giftArtBadge .giftEmoji,
+.memberBadges .memberBadge.giftArtBadge .giftEmoji,
+#layer .memberBadge.giftArtBadge .giftEmoji{
+  display:inline-flex!important;width:20px!important;height:20px!important;
+  align-items:center!important;justify-content:center!important;font-size:20px!important;
+  line-height:20px!important;white-space:nowrap!important;
 }
-/* Never crop the official default logo in any avatar surface. Custom member photos keep their existing crop behavior. */
+/* Give the online-members badge column enough room for the exact same artwork size. */
+#layer .membersOverlay .member>.memberBadges{min-width:24px!important;width:auto!important;max-width:none!important;overflow:visible!important;}
+#layer .membersOverlay .member>.memberBadges .memberBadge.giftArtBadge{flex:0 0 20px!important;width:20px!important;height:20px!important;}
+/* Keep the new default logo fully visible; user-uploaded avatars are not affected. */
 img[src*="rimaz-default-avatar.png"]{object-fit:contain!important;object-position:center!important;background:#fff!important;}
 </style>
-
 </body></html>
 
