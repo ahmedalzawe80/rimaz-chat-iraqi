@@ -1,3 +1,8 @@
+## v46.93.2
+- Added an independent `banner_upload` rank permission for members to upload, replace, and delete their own personal banner.
+- Personal banners are stored separately from rank artwork and member decorations, and appear in the member information panel.
+- Added browser-side image downscaling/WebP compression for oversized banner images, with server-side permission enforcement and the existing image signature validation.
+
 ## v46.92.0
 - Decode bundled smiley and gift image payloads once into Buffers at startup, releasing the larger Base64 strings from the V8 heap and avoiding per-request Buffer allocations.
 - Reworked live presence broadcasts to build short-lived indexed session/socket lookups once per broadcast, eliminating repeated nested full scans while preserving per-viewer ghost/hidden visibility.
@@ -190,3 +195,11 @@
 - The dedicated health tab is now shown and guarded only by owner status or `health_view`; `site_admin` no longer causes the dedicated button to appear. The existing site-admin overview keeps its embedded read-only health summary.
 - Kept the health API protected for owner, `health_view`, or the existing broad `site_admin` access used by the site settings page.
 - Updated archive regression checks for the explicit opt-in behavior.
+
+
+## v46.93.3 — Built-in chat bot foundation
+- Added a permission-gated Bot / Boot entry directly above the announcement button in Settings, matching the supplied reference placement.
+- Added persisted bot controls for welcome, anti-spam, games, member statistics, and admin commands.
+- Implemented the welcome bot in the public room and server-side rate/repetition protection for public chat messages.
+- Added the independent `bots_manage` rank permission and authenticated server endpoints for bot settings.
+- Games, statistics, and admin-command bots are exposed as staged controls and are not represented as active implementations yet.

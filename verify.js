@@ -1128,3 +1128,20 @@ try {
   if (ok) pass('v46.91 default profile logo has one non-cropping 250px rule; legacy competing profilePhoto rules are removed');
   else fail('v46.91 default profile logo has one non-cropping 250px rule; legacy competing profilePhoto rules are removed');
 } catch (error) { fail('v46.91 profile image fit checks', error.message); }
+
+
+// v46.93.2: personal banners are independent and permission-gated.
+try {
+ const src=fs.readFileSync(server,'utf8'), html=fs.readFileSync(mainPath,'utf8');
+ const checks=[
+  ['v46.93.2 banner_upload is an independent permission in the server catalog',src.includes("banner_upload:'رفع وتغيير وحذف البنر الشخصي'")],
+  ['v46.93.2 banner upload and deletion routes enforce banner_upload server-side',src.includes("app.post('/api/profile/banner',requireAuth,(req,res,next)=>{if(!hasPermission(req.user,'banner_upload'))")&&src.includes("app.delete('/api/profile/banner',requireAuth,(req,res)=>{if(!hasPermission(req.user,'banner_upload'))")],
+  ['v46.93.2 banner images use validated image-only upload middleware',src.includes("'/api/profile/banner'")&&src.includes('uploadImage.single(\'file\'),validateUploadedContent(\'image\')')],
+  ['v46.93.2 banners are separate from rank art and member decorations',src.includes('Personal banners are intentionally separate from rank artwork and member decorations')&&src.includes('p.banner=')],
+  ['v46.93.2 rank permission editor exposes banner_upload',html.includes("['الملف الشخصي',['profile_edit','avatar_delete','banner_upload']]")],
+  ['v46.93.2 authorized members can manage their personal banner and oversized images are compressed',html.includes('choosePersonalBanner')&&html.includes("canvas.toBlob(resolve,'image/webp',0.84)")&&html.includes('deletePersonalBanner')],
+  ['v46.93.2 member information panel renders the personal banner',html.includes('memberPersonalBanner')&&html.includes('alt=\"بنر العضو\"')],
+  ['v46.93.2 full-admin migration adds banner permission without broadening limited ranks',src.includes('bannerUploadPermissionMigrationVersion')&&src.includes("previous.every(key=>(adminFull.permissions||[]).includes(key))")],
+  ['v46.93.2 browser entry files remain identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')]
+ ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error){fail('v46.93.2 personal banner checks',error.message)}
