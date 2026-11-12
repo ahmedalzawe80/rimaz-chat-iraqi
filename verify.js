@@ -62,9 +62,11 @@ try {
 
     ['ghost login is restricted to owner or explicitly authorized admin', privileged && privileged[0].includes("mode==='ghost'&&!isOwner(account)&&!hasPermission(account,'ghost_login')")],
     ['hidden login remains restricted to staff or panel-authorized rank', privileged && privileged[0].includes("mode==='hidden'&&!isOwner(account)&&!hasPermission(account,'hidden_login')")],
-    ['presence visibility is viewer-aware and ghost is invisible to others', source.includes('function canSeePresence(viewer,target)') && source.includes('if(target.ghost)return false')],
+    ['presence visibility is viewer-aware and ghost is invisible to others', source.includes('function canSeePresence(viewer,target,context=null)') && source.includes('if(target.ghost)return false')],
     ['hidden presence is visible only to staff and self', source.includes("if(target.hidden)return !!viewer&&(isOwner(viewer)||hasPermission(viewer,'presence_hidden_view'))")],
-    ['live presence state is emitted individually per viewer', source.includes("so.emit('live-state',{online:getOnlineUsers(viewer),rooms:visibleRooms(viewer)})")],
+    ['live presence state is emitted individually per viewer', source.includes("const context=buildPresenceContext()") && source.includes("so.emit('live-state',{online:getOnlineUsers(viewer,context),rooms:visibleRooms(viewer,context)})")],
+    ['packed image assets are decoded once and reused as Buffers', source.includes('function decodePackedAssets(pack)') && source.includes('decodePackedAssets(SMILEY_PACK)') && source.includes('res.send(item.data);') && !source.includes("res.send(Buffer.from(item.data,'base64'))")],
+    ['presence broadcasts reuse indexed session and socket lookups', source.includes('function buildPresenceContext()') && source.includes('sessionsBySid') && source.includes('sessionsByAccount') && source.includes('socketsBySid')],
     ['member directory omits accounts hidden from the current viewer', source.includes('if(hasInvisibleActiveSession(name,req.user))continue')],
     ['hidden join/leave notices are staff-only and ghost emits no presence notices', source.includes("presenceVisibility:u.hidden?'staff':'public'") && source.includes('function emitPresenceToRoom(room,notice)')],
     ['private conversation history is memory-only and cleared after full disconnect', source.includes('privateMessages: []') && source.includes('function clearPrivateConversationForUser(name)') && source.includes('schedulePrivateConversationCleanup(u.name)')],
@@ -904,7 +906,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.87.0 package version is current', pkg.version === '46.91.0'],
+    ['v46.87.0 package version is current', pkg.version === '46.92.0'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -1073,7 +1075,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.87.0 package version',pkgNow.version==='46.91.0'],
+  ['v46.87.0 package version',pkgNow.version==='46.92.0'],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],

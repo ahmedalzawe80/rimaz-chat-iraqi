@@ -30,6 +30,16 @@ const VIP_GIFT_PACK_FILE = path.join(__dirname, 'public', 'vip-gifts-pack.json')
 let VIP_GIFT_PACK = {};
 try { VIP_GIFT_PACK = JSON.parse(fs.readFileSync(VIP_GIFT_PACK_FILE, 'utf8')); }
 catch (error) { console.error('Could not load bundled VIP gift pack:', error.message); }
+// Decode bundled image payloads once into Buffers. This releases the much larger
+// Base64 strings from the V8 heap and avoids allocating a new Buffer on every request.
+function decodePackedAssets(pack) {
+  for (const item of Object.values(pack)) {
+    if (item && typeof item.data === 'string') item.data = Buffer.from(item.data, 'base64');
+  }
+}
+decodePackedAssets(SMILEY_PACK);
+decodePackedAssets(GIFT_PACK);
+decodePackedAssets(VIP_GIFT_PACK);
 const BUILTIN_SMILEYS = Object.fromEntries(
   Object.keys(SMILEY_PACK).filter(file => /^smiley-\d+\.(?:gif|png|jpe?g|webp)$/i.test(file)).sort()
     .map(file => [file, '/smileys/' + file])
@@ -86,7 +96,7 @@ app.get('/smileys/:file', (req,res)=>{
   if(!item || !/^smiley-\d+\.(?:gif|png|jpe?g|webp)$/i.test(String(req.params.file||''))) return res.sendStatus(404);
   res.setHeader('Content-Type', item.type || 'application/octet-stream');
   res.setHeader('Cache-Control','public, max-age=31536000, immutable');
-  res.send(Buffer.from(item.data,'base64'));
+  res.send(item.data);
 });
 // Serve each built-in gift from the single gifts-pack.json file; no gifts folder upload is needed.
 app.get('/gifts/:file', (req,res)=>{
@@ -95,9 +105,9 @@ app.get('/gifts/:file', (req,res)=>{
   if(!item || !/^[a-z0-9_-]+\.(?:gif|png|jpe?g|webp)$/i.test(file)) return res.sendStatus(404);
   res.setHeader('Content-Type', item.type || 'application/octet-stream');
   res.setHeader('Cache-Control','public, max-age=31536000, immutable');
-  res.send(Buffer.from(item.data,'base64'));
+  res.send(item.data);
 });
-app.get('/vip-gifts/:file',(req,res)=>{const file=String(req.params.file||'');const item=VIP_GIFT_PACK[file];if(!item||!/^vip-[a-z0-9_-]+\.gif$/i.test(file))return res.sendStatus(404);res.setHeader('Content-Type',item.type||'image/gif');res.setHeader('Cache-Control','public,max-age=31536000,immutable');res.send(Buffer.from(item.data,'base64'));});
+app.get('/vip-gifts/:file',(req,res)=>{const file=String(req.params.file||'');const item=VIP_GIFT_PACK[file];if(!item||!/^vip-[a-z0-9_-]+\.gif$/i.test(file))return res.sendStatus(404);res.setHeader('Content-Type',item.type||'image/gif');res.setHeader('Cache-Control','public,max-age=31536000,immutable');res.send(item.data);});
 // Static assets must not serve index.html before the dynamic SEO-aware page handler.
 app.get('/index.html', (req,res)=>res.redirect(301,'/'));
 app.use(express.static(path.join(ROOT, 'public'), { index: false }));
@@ -738,29 +748,51 @@ function permissionForAdminPath(req){
 function requireAdmin(req,res,next){ requireAuth(req,res,()=>{const permission=permissionForAdminPath(req);if(!hasPermission(req.user,permission))return res.status(403).json({error:'ما عندك صلاحية لهذا القسم أو الإجراء'});const write=['POST','PUT','PATCH','DELETE'].includes(req.method);if(write){res.on('finish',()=>{if(res.statusCode<200||res.statusCode>=300)return;try{db.adminAuditLogs=db.adminAuditLogs||[];const body=req.body&&typeof req.body==='object'?req.body:{};const target=String(body.name||body.target||body.member||'').slice(0,40);const action=String(body.action||body.operation||body.rank||body.planId||body.title||'').slice(0,80);db.adminAuditLogs.unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),at:Date.now(),actor:String(req.user?.name||'إدارة').slice(0,32),method:req.method,path:String(req.path||'').slice(0,120),status:res.statusCode,target,action,details:[target&&('العضو: '+target),action&&('التفصيل: '+action)].filter(Boolean).join(' · ')});db.adminAuditLogs=db.adminAuditLogs.slice(0,500);save();}catch(e){console.error('Admin audit log save failed:',e.message)}});}return next();}); }
 // Presence visibility is enforced per viewer on the server. A ghost is visible only
 // to its own session; hidden accounts are visible to staff ranks and their own session.
-function canSeePresence(viewer,target){
+// A short-lived context avoids repeatedly scanning all sessions and sockets while
+// broadcasting one live-state update. It is rebuilt per broadcast so it cannot go stale.
+function buildPresenceContext(){
+  const socketsBySid = new Map();
+  for (const so of io.sockets.sockets.values()) if (so.data?.sid) socketsBySid.set(so.data.sid, so);
+  const activeEntries = [];
+  const sessionsBySid = new Map();
+  const sessionsByAccount = new Map();
+  for (const [sid,u] of sessions) {
+    if (!socketUsers.has(sid)) continue;
+    activeEntries.push([sid,u]);
+    sessionsBySid.set(sid,u);
+    const accountKey = keyName(u.name);
+    let group = sessionsByAccount.get(accountKey);
+    if (!group) sessionsByAccount.set(accountKey, group = []);
+    group.push(u);
+  }
+  return { socketsBySid, activeEntries, sessionsBySid, sessionsByAccount };
+}
+function canSeePresence(viewer,target,context=null){
   if(!target)return false;
   if(viewer&&keyName(viewer.name)===keyName(target.name))return true;
-  const sameAccountSessions=[...sessions.entries()].filter(([sid,u])=>socketUsers.has(sid)&&keyName(u.name)===keyName(target.name));
-  if(sameAccountSessions.some(([,u])=>u.ghost))return false;
+  const sameAccountSessions = context
+    ? (context.sessionsByAccount.get(keyName(target.name)) || [])
+    : [...sessions.entries()].filter(([sid,u])=>socketUsers.has(sid)&&keyName(u.name)===keyName(target.name)).map(([,u])=>u);
+  if(sameAccountSessions.some(u=>u.ghost))return false;
   if(target.ghost)return false;
-  if(target.hidden)return !!viewer&&(isOwner(viewer)||hasPermission(viewer,'presence_hidden_view')); 
+  if(target.hidden)return !!viewer&&(isOwner(viewer)||hasPermission(viewer,'presence_hidden_view'));
   return true;
 }
 function canSeePresenceNotice(viewer,notice){
   if(!notice||notice.presenceVisibility!=='staff')return true;
   return !!viewer&&(keyName(viewer.name)===keyName(notice.from)||isOwner(viewer)||hasPermission(viewer,'presence_hidden_view'));
 }
-function visibleRooms(viewer){return db.rooms.map(r=>{const {passwordHash,...safe}=r;return {...safe,locked:!!passwordHash,online:onlineInRoom(r.id,viewer)};});}
+function visibleRooms(viewer,context=null){return db.rooms.map(r=>{const {passwordHash,...safe}=r;return {...safe,locked:!!passwordHash,online:onlineInRoom(r.id,viewer,context)};});}
 function hasInvisibleActiveSession(name,viewer){
   const active=[...sessions.entries()].filter(([sid,u])=>socketUsers.has(sid)&&keyName(u.name)===keyName(name));
   return active.length>0&&!active.some(([,u])=>canSeePresence(viewer,u));
 }
 function emitState(){
-  for(const so of io.sockets.sockets.values()){
+  const context=buildPresenceContext();
+  for(const so of context.socketsBySid.values()){
     const viewer=sessionUser(so.data?.sid);
     if(!viewer)continue;
-    so.emit('live-state',{online:getOnlineUsers(viewer),rooms:visibleRooms(viewer)});
+    so.emit('live-state',{online:getOnlineUsers(viewer,context),rooms:visibleRooms(viewer,context)});
   }
 }
 // socketUsers is keyed by the login session id, not Socket.IO's socket.id.
@@ -772,18 +804,24 @@ function emitToUser(name,event,payload){
   }
 }
 
-function getOnlineUsers(viewer=null){
+function getOnlineUsers(viewer=null,context=null){
   const arr=[];
-  for(const [sid,u] of sessions){
-    if(!socketUsers.has(sid)||!canSeePresence(viewer,u))continue;
-    const role=roleOf(u),so=socketBySession(sid);
+  const entries=context?context.activeEntries:sessions;
+  for(const [sid,u] of entries){
+    if(!context&&!socketUsers.has(sid)||!canSeePresence(viewer,u,context))continue;
+    const role=roleOf(u),so=context?context.socketsBySid.get(sid):socketBySession(sid);
     arr.push({...u,role,owner:role==='owner',admin:['owner','admin'].includes(role),staff:['owner','admin','banner','super'].includes(role),panelAccess:role==='owner'||hasPermission(u,'panel_access'),room:socketUsers.get(sid)?.room||u.room||'',countryCode:(so?.handshake?.headers?.['cf-ipcountry']||so?.handshake?.headers?.['x-country-code']||'').toUpperCase(),displayName:displayName(u.name),likes:userLikes(u),level:level(userLikes(u)),profile:profile(u.name)});
   }
   const seen=new Set(); return arr.filter(x=>{const k=keyName(x.name);if(seen.has(k))return false;seen.add(k);return true;});
 }
-function onlineInRoom(room,viewer=null){
+function onlineInRoom(room,viewer=null,context=null){
   const set=roomSockets.get(room);if(!set)return 0;
-  return [...set].filter(sid=>socketUsers.has(sid)&&canSeePresence(viewer,sessions.get(sid))).length;
+  let count=0;
+  for(const sid of set){
+    const user=context?context.sessionsBySid.get(sid):sessions.get(sid);
+    if(socketUsers.has(sid)&&canSeePresence(viewer,user,context))count++;
+  }
+  return count;
 }
 function emitPresenceToRoom(room,notice){
   for(const sid of (roomSockets.get(room)||[])){

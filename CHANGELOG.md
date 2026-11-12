@@ -1,3 +1,8 @@
+## v46.92.0
+- Decode bundled smiley and gift image payloads once into Buffers at startup, releasing the larger Base64 strings from the V8 heap and avoiding per-request Buffer allocations.
+- Reworked live presence broadcasts to build short-lived indexed session/socket lookups once per broadcast, eliminating repeated nested full scans while preserving per-viewer ghost/hidden visibility.
+- Added regression checks for packed-asset reuse and indexed presence broadcasting; no chat features or user data formats were removed.
+
 ## v46.91.0
 - Removed all older competing profile-photo sizing rules from both mirrored HTML entry points.
 - Applied one canonical rule to the default Rimaz avatar in profile cards: 250px display height, contain fit, centered, white background and slight inset padding. User-uploaded photos are unchanged.
