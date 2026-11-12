@@ -203,3 +203,9 @@
 - Implemented the welcome bot in the public room and server-side rate/repetition protection for public chat messages.
 - Added the independent `bots_manage` rank permission and authenticated server endpoints for bot settings.
 - Games, statistics, and admin-command bots are exposed as staged controls and are not represented as active implementations yet.
+
+## v46.93.4 — Banner rendering and functional bots
+- Render each member's personal banner inline in the online-members list, above their display name; animated GIFs remain animated.
+- Allow GIF personal-banner uploads without converting them to static images.
+- Implement server-side chat commands for games, member statistics, help, and permission-checked administrative announcements.
+- Normalize bot settings and enforce each bot's enabled state on the server.
