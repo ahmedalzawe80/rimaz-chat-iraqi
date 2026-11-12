@@ -176,3 +176,9 @@
 - Added a new one-time VIP catalogue migration that discards the previous VIP catalogue and removes legacy VIP gift assignments while preserving VIP membership and ordinary gifts.
 - Removed square backgrounds, borders, and shadows from member/rank/gift badges across online members, private contacts, chat messages, wall posts, and profile surfaces.
 - Kept the supplied VIP GIF as the canonical VIP asset.
+
+## 46.93.0
+- Added a separate `health_view` rank permission for the server health and memory monitor.
+- Added a dedicated health tab with live RSS, V8 heap, external memory, Buffer, database and upload metrics.
+- Kept health diagnostics read-only and enforced authorization on the server endpoint.
+- Existing full-access admin ranks/accounts retain the new permission through a one-time migration; limited ranks are not broadened.
