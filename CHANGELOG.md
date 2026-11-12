@@ -209,3 +209,11 @@
 - Allow GIF personal-banner uploads without converting them to static images.
 - Implement server-side chat commands for games, member statistics, help, and permission-checked administrative announcements.
 - Normalize bot settings and enforce each bot's enabled state on the server.
+
+
+## v46.93.5 — member banner and profile layout refactor
+- Rebuilt online-member row structure so the avatar, personal banner/name lane, likes, and country flag have separate predictable grid columns.
+- Moved rank artwork inline with the member name instead of reserving a separate column that squeezes the banner.
+- Kept personal banners as shallow 13:1 strips in the online list and moved the profile banner to the top edge of the profile card, above its black title strip.
+- Bounded profile portraits to a fixed content area so oversized source images cannot expand the member card.
+- Kept banner data and upload routes unchanged; GIF image sources remain directly rendered.
