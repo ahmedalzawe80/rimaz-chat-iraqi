@@ -602,7 +602,7 @@ const PERMISSION_CATALOG = {
   avatar_delete:'حذف الصور', grant_likes:'منح اللايكات',
   rank_assign:'منح الشارات ومدتها', rank_art_manage:'إدارة مكتبة أشكال الرتب وربطها بالرتب', member_decoration_manage:'تخصيص وإزالة زخرفة عضو محدد', permission_manage:'تعديل صلاحيات الرتب', member_ip:'عرض IP',
   reset_likes:'تصفير اللايكات', shortcuts_manage:'إدارة الاختصارات', smileys_manage:'إدارة السميلات', room_move:'نقل عضو بين الغرف', room_create:'إنشاء غرفة', room_edit:'تعديل بيانات الغرفة', room_delete:'حذف غرفة', room_lock:'تعيين أو إزالة كلمة مرور الغرفة', room_image_manage:'إدارة صور الغرف', gift_catalog_manage:'إضافة وحذف هدايا الكتالوج', wall_stop:'إيقاف الحائط', wall_restart:'تشغيل الحائط', wall_clear:'حذف جميع منشورات الحائط', wall_delete_user:'حذف منشورات عضو محدد من الحائط', welcome_manage:'إدارة رسائل الترحيب',
-  audit_view:'عرض سجل العمليات وتصديره', stats_view:'عرض إحصائيات الموقع', chat_filter_manage:'إدارة فلتر الكلمات', member_status_manage:'إدارة حالات الأعضاء', private_chat_override:'تجاوز إغلاق المحادثات الخاصة', presence_hidden_view:'مشاهدة الأعضاء المخفيين', hidden_login:'الدخول المخفي', ghost_login:'دخول الشبح', staff_notice:'إرسال تنبيهات إدارية', staff_media:'إرسال وسائط إدارية', voice_mic_override:'تجاوز شرط اللايكات للمايكات', site_admin:'إدارة الموقع الكاملة (الإعدادات والسجلات وصحة الخادم والنسخ والاستعادة)', subscriptions_manage:'إدارة خطط واشتراكات الأعضاء وتجديدها وإلغاؤها', ads_manage:'إدارة الحملات الإعلانية والصور والروابط والمدد', control_center_manage:'التحكم بتشغيل وإيقاف وحدات الدردشة', audit_details_view:'عرض تفاصيل الأهداف والإجراءات في سجل العمليات', health_view:'مراقبة صحة الخادم واستهلاك الذاكرة'
+  audit_view:'عرض سجل العمليات وتصديره', stats_view:'عرض إحصائيات الموقع', chat_filter_manage:'إدارة فلتر الكلمات', member_status_manage:'إدارة حالات الأعضاء', private_chat_override:'تجاوز إغلاق المحادثات الخاصة', presence_hidden_view:'مشاهدة الأعضاء المخفيين', hidden_login:'الدخول المخفي', ghost_login:'دخول الشبح', staff_notice:'إرسال تنبيهات إدارية', staff_media:'إرسال وسائط إدارية', voice_mic_override:'تجاوز شرط اللايكات للمايكات', site_admin:'إدارة الموقع الكاملة (الإعدادات والسجلات والنسخ والاستعادة)', subscriptions_manage:'إدارة خطط واشتراكات الأعضاء وتجديدها وإلغاؤها', ads_manage:'إدارة الحملات الإعلانية والصور والروابط والمدد', control_center_manage:'التحكم بتشغيل وإيقاف وحدات الدردشة', audit_details_view:'عرض تفاصيل الأهداف والإجراءات في سجل العمليات', health_view:'مراقبة صحة الخادم واستهلاك الذاكرة'
 };
 // Every permission is an independent capability; no rank name grants implicit access.
 const ALL_PERMISSION_KEYS=Object.keys(PERMISSION_CATALOG);
@@ -615,7 +615,7 @@ function normalizePermissionList(list){
  return [...set].filter(key=>Object.hasOwn(PERMISSION_CATALOG,key));
 }
 const DEFAULT_RANK_PERMISSIONS = {
-  'admin-full':[...ALL_PERMISSION_KEYS],
+  'admin-full':ALL_PERMISSION_KEYS.filter(permission=>permission!=='health_view'),
   'admin-shield':['panel_access','users_view','kick_room','mute_room','messages_delete'],
   'crown-gold':['panel_access','users_view','kick_room','mute_room','announcement_post'],
   'crown-silver':['panel_access','users_view','kick_room'],
@@ -710,15 +710,15 @@ if(Number(db.adminFeaturePermissionMigrationVersion||0)<1){
  db.adminFeaturePermissionMigrationVersion=1;
  try{save();}catch(error){console.error('Could not persist v46.76 permission migration:',error.message);}
 }
-// Add the dedicated health-monitor permission without broadening limited ranks.
-if(Number(db.healthViewPermissionMigrationVersion||0)<1){
- const introduced=['health_view'];
- const previous=ALL_PERMISSION_KEYS.filter(key=>!introduced.includes(key));
+// Health monitoring is an explicit opt-in capability, even for full-admin ranks.
+// Remove the automatic grant made by the first health permission migration.
+if(Number(db.healthViewPermissionMigrationVersion||0)<2){
+ const previous=ALL_PERMISSION_KEYS.filter(key=>key!=='health_view');
  const adminFull=rankDefinition('admin-full');
- if(adminFull&&previous.every(key=>(adminFull.permissions||[]).includes(key)))adminFull.permissions=[...new Set([...(adminFull.permissions||[]),...introduced])];
- for(const permissions of Object.values(db.accountPermissions||{}))if(Array.isArray(permissions)&&previous.every(key=>permissions.includes(key)))for(const key of introduced)if(!permissions.includes(key))permissions.push(key);
- db.healthViewPermissionMigrationVersion=1;
- try{save();}catch(error){console.error('Could not persist health-view permission migration:',error.message);}
+ if(adminFull&&previous.every(key=>(adminFull.permissions||[]).includes(key)))adminFull.permissions=(adminFull.permissions||[]).filter(key=>key!=='health_view');
+ for(const permissions of Object.values(db.accountPermissions||{}))if(Array.isArray(permissions)&&previous.every(key=>permissions.includes(key))){const index=permissions.indexOf('health_view');if(index!==-1)permissions.splice(index,1);}
+ db.healthViewPermissionMigrationVersion=2;
+ try{save();}catch(error){console.error('Could not persist explicit health-view permission migration:',error.message);}
 }
 
 function requirePermission(permission){return (req,res,next)=>requireAuth(req,res,()=>hasPermission(req.user,permission)?next():res.status(403).json({error:'ما عندك صلاحية لهذا الإجراء'}));}

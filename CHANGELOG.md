@@ -182,3 +182,11 @@
 - Added a dedicated health tab with live RSS, V8 heap, external memory, Buffer, database and upload metrics.
 - Kept health diagnostics read-only and enforced authorization on the server endpoint.
 - Existing full-access admin ranks/accounts retain the new permission through a one-time migration; limited ranks are not broadened.
+
+
+## 46.93.1
+- Made `health_view` an explicit opt-in permission: full-admin rank defaults no longer include it automatically.
+- Added a one-time migration to remove the previous automatic health grant from full-access rank/account permission sets, allowing the owner to enable it deliberately.
+- The dedicated health tab is now shown and guarded only by owner status or `health_view`; `site_admin` no longer causes the dedicated button to appear. The existing site-admin overview keeps its embedded read-only health summary.
+- Kept the health API protected for owner, `health_view`, or the existing broad `site_admin` access used by the site settings page.
+- Updated archive regression checks for the explicit opt-in behavior.

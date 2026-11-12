@@ -906,10 +906,10 @@ try {
  const checks=[
   ['health_view is a distinct permission in the server catalogue',src.includes("health_view:'مراقبة صحة الخادم واستهلاك الذاكرة'")],
   ['health API allows only owner, site_admin or health_view',src.includes("!hasPermission(req.user,'health_view')&&!hasPermission(req.user,'site_admin')")],
-  ['health tab is shown and guarded by the dedicated permission',html.includes("adminTab('health')")&&html.includes("health:hasClientPermission('health_view')||hasClientPermission('site_admin')")&&html.includes("health:can('health_view')||can('site_admin')")],
+  ['health tab is shown only for owner or explicit health_view permission',html.includes("(me?.owner||hasClientPermission('health_view'))?`<button onclick=\"adminTab('health')\">🩺 صحة الخادم</button>`:''")&&html.includes("health:hasClientPermission('health_view')")&&html.includes("health:can('health_view')")],
   ['health monitor displays RSS, heap, external and Buffer metrics',html.includes('RAM الفعلية (RSS)')&&html.includes('Heap المستخدم')&&html.includes('ذاكرة خارج Heap')&&html.includes('Buffers')],
   ['health monitor permission is grouped in rank editor',html.includes("'stats_view','health_view','chat_filter_manage'")],
-  ['full-admin health permission migration does not broaden limited ranks',src.includes('healthViewPermissionMigrationVersion')&&src.includes("const introduced=['health_view']")&&src.includes('previous.every(key=>(adminFull.permissions||[]).includes(key))')],
+  ['health permission is removed from automatic full-admin grants and requires opt-in',src.includes('healthViewPermissionMigrationVersion||0)<2')&&src.includes("filter(permission=>permission!=='health_view')")&&src.includes("filter(key=>key!=='health_view')")&&src.includes('db.healthViewPermissionMigrationVersion=2')],
   ['health diagnostics expose V8 heap and external memory metrics',src.includes('heapTotal:memory.heapTotal,external:memory.external,arrayBuffers:memory.arrayBuffers||0')],
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error){fail('v46.93 health monitor permission checks',error.message)}
@@ -920,7 +920,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.87.0 package version is current', pkg.version === '46.93.0'],
+    ['v46.87.0 package version is current', pkg.version === '46.93.1'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -1089,7 +1089,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.87.0 package version',pkgNow.version==='46.93.0'],
+  ['v46.87.0 package version',pkgNow.version==='46.93.1'],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],
