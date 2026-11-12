@@ -1,3 +1,13 @@
+## v46.90.0
+- Replaced the default avatar with the approved square logo reading “ريماز عراقية”; retained contain-fit so the full image is visible without cropping.
+- Replaced the previous 18px gift-badge rule with one shared 20px rule for online members, private contacts, message headers, presence, and wall posts.
+- Sized the online-members gift slot to 24px so the 20px artwork is not squeezed by the badge column.
+
+## v46.89.0
+- Unified last-gift badge wrapper, image, and emoji sizing to 18px across online members, private contacts, general chat, and wall.
+- Removed stale 20px/21px online-only and 22px member-specific gift badge overrides.
+- Replaced the default avatar with the new “دردشة ريماز” logo on a square canvas with no crop; custom member avatars remain unchanged.
+
 ## v46.88.0
 - Replaced the deployed default avatar asset with the new open-heart Arabic Rimaz logo.
 - Added cache-busting to the default avatar URL and ensured that only the default logo uses contain-fit (custom member photos unchanged).
