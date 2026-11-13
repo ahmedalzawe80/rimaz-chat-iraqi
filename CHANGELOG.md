@@ -1,3 +1,10 @@
+## v46.93.13 — Private conversation identity cleanup
+- Removed the three superseded private-message sender layout style layers that alternated between Flex and Grid and forced intrinsic max-content widths.
+- Replaced them with one canonical sender layout: fixed avatar column plus a wall-style `minmax(0,1fr)` identity column.
+- Applied the same flexible banner sizing rule to the private conversation title and sender rows; long banner artwork scales proportionally within the available width instead of being clipped or shifted.
+- Preserved the existing 14px chat-banner height and all other chat surfaces.
+- Synchronized `index.html` and `public/index.html`.
+
 ## v46.93.10 — Shared personal-banner identity layout
 - Rebuilt the personal-banner identity component as a single intrinsic-size flex layout shared by public chat, room-entry notices, online members, private contacts, private messages, and the wall.
 - Removed the previous per-surface width/position assumptions that caused private-message banners to collapse or drift and caused member names to clip at the start.
