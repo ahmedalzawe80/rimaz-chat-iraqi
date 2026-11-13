@@ -1,3 +1,11 @@
+## v46.93.10 — Shared personal-banner identity layout
+- Rebuilt the personal-banner identity component as a single intrinsic-size flex layout shared by public chat, room-entry notices, online members, private contacts, private messages, and the wall.
+- Removed the previous per-surface width/position assumptions that caused private-message banners to collapse or drift and caused member names to clip at the start.
+- Preserved the existing banner height (14px in chat surfaces; 26px in the member-card header) and kept the member-card order: banner, photo, rank, name.
+- Kept avatar placement owned by each surface so the banner remains adjacent to the correct avatar without duplicating or hiding the image.
+- Synchronized the browser entry files and added no changes to banner asset sizing.
+- Validation: existing static/archive regression suite passes; live visual testing on the deployed server remains necessary.
+
 ## v46.93.9 — Identity ordering and clipping correction
 
 - Kept all personal-banner height and size values unchanged.
