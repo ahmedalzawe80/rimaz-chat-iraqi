@@ -234,9 +234,8 @@
 - Synchronized both browser entry files and updated structural verification for the canonical layout.
 - Final visual parity remains subject to a live-host screenshot comparison at the same viewport as the reference.
 
-## v46.93.9 — Reference-exact personal banner alignment
-- Rebuilt the member profile header state: when a personal banner exists, the member avatar is directly adjacent to the banner inside the compact black header; the display name and rank are omitted from that header.
-- When the personal banner is absent, the normal member name and rank return to their original header position in the main member profile.
-- Reworked the online-members row for banner accounts to place the avatar beside a full-height banner, matching the supplied reference proportions.
-- Left the public chat message and wall banner renderers unchanged.
-- Kept `index.html` and `public/index.html` byte-identical and added regression checks for both banner states.
+## v46.93.10 — reference-aligned banner identity layout
+- Rebuilt the profile header banner sequence as banner, avatar, rank, then member name.
+- Kept the no-banner header sequence unchanged.
+- Reworked online-member banner geometry to use bounded dimensions and `object-fit: contain` rather than stretching the artwork.
+- Kept the existing public chat and wall banner rendering untouched.
