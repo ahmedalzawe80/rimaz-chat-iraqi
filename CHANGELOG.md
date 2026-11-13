@@ -1,3 +1,11 @@
+## v46.93.14 — Private contacts and member-card header rebuild
+- Removed legacy CSS selectors that specifically targeted private-contact member rows, including the obsolete extra rank column that did not exist in the row DOM.
+- Rebuilt the private conversations list from its actual four-column DOM: status marker, avatar, flexible identity, and delete action. The identity now receives the full remaining width using the same `minmax(0,1fr)` content geometry proven on the wall.
+- Removed the previous personal-banner system block and replaced it with one canonical identity layout definition.
+- Rebuilt the member-card top strip: banner height reduced from 26px to 22px, black strip reduced to 26px with zero padding, and the avatar/rank/close control follow the same compact height.
+- Preserved banner height on all other chat surfaces and did not change the general chat or wall layouts.
+- Synchronized `index.html` and `public/index.html`.
+
 ## v46.93.13 — Private conversation identity cleanup
 - Removed the three superseded private-message sender layout style layers that alternated between Flex and Grid and forced intrinsic max-content widths.
 - Replaced them with one canonical sender layout: fixed avatar column plus a wall-style `minmax(0,1fr)` identity column.
