@@ -2600,41 +2600,57 @@ img[src*="rimaz-default-avatar.png"]{object-fit:contain!important;object-positio
 
 
 <style id="rimaz-chat-typography-single-source-v1">
-/* Typography source of truth: values mirror the approved welcome-card title and body. */
+/* Single typography source for every chat surface: member names 17px, all supporting text 16px. */
 :root{
-  --rimaz-chat-name-size:16px;
-  --rimaz-chat-body-size:17px;
+  --rimaz-chat-name-size:17px;
+  --rimaz-chat-body-size:16px;
   --rimaz-chat-name-weight:900;
   --rimaz-chat-body-weight:700;
   --rimaz-chat-name-line:1.12;
   --rimaz-chat-body-line:1.18;
 }
-.msg .msghead,
+/* Names: public messages, entry notices, online members, private list/conversations, and wall. */
 .msg .msghead .rimazIdentityName,
 .msg .msghead .rimazIdentityPlain,
 .member .memberName,
+.member .memberNameLine .rimazIdentityName,
 .presence .presenceName,
+.presence .presenceNameRow .rimazIdentityName,
+.privateContactIdentity .rimazIdentityName,
 .pmsgTitle .rimazIdentityName,
-.rimazUnifiedName b{
+.rimazUnifiedName .rimazIdentityName,
+.rimazUnifiedName b,
+.wallPost .wallText .rimazIdentityName,
+.rimazChatNotice .noticeContent>b,
+.rimazWelcomeNotice .noticeContent>b{
   font-size:var(--rimaz-chat-name-size)!important;
   font-weight:var(--rimaz-chat-name-weight)!important;
   line-height:var(--rimaz-chat-name-line)!important;
 }
+/* Supporting text: message bodies, statuses, previews, private messages, and wall text. */
 .msg .msgtext,
 .member .memberSub,
 .presence .presenceText,
+.privateListOverlay .privateLastMessage,
+.pmsg .pmsgText,
 .wallPost .wallText,
-.pmsg .pmsgText{
+.wallPost .wallText>div:not(.rimazUnifiedName),
+.rimazChatNotice .noticeText,
+.rimazChatNotice .noticeMessageText,
+.rimazWelcomeNotice .noticeText,
+.rimazWelcomeNotice .noticeMessageText{
   font-size:var(--rimaz-chat-body-size)!important;
   font-weight:var(--rimaz-chat-body-weight)!important;
   line-height:var(--rimaz-chat-body-line)!important;
 }
-@media(max-width:600px){
-  :root{
-    --rimaz-chat-name-size:15px;
-    --rimaz-chat-body-size:16px;
-  }
-}
+/* Keep the entry/member rank aligned to the top edge of the avatar and name row. */
+.presence .presenceBody{align-self:start!important;justify-content:flex-start!important;}
+.presence .presenceNameRow,
+.member .memberNameLine{align-items:flex-start!important;}
+.presence .presenceNameRow .memberBadges,
+.presence .presenceNameRow .memberBadge,
+.member .memberNameLine .memberBadges,
+.member .memberNameLine .memberBadge{align-self:flex-start!important;}
 </style>
 
 </body></html>
