@@ -1,3 +1,13 @@
+## v46.93.8 — Unified personal-banner identity system
+
+- Replaced the scattered personal-banner rendering paths with one shared identity renderer.
+- Personal banners now render in room-entry presence notices, public chat messages, online members, private contacts, private conversations, and wall posts.
+- In normal chat surfaces, the banner replaces the member name and rank; removing the banner restores the normal name/rank identity.
+- Member cards keep the name and rank visible and place the member avatar immediately to the left of the personal banner.
+- Reduced the member-card masthead and banner dimensions together; the masthead now closely matches the banner/avatar height.
+- Removed obsolete personal-banner selectors and kept the two browser entry files identical.
+- Updated live profile-change handling so banner add/remove and name changes refresh visible identity rows.
+
 ## v46.93.2
 - Added an independent `banner_upload` rank permission for members to upload, replace, and delete their own personal banner.
 - Personal banners are stored separately from rank artwork and member decorations, and appear in the member information panel.

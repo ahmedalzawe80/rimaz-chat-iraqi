@@ -183,7 +183,7 @@ try {
 try {
   const client = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const history = fs.readFileSync(server, 'utf8').match(/function roomHistoryWithAnnouncements\([\s\S]*?\n}\nfunction publishAnnouncement/);
-  if (client.includes('translate=\"no\"') && client.includes('class=\"notranslate\"') && client.includes('nameEl.setAttribute(\'translate\',\'no\')')) pass('chat display names are protected from browser translation');
+  if (client.includes('translate="no"') && client.includes('rimazIdentityName notranslate') && client.includes("nameEl.setAttribute('translate','no')")) pass('chat display names are protected from browser translation');
   else fail('chat display names are protected from browser translation');
   if (!client.includes("m.likes>=500?'<span class=\"badge\">500+</span>'")) pass('500+ likes badge is removed from chat message headers');
   else fail('500+ likes badge is removed from chat message headers');
@@ -377,7 +377,7 @@ try {
   else fail('VIP replaces a previous gift but never replaces an active rank');
   if (rank && rank[0].includes('p.gifts=[]') && rank[0].includes('delete p.vipUntil')) pass('new visual rank replaces previous gift and VIP');
   else fail('new visual rank replaces previous gift and VIP');
-  if (css.includes('rimaz-member-layout-single-source-v46937') && css.includes('grid-template-columns:3px 42px minmax(0,1fr) 23px 19px!important') && css.includes('.memberNameLine') && css.includes('.memberPersonalBannerInline') && css.includes('.member .memberSub')) pass('online-members panel uses one layout with name and status beside rank');
+  if (css.includes('rimaz-personal-banner-system') && css.includes('function personalBannerIdentity') && css.includes('onlineIdentity') && css.includes('.memberNameLine') && css.includes('.memberSub')) pass('online-members panel uses one layout with name and status beside rank');
   else fail('online-members status/name/rank unified layout');
 } catch (error) { fail('badge exclusivity and online layout checks', error.message); }
 
@@ -920,7 +920,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.6 package version is current', pkg.version === '46.93.7'],
+    ['v46.93.6 package version is current', pkg.version === '46.93.8'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -1089,7 +1089,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.87.0 package version',pkgNow.version==='46.93.7'],
+  ['v46.87.0 package version',pkgNow.version==='46.93.8'],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],
@@ -1119,14 +1119,14 @@ try {
 // v46.93.6: the personal banner is structurally placed inside the dark profile identity bar.
 try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
-  const memberProfileHeader = htmlText.includes('<div class="profileTop">${p.banner?`<img class="memberPersonalBannerProfile"') && !htmlText.includes('<div class="memberPersonalBannerProfile"><img');
-  const genericProfileHeader = htmlText.includes('<div class="profileTop">${x.profile?.banner?`<img class="memberPersonalBannerProfile"');
-  const coherentLayout = htmlText.includes('rimaz-member-layout-single-source-v46937') && htmlText.includes('width:84vw!important') && htmlText.includes('height:50.4vw!important') && htmlText.includes('max-width:min(100%,135px)!important');
+  const memberProfileHeader = htmlText.includes('personalBannerIdentity(p,dn') && htmlText.includes('profileIdentity');
+  const genericProfileHeader = htmlText.includes('personalBannerIdentity(x.profile,displayFor(x)') && htmlText.includes('rimazProfileMiniAvatar');
+  const coherentLayout = htmlText.includes('rimaz-personal-banner-system') && htmlText.includes('height:32px!important') && htmlText.includes('height:26px!important') && htmlText.includes('max-width:min(100%,150px)!important');
   const noSupersededLayout = !htmlText.includes('rimaz-reference-member-components-v4696') && !htmlText.includes('rimaz-profile-and-banner-layout-v4695');
   const ok = memberProfileHeader && genericProfileHeader && coherentLayout && noSupersededLayout;
-  if (ok) pass('v46.93.7 canonical member card and compact online-member geometry are present');
-  else fail('v46.93.7 canonical member card and compact online-member geometry are present');
-} catch (error) { fail('v46.93.7 profile structure checks', error.message); }
+  if (ok) pass('v46.93.8 canonical member card and compact online-member geometry are present');
+  else fail('v46.93.8 canonical member card and compact online-member geometry are present');
+} catch (error) { fail('v46.93.8 profile structure checks', error.message); }
 
 
 // v46.93.2: personal banners are independent and permission-gated.
@@ -1139,7 +1139,7 @@ try {
   ['v46.93.2 banners are separate from rank art and member decorations',src.includes('Personal banners are intentionally separate from rank artwork and member decorations')&&src.includes('p.banner=')],
   ['v46.93.2 rank permission editor exposes banner_upload',html.includes("['الملف الشخصي',['profile_edit','avatar_delete','banner_upload']]")],
   ['v46.93.2 authorized members can manage their personal banner and oversized images are compressed',html.includes('choosePersonalBanner')&&html.includes("canvas.toBlob(resolve,'image/webp',0.84)")&&html.includes('deletePersonalBanner')],
-  ['v46.93.2 member information panel renders the personal banner',html.includes('memberPersonalBannerProfile')&&html.includes('profileTop')],
+  ['v46.93.2 member information panel renders the personal banner',html.includes('personalBannerIdentity(p,dn')&&html.includes('rimazProfileMiniAvatar')&&html.includes('profileTop')],
   ['v46.93.2 full-admin migration adds banner permission without broadening limited ranks',src.includes('bannerUploadPermissionMigrationVersion')&&src.includes("previous.every(key=>(adminFull.permissions||[]).includes(key))")],
   ['v46.93.2 browser entry files remain identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')]
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
