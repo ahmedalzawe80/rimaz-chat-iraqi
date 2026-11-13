@@ -1,3 +1,12 @@
+# Changelog
+
+## v46.93.8 — توحيد عرض البنر الشخصي
+- توحيد بناء هوية العضو ذات البنر في دالة مشتركة بدلاً من تكرار تركيب الصورة والبنر داخل كل قالب.
+- عند وجود البنر، تبقى الصورة الشخصية الموجودة في العمود المجاور ويحل البنر محل الاسم والرتبة في قائمة المتواجدين والحضور والرسائل العامة والخاصة والحائط.
+- عند غياب البنر، تعود قوالب الاسم والرتبة الأصلية تلقائياً دون تخزين حالة عرض منفصلة.
+- إزالة تكرار شارة الرتبة من صف جهات الاتصال الخاصة عند وجود البنر.
+- توحيد ملفي الواجهة واختبارات انحدار مخصصة لمسارات عرض البنر.
+
 ## v46.93.2
 - Added an independent `banner_upload` rank permission for members to upload, replace, and delete their own personal banner.
 - Personal banners are stored separately from rank artwork and member decorations, and appear in the member information panel.

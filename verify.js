@@ -920,7 +920,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.6 package version is current', pkg.version === '46.93.7'],
+    ['v46.93.6 package version is current', pkg.version === '46.93.8'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -1089,7 +1089,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.87.0 package version',pkgNow.version==='46.93.7'],
+  ['v46.87.0 package version',pkgNow.version==='46.93.8'],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],
@@ -1144,3 +1144,19 @@ try {
   ['v46.93.2 browser entry files remain identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')]
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error){fail('v46.93.2 personal banner checks',error.message)}
+
+
+// v46.93.8: personal banner identity is a single conditional rendering contract.
+try {
+ const html=fs.readFileSync(mainPath,'utf8');
+ const checks=[
+  ['v46.93.8 shared banner renderer emits banner only; adjacent avatar remains owned by each surface',html.includes('function personalBannerIdentity(profile,name)')&&html.includes('class="rimazBannerArtwork"')&&!html.includes('class="rimazBannerAvatar"')],
+  ['v46.93.8 online member rows hide name/rank while banner exists and restore them otherwise',html.includes('x.profile?.banner?personalBannerIdentity(x.profile,name):`<div class="memberNameLine">${memberBadge(x)}')],
+  ['v46.93.8 presence rows conditionally switch between banner and original name/rank',html.includes('p.banner?personalBannerIdentity(p,d.displayName||d.name):`<div class="presenceNameRow">')],
+  ['v46.93.8 public chat messages conditionally switch identity to banner',html.includes('p.banner?personalBannerIdentity(p,m.displayName||m.from,avatarFor(p)):')],
+  ['v46.93.8 private messages conditionally switch identity to banner',html.includes('prof?.banner?personalBannerIdentity(prof,m.fromDisplayName||m.from):')],
+  ['v46.93.8 wall posts conditionally switch identity to banner',html.includes('p.profile?.banner?personalBannerIdentity(p.profile,p.displayName||p.from):')],
+  ['v46.93.8 private contact rows suppress duplicate rank when banner exists',html.includes("u.profile?.banner?\'\':memberBadge(u)")],
+  ['v46.93.8 both browser entry files remain identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')]
+ ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error){fail('v46.93.8 banner identity checks',error.message)}
