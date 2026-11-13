@@ -309,3 +309,10 @@
 - Uses `object-fit: contain` with a subtle 3px top inset and bottom alignment so the artwork is slightly smaller and sits a little lower.
 - The black profile header, personal banner, custom user avatars, and all other avatar sizes/layouts remain unchanged.
 - Updated the default-avatar cache key to v46.93.18.
+
+
+## v46.93.19 — Full-width default profile avatar
+- Removed the previous profile-only `contain` sizing and inset that made the default avatar appear small with white side gutters.
+- Matched the default square artwork to the full profile-card width using its intrinsic 1:1 ratio, with no side padding or cropping.
+- Kept the change scoped to the default avatar in the member profile card; custom member photos and the black header are unchanged.
+- Updated the default-avatar cache key to v46.93.19.
