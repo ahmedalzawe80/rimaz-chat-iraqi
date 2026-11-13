@@ -225,3 +225,11 @@
 - Kept banner data, upload permissions, and GIF image URLs intact.
 - Synchronized the public browser entry file with the main entry file.
 - Visual parity still requires a live browser check against the reference on the hosted deployment.
+
+
+## v46.93.7 — Canonical member components
+- Removed the superseded profile-card and member-row layout layers that had conflicting widths, portrait heights, and header sizing.
+- Consolidated the member profile card and online-member row into one authoritative layout definition based on the supplied Benota Qalbi reference: 84vw card width, a shallow identity bar, a bounded 5:3 portrait, and a compact personal banner beside the name.
+- Kept profile actions, room badge, member ranks, personal banner storage, upload permissions, and animated GIF sources intact.
+- Synchronized both browser entry files and updated structural verification for the canonical layout.
+- Final visual parity remains subject to a live-host screenshot comparison at the same viewport as the reference.

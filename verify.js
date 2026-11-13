@@ -377,7 +377,7 @@ try {
   else fail('VIP replaces a previous gift but never replaces an active rank');
   if (rank && rank[0].includes('p.gifts=[]') && rank[0].includes('delete p.vipUntil')) pass('new visual rank replaces previous gift and VIP');
   else fail('new visual rank replaces previous gift and VIP');
-  if (css.includes('rimaz-members-overlay-unified-layout-v2') && css.includes('grid-template-columns:3px 42px minmax(0,1fr) 30px 22px!important') && css.includes('.memberNameLine') && css.includes('.memberPersonalBannerInline') && css.includes('.member .memberSub')) pass('online-members panel uses one layout with name and status beside rank');
+  if (css.includes('rimaz-member-layout-single-source-v46937') && css.includes('grid-template-columns:3px 42px minmax(0,1fr) 23px 19px!important') && css.includes('.memberNameLine') && css.includes('.memberPersonalBannerInline') && css.includes('.member .memberSub')) pass('online-members panel uses one layout with name and status beside rank');
   else fail('online-members status/name/rank unified layout');
 } catch (error) { fail('badge exclusivity and online layout checks', error.message); }
 
@@ -721,7 +721,7 @@ try {
   const repairHtml = fs.readFileSync(mainPath, 'utf8');
   const membersRoute = repairServer.match(/app\.get\('\/api\/members',[\s\S]*?\n\}\);/);
   const adminDataRoute = repairServer.match(/app\.get\('\/api\/admin\/data',[\s\S]*?\n\}\);/);
-  if (!repairHtml.includes('rimaz-members-overlay-unified-layout-v2') || repairHtml.includes('rimaz-final-online-presence-and-permission-repair-v46-29') || repairHtml.includes('rimaz-chat-members-rank-alignment-fix-v1') || repairHtml.includes('rimaz-online-members-status-final-v2')) throw new Error('legacy online layout rules remain or unified layout is missing');
+  if (!repairHtml.includes('rimaz-member-layout-single-source-v46937') || repairHtml.includes('rimaz-final-online-presence-and-permission-repair-v46-29') || repairHtml.includes('rimaz-chat-members-rank-alignment-fix-v1') || repairHtml.includes('rimaz-online-members-status-final-v2')) throw new Error('legacy online layout rules remain or unified layout is missing');
   if (!membersRoute || !membersRoute[0].includes('registeredKeys.has(normalized)') || !membersRoute[0].includes('seenMemberKeys.has(normalized)')) throw new Error('member directory does not suppress legacy guest/registered duplicates');
   if (!repairServer.includes('const registeredAccountKeys=new Set(Object.keys(db.users||{}).map(keyName))') || !repairServer.includes('registeredAccountKeys.has(k)||seenAdminAccountKeys.has(k)')) throw new Error('admin data does not suppress duplicate account identities');
   if (!repairServer.includes("app.get('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")) throw new Error('welcome-message GET route still blocks rank permission');
@@ -920,7 +920,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.6 package version is current', pkg.version === '46.93.6'],
+    ['v46.93.6 package version is current', pkg.version === '46.93.7'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -1089,7 +1089,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.87.0 package version',pkgNow.version==='46.93.6'],
+  ['v46.87.0 package version',pkgNow.version==='46.93.7'],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],
@@ -1111,7 +1111,7 @@ try {
   ['v46.80.8 login form is always shown on page load and no old session token auto-boots chat',html.includes('// Always show the entry screen on a fresh page load.')&&!html.includes('if(sid)boot();')&&html.includes("let sid='',me=null")],
   ['v46.80.8 successful login remembers username and password for prefilled fields',html.includes("localStorage.setItem('rimaz_saved_username'")&&html.includes("localStorage.setItem('rimaz_saved_password'")&&html.includes('value="${esc(remembered.password)}"')],
   ['v46.80.8 session token is tab-only and old persistent tokens are cleared',!html.includes("localStorage.setItem('rimaz_sid',sid)")&&html.includes("sessionStorage.setItem('rimaz_sid',sid)")&&html.includes("localStorage.removeItem('rimaz_sid')")],
-  ['online-members rank art is inline with the name and banner has its own compact column',html.includes('rimaz-members-overlay-unified-layout-v2')&&html.includes('.memberNameLine .memberBadges')&&html.includes('grid-template-columns:3px 42px minmax(0,1fr) 30px 22px!important')]
+  ['online-members rank art is inline with the name and banner has its own compact column',html.includes('rimaz-member-layout-single-source-v46937')&&html.includes('.memberNameLine .memberBadges')&&html.includes('grid-template-columns:3px 42px minmax(0,1fr) 23px 19px!important')]
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error){fail('v46.76.0 feature checks',error.message)}
 
@@ -1121,11 +1121,12 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const memberProfileHeader = htmlText.includes('<div class="profileTop">${p.banner?`<img class="memberPersonalBannerProfile"') && !htmlText.includes('<div class="memberPersonalBannerProfile"><img');
   const genericProfileHeader = htmlText.includes('<div class="profileTop">${x.profile?.banner?`<img class="memberPersonalBannerProfile"');
-  const coherentLayout = htmlText.includes('rimaz-reference-member-components-v4696') && htmlText.includes('aspect-ratio:4/3!important');
-  const ok = memberProfileHeader && genericProfileHeader && coherentLayout;
-  if (ok) pass('v46.93.6 personal banner is inside the profile identity bar and portrait has reference proportions');
-  else fail('v46.93.6 personal banner is inside the profile identity bar and portrait has reference proportions');
-} catch (error) { fail('v46.93.6 profile structure checks', error.message); }
+  const coherentLayout = htmlText.includes('rimaz-member-layout-single-source-v46937') && htmlText.includes('width:84vw!important') && htmlText.includes('height:50.4vw!important') && htmlText.includes('max-width:min(100%,135px)!important');
+  const noSupersededLayout = !htmlText.includes('rimaz-reference-member-components-v4696') && !htmlText.includes('rimaz-profile-and-banner-layout-v4695');
+  const ok = memberProfileHeader && genericProfileHeader && coherentLayout && noSupersededLayout;
+  if (ok) pass('v46.93.7 canonical member card and compact online-member geometry are present');
+  else fail('v46.93.7 canonical member card and compact online-member geometry are present');
+} catch (error) { fail('v46.93.7 profile structure checks', error.message); }
 
 
 // v46.93.2: personal banners are independent and permission-gated.
