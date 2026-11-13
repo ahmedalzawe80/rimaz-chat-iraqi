@@ -1,3 +1,10 @@
+## v46.93.15 — Presence and private-list lower alignment
+- Adjusted the existing online-member content column to stretch to the avatar row height and distribute the status line to the bottom edge.
+- Adjusted the existing private-conversation contact content column to stretch to the avatar row height and anchor the latest-message preview at the bottom.
+- Set the private-list latest-message preview to left alignment beneath the banner, matching the requested avatar-bottom alignment.
+- No banner dimensions, banner heights, member-card header sizing, general chat, or wall layout were changed.
+- Edited the existing canonical selectors in place; no new CSS override block was appended.
+
 ## v46.93.14 — Private contacts and member-card header rebuild
 - Removed legacy CSS selectors that specifically targeted private-contact member rows, including the obsolete extra rank column that did not exist in the row DOM.
 - Rebuilt the private conversations list from its actual four-column DOM: status marker, avatar, flexible identity, and delete action. The identity now receives the full remaining width using the same `minmax(0,1fr)` content geometry proven on the wall.
