@@ -260,3 +260,9 @@
 - Kept profile actions, room badge, member ranks, personal banner storage, upload permissions, and animated GIF sources intact.
 - Synchronized both browser entry files and updated structural verification for the canonical layout.
 - Final visual parity remains subject to a live-host screenshot comparison at the same viewport as the reference.
+
+
+## v46.93.12
+- Fixed the private conversation top header to render the shared personal-banner identity instead of always showing rank and name.
+- Stabilized private-message sender banner sizing so the banner keeps its intrinsic width and no longer shrinks into the center or crops its text.
+- Kept the existing banner height and all other chat surfaces unchanged.
