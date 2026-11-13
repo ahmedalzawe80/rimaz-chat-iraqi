@@ -1,3 +1,11 @@
+## v46.93.16 — Unified chat typography
+- Audited the full stylesheet and removed 136 legacy font-size, font-weight, line-height, and font shorthand declarations from 26 selectors controlling member names and the text beneath them.
+- Added one canonical typography source using the approved welcome-card title and body metrics: desktop 16px/17px and mobile 15px/16px, with matching 900/700 weights and line heights.
+- Applied the shared name scale to general chat, online members, private contacts, private conversation headers, and wall posts.
+- Applied the shared body scale to chat messages, member status/subtitles, private-message bodies, and wall text.
+- Added a semantic class to private-message body text so it participates in the same typography system.
+- Preserved all layout, banner dimensions, avatar dimensions, and unrelated styles. Synchronized `index.html` and `public/index.html`.
+
 ## v46.93.15 — Presence and private-list lower alignment
 - Adjusted the existing online-member content column to stretch to the avatar row height and distribute the status line to the bottom edge.
 - Adjusted the existing private-conversation contact content column to stretch to the avatar row height and anchor the latest-message preview at the bottom.
