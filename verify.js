@@ -920,7 +920,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.6 package version is current', pkg.version === '46.93.10'],
+    ['v46.93.6 package version is current', pkg.version === '46.93.11'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -1089,7 +1089,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.87.0 package version',pkgNow.version==='46.93.10'],
+  ['v46.87.0 package version',pkgNow.version==='46.93.11'],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],
@@ -1145,13 +1145,13 @@ try {
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error){fail('v46.93.2 personal banner checks',error.message)}
 
-// v46.93.10 shared banner identity layout regression checks.
+// v46.93.11 canonical shared banner identity layout regression checks.
 try {
  const html=fs.readFileSync(mainPath,'utf8');
  const checks=[
-  ['v46.93.10 shared identity component uses one intrinsic-size flex layout',html.includes('id="rimaz-personal-banner-system"')&&html.includes('flex-flow:row nowrap!important')&&html.includes('object-fit:contain!important')],
-  ['v46.93.10 private-message identity column cannot collapse to zero width',html.includes('.pmsgIdentity{order:2!important;display:flex!important;flex:1 1 0!important;width:auto!important;min-width:0!important')],
-  ['v46.93.10 member-card order remains banner, photo, rank, name',html.includes('.rimazPersonalBanner{order:1!important')&&html.includes('.rimazProfileMiniAvatar{display:block!important;order:2!important')&&html.includes('.rimazIdentityName{order:4!important')],
-  ['v46.93.10 banner height remains unchanged across chat surfaces',html.includes('height:14px!important;min-width:0!important;min-height:14px!important')&&html.includes('height:26px!important;min-height:26px!important;max-height:26px!important')]
+  ['v46.93.11 shared identity component uses one intrinsic-size flex layout',html.includes('id="rimaz-personal-banner-system"')&&html.includes('.rimazPersonalIdentity{')&&html.includes('flex-flow:row nowrap!important')&&html.includes('object-fit:contain!important')],
+  ['v46.93.11 private-message identity column cannot collapse to zero width',html.includes('#layer .privateOverlay .pmsgIdentity{display:block!important;flex:1 1 0!important;width:auto!important;min-width:0!important')],
+  ['v46.93.11 member-card order remains banner, photo, rank, name',html.includes('.profileIdentity .rimazPersonalBanner{order:1!important')&&html.includes('.profileIdentity .rimazProfileMiniAvatar{order:2!important')&&html.includes('.profileIdentity .rimazIdentityName{order:4!important')],
+  ['v46.93.11 banner height remains unchanged across chat surfaces',html.includes('height:14px!important; min-width:0!important; min-height:14px!important')&&html.includes('height:26px!important;min-height:26px!important;max-height:26px!important')]
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error){fail('v46.93.10 shared banner identity checks',error.message)}
