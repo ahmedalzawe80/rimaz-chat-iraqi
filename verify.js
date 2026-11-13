@@ -920,7 +920,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.16 package version is current', pkg.version === '46.93.16'],
+    ['v46.93.17 package version is current', pkg.version === '46.93.17'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -1089,7 +1089,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.16 package version',pkgNow.version==='46.93.16'],
+  ['v46.93.17 package version',pkgNow.version==='46.93.17'],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],
@@ -1121,10 +1121,11 @@ try {
   const html=fs.readFileSync(mainPath,'utf8');
   const checks=[
     ['v46.93.16 has one canonical chat typography source', (html.match(/id="rimaz-chat-typography-single-source-v1"/g)||[]).length===1],
-    ['v46.93.16 welcome title/body typography values are shared through variables', html.includes('--rimaz-chat-name-size:16px')&&html.includes('--rimaz-chat-body-size:17px')&&html.includes('--rimaz-chat-name-size:15px')&&html.includes('--rimaz-chat-body-size:16px')],
-    ['v46.93.16 names share typography across public, presence, private, and wall surfaces', html.includes('.msg .msghead .rimazIdentityName')&&html.includes('.member .memberName')&&html.includes('.presence .presenceName')&&html.includes('.pmsgTitle .rimazIdentityName')&&html.includes('.rimazUnifiedName b')],
-    ['v46.93.16 subtitles and message bodies share typography across all chat surfaces', html.includes('.msg .msgtext')&&html.includes('.member .memberSub')&&html.includes('.presence .presenceText')&&html.includes('.wallPost .wallText')&&html.includes('.pmsg .pmsgText')],
-    ['v46.93.16 private conversation messages have a semantic body class', html.includes('class="pmsgText"')],
+    ['v46.93.17 typography is 17px names and 16px supporting text on desktop and mobile', html.includes('--rimaz-chat-name-size:17px')&&html.includes('--rimaz-chat-body-size:16px')&&!html.includes('--rimaz-chat-name-size:15px')],
+    ['v46.93.17 names share typography across public, presence, private list/conversation, notices, and wall surfaces', html.includes('.msg .msghead .rimazIdentityName')&&html.includes('.member .memberNameLine .rimazIdentityName')&&html.includes('.presence .presenceNameRow .rimazIdentityName')&&html.includes('.privateContactIdentity .rimazIdentityName')&&html.includes('.pmsgTitle .rimazIdentityName')&&html.includes('.rimazUnifiedName b')&&html.includes('.rimazChatNotice .noticeContent>b')],
+    ['v46.93.17 supporting text shares 16px across all chat surfaces', html.includes('.msg .msgtext')&&html.includes('.member .memberSub')&&html.includes('.presence .presenceText')&&html.includes('.privateListOverlay .privateLastMessage')&&html.includes('.wallPost .wallText')&&html.includes('.pmsg .pmsgText')&&html.includes('.noticeMessageText')],
+    ['v46.93.17 private conversation messages have a semantic body class', html.includes('class="pmsgText"')],
+    ['v46.93.17 entry and online-member rank badges align to the top of the avatar row', html.includes('.presence .presenceBody{align-self:start!important;justify-content:flex-start!important;}')&&html.includes('.member .memberNameLine .memberBadge{align-self:flex-start!important;}')],
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 }

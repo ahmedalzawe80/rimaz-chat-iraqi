@@ -296,3 +296,10 @@
 - Fixed the private conversation top header to render the shared personal-banner identity instead of always showing rank and name.
 - Stabilized private-message sender banner sizing so the banner keeps its intrinsic width and no longer shrinks into the center or crops its text.
 - Kept the existing banner height and all other chat surfaces unchanged.
+
+
+## 46.93.17 — Unified chat typography
+- Set every chat member name to 17px / weight 900.
+- Set supporting text, status, previews, and message bodies to 16px / weight 700 across desktop and mobile.
+- Applied the shared values to public messages, entry notices, online members, private conversation list, private messages, and wall posts.
+- Aligned entry and online-member rank badges to the top of the avatar/name row.
