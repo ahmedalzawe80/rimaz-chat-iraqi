@@ -1,12 +1,3 @@
-# Changelog
-
-## v46.93.8 — توحيد عرض البنر الشخصي
-- توحيد بناء هوية العضو ذات البنر في دالة مشتركة بدلاً من تكرار تركيب الصورة والبنر داخل كل قالب.
-- عند وجود البنر، تبقى الصورة الشخصية الموجودة في العمود المجاور ويحل البنر محل الاسم والرتبة في قائمة المتواجدين والحضور والرسائل العامة والخاصة والحائط.
-- عند غياب البنر، تعود قوالب الاسم والرتبة الأصلية تلقائياً دون تخزين حالة عرض منفصلة.
-- إزالة تكرار شارة الرتبة من صف جهات الاتصال الخاصة عند وجود البنر.
-- توحيد ملفي الواجهة واختبارات انحدار مخصصة لمسارات عرض البنر.
-
 ## v46.93.2
 - Added an independent `banner_upload` rank permission for members to upload, replace, and delete their own personal banner.
 - Personal banners are stored separately from rank artwork and member decorations, and appear in the member information panel.
@@ -242,3 +233,10 @@
 - Kept profile actions, room badge, member ranks, personal banner storage, upload permissions, and animated GIF sources intact.
 - Synchronized both browser entry files and updated structural verification for the canonical layout.
 - Final visual parity remains subject to a live-host screenshot comparison at the same viewport as the reference.
+
+## v46.93.9 — Reference-exact personal banner alignment
+- Rebuilt the member profile header state: when a personal banner exists, the member avatar is directly adjacent to the banner inside the compact black header; the display name and rank are omitted from that header.
+- When the personal banner is absent, the normal member name and rank return to their original header position in the main member profile.
+- Reworked the online-members row for banner accounts to place the avatar beside a full-height banner, matching the supplied reference proportions.
+- Left the public chat message and wall banner renderers unchanged.
+- Kept `index.html` and `public/index.html` byte-identical and added regression checks for both banner states.

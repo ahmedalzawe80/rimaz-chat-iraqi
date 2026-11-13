@@ -80,3 +80,9 @@
 - رفع GIF اليدوي يرسل رمز الجلسة `x-session`؛ لذلك لا يُعامل طلب الرفع كزائر غير مسجل.
 - إدارة رفع/حذف كتالوج الهدايا العادي وVIP تتطلب صلاحية `gift_catalog_manage`، وتبقى صلاحية إرسال الهدية منفصلة.
 - الترحيل v4 يستبدل الكتالوج القديم مرة واحدة عند بدء التطبيق. لا تستبدل `data.json` أو مجلدات التخزين الدائمة عند النشر.
+
+
+## v46.93.9 — Reference banner alignment
+- Rebuilt the member profile header so the member avatar sits directly beside the personal banner inside the compact black header.
+- The banner state suppresses the normal display name/rank in that header; removing the banner restores the original name/rank markup.
+- Matched the online-members banner row to the supplied reference without changing public chat or wall banner rendering.
