@@ -386,7 +386,7 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 .wallPost{display:grid!important;grid-template-columns:54px minmax(0,1fr)!important;direction:ltr!important;align-items:start!important;gap:8px!important;}
 .wallAvatar{grid-column:1!important;grid-row:1!important;width:54px!important;height:54px!important;object-fit:cover!important;}
 .wallPostMain{grid-column:2!important;grid-row:1!important;min-width:0!important;direction:rtl!important;text-align:right!important;}
-.rimazUnifiedName{display:flex!important;flex-direction:row!important;align-items:center!important;justify-content:flex-start!important;gap:6px!important;direction:rtl!important;}
+.rimazUnifiedName{display:flex!important;flex-direction:row!important;align-items:center!important;justify-content:flex-start!important;gap:6px!important;direction:rtl!important;min-width:0!important;width:100%!important;overflow:visible!important;}
 .rimazUnifiedName .rimazRoleBadge{display:inline-flex!important;align-items:center!important;flex:0 0 auto!important;}
 .rimazUnifiedName b{display:inline-block!important;min-width:0!important;white-space:nowrap!important;}
 @media(max-width:600px){.member,.privateListOverlay .member{grid-template-columns:4px 48px 25px minmax(0,1fr) 48px!important;column-gap:2px!important;min-height:60px!important}.member>img,.privateListOverlay .member>img{width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important}.member .memberBadge,.privateListOverlay .member .memberBadge{width:23px!important;height:23px!important;min-width:23px!important;font-size:14px!important}.privateListOverlay .member .privateContactDelete{height:30px!important;font-size:10px!important}.msg{grid-template-columns:48px minmax(0,1fr) 36px!important}.msg .avatar{width:44px!important;height:44px!important}.presence{grid-template-columns:48px minmax(0,1fr) 36px!important}.wallPost{grid-template-columns:48px minmax(0,1fr)!important}.wallAvatar{width:48px!important;height:48px!important}}
@@ -915,32 +915,56 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 </style>
 
 <style id="rimaz-personal-banner-system">
-/* Single identity component: intrinsic banner ratio, no fixed-width clipping. */
-.rimazPersonalIdentity,.rimazIdentityPlain{display:inline-flex!important;flex-direction:row!important;align-items:center!important;gap:4px!important;min-width:0!important;max-width:100%!important;vertical-align:middle!important;box-sizing:border-box!important;overflow:visible!important}
-.rimazPersonalBanner{display:block!important;flex:0 1 auto!important;width:auto!important;min-width:0!important;max-width:100%!important;height:14px!important;min-height:14px!important;max-height:14px!important;object-fit:contain!important;object-position:center!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important}
-.rimazIdentityName{display:inline-block!important;flex:0 1 auto!important;min-width:0!important;max-width:100%!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;font:inherit!important;color:inherit!important}
-/* A personal banner replaces the normal name/rank line outside the member card. */
-.rimazPersonalIdentity:not(.rimazKeepName) .rimazIdentityName,.rimazPersonalIdentity:not(.rimazKeepName) .memberBadges,.rimazPersonalIdentity:not(.rimazKeepName) .rimazRoleBadge{display:none!important}
-.msghead,.presenceNameRow,.privateContactBanner,.pmsgTitle,.rimazUnifiedName,.memberMain .memberNameLine{min-width:0!important;max-width:100%!important;box-sizing:border-box!important}
-.msghead .rimazPersonalBanner,.presenceNameRow .rimazPersonalBanner,.privateContactBanner .rimazPersonalBanner,.pmsgTitle .rimazPersonalBanner,.rimazUnifiedName .rimazPersonalBanner,.memberMain .rimazPersonalBanner{height:14px!important;min-height:14px!important;max-height:14px!important;max-width:100%!important}
-.memberNameLine .rimazIdentityName{display:block!important;flex:1 1 auto!important;min-width:0!important;margin:0!important;padding:0!important;font-size:13px!important;font-weight:900!important;line-height:1.15!important;direction:rtl!important;text-align:right!important;unicode-bidi:plaintext!important}
-/* Member card exception: banner first, then avatar, rank, and name. */
+/* One shared identity layout. Each surface supplies its own adjacent avatar; this component only owns banner/rank/name. */
+.rimazPersonalIdentity,.rimazIdentityPlain{
+  display:flex!important;flex-flow:row nowrap!important;align-items:center!important;justify-content:flex-start!important;
+  gap:4px!important;width:max-content!important;min-width:0!important;max-width:100%!important;
+  margin:0!important;padding:0!important;box-sizing:border-box!important;overflow:visible!important;vertical-align:middle!important
+}
+.rimazPersonalBanner{
+  display:block!important;position:static!important;flex:0 1 auto!important;align-self:center!important;
+  width:auto!important;height:14px!important;min-width:0!important;min-height:14px!important;max-width:100%!important;max-height:14px!important;
+  object-fit:contain!important;object-position:left center!important;margin:0!important;padding:0!important;border:0!important;
+  border-radius:0!important;background:transparent!important
+}
+.rimazIdentityName{
+  display:inline-block!important;position:static!important;flex:0 1 auto!important;min-width:0!important;max-width:100%!important;
+  margin:0!important;padding:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;
+  font:inherit!important;color:inherit!important
+}
+/* A personal banner replaces rank/name in chat rows; the member card explicitly keeps both. */
+.rimazPersonalIdentity:not(.rimazKeepName) .rimazIdentityName,
+.rimazPersonalIdentity:not(.rimazKeepName) .memberBadges,
+.rimazPersonalIdentity:not(.rimazKeepName) .rimazRoleBadge{display:none!important}
+.msghead,.presenceNameRow,.privateContactBanner,.privateContactIdentity,.pmsgTitle,.rimazUnifiedName,.memberMain .memberNameLine{
+  display:flex!important;align-items:center!important;flex-flow:row nowrap!important;gap:4px!important;
+  min-width:0!important;max-width:100%!important;box-sizing:border-box!important;overflow:visible!important
+}
+.msghead .rimazPersonalBanner,.presenceNameRow .rimazPersonalBanner,.privateContactBanner .rimazPersonalBanner,
+.pmsgTitle .rimazPersonalBanner,.rimazUnifiedName .rimazPersonalBanner,.memberMain .rimazPersonalBanner{
+  height:14px!important;min-height:14px!important;max-height:14px!important;max-width:100%!important
+}
+.memberNameLine .rimazIdentityName{display:block!important;flex:1 1 auto!important;min-width:0!important;font-size:13px!important;font-weight:900!important;line-height:1.15!important;direction:rtl!important;text-align:right!important;unicode-bidi:plaintext!important}
+/* Member card: banner, then photo, rank, then name. */
 #layer .profileOverlay .profileTop{height:27px!important;min-height:27px!important;max-height:27px!important;padding:0 5px!important;gap:5px!important;border-bottom-width:1px!important}
-#layer .profileOverlay .profileTop .profileIdentity{display:inline-flex!important;flex:1 1 auto!important;flex-direction:row!important;align-items:center!important;justify-content:flex-start!important;gap:5px!important;min-width:0!important;max-width:calc(100% - 38px)!important;overflow:hidden!important}
-#layer .profileOverlay .profileTop .profileIdentity .rimazProfileMiniAvatar{display:block!important;order:2!important;flex:0 0 26px!important;width:26px!important;height:26px!important;min-width:26px!important;min-height:26px!important;max-width:26px!important;max-height:26px!important;object-fit:cover!important;margin:0!important;border:0!important;border-radius:0!important}
+#layer .profileOverlay .profileTop .profileIdentity{display:flex!important;flex:1 1 auto!important;flex-direction:row!important;align-items:center!important;justify-content:flex-start!important;gap:5px!important;min-width:0!important;max-width:calc(100% - 38px)!important;overflow:visible!important}
 #layer .profileOverlay .profileTop .profileIdentity .rimazPersonalBanner{order:1!important;height:26px!important;min-height:26px!important;max-height:26px!important;max-width:min(42vw,220px)!important;flex:0 1 auto!important}
+#layer .profileOverlay .profileTop .profileIdentity .rimazProfileMiniAvatar{display:block!important;order:2!important;flex:0 0 26px!important;width:26px!important;height:26px!important;min-width:26px!important;min-height:26px!important;max-width:26px!important;max-height:26px!important;object-fit:cover!important;margin:0!important;border:0!important;border-radius:0!important}
+#layer .profileOverlay .profileTop .profileIdentity .profileTopRank,
+#layer .profileOverlay .profileTop .profileIdentity .memberBadges{order:3!important;display:inline-flex!important;flex:0 0 auto!important;align-items:center!important;gap:2px!important;white-space:nowrap!important}
 #layer .profileOverlay .profileTop .profileIdentity .rimazIdentityName{order:4!important;font:900 18px/1.1 Tahoma,Arial,sans-serif!important;color:#fff!important;direction:rtl!important}
-#layer .profileOverlay .profileTop .profileIdentity .profileTopRank{order:3!important;display:inline-flex!important;flex:0 0 auto!important;align-items:center!important;width:auto!important;height:26px!important;margin:0!important;padding:0!important}
-#layer .profileOverlay .profileTop .profileIdentity .memberBadges{order:3!important;display:inline-flex!important;align-items:center!important;gap:2px!important;white-space:nowrap!important}
 #layer .profileOverlay .profileTop .profileIdentity .memberBadge{display:inline-grid!important;place-items:center!important;flex:0 0 22px!important;width:22px!important;height:22px!important;min-width:22px!important;min-height:22px!important;max-width:22px!important;max-height:22px!important;margin:0!important;padding:0!important;font-size:16px!important;line-height:1!important}
 #layer .profileOverlay .profileTop .profileIdentity .emptyBadge{display:none!important}
-/* Private messages: avatar on the right, banner identity immediately to its left. */
+/* Private message identity stays in the same content column as the wall identity, adjacent to its avatar. */
 #layer .privateOverlay .pmsgHead{display:flex!important;flex-direction:row!important;direction:rtl!important;align-items:flex-start!important;justify-content:flex-start!important;gap:8px!important;min-width:0!important;width:100%!important;overflow:visible!important}
-#layer .privateOverlay .pmsgHead>img{order:1!important;flex:0 0 44px!important;width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important}
-#layer .privateOverlay .pmsgIdentity{order:2!important;display:flex!important;flex:1 1 0!important;width:0!important;min-width:0!important;max-width:100%!important;overflow:visible!important}
-#layer .privateOverlay .pmsgTitle{display:flex!important;flex:1 1 auto!important;flex-direction:row!important;direction:rtl!important;align-items:flex-start!important;justify-content:flex-start!important;gap:4px!important;width:100%!important;min-width:0!important;max-width:100%!important;margin:0!important;padding:0!important;overflow:visible!important}
-#layer .privateOverlay .pmsgTitle .rimazPersonalBanner{flex:0 1 auto!important;max-width:100%!important;object-position:center!important}
-@media(max-width:650px){#layer .privateOverlay .pmsgHead{gap:7px!important;min-height:42px!important}#layer .privateOverlay .pmsgHead>img{flex-basis:42px!important;width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important}}
+#layer .privateOverlay .pmsgHead>img{order:1!important;flex:0 0 44px!important;width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;object-fit:cover!important}
+#layer .privateOverlay .pmsgIdentity{order:2!important;display:flex!important;flex:1 1 0!important;width:auto!important;min-width:0!important;max-width:100%!important;overflow:visible!important}
+#layer .privateOverlay .pmsgTitle{display:flex!important;flex:1 1 auto!important;flex-direction:row!important;direction:rtl!important;align-items:center!important;justify-content:flex-start!important;gap:4px!important;width:100%!important;min-width:0!important;max-width:100%!important;margin:0!important;padding:0!important;overflow:visible!important}
+#layer .privateOverlay .pmsgTitle .rimazPersonalBanner{flex:0 1 auto!important;max-width:100%!important;object-position:left center!important}
+@media(max-width:650px){
+ #layer .privateOverlay .pmsgHead{gap:7px!important;min-height:42px!important}
+ #layer .privateOverlay .pmsgHead>img{flex-basis:42px!important;width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important}
+}
 </style>
 </head><body><div id="app"></div>
 <script>
