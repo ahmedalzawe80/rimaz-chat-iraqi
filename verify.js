@@ -920,7 +920,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.6 package version is current', pkg.version === '46.93.8'],
+    ['v46.93.6 package version is current', pkg.version === '46.93.9'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -1089,7 +1089,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.87.0 package version',pkgNow.version==='46.93.8'],
+  ['v46.87.0 package version',pkgNow.version==='46.93.9'],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],
@@ -1120,13 +1120,13 @@ try {
 try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const memberProfileHeader = htmlText.includes('personalBannerIdentity(p,dn') && htmlText.includes('profileIdentity');
-  const genericProfileHeader = htmlText.includes('personalBannerIdentity(x.profile,displayFor(x)') && htmlText.includes('rimazProfileMiniAvatar');
-  const coherentLayout = htmlText.includes('rimaz-personal-banner-system') && htmlText.includes('height:32px!important') && htmlText.includes('height:26px!important') && htmlText.includes('max-width:min(100%,150px)!important');
+  const cardOrder = htmlText.includes('class=\"rimazPersonalBanner\"') && htmlText.includes('class=\"rimazProfileMiniAvatar\"') && htmlText.includes('order:1!important') && htmlText.includes('order:2!important');
+  const coherentLayout = htmlText.includes('rimaz-personal-banner-system') && htmlText.includes('max-width:100%!important') && htmlText.includes('direction:rtl!important') && htmlText.includes('pmsgIdentity');
   const noSupersededLayout = !htmlText.includes('rimaz-reference-member-components-v4696') && !htmlText.includes('rimaz-profile-and-banner-layout-v4695');
-  const ok = memberProfileHeader && genericProfileHeader && coherentLayout && noSupersededLayout;
-  if (ok) pass('v46.93.8 canonical member card and compact online-member geometry are present');
-  else fail('v46.93.8 canonical member card and compact online-member geometry are present');
-} catch (error) { fail('v46.93.8 profile structure checks', error.message); }
+  const ok = memberProfileHeader && cardOrder && coherentLayout && noSupersededLayout;
+  if (ok) pass('v46.93.9 banner-first member card and unclipped identity layout are present');
+  else fail('v46.93.9 banner-first member card and unclipped identity layout are present');
+} catch (error) { fail('v46.93.9 profile structure checks', error.message); }
 
 
 // v46.93.2: personal banners are independent and permission-gated.

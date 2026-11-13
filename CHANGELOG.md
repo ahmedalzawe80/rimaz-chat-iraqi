@@ -1,3 +1,12 @@
+## v46.93.9 — Identity ordering and clipping correction
+
+- Kept all personal-banner height and size values unchanged.
+- Reordered the member-card identity to banner, avatar, rank, then member name.
+- Corrected online-member RTL name alignment so leading characters are not clipped.
+- Rebuilt private-message header flow so the avatar stays on the right and the personal banner sits directly to its left.
+- Removed arbitrary 150px/42vw banner width caps; banner images now retain their intrinsic aspect ratio within the available identity width, preventing short custom banner text from being cut off.
+- Synchronized `index.html` and `public/index.html` and added regression checks for the new identity structure.
+
 ## v46.93.8 — Unified personal-banner identity system
 
 - Replaced the scattered personal-banner rendering paths with one shared identity renderer.
