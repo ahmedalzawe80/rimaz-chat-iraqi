@@ -233,9 +233,3 @@
 - Kept profile actions, room badge, member ranks, personal banner storage, upload permissions, and animated GIF sources intact.
 - Synchronized both browser entry files and updated structural verification for the canonical layout.
 - Final visual parity remains subject to a live-host screenshot comparison at the same viewport as the reference.
-
-## v46.93.10 — reference-aligned banner identity layout
-- Rebuilt the profile header banner sequence as banner, avatar, rank, then member name.
-- Kept the no-banner header sequence unchanged.
-- Reworked online-member banner geometry to use bounded dimensions and `object-fit: contain` rather than stretching the artwork.
-- Kept the existing public chat and wall banner rendering untouched.
