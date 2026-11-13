@@ -303,3 +303,9 @@
 - Set supporting text, status, previews, and message bodies to 16px / weight 700 across desktop and mobile.
 - Applied the shared values to public messages, entry notices, online members, private conversation list, private messages, and wall posts.
 - Aligned entry and online-member rank badges to the top of the avatar/name row.
+
+## v46.93.18 — Default profile avatar fit
+- Adjusted only the default branded avatar inside the member profile photo area to show the full crown/logo.
+- Uses `object-fit: contain` with a subtle 3px top inset and bottom alignment so the artwork is slightly smaller and sits a little lower.
+- The black profile header, personal banner, custom user avatars, and all other avatar sizes/layouts remain unchanged.
+- Updated the default-avatar cache key to v46.93.18.
