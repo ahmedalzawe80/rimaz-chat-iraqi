@@ -1,3 +1,14 @@
+## v46.93.21 — Unified sender-only likes policy for rooms, media and calls
+- Centralized the authorization thresholds: 400 likes for notices and raising a voice-room mic; 500 likes for private image/video/audio uploads and initiating private voice/video calls.
+- The threshold is evaluated only for the initiating sender. A recipient with zero likes can receive private media and can accept a call initiated by an eligible sender. Call acceptance revalidates the original caller, never the recipient.
+- The site owner and a full-permission `ADMIN كامل الصلاحيات` account are exempt from all three likes gates. Partial moderators and individual legacy bypass permissions are not exempt.
+- Replaced the old configurable per-room mic threshold (default 30) with one fixed 400-like rule, removed its room-creation controls and API payload fields, and migrated existing saved rooms by deleting the obsolete `micLikesRequired` field.
+- The room-mic client now checks the 400-like rule before requesting microphone access; the server independently enforces the same rule.
+- Removed the obsolete `staff_notice`, `staff_media`, and `voice_mic_override` permission toggles and bumped the permission schema to 9.
+- Kept ordinary public/private text messages outside the likes checks. The previous composer left-alignment change is retained unchanged.
+- Added runtime regression coverage for owner/full-admin, partial moderator, 0/400/500 likes, room mic, private media, and sender/recipient call authorization.
+- No gift, member-card, profile, banner, avatar, or unrelated chat behavior was changed.
+
 ## v46.93.20 — Canonical composer alignment and sender-only likes permissions
 - Replaced the existing shared `.composerRichInput` RTL/right-alignment declaration in place with LTR/left alignment. The rule applies only to the three current composer fields: public chat, private chat, and wall; no appended override block was added.
 - Unified notification authorization at the server boundary: 400 likes are checked on the sender; only the site owner or an account with the complete `ADMIN كامل الصلاحيات` permission set is exempt. Partial `staff_notice` permissions no longer bypass the threshold.

@@ -16,21 +16,28 @@
 - `index.html` and `public/index.html` are identical.
 
 
-## v46.93.20 — Root-cause audit
+## v46.93.20 — Composer alignment and initial likes gate
+- The three active editable composer nodes are `#msgInput`, `#privateText`, and `#wallText`. Their shared `.composerRichInput` rule was changed in place from right/RTL to left/LTR; other inputs were not changed.
+- The initial release corrected notice and private-media upload checks but did not yet unify voice-room mic and private-call signaling. Those remaining paths were identified and corrected in v46.93.21 below.
 
-### Composer alignment
-- The three active editable composer nodes are `#msgInput`, `#privateText`, and `#wallText`.
-- All three use the shared `.composerRichInput` class. Its original canonical declaration set `text-align:right` and `direction:rtl`, which controlled both typed text and the `:empty::before` placeholder.
-- Replaced those declarations in the original rule with `text-align:left` and `direction:ltr`; did not add a later CSS override. Other inputs do not use this shared class and were not changed.
+## v46.93.21 — Unified likes authorization audit
 
-### Likes authorization
-- `/api/notify` is the server authority for member-to-member notices. The 400-like check now evaluates only the authenticated sender. `staff_notice` alone no longer bypasses it.
-- `/api/media` is the server authority for private attachments. The 500-like check now evaluates only the authenticated sender. `staff_media` alone no longer bypasses it.
-- A dedicated full-admin predicate checks the complete current permission set (the same set granted to `admin-full`, excluding the separate `health_view` capability). Site owner is exempt. A partial role with `panel_access` is not automatically considered full-admin.
-- The private-media client gate now consumes the explicit `fullAdmin` session flag instead of generic `admin`/panel access.
-- Public and private text-message handlers were left outside the likes checks. Recipient likes are not part of notice or private-media authorization.
+### Canonical thresholds
+- `NOTICE_LIKES_REQUIRED = 400`: checked against the authenticated sender for notices.
+- `ROOM_MIC_LIKES_REQUIRED = 400`: checked against the authenticated speaker before a room mic is raised. The browser checks before requesting microphone access, and the server independently enforces the same rule. The former per-room `micLikesRequired` setting (default 30) was removed from room creation, room updates, and persisted room records.
+- `PRIVATE_MEDIA_LIKES_REQUIRED = 500`: checked against the authenticated sender for private image/video/audio uploads and when initiating private voice/video calls.
 
-### Scope and verification
-- Root `index.html` and `public/index.html` remain identical.
-- Only the composer alignment rule, notification/private-media authorization, corresponding client gate/session metadata, version metadata, and regression documentation/tests were changed.
-- Static and regression verification must be run with `npm test`; live deployment behavior still requires a real hosted-session test.
+### Sender and recipient separation
+- Private media upload authorization checks only the sender. The recipient's likes are not read.
+- `call-offer` authorizes only the caller; it does not inspect the recipient's likes. `call-answer` permits a zero-like recipient to answer and revalidates the original caller's eligibility.
+- Ordinary public and private text messages remain independent of likes.
+
+### Exemptions and obsolete bypass removal
+- The site owner and accounts with the complete `admin-full` permission set (all current permission keys except the separately optional `health_view`) bypass the likes thresholds.
+- Partial moderators are not exempt. Removed the legacy `staff_notice`, `staff_media`, and `voice_mic_override` capabilities that previously bypassed these gates. Old saved references to those keys are filtered from account permission sets on startup.
+- The browser uses the explicit `fullAdmin` session flag for private media and call initiation; generic panel access is not treated as full-admin status.
+
+### Verification scope
+- Added regression checks for the 0/400/500 likes matrix, owner/full-admin exemptions, partial moderator restrictions, fixed voice-room mic threshold, sender-only media/call authorization, and retired permission keys.
+- `index.html` and `public/index.html` must remain byte-identical.
+- Automated checks do not replace a live two-account browser test on the deployed host.

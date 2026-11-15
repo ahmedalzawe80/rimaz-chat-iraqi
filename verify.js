@@ -270,7 +270,7 @@ try {
 try {
   const source = fs.readFileSync(server, 'utf8');
   const html = fs.readFileSync(mainPath, 'utf8');
-  if (source.includes('const timeoutCall=()=>{if(activeCallPairs.get(pair)!==state||state.answered)return;const callee=socketUsers.get(target[0]);if(callee&&voiceSpeakers.get(callee.room)?.has(target[0]))') && source.includes('waitingOnRoomMic') && source.includes('if(!state||state.callee!==sid||state.caller!==target[0])return;state.answered=true;')) pass('incoming call timeout is extended while the callee is speaking on a room mic');
+  if (source.includes('const timeoutCall=()=>{if(activeCallPairs.get(pair)!==state||state.answered)return;const callee=socketUsers.get(target[0]);if(callee&&voiceSpeakers.get(callee.room)?.has(target[0]))') && source.includes('waitingOnRoomMic') && source.includes('if(!state||state.callee!==sid||state.caller!==target[0])return;') && source.includes('if(!canMedia(target[1]))')) pass('incoming call timeout is extended while the callee is speaking on a room mic');
   else fail('incoming call remains pending during room-mic use');
   if (source.includes("if(voiceSpeakers.get(u.room)?.has(sid))return socket.emit('call-answer-denied',{reason:'room-mic'})") && html.includes("socket.on('call-answer-denied'") && html.includes('acceptedIncomingCallForRetry')) pass('server blocks call answers during room-mic use and restores the incoming card');
   else fail('server-side room-mic call-answer guard');
@@ -709,8 +709,8 @@ try {
     if (!permissionHtml.includes(label)) throw new Error(`missing Arabic label ${label}`);
   }
   if (!permissionHtml.includes('عدم توافق نسخة الواجهة والسيرفر')) throw new Error('client compatibility preflight missing');
-  if (!permissionServer.includes('permissionSchemaVersion:8') || !permissionServer.includes('permissionKeys:ALL_PERMISSION_KEYS')) throw new Error('server permission schema metadata missing');
-  if (!permissionHtml.includes("['الأدوات والإضافات الجديدة',['audit_view','stats_view','health_view','chat_filter_manage','member_status_manage','private_chat_override','presence_hidden_view','hidden_login','ghost_login','staff_notice','staff_media','voice_mic_override']]")) throw new Error('custom rank editor missing new permission group');
+  if (!permissionServer.includes('permissionSchemaVersion:9') || !permissionServer.includes('permissionKeys:ALL_PERMISSION_KEYS')) throw new Error('server permission schema metadata missing');
+  if (!permissionHtml.includes("['الأدوات والإضافات الجديدة',['audit_view','stats_view','health_view','chat_filter_manage','member_status_manage','private_chat_override','presence_hidden_view','hidden_login','ghost_login']]")) throw new Error('custom rank editor missing new permission group');
   pass('v46.27 Arabic permission labels and client/server schema compatibility');
 } catch (error) { fail('v46.27 permission compatibility checks', error.message); }
 
@@ -920,7 +920,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.19 package version is current', pkg.version === '46.93.20'],
+    ['v46.93.21 package version is current', pkg.version === '46.93.21'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -1089,7 +1089,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.19 package version',pkgNow.version==='46.93.20'],
+  ['v46.93.21 package version',pkgNow.version==='46.93.21'],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],
@@ -1178,53 +1178,73 @@ try {
 } catch(error){fail('v46.93.10 shared banner identity checks',error.message)}
 
 
-// v46.93.20 — canonical composer alignment and sender-only likes permissions.
+// v46.93.21 — one canonical sender-side likes policy for notices, room mics, media and calls.
 try {
   const client = fs.readFileSync(mainPath, 'utf8');
   const source = fs.readFileSync(server, 'utf8');
+  const offerLine = source.split('\n').find(line => line.includes("socket.on('call-offer'")) || '';
+  const answerLine = source.split('\n').find(line => line.includes("socket.on('call-answer'")) || '';
+  const micLine = source.split('\n').find(line => line.includes("socket.on('request-mic'")) || '';
+  const roomCreateRoutes = source.split('\n').filter(line => line.includes("app.post('/api/rooms'") || line.includes("app.post('/api/admin/room'"));
   const checks = [
-    ['all three chat composers share the left-aligned canonical rule', client.includes('line-height:1.25;text-align:left;direction:ltr}.composerRichInput:empty:before') && ['msgInput','privateText','wallText'].every(id => client.includes(`id="${id}"`))],
+    ['all three chat composers retain the canonical left-aligned rule', client.includes('line-height:1.25;text-align:left;direction:ltr}.composerRichInput:empty:before') && ['msgInput','privateText','wallText'].every(id => client.includes(`id="${id}"`))],
     ['no old right-aligned composer rule remains', !client.includes('line-height:1.25;text-align:right;direction:rtl}.composerRichInput:empty:before')],
-    ['private media UI checks full-admin status rather than generic panel access', client.includes('function sharePrivate(){if(me.likes<500&&!me.fullAdmin)') && !client.includes('function sharePrivate(){if(me.likes<500&&!me.admin)')],
+    ['private media UI uses 500 sender likes or full-admin exemption', client.includes('function sharePrivate(){if(me.likes<500&&!me.fullAdmin)') && !client.includes('function sharePrivate(){if(me.likes<500&&!me.admin)')],
+    ['private call UI uses 500 sender likes or full-admin exemption', client.includes('function startCall(camera){if(Number(me.likes||0)<500&&!me.fullAdmin)') && !client.includes('function startCall(camera){if(me.likes<500&&!me.admin)')],
     ['session payload exposes a distinct full-permission admin flag', source.includes('fullAdmin:isFullPermissionAdmin(s)')],
-    ['private media endpoint authorizes the sender only through the dedicated media gate', source.includes("if(scope==='private'&&!canSendPrivateMedia(u))") && source.includes('function canSendPrivateMedia(u)')],
-    ['member notices no longer exempt partial staff_notice holders', source.includes('function canNotice(u){ return !!u&&(isFullPermissionAdmin(u)||') && source.includes("app.post('/api/notify',requireAuth,(req,res)=>{if(!canNotice(req.user))") && !source.includes("isOwner(u)||hasPermission(u,'staff_notice')||Number(getUser(u.name)")],
-    ['private text messages remain independent of the likes gate', (()=>{const start=source.indexOf("socket.on('private-message',d=>"),end=source.indexOf("socket.on('call-offer'",start);const handler=source.slice(start,end);return start>=0&&end>start&&!handler.includes('canNotice(')&&!handler.includes('canSendPrivateMedia(')&&!handler.includes('canMedia(')})()]
+    ['private media endpoint uses the same sender-side 500-like gate', source.includes("if(scope==='private'&&!canMedia(u))") && !source.includes('canSendPrivateMedia')],
+    ['notices use the sender-side 400-like gate only', source.includes('const NOTICE_LIKES_REQUIRED=400;') && source.includes('function canNotice(u){ return !!u&&(isFullPermissionAdmin(u)||userLikes(u)>=NOTICE_LIKES_REQUIRED); }')],
+    ['voice-room mic uses a fixed 400-like gate, not a room-configured 30-like threshold', source.includes('const ROOM_MIC_LIKES_REQUIRED=400;') && source.includes('if(!canRaiseRoomMic(u))') && !micLine.includes('micLikesRequired') && !source.includes('voice_mic_override')],
+    ['voice-room client blocks zero-like users before requesting microphone access', client.includes("if(Number(me.likes||0)<400&&!me.fullAdmin)return toast('رفع المايك في الغرف الصوتية يفتح عند 400 إعجاب')") && client.indexOf("if(Number(me.likes||0)<400&&!me.fullAdmin)") < client.indexOf('navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false})')],
+    ['old per-room mic threshold controls and payloads are removed from the client', !client.includes('publicRoomLikes') && !client.includes('rmlikes') && !client.includes('micLikesRequired')],
+    ['new room creation no longer stores a custom mic-like threshold', roomCreateRoutes.length===2 && roomCreateRoutes.every(line=>!line.includes('micLikesRequired'))],
+    ['old persisted room mic threshold is removed at startup', source.includes('delete r.micLikesRequired')],
+    ['call offer gates the caller only and does not inspect recipient likes', offerLine.includes('if(!canMedia(u))') && !offerLine.includes('canMedia(target[1])') && !offerLine.includes('500 إعجاب للطرفين')],
+    ['call answer exempts the recipient and revalidates only the original caller', answerLine.includes('if(!canMedia(target[1]))') && !answerLine.includes('!canMedia(u)') && answerLine.includes('state.callee!==sid')],
+    ['retired staff/media/mic bypass permissions are absent from catalog and UI', !source.includes("staff_notice:'") && !source.includes("staff_media:'") && !source.includes("voice_mic_override:'") && !client.includes("'staff_notice'") && !client.includes("'staff_media'") && !client.includes("'voice_mic_override'")],
+    ['permission schema version reflects the retired bypass capabilities', source.includes('permissionSchemaVersion:9') && client.includes('permissionSchemaVersion:compatibility.permissionSchemaVersion||9')],
+    ['private text messages remain independent of likes restrictions', source.includes("socket.on('private-message',d=>") && !/socket\.on\('private-message',d=>[\s\S]{0,1200}likes/.test(source)]
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
 
-  const helperNames = ['isFullPermissionAdmin','canNotice','canSendPrivateMedia'];
-  const extracted = helperNames.map(name => {
+  const helperNames = ['isFullPermissionAdmin','userLikes','canNotice','canMedia','canRaiseRoomMic'];
+  const extracted = [
+    'const NOTICE_LIKES_REQUIRED=400;',
+    'const ROOM_MIC_LIKES_REQUIRED=400;',
+    'const PRIVATE_MEDIA_LIKES_REQUIRED=500;'
+  ].join('\n') + '\n' + helperNames.map(name => {
     const match = source.match(new RegExp(`function ${name}\\([^)]*\\)\\s*\\{[^\\n]*\\}`));
     if (!match) throw new Error(`missing ${name}`);
     return match[0];
   }).join('\n');
-  const permissionKeys = ['panel_access','users_view','staff_notice','staff_media','grant_likes','site_admin','health_view'];
+  const permissionKeys = ['panel_access','users_view','grant_likes','site_admin','banner_upload','permission_manage','health_view'];
   const accountPermissions = new Map();
+  const owners = new Set(['Owner']);
   const context = {
     ALL_PERMISSION_KEYS: permissionKeys,
-    isOwner: () => false,
+    isOwner: user => owners.has(user.name),
     effectivePermissionsForUser: user => new Set(accountPermissions.get(user.name) || []),
     getUser: name => context.accounts[name] || null,
     getGuest: () => null,
     accounts: {}
   };
   vm.createContext(context);
-  vm.runInContext(`${extracted}\nglobalThis.checks={isFullPermissionAdmin,canNotice,canSendPrivateMedia};`, context);
-  const full = {name:'FullAdmin'}, partial = {name:'Moderator'}, member400={name:'Member400'}, member500={name:'Member500'};
+  vm.runInContext(`${extracted}\nglobalThis.checks={isFullPermissionAdmin,canNotice,canMedia,canRaiseRoomMic};`, context);
+  const full = {name:'FullAdmin'}, partial = {name:'Moderator'}, zero = {name:'MemberZero'}, member400={name:'Member400'}, member500={name:'Member500'}, owner={name:'Owner'};
   accountPermissions.set(full.name, permissionKeys.filter(key => key !== 'health_view'));
-  accountPermissions.set(partial.name, ['panel_access','staff_notice','staff_media']);
+  accountPermissions.set(partial.name, ['panel_access','staff_notice','staff_media','voice_mic_override']);
   context.accounts[full.name] = {likes:0};
   context.accounts[partial.name] = {likes:0};
+  context.accounts[zero.name] = {likes:0};
   context.accounts[member400.name] = {likes:400};
   context.accounts[member500.name] = {likes:500};
   const runtime = context.checks;
-  const runtimeOk = runtime.isFullPermissionAdmin(full) &&
-    runtime.canNotice(full) && runtime.canSendPrivateMedia(full) &&
-    !runtime.isFullPermissionAdmin(partial) &&
-    !runtime.canNotice(partial) && !runtime.canSendPrivateMedia(partial) &&
-    runtime.canNotice(member400) && !runtime.canSendPrivateMedia(member400) &&
-    runtime.canSendPrivateMedia(member500);
-  if (runtimeOk) pass('likes permission runtime matrix: full admin exempt, partial moderators gated, sender thresholds enforced');
-  else fail('likes permission runtime matrix');
-} catch (error) { fail('v46.93.20 composer and likes-permission regression checks', error.message); }
+  const runtimeOk = runtime.isFullPermissionAdmin(owner) && runtime.canNotice(owner) && runtime.canMedia(owner) && runtime.canRaiseRoomMic(owner) &&
+    runtime.isFullPermissionAdmin(full) && runtime.canNotice(full) && runtime.canMedia(full) && runtime.canRaiseRoomMic(full) &&
+    !runtime.isFullPermissionAdmin(partial) && !runtime.canNotice(partial) && !runtime.canMedia(partial) && !runtime.canRaiseRoomMic(partial) &&
+    !runtime.canNotice(zero) && !runtime.canMedia(zero) && !runtime.canRaiseRoomMic(zero) &&
+    runtime.canNotice(member400) && !runtime.canMedia(member400) && runtime.canRaiseRoomMic(member400) &&
+    runtime.canNotice(member500) && runtime.canMedia(member500) && runtime.canRaiseRoomMic(member500);
+  if (runtimeOk) pass('likes runtime matrix: owner/full admin exempt; 0 blocked; 400 notices+room mic; 500 all sender actions');
+  else fail('likes runtime matrix');
+} catch (error) { fail('v46.93.21 unified likes-policy regression checks', error.message); }
