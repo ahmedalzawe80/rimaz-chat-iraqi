@@ -920,7 +920,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.19 package version is current', pkg.version === '46.93.19'],
+    ['v46.93.19 package version is current', pkg.version === '46.93.20'],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -1089,7 +1089,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.19 package version',pkgNow.version==='46.93.19'],
+  ['v46.93.19 package version',pkgNow.version==='46.93.20'],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],
@@ -1176,3 +1176,55 @@ try {
   ['v46.93.14 member-card black strip and banner are compact and padding-free',html.includes('#layer .profileOverlay .profileTop{height:26px!important;min-height:26px!important;max-height:26px!important;padding:0!important')&&html.includes('.profileIdentity .rimazPersonalBanner{order:1!important;display:block!important;flex:0 1 auto!important;width:auto!important;height:22px!important') ]
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error){fail('v46.93.10 shared banner identity checks',error.message)}
+
+
+// v46.93.20 — canonical composer alignment and sender-only likes permissions.
+try {
+  const client = fs.readFileSync(mainPath, 'utf8');
+  const source = fs.readFileSync(server, 'utf8');
+  const checks = [
+    ['all three chat composers share the left-aligned canonical rule', client.includes('line-height:1.25;text-align:left;direction:ltr}.composerRichInput:empty:before') && ['msgInput','privateText','wallText'].every(id => client.includes(`id="${id}"`))],
+    ['no old right-aligned composer rule remains', !client.includes('line-height:1.25;text-align:right;direction:rtl}.composerRichInput:empty:before')],
+    ['private media UI checks full-admin status rather than generic panel access', client.includes('function sharePrivate(){if(me.likes<500&&!me.fullAdmin)') && !client.includes('function sharePrivate(){if(me.likes<500&&!me.admin)')],
+    ['session payload exposes a distinct full-permission admin flag', source.includes('fullAdmin:isFullPermissionAdmin(s)')],
+    ['private media endpoint authorizes the sender only through the dedicated media gate', source.includes("if(scope==='private'&&!canSendPrivateMedia(u))") && source.includes('function canSendPrivateMedia(u)')],
+    ['member notices no longer exempt partial staff_notice holders', source.includes('function canNotice(u){ return !!u&&(isFullPermissionAdmin(u)||') && source.includes("app.post('/api/notify',requireAuth,(req,res)=>{if(!canNotice(req.user))") && !source.includes("isOwner(u)||hasPermission(u,'staff_notice')||Number(getUser(u.name)")],
+    ['private text messages remain independent of the likes gate', (()=>{const start=source.indexOf("socket.on('private-message',d=>"),end=source.indexOf("socket.on('call-offer'",start);const handler=source.slice(start,end);return start>=0&&end>start&&!handler.includes('canNotice(')&&!handler.includes('canSendPrivateMedia(')&&!handler.includes('canMedia(')})()]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+
+  const helperNames = ['isFullPermissionAdmin','canNotice','canSendPrivateMedia'];
+  const extracted = helperNames.map(name => {
+    const match = source.match(new RegExp(`function ${name}\\([^)]*\\)\\s*\\{[^\\n]*\\}`));
+    if (!match) throw new Error(`missing ${name}`);
+    return match[0];
+  }).join('\n');
+  const permissionKeys = ['panel_access','users_view','staff_notice','staff_media','grant_likes','site_admin','health_view'];
+  const accountPermissions = new Map();
+  const context = {
+    ALL_PERMISSION_KEYS: permissionKeys,
+    isOwner: () => false,
+    effectivePermissionsForUser: user => new Set(accountPermissions.get(user.name) || []),
+    getUser: name => context.accounts[name] || null,
+    getGuest: () => null,
+    accounts: {}
+  };
+  vm.createContext(context);
+  vm.runInContext(`${extracted}\nglobalThis.checks={isFullPermissionAdmin,canNotice,canSendPrivateMedia};`, context);
+  const full = {name:'FullAdmin'}, partial = {name:'Moderator'}, member400={name:'Member400'}, member500={name:'Member500'};
+  accountPermissions.set(full.name, permissionKeys.filter(key => key !== 'health_view'));
+  accountPermissions.set(partial.name, ['panel_access','staff_notice','staff_media']);
+  context.accounts[full.name] = {likes:0};
+  context.accounts[partial.name] = {likes:0};
+  context.accounts[member400.name] = {likes:400};
+  context.accounts[member500.name] = {likes:500};
+  const runtime = context.checks;
+  const runtimeOk = runtime.isFullPermissionAdmin(full) &&
+    runtime.canNotice(full) && runtime.canSendPrivateMedia(full) &&
+    !runtime.isFullPermissionAdmin(partial) &&
+    !runtime.canNotice(partial) && !runtime.canSendPrivateMedia(partial) &&
+    runtime.canNotice(member400) && !runtime.canSendPrivateMedia(member400) &&
+    runtime.canSendPrivateMedia(member500);
+  if (runtimeOk) pass('likes permission runtime matrix: full admin exempt, partial moderators gated, sender thresholds enforced');
+  else fail('likes permission runtime matrix');
+} catch (error) { fail('v46.93.20 composer and likes-permission regression checks', error.message); }

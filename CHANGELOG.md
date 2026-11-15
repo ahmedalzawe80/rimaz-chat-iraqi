@@ -1,3 +1,12 @@
+## v46.93.20 — Canonical composer alignment and sender-only likes permissions
+- Replaced the existing shared `.composerRichInput` RTL/right-alignment declaration in place with LTR/left alignment. The rule applies only to the three current composer fields: public chat, private chat, and wall; no appended override block was added.
+- Unified notification authorization at the server boundary: 400 likes are checked on the sender; only the site owner or an account with the complete `ADMIN كامل الصلاحيات` permission set is exempt. Partial `staff_notice` permissions no longer bypass the threshold.
+- Unified private-media authorization at the server boundary: 500 likes are checked on the sender; only the site owner or a complete-permission admin is exempt. Partial `staff_media` permissions no longer bypass the image/media threshold.
+- Exposed a distinct `fullAdmin` session flag and aligned the private-media UI gate with the server. Generic admin-panel access is not treated as full-admin exemption.
+- Ordinary public/private text messages remain outside the likes checks. Recipient likes are not consulted by notification or private-media authorization.
+- Added regression checks for the composer rule and a runtime permission matrix covering owner/admin exemption, partial moderators, and 400/500 sender thresholds.
+- No unrelated UI, gift, profile, avatar, room, or member-card behavior was changed.
+
 ## v46.93.16 — Unified chat typography
 - Audited the full stylesheet and removed 136 legacy font-size, font-weight, line-height, and font shorthand declarations from 26 selectors controlling member names and the text beneath them.
 - Added one canonical typography source using the approved welcome-card title and body metrics: desktop 16px/17px and mobile 15px/16px, with matching 900/700 weights and line heights.
