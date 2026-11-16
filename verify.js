@@ -920,7 +920,8 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.21 package version is current', pkg.version === '46.93.21'],
+    ['v46.93.24 package version is current', pkg.version === '46.93.24'],
+    ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
@@ -1089,7 +1090,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.21 package version',pkgNow.version==='46.93.21'],
+  ['v46.93.24 package version',pkgNow.version==='46.93.24'],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],
@@ -1249,3 +1250,18 @@ try {
   if (runtimeOk) pass('likes runtime matrix: owner/full admin exempt; 0 blocked; 30 room mic; 400 notices; 500 all sender actions');
   else fail('likes runtime matrix');
 } catch (error) { fail('v46.93.21 unified likes-policy regression checks', error.message); }
+
+
+// v46.93.24: profile settings layout matches the supplied reference and old conflicting alignment rules are retired.
+try {
+  const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+  const publicHtml = fs.readFileSync(path.join(__dirname, 'public/index.html'), 'utf8');
+  const ok = html === publicHtml &&
+    html.includes('rimaz-settings-profile-layout-reference-v1') &&
+    html.includes('grid-template-columns:45% 114px') &&
+    html.includes('width:45%!important') &&
+    html.includes('text-align:center!important') &&
+    !/\.settings \.srow:nth-child\(-n/.test(html);
+  if (ok) pass('v46.93.24 settings fields: labels left, full-width text inputs below, compact color swatches on the right; browser files identical');
+  else fail('v46.93.24 settings reference layout', 'layout or browser-file synchronization mismatch');
+} catch (error) { fail('v46.93.24 settings reference layout', error.message); }

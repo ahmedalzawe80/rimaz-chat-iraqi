@@ -1,3 +1,17 @@
+# 46.93.24 — إعادة بناء تخطيط حقول الإعدادات حسب الصورة المرجعية
+
+- إزالة قواعد المحاذاة القديمة المتعارضة التي كانت تضع عناوين الزخرفة والحالة على اليمين.
+- إعادة ترتيب صفوف الزخرفة والحالة: العنوان على اليسار، وحقل الإدخال الكامل تحته بعرض اللوحة.
+- إعادة بناء صفوف الألوان الثلاثة: التسمية على اليسار ومربع اللون الصغير بجانبها إلى اليمين، بمقاسات ثابتة مطابقة للنسب الظاهرة في الصورة المرجعية.
+- ضبط ارتفاعات الحقول والعناوين وزر الحفظ لتقارب أبعاد الصورة الأصلية على الهاتف.
+- مزامنة `index.html` و`public/index.html` وإضافة اختبارات تحقق خاصة بتخطيط الإعدادات.
+- لم تتغير وظائف الحفظ أو قيم الألوان أو حدود الإعجابات.
+
+
+- نقل تطبيق لون الخلفية من حاوية عنوان الرسالة كاملة إلى عنصر نص الاسم نفسه.
+- أصبح التظليل الأصفر/الملون يتوقف عند نهاية الاسم ولا يمتد بعرض الشاشة.
+- بقي لون الاسم ولون نص الرسالة مستقلين عن لون الخلفية.
+
 ## v46.93.21 — Unified sender-only likes policy for rooms, media and calls
 - Centralized the authorization thresholds: 400 likes for notices and raising a voice-room mic; 500 likes for private image/video/audio uploads and initiating private voice/video calls.
 - The threshold is evaluated only for the initiating sender. A recipient with zero likes can receive private media and can accept a call initiated by an eligible sender. Call acceptance revalidates the original caller, never the recipient.
