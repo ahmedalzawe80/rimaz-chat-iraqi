@@ -550,7 +550,7 @@ function getGuest(name){ const k=findKey(db.guests,name); return k ? db.guests[k
 function accountKey(name){ return findKey(db.users,name) || findKey(db.guests,name) || cleanName(name); }
 function userLikes(u){ if(!u)return 0;if(isOwner(u))return 999999;return Number(getUser(u.name)?.likes??getGuest(u.name)?.likes??u.likes??0); }
 const NOTICE_LIKES_REQUIRED=400;
-const ROOM_MIC_LIKES_REQUIRED=400;
+const ROOM_MIC_LIKES_REQUIRED=30;
 const PRIVATE_MEDIA_LIKES_REQUIRED=500;
 function level(l){ l=Number(l)||0; return l>=500?3:l>=400?2:1; }
 function canNotice(u){ return !!u&&(isFullPermissionAdmin(u)||userLikes(u)>=NOTICE_LIKES_REQUIRED); }

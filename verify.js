@@ -1194,8 +1194,8 @@ try {
     ['session payload exposes a distinct full-permission admin flag', source.includes('fullAdmin:isFullPermissionAdmin(s)')],
     ['private media endpoint uses the same sender-side 500-like gate', source.includes("if(scope==='private'&&!canMedia(u))") && !source.includes('canSendPrivateMedia')],
     ['notices use the sender-side 400-like gate only', source.includes('const NOTICE_LIKES_REQUIRED=400;') && source.includes('function canNotice(u){ return !!u&&(isFullPermissionAdmin(u)||userLikes(u)>=NOTICE_LIKES_REQUIRED); }')],
-    ['voice-room mic uses a fixed 400-like gate, not a room-configured 30-like threshold', source.includes('const ROOM_MIC_LIKES_REQUIRED=400;') && source.includes('if(!canRaiseRoomMic(u))') && !micLine.includes('micLikesRequired') && !source.includes('voice_mic_override')],
-    ['voice-room client blocks zero-like users before requesting microphone access', client.includes("if(Number(me.likes||0)<400&&!me.fullAdmin)return toast('رفع المايك في الغرف الصوتية يفتح عند 400 إعجاب')") && client.indexOf("if(Number(me.likes||0)<400&&!me.fullAdmin)") < client.indexOf('navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false})')],
+    ['voice-room mic uses the fixed 30-like gate on the server', source.includes('const ROOM_MIC_LIKES_REQUIRED=30;') && source.includes('if(!canRaiseRoomMic(u))') && !micLine.includes('micLikesRequired') && !source.includes('voice_mic_override')],
+    ['voice-room client blocks zero-like users before requesting microphone access', client.includes("if(Number(me.likes||0)<30&&!me.fullAdmin)return toast('رفع المايك في الغرف الصوتية يفتح عند 30 إعجاب')") && client.indexOf("if(Number(me.likes||0)<30&&!me.fullAdmin)") < client.indexOf('navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false})')],
     ['old per-room mic threshold controls and payloads are removed from the client', !client.includes('publicRoomLikes') && !client.includes('rmlikes') && !client.includes('micLikesRequired')],
     ['new room creation no longer stores a custom mic-like threshold', roomCreateRoutes.length===2 && roomCreateRoutes.every(line=>!line.includes('micLikesRequired'))],
     ['old persisted room mic threshold is removed at startup', source.includes('delete r.micLikesRequired')],
@@ -1210,7 +1210,7 @@ try {
   const helperNames = ['isFullPermissionAdmin','userLikes','canNotice','canMedia','canRaiseRoomMic'];
   const extracted = [
     'const NOTICE_LIKES_REQUIRED=400;',
-    'const ROOM_MIC_LIKES_REQUIRED=400;',
+    'const ROOM_MIC_LIKES_REQUIRED=30;',
     'const PRIVATE_MEDIA_LIKES_REQUIRED=500;'
   ].join('\n') + '\n' + helperNames.map(name => {
     const match = source.match(new RegExp(`function ${name}\\([^)]*\\)\\s*\\{[^\\n]*\\}`));
@@ -1230,12 +1230,13 @@ try {
   };
   vm.createContext(context);
   vm.runInContext(`${extracted}\nglobalThis.checks={isFullPermissionAdmin,canNotice,canMedia,canRaiseRoomMic};`, context);
-  const full = {name:'FullAdmin'}, partial = {name:'Moderator'}, zero = {name:'MemberZero'}, member400={name:'Member400'}, member500={name:'Member500'}, owner={name:'Owner'};
+  const full = {name:'FullAdmin'}, partial = {name:'Moderator'}, zero = {name:'MemberZero'}, member30={name:'Member30'}, member400={name:'Member400'}, member500={name:'Member500'}, owner={name:'Owner'};
   accountPermissions.set(full.name, permissionKeys.filter(key => key !== 'health_view'));
   accountPermissions.set(partial.name, ['panel_access','staff_notice','staff_media','voice_mic_override']);
   context.accounts[full.name] = {likes:0};
   context.accounts[partial.name] = {likes:0};
   context.accounts[zero.name] = {likes:0};
+  context.accounts[member30.name] = {likes:30};
   context.accounts[member400.name] = {likes:400};
   context.accounts[member500.name] = {likes:500};
   const runtime = context.checks;
@@ -1243,8 +1244,8 @@ try {
     runtime.isFullPermissionAdmin(full) && runtime.canNotice(full) && runtime.canMedia(full) && runtime.canRaiseRoomMic(full) &&
     !runtime.isFullPermissionAdmin(partial) && !runtime.canNotice(partial) && !runtime.canMedia(partial) && !runtime.canRaiseRoomMic(partial) &&
     !runtime.canNotice(zero) && !runtime.canMedia(zero) && !runtime.canRaiseRoomMic(zero) &&
-    runtime.canNotice(member400) && !runtime.canMedia(member400) && runtime.canRaiseRoomMic(member400) &&
+    runtime.canNotice(member400) && !runtime.canMedia(member400) && runtime.canRaiseRoomMic(member400) && runtime.canRaiseRoomMic(member30) &&
     runtime.canNotice(member500) && runtime.canMedia(member500) && runtime.canRaiseRoomMic(member500);
-  if (runtimeOk) pass('likes runtime matrix: owner/full admin exempt; 0 blocked; 400 notices+room mic; 500 all sender actions');
+  if (runtimeOk) pass('likes runtime matrix: owner/full admin exempt; 0 blocked; 30 room mic; 400 notices; 500 all sender actions');
   else fail('likes runtime matrix');
 } catch (error) { fail('v46.93.21 unified likes-policy regression checks', error.message); }
