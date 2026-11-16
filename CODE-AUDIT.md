@@ -1,3 +1,12 @@
+## v46.93.26 — Profile color picker and alignment root-cause audit
+
+- The previous palette was nested inside `.svalue`, which is a block/flex child rather than the `.colorField` grid. Its `grid-column:1/-1` therefore had no effect, and the click handler was attached to a native `input[type=color]`, allowing the browser picker to appear too.
+- The profile settings now retain the saved color inputs as hidden values and use a visible button swatch as the sole trigger. The palette is a direct grid child of the color row, with 105 selectable colors.
+- The selection handler updates the hidden input and visible swatch, dispatches the existing input/change events, and keeps the existing `saveSettings()` payload/API unchanged.
+- Removed the previous appended compact-profile CSS override block. One canonical profile-settings rule set now defines left-aligned decoration/status labels and inputs, and the palette grid structure.
+- Admin color controls and unrelated buttons/settings remain unchanged.
+- `index.html` and `public/index.html` are synchronized.
+
 # v46.93.14 — Targeted layout audit
 
 ## Private conversations list

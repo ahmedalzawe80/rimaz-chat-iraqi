@@ -920,7 +920,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.24 package version is current', pkg.version === '46.93.25'],
+    ['v46.93.24 package version is current', pkg.version === '46.93.26'],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
@@ -1090,7 +1090,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.24 package version',pkgNow.version==='46.93.25'],
+  ['v46.93.24 package version',pkgNow.version==='46.93.26'],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],
@@ -1252,18 +1252,29 @@ try {
 } catch (error) { fail('v46.93.21 unified likes-policy regression checks', error.message); }
 
 
-// v46.93.25: canonical compact settings dimensions are defined once and match the original reference proportions.
+// v46.93.26: profile color selection is a deterministic in-page palette, not the browser-native color dialog.
 try {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   const publicHtml = fs.readFileSync(path.join(__dirname, 'public/index.html'), 'utf8');
-  const block = html.slice(html.indexOf('/* Profile settings: canonical compact dimensions'), html.indexOf('</style>', html.indexOf('/* Profile settings: canonical compact dimensions')));
-  const ok = html === publicHtml &&
-    block.includes('width:45%;height:23px;min-height:23px') &&
-    block.includes('height:24px;min-height:24px') &&
-    block.includes('grid-template-columns:45% 57px') &&
-    block.includes('width:57px;max-width:57px;height:20px') &&
-    block.includes('height:31px;min-height:31px') &&
-    !block.includes('114px') && !block.includes('height:62px');
-  if (ok) pass('v46.93.25 settings fields use compact reference-sized labels, inputs, color swatches and save button; labels remain on the left and browser files identical');
-  else fail('v46.93.25 settings reference dimensions', 'layout or browser-file synchronization mismatch');
-} catch (error) { fail('v46.93.25 settings reference dimensions', error.message); }
+  const settingsStart = html.indexOf('function openSettings()');
+  const settingsEnd = html.indexOf('async function saveSettings()', settingsStart);
+  const settings = html.slice(settingsStart, settingsEnd);
+  const paletteStart = html.indexOf('const PROFILE_EXTRA_COLORS=');
+  const paletteEnd = html.indexOf(';', paletteStart);
+  const paletteText = html.slice(paletteStart, paletteEnd + 1);
+  const palette = [...paletteText.matchAll(/"#[0-9a-f]{6}"/gi)];
+  const cssStart = html.indexOf('.settingsProfileFields{');
+  const cssEnd = html.indexOf('\\n.danger{', cssStart);
+  const css = html.slice(cssStart, cssEnd);
+  const checks = [
+    ['browser entry files are identical', html === publicHtml],
+    ['settings color controls no longer invoke the native color picker', settings.includes('type="hidden"') && !settings.includes('type="color"')],
+    ['each color swatch opens its own in-page palette', ['nameColor','fontColor','bgColor'].every(id => settings.includes('data-for="'+id+'"') && settings.includes('id="'+id+'Trigger"'))],
+    ['palette contains more than 100 distinct colors', palette.length >= 100 && new Set(palette.map(x => x[0].toLowerCase())).size === palette.length],
+    ['palette grid is a direct child of each color row and opens as a grid', css.includes('>.colorPickerList{display:none;grid-column:1/-1') && css.includes('>.colorPickerList.open{display:grid}')],
+    ['palette swatches update the retained profile values and visible trigger', html.includes('input.value=color;trigger.style.backgroundColor=color;')],
+    ['decoration and status inputs are explicitly left-aligned', css.includes('text-align:left') && css.includes('direction:ltr')],
+    ['obsolete nested palette and native-input click handler are gone', settings.includes('</button></div><div class="colorPickerList" data-for="nameColor"></div></div>') && !html.includes("input.addEventListener('click',()=>toggleProfileColorList")]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+} catch (error) { fail('v46.93.26 profile settings regression checks', error.message); }
