@@ -359,7 +359,10 @@
 - Updated the base settings component rules and the single canonical reference layout together; removed the prior oversized dimensions rather than layering another override.
 - No room-mic, messaging, account, or other feature behavior was changed.
 
-## 46.93.29
-- Rebuilt the profile-settings color controls as part of each color row; palette controls no longer sit as an extra child in the fields container.
-- Kept Save and all following settings actions as direct siblings, preserving their existing button styles and behavior.
-- Preserved the compact reference dimensions, left-side labels, and 30-like room-mic threshold.
+## v46.93.26 — Profile settings alignment and expanded color gradients
+- Corrected decoration and status input direction/alignment at the canonical settings component level so entered text begins at the left edge, matching the reference image.
+- Retained the compact left-side labels, full-width fields, small color controls, and compact save button dimensions.
+- Added an expandable 54-color gradient palette to each of the name, text, and name-background color controls, including multiple shades per hue and neutral grayscale choices.
+- Palette selection updates the corresponding native color input; the existing save action remains the single persistence path.
+- Removed the temporary appended settings override layers and consolidated the implementation into the base settings component rules.
+- No other features or room-mic thresholds were changed.
