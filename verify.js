@@ -920,7 +920,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.26 package version is current', pkg.version === '46.93.26'],
+    ['v46.93.24 package version is current', pkg.version === '46.93.27'],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
@@ -1090,7 +1090,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.26 package version',pkgNow.version==='46.93.26'],
+  ['v46.93.24 package version',pkgNow.version==='46.93.27'],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],
@@ -1252,22 +1252,19 @@ try {
 } catch (error) { fail('v46.93.21 unified likes-policy regression checks', error.message); }
 
 
-// v46.93.26: settings input alignment and expanded color gradients are part of the canonical base component.
+// v46.93.25: canonical compact settings dimensions are defined once and match the original reference proportions.
 try {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   const publicHtml = fs.readFileSync(path.join(__dirname, 'public/index.html'), 'utf8');
-  const settingsCss = html.slice(html.indexOf('.settings{padding:3px}'), html.indexOf('.save{height:31px', html.indexOf('.settings{padding:3px}')));
-  const settingsMarkup = html.slice(html.indexOf('function settingsColorHex'), html.indexOf('async function saveSettings'));
+  const block = html.slice(html.indexOf('/* Profile settings: canonical compact dimensions'), html.indexOf('</style>', html.indexOf('/* Profile settings: canonical compact dimensions')));
   const ok = html === publicHtml &&
-    settingsCss.includes('direction:ltr;text-align:left') &&
-    settingsCss.includes('grid-template-columns:45% 57px') &&
-    settingsCss.includes('settingsColorSwatches') &&
-    settingsMarkup.includes('for(let h=0;h<360;h+=30)') &&
-    settingsMarkup.includes("settingsColorPalette('nameColor')") &&
-    settingsMarkup.includes("settingsColorPalette('fontColor')") &&
-    settingsMarkup.includes("settingsColorPalette('bgColor')") &&
-    !html.includes('/* Profile settings: canonical compact dimensions') &&
-    !html.includes('/* Root settings palette: fixed LTR geometry');
-  if (ok) pass('v46.93.26 profile fields are left-aligned and all three color controls expose 54 shades; styles are canonical and browser files identical');
-  else fail('v46.93.26 profile settings alignment and palette', 'layout, palette, or browser-file synchronization mismatch');
-} catch (error) { fail('v46.93.26 profile settings alignment and palette', error.message); }
+    block.includes('width:45%;height:23px;min-height:23px') &&
+    block.includes('height:24px;min-height:24px') &&
+    block.includes('grid-template-columns:45% 57px') &&
+    block.includes('width:57px;max-width:57px;height:20px') &&
+    block.includes('height:31px;min-height:31px') &&
+    !block.includes('114px') && !block.includes('height:62px');
+  const finalFix = html.includes('profile-settings-final-small-change') && html.includes('settingsPaletteGroup') && html.includes('177-color')===false && html.includes('settingsColorPalette') && html.includes('direction:ltr!important;text-align:left!important') && html.includes('settingsColorSwatches') && html.includes('settingsProfileFields+.save');
+  if (ok && finalFix) pass('v46.93.27 keeps compact reference settings and all existing buttons, left-aligns name/status inputs, and adds isolated 177-color palettes; browser files identical');
+  else fail('v46.93.27 settings regression', 'reference dimensions, isolated palette, alignment, or browser-file synchronization mismatch');
+} catch (error) { fail('v46.93.25 settings reference dimensions', error.message); }
