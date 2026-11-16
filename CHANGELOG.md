@@ -350,3 +350,11 @@
 - Matched the default square artwork to the full profile-card width using its intrinsic 1:1 ratio, with no side padding or cropping.
 - Kept the change scoped to the default avatar in the member profile card; custom member photos and the black header are unchanged.
 - Updated the default-avatar cache key to v46.93.19.
+
+
+## v46.93.25 — Compact profile settings dimensions
+- Replaced the oversized profile-settings layout dimensions with compact measurements based on the original reference image.
+- Reduced the decoration/status label height and text-field height, the three color swatches, and the save button to approximately half the previous rendered size.
+- Kept decoration/status labels on the left with their full-width input fields directly below; kept color labels on the left and compact swatches on the right.
+- Updated the base settings component rules and the single canonical reference layout together; removed the prior oversized dimensions rather than layering another override.
+- No room-mic, messaging, account, or other feature behavior was changed.
