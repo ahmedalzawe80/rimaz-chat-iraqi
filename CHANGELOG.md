@@ -359,9 +359,7 @@
 - Updated the base settings component rules and the single canonical reference layout together; removed the prior oversized dimensions rather than layering another override.
 - No room-mic, messaging, account, or other feature behavior was changed.
 
-
-## v46.93.27
-- Restored the complete settings panel and all existing buttons from v46.93.25.
-- Changed only the name/status input text alignment to left-to-right.
-- Added an isolated, expandable 177-color palette for name, font, and background colors.
-- Kept existing settings button dimensions and layout unchanged.
+## 46.93.29
+- Rebuilt the profile-settings color controls as part of each color row; palette controls no longer sit as an extra child in the fields container.
+- Kept Save and all following settings actions as direct siblings, preserving their existing button styles and behavior.
+- Preserved the compact reference dimensions, left-side labels, and 30-like room-mic threshold.
