@@ -741,6 +741,14 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 .call.cameraCall .callBar button:disabled{opacity:.65}
 .call.voiceCall #remoteAudio{display:none}
 </style>
+
+<style id="rimaz-private-call-status-controls">
+.callBar{gap:6px;align-items:center;justify-content:center;flex-wrap:wrap}
+.callBar .callSpeakerButton{background:#376b8d;color:#fff}
+.callBar .ok{display:flex;align-items:center;justify-content:center;gap:9px;min-width:112px}
+#callDuration{font-variant-numeric:tabular-nums;direction:ltr;white-space:nowrap}
+@media(max-width:390px){.callBar{left:7px;right:7px;gap:5px}.callBar button{padding:9px 10px;font-size:12px}}
+</style>
 <style id="rimaz-voice-bar-initial-state">.chat .roombar[aria-hidden="true"]{display:none!important;height:0!important;min-height:0!important;padding:0!important;border:0!important;overflow:hidden!important}</style>
 
 <style id="rimaz-banner-height-and-mark-final">
@@ -1572,7 +1580,7 @@ async function broadcast(duration='permanent'){const temporary=duration==='15m';
 async function deleteAnnouncement(id){if(!confirm('حذف الإعلان من السجل ومن رسائله المنشورة داخل الغرف؟'))return;try{const result=await api('/api/admin/announcement/'+encodeURIComponent(id),{method:'DELETE'});toast('تم حذف الإعلان ورسائله ('+(result.removedMessages||0)+')');adminTab('announcements')}catch(e){toast(e.message)}}
 async function deleteAdminMessage(id){if(!confirm('حذف هذه الرسالة؟'))return;try{await api('/api/admin/message/'+encodeURIComponent(id),{method:'DELETE'});toast('تم حذف الرسالة');adminTab('messages')}catch(e){toast(e.message)}}
 function callChoice(){if(!privateTo)return toast('اختر عضوًا أولًا');const layerEl=document.getElementById('layer');if(!layerEl)return;layerEl.insertAdjacentHTML('beforeend',`<div class="callChoice" id="callChoice"><div class="callChoiceBox"><h3>اختر نوع الاتصال</h3><button onclick="document.getElementById('callChoice')?.remove();startCall(false)">☎ اتصال صوتي</button><button onclick="document.getElementById('callChoice')?.remove();startCall(true)">📹 اتصال كام</button><button class="cancel" onclick="document.getElementById('callChoice')?.remove()">إلغاء</button></div></div>`)}
-let pc=null,localStream=null,callMode='voice',callRemoteStream=null,callRemoteVideoStream=null,callRemoteAudioStream=null,callStatsTimer=null;const pendingCallIce=[],pendingOutgoingCallIce=[];let callPeerName='',callOfferSent=false,pendingIncomingCall=null,acceptedIncomingCallForRetry=null,callFacingMode='user',callCameraSwitching=false;
+let pc=null,localStream=null,callMode='voice',callRemoteStream=null,callRemoteVideoStream=null,callRemoteAudioStream=null,callStatsTimer=null,callDurationTimer=null,callConnectedAt=0,callSpeakerMode='earpiece';const pendingCallIce=[],pendingOutgoingCallIce=[];let callPeerName='',callOfferSent=false,pendingIncomingCall=null,acceptedIncomingCallForRetry=null,callFacingMode='user',callCameraSwitching=false;
 async function getPrivateCallIceServers(){const fallback=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}];try{const config=await api('/api/rtc-config');return Array.isArray(config.iceServers)&&config.iceServers.length?config.iceServers:fallback}catch(error){console.warn('RTC configuration unavailable; using STUN fallback',error);return fallback}}
 function setRemoteVideoStatus(message,visible=true){const status=document.getElementById('remoteVideoStatus');if(status){if(message)status.textContent=message;status.hidden=!visible}}
 function playPrivateRemoteVideo(){const video=document.getElementById('remoteVideo');if(!video||!video.srcObject)return;video.muted=true;video.autoplay=true;video.playsInline=true;video.setAttribute('playsinline','');video.setAttribute('webkit-playsinline','');const result=video.play?.();if(result?.catch)result.catch(error=>console.warn('Private remote video playback deferred',error))}
@@ -1581,128 +1589,54 @@ function attachCallRemote(stream){if(!stream)return;for(const track of stream.ge
 function startPrivateCallStats(){if(callStatsTimer)clearInterval(callStatsTimer);callStatsTimer=setInterval(async()=>{const active=pc;if(!active||callMode!=='camera'||active.connectionState==='closed')return;try{const report=await active.getStats(),rows=[],codecById=new Map(),transports=[];report.forEach(item=>{if(item.type==='codec')codecById.set(item.id,item.mimeType||item.codec||'unknown');if(item.type==='transport')transports.push({dtlsState:item.dtlsState,iceState:item.iceState,selectedCandidatePairId:item.selectedCandidatePairId})});report.forEach(item=>{if(item.type==='inbound-rtp'&&(item.kind==='video'||item.mediaType==='video'))rows.push({direction:'receive',packetsReceived:item.packetsReceived,bytesReceived:item.bytesReceived,framesReceived:item.framesReceived,framesDecoded:item.framesDecoded,framesPerSecond:item.framesPerSecond,frameWidth:item.frameWidth,frameHeight:item.frameHeight,framesDropped:item.framesDropped,codec:codecById.get(item.codecId)||item.codecId});if(item.type==='outbound-rtp'&&(item.kind==='video'||item.mediaType==='video'))rows.push({direction:'send',packetsSent:item.packetsSent,bytesSent:item.bytesSent,framesSent:item.framesSent,framesEncoded:item.framesEncoded,framesPerSecond:item.framesPerSecond,frameWidth:item.frameWidth,frameHeight:item.frameHeight,codec:codecById.get(item.codecId)||item.codecId})});const pairIds=transports.map(t=>t.selectedCandidatePairId).filter(Boolean);const pairs=[];report.forEach(item=>{if(item.type==='candidate-pair'&&pairIds.includes(item.id))pairs.push({state:item.state,nominated:item.nominated,currentRoundTripTime:item.currentRoundTripTime,availableOutgoingBitrate:item.availableOutgoingBitrate,localCandidateId:item.localCandidateId,remoteCandidateId:item.remoteCandidateId})});const localVideo=localStream?.getVideoTracks?.()[0];console.info('[Rimaz private video diagnostics]',{connection:active.connectionState,ice:active.iceConnectionState,signaling:active.signalingState,localTrack:localVideo?{enabled:localVideo.enabled,muted:localVideo.muted,readyState:localVideo.readyState,settings:localVideo.getSettings?.()}:null,transports,pairs,video:rows})}catch(error){console.warn('Private video stats unavailable',error)}},3000)}
 function attachCallLocal(stream){const target=document.getElementById('localVideo');if(!target||!stream)return;target.srcObject=stream;target.classList.toggle('rearCamera',callFacingMode==='environment');const play=target.play?.();if(play?.catch)play.catch(()=>{})}
 function addPrivateCallTracks(stream){if(!pc||!stream)throw new Error('اتصال الفيديو غير جاهز');for(const track of stream.getTracks()){const exists=pc.getSenders().some(sender=>sender.track?.id===track.id);if(!exists)pc.addTrack(track,stream)}}
-function configureCallPeer(peerName,iceServers){callPeerName=peerName;callOfferSent=false;callRemoteStream=null;callRemoteVideoStream=null;callRemoteAudioStream=null;pc=new RTCPeerConnection({iceServers:iceServers||[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}]});pc.onicecandidate=e=>{if(!e.candidate||!callPeerName)return;if(!callOfferSent)pendingOutgoingCallIce.push(e.candidate);else socket?.emit('ice',{to:callPeerName,candidate:e.candidate})};pc.ontrack=e=>{console.info('[Rimaz private call] remote track received',{kind:e.track.kind,id:e.track.id,muted:e.track.muted,readyState:e.track.readyState,streams:e.streams?.length||0});attachCallRemoteTrack(e.track)};pc.oniceconnectionstatechange=()=>console.info('[Rimaz private call] ICE state',pc?.iceConnectionState);pc.onsignalingstatechange=()=>console.info('[Rimaz private call] signaling state',pc?.signalingState);pc.onconnectionstatechange=()=>{console.info('[Rimaz private call] connection state',pc?.connectionState);if(pc&&['failed','closed'].includes(pc.connectionState))endCall(false)};if(callMode==='camera')startPrivateCallStats();return pc}
+function setPrivateCallAudioSession(type='play-and-record'){try{const session=navigator.audioSession;if(session&&'type'in session)session.type=type}catch(error){console.info('Audio session mode is not available in this browser',error)}}
+function formatPrivateCallDuration(seconds){const safe=Math.max(0,Math.floor(Number(seconds)||0)),hours=Math.floor(safe/3600),minutes=Math.floor((safe%3600)/60),secs=safe%60;return hours?[hours,minutes,secs].map(value=>String(value).padStart(2,'0')).join(':'):[minutes,secs].map(value=>String(value).padStart(2,'0')).join(':')}
+function updatePrivateCallStatus(label){const node=document.getElementById('callStatus');if(node&&label)node.textContent=label}
+function paintPrivateCallDuration(){const node=document.getElementById('callDuration');if(node&&callConnectedAt)node.textContent=formatPrivateCallDuration((Date.now()-callConnectedAt)/1000)}
+function startPrivateCallDuration(){if(callConnectedAt){updatePrivateCallStatus('متصل');return}callConnectedAt=Date.now();updatePrivateCallStatus('متصل');paintPrivateCallDuration();if(callDurationTimer)clearInterval(callDurationTimer);callDurationTimer=setInterval(paintPrivateCallDuration,1000)}
+function resetPrivateCallDuration(){if(callDurationTimer){clearInterval(callDurationTimer);callDurationTimer=null}callConnectedAt=0}
+async function togglePrivateCallSpeaker(){const audio=document.getElementById('remoteAudio');if(!audio)return;if(typeof audio.setSinkId!=='function'){toast('هذا المتصفح لا يسمح للموقع بتبديل مخرج الصوت؛ استخدم زر الصوت في الجهاز');return}try{const outputs=(await navigator.mediaDevices.enumerateDevices()).filter(device=>device.kind==='audiooutput'&&device.deviceId);const speakerPattern=/(speaker|loudspeaker|built.?in speaker|مكبر)/i,earpiecePattern=/(earpiece|receiver|phone|سماعة الأذن|سماعة الهاتف)/i;const targetPattern=callSpeakerMode==='speaker'?earpiecePattern:speakerPattern;const target=outputs.find(device=>targetPattern.test(device.label||''));if(!target){toast('المتصفح لم يكشف مخرج '+(callSpeakerMode==='speaker'?'سماعة الأذن':'مكبر الصوت')+' بشكل يسمح بالتحويل');return}await audio.setSinkId(target.deviceId);callSpeakerMode=callSpeakerMode==='speaker'?'earpiece':'speaker';const button=document.getElementById('callSpeakerButton');if(button)button.textContent=callSpeakerMode==='speaker'?'🔊 مكبر الصوت':'📞 سماعة الأذن'}catch(error){console.warn('Private call output routing failed',error);toast('تعذر تغيير مخرج الصوت؛ تحقق من إذن الأجهزة الصوتية في المتصفح')}}
+function configureCallPeer(peerName,iceServers){callPeerName=peerName;callOfferSent=false;callRemoteStream=null;callRemoteVideoStream=null;callRemoteAudioStream=null;const activePeer=new RTCPeerConnection({iceServers:iceServers||[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}]});pc=activePeer;activePeer.onicecandidate=e=>{if(!e.candidate||!callPeerName||pc!==activePeer)return;if(!callOfferSent)pendingOutgoingCallIce.push(e.candidate);else socket?.emit('ice',{to:callPeerName,candidate:e.candidate})};activePeer.ontrack=e=>{if(pc!==activePeer)return;console.info('[Rimaz private call] remote track received',{kind:e.track.kind,id:e.track.id,muted:e.track.muted,readyState:e.track.readyState,streams:e.streams?.length||0});attachCallRemoteTrack(e.track)};activePeer.oniceconnectionstatechange=()=>{if(pc===activePeer)console.info('[Rimaz private call] ICE state',activePeer.iceConnectionState)};activePeer.onsignalingstatechange=()=>{if(pc===activePeer)console.info('[Rimaz private call] signaling state',activePeer.signalingState)};activePeer.onconnectionstatechange=()=>{if(pc!==activePeer)return;console.info('[Rimaz private call] connection state',activePeer.connectionState);if(activePeer.connectionState==='connected')startPrivateCallDuration();else if(activePeer.connectionState==='disconnected')updatePrivateCallStatus('إعادة الاتصال…');else if(activePeer.connectionState==='connecting')updatePrivateCallStatus('جارٍ الاتصال…');if(['failed','closed'].includes(activePeer.connectionState))endCall(false)};if(callMode==='camera')startPrivateCallStats();return activePeer}
 function flushOutgoingCallIce(){callOfferSent=true;while(pendingOutgoingCallIce.length){socket?.emit('ice',{to:callPeerName,candidate:pendingOutgoingCallIce.shift()})}}
 async function flushCallIce(){if(!pc?.remoteDescription)return;while(pendingCallIce.length){const candidate=pendingCallIce.shift();try{await pc.addIceCandidate(candidate)}catch(error){console.warn('Private call ICE candidate failed',error)}}}
 async function switchCallCamera(){
  if(callMode!=='camera'||!localStream||!pc||callCameraSwitching)return;
  if(!navigator.mediaDevices?.getUserMedia)return toast('المتصفح لا يدعم تبديل الكاميرا');
- const activePeer=pc,activeStream=localStream;
- const oldTrack=activeStream.getVideoTracks()[0];
+ const activePeer=pc,activeStream=localStream,oldTrack=activeStream.getVideoTracks()[0];
  if(!oldTrack)return toast('مسار الكاميرا غير متاح');
  const sender=activePeer.getSenders().find(item=>item.track?.id===oldTrack.id)||activePeer.getSenders().find(item=>item.track?.kind==='video');
  if(!sender)return toast('مسار إرسال الفيديو غير جاهز');
- const oldSettings=oldTrack.getSettings?.()||{};
- const oldDeviceId=oldSettings.deviceId||'';
- const oldFacing=oldSettings.facingMode||callFacingMode||'user';
- const nextFacing=oldFacing==='environment'?'user':'environment';
- callCameraSwitching=true;
- const button=document.getElementById('switchCallCameraButton');
- if(button){button.disabled=true;button.textContent='جارٍ التبديل…'}
- let freshStream=null,oldTrackStopped=false;
- const isSameCall=()=>pc===activePeer&&localStream===activeStream&&callMode==='camera'&&activePeer.connectionState!=='closed';
+ const oldSettings=oldTrack.getSettings?.()||{},oldDeviceId=oldSettings.deviceId||'',oldFacing=oldSettings.facingMode||callFacingMode||'user',nextFacing=oldFacing==='environment'?'user':'environment';
+ callCameraSwitching=true;const button=document.getElementById('switchCallCameraButton');if(button){button.disabled=true;button.textContent='جارٍ تحرير الكاميرا…'}
+ let freshStream=null,oldReleased=false;
  const stopStream=stream=>stream?.getTracks?.().forEach(track=>track.stop());
  const stopFresh=()=>{stopStream(freshStream);freshStream=null};
+ const isSameCall=()=>pc===activePeer&&localStream===activeStream&&callMode==='camera'&&activePeer.connectionState!=='closed';
  const ensureSameCall=()=>{if(!isSameCall())throw new Error('CALL_ENDED_DURING_CAMERA_SWITCH')};
- const rejectWrongCamera=stream=>{stopStream(stream);const error=new Error('WRONG_CAMERA_SELECTED');error.name='OverconstrainedError';throw error};
- const validateCandidate=(stream,avoidId,direction)=>{
-  const track=stream?.getVideoTracks?.()[0];
-  if(!track){stopStream(stream);const error=new Error('NO_VIDEO_TRACK');error.name='NotFoundError';throw error}
-  const settings=track.getSettings?.()||{};
-  if(avoidId&&settings.deviceId&&settings.deviceId===avoidId)rejectWrongCamera(stream);
-  if(settings.facingMode&&settings.facingMode!==direction)rejectWrongCamera(stream);
-  return stream;
- };
- const acquireFacing=async(direction,avoidId='')=>{
-  const errors=[];
-  let devices=[];
-  try{devices=(await navigator.mediaDevices.enumerateDevices()).filter(device=>device.kind==='videoinput'&&device.deviceId)}catch(error){if(['NotAllowedError','SecurityError'].includes(error?.name))throw error;errors.push(error)}
-  const isBack=direction==='environment';
-  const labelPattern=isBack?/(back|rear|environment|world|خلف)/i:/(front|user|face|أمام)/i;
-  const candidates=devices.filter(device=>device.deviceId!==avoidId&&labelPattern.test(device.label||''));
-  for(const device of candidates){
-   try{const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{deviceId:{exact:device.deviceId}}});return validateCandidate(stream,avoidId,direction)}
-   catch(error){if(['NotAllowedError','SecurityError'].includes(error?.name))throw error;errors.push(error);console.warn('Camera device selection failed',error)}
-  }
-  try{const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{exact:direction}}});return validateCandidate(stream,avoidId,direction)}
-  catch(error){if(['NotAllowedError','SecurityError'].includes(error?.name))throw error;errors.push(error)}
-  try{const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:direction}}});return validateCandidate(stream,avoidId,direction)}
-  catch(error){if(['NotAllowedError','SecurityError'].includes(error?.name))throw error;errors.push(error)}
-  const hardwareBusy=errors.find(error=>['NotReadableError','TrackStartError','AbortError'].includes(error?.name));
-  throw hardwareBusy||errors[errors.length-1]||new Error('CAMERA_NOT_AVAILABLE');
- };
- const isHardwareBusy=error=>['NotReadableError','TrackStartError','AbortError'].includes(error?.name);
- const restorePreviousCamera=async()=>{
-  let restoredStream=null;
-  try{
-   if(oldDeviceId){try{restoredStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{deviceId:{exact:oldDeviceId}}})}catch(restoreByIdError){console.warn('Restore by previous camera ID failed',restoreByIdError)}}
-   if(!restoredStream)restoredStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:oldFacing}}});
-   if(!isSameCall()){stopStream(restoredStream);return false}
-   const restoredTrack=restoredStream.getVideoTracks()[0];
-   if(!restoredTrack)throw new Error('ORIGINAL_CAMERA_RESTORE_FAILED');
-   const restoredSettings=restoredTrack.getSettings?.()||{};
-   if(restoredSettings.facingMode&&restoredSettings.facingMode!==oldFacing)throw new Error('ORIGINAL_CAMERA_RESTORE_WRONG_DIRECTION');
-   await sender.replaceTrack(restoredTrack);
-   if(!isSameCall()){stopStream(restoredStream);return false}
-   activeStream.removeTrack(oldTrack);
-   activeStream.addTrack(restoredTrack);
-   restoredStream.getTracks().filter(track=>track!==restoredTrack).forEach(track=>track.stop());
-   callFacingMode=oldFacing;
-   attachCallLocal(activeStream);
-   return true;
-  }catch(restoreError){stopStream(restoredStream);throw restoreError}
- };
+ const validateCandidate=(stream,avoidId,direction)=>{const track=stream?.getVideoTracks?.()[0];if(!track){stopStream(stream);const error=new Error('NO_VIDEO_TRACK');error.name='NotFoundError';throw error}const settings=track.getSettings?.()||{};if(avoidId&&settings.deviceId&&settings.deviceId===avoidId){stopStream(stream);const error=new Error('WRONG_CAMERA_SELECTED');error.name='OverconstrainedError';throw error}if(settings.facingMode&&settings.facingMode!==direction){stopStream(stream);const error=new Error('WRONG_CAMERA_DIRECTION');error.name='OverconstrainedError';throw error}return stream};
+ const acquireFacing=async(direction,preferredId='')=>{const errors=[];if(preferredId){try{return validateCandidate(await navigator.mediaDevices.getUserMedia({audio:false,video:{deviceId:{exact:preferredId}}}),'',direction)}catch(error){errors.push(error)}}let devices=[];try{devices=(await navigator.mediaDevices.enumerateDevices()).filter(device=>device.kind==='videoinput'&&device.deviceId)}catch(error){if(['NotAllowedError','SecurityError'].includes(error?.name))throw error;errors.push(error)}const pattern=direction==='environment'?/(back|rear|environment|world|خلف)/i:/(front|user|face|أمام)/i;for(const device of devices.filter(item=>item.deviceId!==oldDeviceId&&pattern.test(item.label||''))){try{return validateCandidate(await navigator.mediaDevices.getUserMedia({audio:false,video:{deviceId:{exact:device.deviceId}}}),oldDeviceId,direction)}catch(error){if(['NotAllowedError','SecurityError'].includes(error?.name))throw error;errors.push(error)}}for(const constraint of [{facingMode:{exact:direction}},{facingMode:{ideal:direction}}]){try{return validateCandidate(await navigator.mediaDevices.getUserMedia({audio:false,video:constraint}),oldDeviceId,direction)}catch(error){if(['NotAllowedError','SecurityError'].includes(error?.name))throw error;errors.push(error)}}throw errors.find(error=>['NotReadableError','TrackStartError','AbortError'].includes(error?.name))||errors[errors.length-1]||new Error('CAMERA_NOT_AVAILABLE')};
+ const restorePreviousCamera=async()=>{let restored=null;try{restored=await acquireFacing(oldFacing,oldDeviceId);ensureSameCall();const track=restored.getVideoTracks()[0];await sender.replaceTrack(track);ensureSameCall();activeStream.addTrack(track);restored.getTracks().filter(item=>item!==track).forEach(item=>item.stop());callFacingMode=oldFacing;attachCallLocal(activeStream);return true}catch(error){stopStream(restored);throw error}};
  try{
-  try{freshStream=await acquireFacing(nextFacing,oldDeviceId);ensureSameCall()}
-  catch(firstError){
-   ensureSameCall();
-   if(!isHardwareBusy(firstError))throw firstError;
-   // Release the active capture only for errors that indicate a camera/HAL lock.
-   oldTrack.stop();oldTrackStopped=true;
-   await new Promise(resolve=>setTimeout(resolve,450));
-   ensureSameCall();
-   freshStream=await acquireFacing(nextFacing,oldDeviceId);
-   ensureSameCall();
-  }
-  const nextTrack=freshStream.getVideoTracks()[0];
-  if(!nextTrack)throw new Error('NO_VIDEO_TRACK');
-  await sender.replaceTrack(nextTrack);
-  ensureSameCall();
-  activeStream.removeTrack(oldTrack);
-  activeStream.addTrack(nextTrack);
-  freshStream.getTracks().filter(track=>track!==nextTrack).forEach(track=>track.stop());
-  freshStream=null;
-  if(!oldTrackStopped)oldTrack.stop();
-  callFacingMode=nextFacing;
-  attachCallLocal(activeStream);
- }catch(error){
-  stopFresh();
-  if(error?.message==='CALL_ENDED_DURING_CAMERA_SWITCH')return;
-  console.error('Private-call camera switch failed',error);
-  if(oldTrackStopped&&isSameCall()){
-   try{await restorePreviousCamera()}
-   catch(restoreError){console.error('Original camera restore failed',restoreError);if(isSameCall())toast('تعذر تبديل الكاميرا وتعذر استرجاع الكاميرا السابقة؛ أعد تشغيل الكاميرا')}
-  }
-  if(!isSameCall())return;
-  if(error?.name==='NotAllowedError'||error?.name==='SecurityError')toast('المتصفح منع الوصول للكاميرا؛ راجع إذن الكاميرا للموقع');
-  else if(error?.name==='NotFoundError'||error?.name==='OverconstrainedError'||error?.message==='CAMERA_NOT_AVAILABLE'||error?.message==='WRONG_CAMERA_SELECTED')toast('لم يتم العثور على الكاميرا المطلوبة بهذا الاتجاه على الجهاز');
-  else if(isHardwareBusy(error))toast('الكاميرا مشغولة من تطبيق أو عملية أخرى؛ أغلق تطبيق الكاميرا وحاول مجدداً');
-  else toast('تعذر تبديل الكاميرا؛ بقي الاتصال على الكاميرا السابقة');
- }finally{
-  callCameraSwitching=false;
-  if(button&&button.isConnected){button.disabled=false;button.textContent=callFacingMode==='environment'?'⇄ الكاميرا الأمامية':'⇄ الكاميرا الخلفية'}
- }
+  // Release the current hardware capture before asking Android/iOS for the other lens.
+  await sender.replaceTrack(null);ensureSameCall();activeStream.removeTrack(oldTrack);oldTrack.stop();oldReleased=true;
+  if(button&&button.isConnected)button.textContent='جارٍ تشغيل الكاميرا…';
+  await new Promise(resolve=>setTimeout(resolve,300));ensureSameCall();
+  freshStream=await acquireFacing(nextFacing);ensureSameCall();const nextTrack=freshStream.getVideoTracks()[0];
+  await sender.replaceTrack(nextTrack);ensureSameCall();activeStream.addTrack(nextTrack);freshStream.getTracks().filter(track=>track!==nextTrack).forEach(track=>track.stop());freshStream=null;
+  callFacingMode=nextFacing;attachCallLocal(activeStream);
+ }catch(error){stopFresh();if(error?.message==='CALL_ENDED_DURING_CAMERA_SWITCH')return;console.error('Private-call camera switch failed',error);if(oldReleased&&isSameCall()){try{await restorePreviousCamera()}catch(restoreError){console.error('Original camera restore failed',restoreError);if(isSameCall())toast('فشل تبديل الكاميرا ولم يتمكن الجهاز من استرجاع السابقة؛ أعد بدء مكالمة الفيديو')}}if(!isSameCall())return;if(error?.name==='NotAllowedError'||error?.name==='SecurityError')toast('المتصفح منع الوصول للكاميرا؛ راجع إذن الكاميرا للموقع');else if(error?.name==='NotFoundError'||error?.name==='OverconstrainedError'||error?.message==='CAMERA_NOT_AVAILABLE'||error?.message==='WRONG_CAMERA_SELECTED')toast('لم يتم العثور على الكاميرا المطلوبة؛ تمت محاولة استرجاع الكاميرا السابقة');else toast('تعذر تبديل الكاميرا؛ تمت محاولة استرجاع الكاميرا السابقة')
+ }finally{callCameraSwitching=false;if(button&&button.isConnected){button.disabled=false;button.textContent=callFacingMode==='environment'?'⇄ الكاميرا الأمامية':'⇄ الكاميرا الخلفية'}}
 }
 
 function incomingCallCard(d){const profile=d.fromProfile||{};const member={name:d.from,role:d.fromRole||'member',vip:!!d.fromVip,profile};return `<div class="incomingCallCard" id="incomingCallCard" role="dialog" aria-label="اتصال وارد"><div class="incomingCallTop"><b>${d.video?'📹 اتصال فيديو وارد':'☎ اتصال صوتي وارد'}</b><button type="button" onclick="rejectIncomingCall()" aria-label="إغلاق">×</button></div><div class="incomingCallIdentity"><img src="${esc(avatarFor(profile))}" alt=""><div><div class="incomingCallTitleLine"><span class="incomingCallRank">${memberBadge(member)}</span><strong>${esc(d.fromDisplayName||displayFor({name:d.from,profile})||d.from)}</strong></div><small>يتصل بك الآن</small></div></div><div class="incomingCallActions"><button class="acceptIncoming" onclick="acceptIncomingCall()">فتح الاتصال</button><button class="rejectIncoming" onclick="rejectIncomingCall()">إغلاق الاتصال</button></div></div>`}
-async function startCall(camera){if(Number(me.likes||0)<500&&!me.fullAdmin)return toast('الاتصال يفتح عند 500 إعجاب من حسابك');if(!privateTo)return toast('اختر عضوًا للاتصال');try{endCall(false,false);callMode=camera?'camera':'voice';callFacingMode='user';const iceServers=await getPrivateCallIceServers();configureCallPeer(privateTo,iceServers);showCall(camera,true);localStream=await navigator.mediaDevices.getUserMedia(camera?{audio:{echoCancellation:true,noiseSuppression:true},video:{facingMode:{ideal:'user'}}}:{audio:{echoCancellation:true,noiseSuppression:true},video:false});if(camera)attachCallLocal(localStream);addPrivateCallTracks(localStream);const offer=await pc.createOffer();await pc.setLocalDescription(offer);socket.emit('call-offer',{to:privateTo,offer,video:camera});flushOutgoingCallIce()}catch(error){console.error('Private call start failed',error);endCall(false,false);toast(error?.name==='NotAllowedError'?'اسمح للمتصفح باستخدام الكاميرا والمايك':'تعذر بدء الاتصال؛ تحقق من صلاحية الكاميرا والمايك')}}
-function showCall(camera,outgoing=false){document.querySelector('.call')?.remove();document.getElementById('layer').insertAdjacentHTML('beforeend',`<div class="call ${camera?'cameraCall':'voiceCall'}">${camera?'<video id="remoteVideo" autoplay muted playsinline webkit-playsinline></video><audio id="remoteAudio" autoplay playsinline></audio><div id="remoteVideoStatus" class="remoteVideoStatus">بانتظار صورة الطرف الآخر…</div><video id="localVideo" class="localCallPreview" autoplay muted playsinline webkit-playsinline></video>':'<audio id="remoteAudio" autoplay playsinline></audio>'}<div class="callBar">${camera?'<button type="button" id="switchCallCameraButton" class="switchCallCamera" title="تبديل الكاميرا" aria-label="تبديل الكاميرا" onclick="switchCallCamera()">⇄ الكاميرا الخلفية</button>':''}<button onclick="endCall()">إنهاء الاتصال</button><button class="ok" onclick="document.querySelector('.call')?.classList.toggle('call-minimized')">${outgoing?'بانتظار الرد':(camera?'📹 اتصال فيديو':'☎ اتصال صوتي')}</button></div></div>`);if(camera&&localStream)attachCallLocal(localStream);if(callRemoteStream)attachCallRemote(callRemoteStream)}
+async function startCall(camera){if(Number(me.likes||0)<500&&!me.fullAdmin)return toast('الاتصال يفتح عند 500 إعجاب من حسابك');if(!privateTo)return toast('اختر عضوًا للاتصال');try{endCall(false,false);callMode=camera?'camera':'voice';callFacingMode='user';callSpeakerMode='earpiece';setPrivateCallAudioSession('play-and-record');const iceServers=await getPrivateCallIceServers();configureCallPeer(privateTo,iceServers);showCall(camera,true);localStream=await navigator.mediaDevices.getUserMedia(camera?{audio:{echoCancellation:true,noiseSuppression:true},video:{facingMode:{ideal:'user'}}}:{audio:{echoCancellation:true,noiseSuppression:true},video:false});if(camera)attachCallLocal(localStream);addPrivateCallTracks(localStream);const offer=await pc.createOffer();await pc.setLocalDescription(offer);socket.emit('call-offer',{to:privateTo,offer,video:camera});flushOutgoingCallIce()}catch(error){console.error('Private call start failed',error);endCall(false,false);toast(error?.name==='NotAllowedError'?'اسمح للمتصفح باستخدام الكاميرا والمايك':'تعذر بدء الاتصال؛ تحقق من صلاحية الكاميرا والمايك')}}
+function showCall(camera,outgoing=false){document.querySelector('.call')?.remove();const initialStatus=outgoing?'بانتظار الرد':'جارٍ الاتصال…';document.getElementById('layer').insertAdjacentHTML('beforeend',`<div class="call ${camera?'cameraCall':'voiceCall'}">${camera?'<video id="remoteVideo" autoplay muted playsinline webkit-playsinline></video><audio id="remoteAudio" autoplay playsinline></audio><div id="remoteVideoStatus" class="remoteVideoStatus">بانتظار صورة الطرف الآخر…</div><video id="localVideo" class="localCallPreview" autoplay muted playsinline webkit-playsinline></video>':'<audio id="remoteAudio" autoplay playsinline></audio>'}<div class="callBar">${camera?'<button type="button" id="switchCallCameraButton" class="switchCallCamera" title="تبديل الكاميرا" aria-label="تبديل الكاميرا" onclick="switchCallCamera()">⇄ الكاميرا الخلفية</button>':''}<button type="button" id="callSpeakerButton" class="callSpeakerButton" onclick="togglePrivateCallSpeaker()">🔊 مكبر الصوت</button><button onclick="endCall()">إنهاء الاتصال</button><button class="ok" onclick="document.querySelector('.call')?.classList.toggle('call-minimized')"><span id="callStatus">${initialStatus}</span><span id="callDuration"></span></button></div></div>`);if(camera&&localStream)attachCallLocal(localStream);if(callRemoteStream)attachCallRemote(callRemoteStream)}
 function handleOffer(d){if(!d?.from)return;if(pc||pendingIncomingCall){socket?.emit('call-reject',{to:d.from,reason:'busy'});return}pendingIncomingCall=d;const layerEl=document.getElementById('layer');if(layerEl){document.getElementById('incomingCallCard')?.remove();layerEl.insertAdjacentHTML('beforeend',incomingCallCard(d))}else socket?.emit('call-reject',{to:d.from,reason:'unavailable'})}
-async function acceptIncomingCall(){const incoming=pendingIncomingCall;if(!incoming)return;if(micRaised||voiceRequestPending){toast('لا تستطيع الرد على المكالمة لأنك تتحدث باستخدام مايك الغرفة');return;}acceptedIncomingCallForRetry=incoming;pendingIncomingCall=null;document.getElementById('incomingCallCard')?.remove();callMode=incoming.video?'camera':'voice';callFacingMode='user';try{const iceServers=await getPrivateCallIceServers();configureCallPeer(incoming.from,iceServers);showCall(!!incoming.video,false);localStream=await navigator.mediaDevices.getUserMedia(incoming.video?{audio:{echoCancellation:true,noiseSuppression:true},video:{facingMode:{ideal:'user'}}}:{audio:{echoCancellation:true,noiseSuppression:true},video:false});if(incoming.video)attachCallLocal(localStream);await pc.setRemoteDescription(incoming.offer);await flushCallIce();addPrivateCallTracks(localStream);const answer=await pc.createAnswer();await pc.setLocalDescription(answer);socket.emit('call-answer',{to:incoming.from,answer,video:!!incoming.video});flushOutgoingCallIce()}catch(error){console.error('Private call acceptance failed',error);socket?.emit('call-reject',{to:incoming.from,reason:error?.name==='NotAllowedError'?'permission':'failed'});endCall(false,false);toast(error?.name==='NotAllowedError'?'لم تسمح باستخدام المايك أو الكاميرا':'تعذر قبول الاتصال؛ تحقق من صلاحية الجهاز')}}
+async function acceptIncomingCall(){const incoming=pendingIncomingCall;if(!incoming)return;if(micRaised||voiceRequestPending){toast('لا تستطيع الرد على المكالمة لأنك تتحدث باستخدام مايك الغرفة');return;}acceptedIncomingCallForRetry=incoming;pendingIncomingCall=null;document.getElementById('incomingCallCard')?.remove();callMode=incoming.video?'camera':'voice';callFacingMode='user';callSpeakerMode='earpiece';setPrivateCallAudioSession('play-and-record');try{const iceServers=await getPrivateCallIceServers();configureCallPeer(incoming.from,iceServers);showCall(!!incoming.video,false);localStream=await navigator.mediaDevices.getUserMedia(incoming.video?{audio:{echoCancellation:true,noiseSuppression:true},video:{facingMode:{ideal:'user'}}}:{audio:{echoCancellation:true,noiseSuppression:true},video:false});if(incoming.video)attachCallLocal(localStream);await pc.setRemoteDescription(incoming.offer);await flushCallIce();addPrivateCallTracks(localStream);const answer=await pc.createAnswer();await pc.setLocalDescription(answer);socket.emit('call-answer',{to:incoming.from,answer,video:!!incoming.video});flushOutgoingCallIce()}catch(error){console.error('Private call acceptance failed',error);socket?.emit('call-reject',{to:incoming.from,reason:error?.name==='NotAllowedError'?'permission':'failed'});endCall(false,false);toast(error?.name==='NotAllowedError'?'لم تسمح باستخدام المايك أو الكاميرا':'تعذر قبول الاتصال؛ تحقق من صلاحية الجهاز')}}
 function rejectIncomingCall(){const incoming=pendingIncomingCall;if(incoming)socket?.emit('call-reject',{to:incoming.from,reason:'declined'});pendingIncomingCall=null;pendingCallIce.length=0;document.getElementById('incomingCallCard')?.remove()}
 async function handleAnswer(d){if(!pc||!d?.answer||key(d.from)!==key(callPeerName))return;try{await pc.setRemoteDescription(d.answer);await flushCallIce()}catch(error){console.warn('Private call answer setup failed',error);endCall();toast('تعذر إكمال الاتصال')}}
 async function handleIce(d){if(!d?.candidate)return;if(!pc){if(pendingIncomingCall&&key(d.from)===key(pendingIncomingCall.from))pendingCallIce.push(d.candidate);return}if(key(d.from)!==key(callPeerName))return;if(!pc.remoteDescription){pendingCallIce.push(d.candidate);return}try{await pc.addIceCandidate(d.candidate)}catch(error){console.warn('Private call ICE candidate failed',error)}}
-function endCall(showToast=true,notifyPeer=true){const peer=callPeerName;if(notifyPeer&&peer)socket?.emit('call-end',{to:peer});if(callStatsTimer){clearInterval(callStatsTimer);callStatsTimer=null}localStream?.getTracks().forEach(t=>t.stop());localStream=null;try{pc?.close()}catch{}pc=null;callRemoteStream=null;callRemoteVideoStream=null;callRemoteAudioStream=null;callPeerName='';callOfferSent=false;pendingCallIce.length=0;pendingOutgoingCallIce.length=0;document.querySelector('.call')?.remove();if(showToast)toast('تم إنهاء الاتصال')}
+function endCall(showToast=true,notifyPeer=true){const peer=callPeerName;if(notifyPeer&&peer)socket?.emit('call-end',{to:peer});if(callStatsTimer){clearInterval(callStatsTimer);callStatsTimer=null}resetPrivateCallDuration();setPrivateCallAudioSession('auto');localStream?.getTracks().forEach(t=>t.stop());localStream=null;try{pc?.close()}catch{}pc=null;callRemoteStream=null;callRemoteVideoStream=null;callRemoteAudioStream=null;callPeerName='';callOfferSent=false;pendingCallIce.length=0;pendingOutgoingCallIce.length=0;document.querySelector('.call')?.remove();if(showToast)toast('تم إنهاء الاتصال')}
 function clearIncomingCall(){pendingIncomingCall=null;acceptedIncomingCallForRetry=null;pendingCallIce.length=0;document.getElementById('incomingCallCard')?.remove()}
 window.addEventListener('beforeunload',()=>socket?.disconnect());
 // Always show the entry screen on a fresh page load. Credentials are prefilled;

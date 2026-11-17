@@ -855,7 +855,7 @@ try {
   const serverText = fs.readFileSync(server, 'utf8');
   const videoChecks = [
     ['private video call renders live local and remote video elements', html.includes('id=\"remoteVideo\"') && html.includes('id=\"localVideo\"') && html.includes('function attachCallLocal(stream)')],
-    ['private video call switches camera using verified opposite-facing device selection and sender replacement', html.includes('function switchCallCamera()') && html.includes('enumerateDevices()') && html.includes('deviceId:{exact:device.deviceId}') && html.includes('facingMode:{exact:direction}') && html.includes('facingMode:{ideal:direction}') && html.includes('validateCandidate(stream,avoidId,direction)') && html.includes('sender.replaceTrack(nextTrack)') && html.includes('switchCallCameraButton')],
+    ['private video call releases the current camera before acquiring the opposite lens and replaces the same sender', html.includes('function switchCallCamera()') && html.includes('await sender.replaceTrack(null)') && html.includes('oldTrack.stop();oldReleased=true') && html.includes('facingMode:{exact:direction}') && html.includes('facingMode:{ideal:direction}') && html.includes('await sender.replaceTrack(nextTrack)') && html.includes('switchCallCameraButton')],
     ['incoming video call installs remote offer before adding local tracks and creating answer', html.includes('await pc.setRemoteDescription(incoming.offer);await flushCallIce();addPrivateCallTracks(localStream);const answer=await pc.createAnswer()')],
     ['outgoing video call adds local tracks before creating offer', html.includes('addPrivateCallTracks(localStream);const offer=await pc.createOffer()')],
     ['private call obtains server ICE configuration and preserves STUN fallback', html.includes("api('/api/rtc-config')") && html.includes('function configureCallPeer(peerName,iceServers)')],
@@ -871,25 +871,26 @@ try {
 } catch (error) { fail('v46.61 private video-call repair checks', error.message); }
 
 
-// v46.93.35: make camera switching transactional and preserve the active capture on non-busy failures.
+// v46.93.36: release-first cross-device camera switching and connected-call duration/audio routing.
 try {
   const html = fs.readFileSync(mainPath, 'utf8');
   const fn = (html.match(/async function switchCallCamera\(\)\{[\s\S]*?\n\}/)||[])[0]||'';
   const checks = [
-    ['camera switch derives the opposite direction from the active track settings', fn.includes("oldSettings.facingMode||callFacingMode||'user'") && fn.includes("oldFacing==='environment'?'user':'environment'")],
-    ['camera selection prefers labelled devices and validates both device ID and facing direction', fn.includes('labelPattern.test(device.label||\'\')') && fn.includes('device.deviceId!==avoidId') && fn.includes('validateCandidate(stream,avoidId,direction)') && fn.includes('settings.deviceId===avoidId') && fn.includes('settings.facingMode!==direction')],
-    ['camera selection uses exact facing mode and a validated ideal fallback', fn.includes('facingMode:{exact:direction}') && fn.includes('facingMode:{ideal:direction}')],
-    ['only camera-busy errors release the old track before retrying', fn.includes("const isHardwareBusy=error=>['NotReadableError','TrackStartError','AbortError'].includes(error?.name)") && fn.includes('if(!isHardwareBusy(firstError))throw firstError') && fn.includes('oldTrack.stop();oldTrackStopped=true') && fn.includes('setTimeout(resolve,450)')],
-    ['permission, missing-camera and constraint errors preserve the current camera without releasing it', fn.includes("if(!isHardwareBusy(firstError))throw firstError") && fn.includes("if(error?.name==='NotAllowedError'||error?.name==='SecurityError')")],
-    ['camera restore verifies the old direction and replaces only the existing video sender track', fn.includes('const restorePreviousCamera=async()=>') && fn.includes('restoredSettings.facingMode!==oldFacing') && fn.includes('await sender.replaceTrack(restoredTrack)')],
-    ['camera switching aborts safely if the call or stream changes during an asynchronous request', fn.includes('const activePeer=pc,activeStream=localStream') && fn.includes('const isSameCall=()=>pc===activePeer&&localStream===activeStream') && fn.includes('ensureSameCall()') && fn.includes('CALL_ENDED_DURING_CAMERA_SWITCH')],
-    ['successful switch updates the existing stream and keeps the same peer connection sender', fn.includes('await sender.replaceTrack(nextTrack)') && fn.includes('activeStream.removeTrack(oldTrack)') && fn.includes('activeStream.addTrack(nextTrack)')],
-    ['camera switch button is restored only while its original element remains connected', fn.includes('if(button&&button.isConnected)') && fn.includes("callFacingMode==='environment'?'⇄ الكاميرا الأمامية':'⇄ الكاميرا الخلفية'")],
-    ['private call and room-mic media variables remain isolated', html.includes('let pc=null,localStream=null') && html.includes('voiceLocalStream=null') && html.includes('const voicePeers=new Map()')],
-    ['both browser entry files are identical', html === fs.readFileSync(publicPath, 'utf8')],
+    ['camera switch derives the opposite direction from active track settings', fn.includes("oldSettings.facingMode||callFacingMode||'user'") && fn.includes("oldFacing==='environment'?'user':'environment'")],
+    ['camera hardware is detached and released before requesting the next lens', fn.includes('await sender.replaceTrack(null)') && fn.indexOf('await sender.replaceTrack(null)') < fn.indexOf('freshStream=await acquireFacing(nextFacing)') && fn.includes('activeStream.removeTrack(oldTrack);oldTrack.stop();oldReleased=true')],
+    ['camera candidates are checked for device identity and facing direction', fn.includes('settings.deviceId===avoidId') && fn.includes('settings.facingMode!==direction') && fn.includes('enumerateDevices()')],
+    ['failed camera switching attempts to restore the previous device and reattach it to the same sender', fn.includes('const restorePreviousCamera=async()=>') && fn.includes('acquireFacing(oldFacing,oldDeviceId)') && fn.includes('await sender.replaceTrack(track)') && fn.includes('activeStream.addTrack(track)')],
+    ['camera switching aborts safely if the call changes during asynchronous acquisition', fn.includes('const activePeer=pc,activeStream=localStream') && fn.includes('const isSameCall=()=>pc===activePeer&&localStream===activeStream') && fn.includes('CALL_ENDED_DURING_CAMERA_SWITCH')],
+    ['successful camera switch keeps the same peer connection and updates the local preview', fn.includes('await sender.replaceTrack(nextTrack)') && fn.includes('activeStream.addTrack(nextTrack)') && fn.includes('attachCallLocal(activeStream)')],
+    ['call duration begins only after RTCPeerConnection reaches connected', html.includes("activePeer.connectionState==='connected')startPrivateCallDuration()") && html.includes('function startPrivateCallDuration()')],
+    ['call duration uses elapsed wall-clock time and is cleared on end', html.includes('Date.now()-callConnectedAt') && html.includes("resetPrivateCallDuration();setPrivateCallAudioSession(\'auto\')")],
+    ['outgoing call remains waiting until actual connection', html.includes("const initialStatus=outgoing?'بانتظار الرد':'جارٍ الاتصال…'") && html.includes("updatePrivateCallStatus('متصل')")],
+    ['audio communication session is requested before microphone capture where supported', html.includes("setPrivateCallAudioSession('play-and-record')") && html.includes("session.type=type")],
+    ['speaker output control uses real browser output routing capability and reports unsupported browsers', html.includes('togglePrivateCallSpeaker()') && html.includes("typeof audio.setSinkId!=='function'") && html.includes('await audio.setSinkId(target.deviceId)')],
+    ['both browser entry files remain identical', html === fs.readFileSync(publicPath, 'utf8')],
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
-} catch (error) { fail('v46.93.35 transactional camera switch checks', error.message); }
+} catch (error) { fail('v46.93.36 private call reliability checks', error.message); }
 
 // v46.67: independently managed animated gift catalogue and GIF delivery pipeline.
 try {
@@ -937,7 +938,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.35 package version is current', pkg.version === '46.93.35'],
+    ['v46.93.36 package version is current', pkg.version === '46.93.36'],
     ['no dangling async-only lines remain in the browser entry script', !/^\s*async\s*$/m.test(html)],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
@@ -1108,7 +1109,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.35 package version',pkgNow.version==='46.93.35'],
+  ['v46.93.36 package version',pkgNow.version==='46.93.36'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],

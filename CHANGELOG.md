@@ -1,3 +1,10 @@
+## v46.93.36 — Cross-browser private-call reliability
+
+- Reworked front/rear camera switching to detach the active video sender and release the current camera track before requesting the opposite lens; failed switches attempt to restore the original camera.
+- Added call-duration timing that begins only when the peer connection reaches `connected`, and resets cleanly when the call ends.
+- Added a browser-capability-aware speaker output control and requests the `play-and-record` audio session mode where supported; unsupported browsers report the limitation rather than pretending to switch outputs.
+- Added clearer connection states and synchronized both browser entry files. Physical-device testing is still required, especially for mobile audio routing and camera HAL behavior.
+
 ## v46.93.35 — Transactional Android camera switching audit
 
 - Restricted release-and-retry to camera-busy errors (`NotReadableError`, `TrackStartError`, `AbortError`); missing-camera, unsupported-constraint, and permission errors no longer stop the working camera.
