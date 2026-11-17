@@ -1,3 +1,10 @@
+## v46.93.29 — Final source and package hygiene audit
+- Removed the unused root-level duplicate of `rimaz-hero.jpg`; the public static asset remains unchanged.
+- Removed a broken image fallback URL that incorrectly included the filesystem directory `/public` in the browser path.
+- Kept the two identical HTML entry files because the server explicitly uses the root entry first and the public entry as a fallback.
+- Corrected current audit documentation: room microphone access uses 30 likes; notices use 400; private media and calls use 500.
+- Updated package version and regression checks. No chat feature or authorization behavior was changed.
+
 ## v46.93.28 — ربط الوصف المحفوظ بمرجع فهرسة موحّد
 - جعل عنوان الموقع العام مصدراً موحداً لرابط canonical وOpen Graph URL وبيانات Schema وrobots.txt وsitemap.xml، مع إمكانية ضبطه من متغير البيئة PUBLIC_SITE_URL عند اعتماد نطاق مخصص.
 - تقديم robots.txt وsitemap.xml ديناميكياً قبل الملفات الثابتة حتى لا تختلف تعليمات الزحف أو خريطة الموقع عن النطاق الأساسي.
