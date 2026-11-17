@@ -1,3 +1,9 @@
+## v46.93.31 — Blank-page hotfix
+
+- Removed incomplete `async` fragments left behind by the previous unused-function cleanup; these caused a JavaScript syntax error that stopped the entire page script from running.
+- Synchronized `index.html` and `public/index.html` and restored the root hero image asset for archive completeness.
+- Re-ran inline JavaScript syntax checks and the complete local verification suite.
+
 ## v46.93.30 — Credential safety and dead-code cleanup
 - Removed plaintext password reads/writes from `localStorage`; the legacy `rimaz_saved_password` value is cleared on page load and after a successful sign-in.
 - Kept remembering the member username. Password autofill and optional saving are delegated to the browser password manager using the standard `username` and `current-password` autocomplete fields.
