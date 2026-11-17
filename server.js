@@ -591,11 +591,13 @@ function profile(name){
   if (!db.profiles[name]) db.profiles[name]={displayName:cleanName(name),avatar:'',status:defaultStatus(name),bio:'عضو في دردشة ريماز عراقية',nameColor:'#222222',fontColor:'#222222',bgColor:'#ffffff',privateOpen:true,notificationsOpen:true};
   const p=db.profiles[name];
   if(!p.displayName) p.displayName=cleanName(name);
+  // Expire temporary visual ranks before projecting their assigned rank artwork/banner.
+  if(p.rankUntil && Number(p.rankUntil)<=Date.now()) { p.rank='none'; delete p.rankUntil; delete p.rankPreviousRole; delete p.rankDurationDays; save(); }
   const visualRank=rankDefinition(p.rank);
   p.rankArt=visualRank?.artUrl||'';
+  p.rankBanner=visualRank?.bannerUrl||'';
+  p.rankBannerName=visualRank?.bannerName||'';
   p.customDecorationImage=String(p.customDecorationImage||'');
-  // Expire temporary visual ranks without changing the existing badge artwork or staff role.
-  if(p.rankUntil && Number(p.rankUntil)<=Date.now()) { p.rank='none'; delete p.rankUntil; delete p.rankPreviousRole; delete p.rankDurationDays; save(); }
   // Never let the old automatic status survive as a default. Custom statuses remain untouched.
   if(!p.status || p.status==='متصل الآن' || p.status==='زائر جديد' || p.status==='غير مسجل' || p.status==='عضو جديد') p.status=defaultStatus(name);
   if(!p.fontColor) p.fontColor=p.nameColor||'#222222';
@@ -633,7 +635,7 @@ const PERMISSION_CATALOG = {
   messages_delete:'حذف الرسائل', announcement_post:'نشر الإعلانات', announcement_delete:'حذف الإعلانات',
   gifts:'إرسال الهدايا', vip:'منح VIP', profile_edit:'تعديل ألوان الملف الشخصي',
   avatar_delete:'حذف الصور', grant_likes:'منح اللايكات',
-  rank_assign:'منح الشارات ومدتها', banner_upload:'رفع وتغيير وحذف البنر الشخصي', rank_art_manage:'إدارة مكتبة أشكال الرتب وربطها بالرتب', member_decoration_manage:'تخصيص وإزالة زخرفة عضو محدد', permission_manage:'تعديل صلاحيات الرتب', member_ip:'عرض IP',
+  rank_assign:'منح الشارات ومدتها', personal_banner:'رفع وحذف البنر الشخصي للحساب نفسه', chat_banners_manage:'إدارة بنرات الدردشة للرتب السبع', rank_art_manage:'إدارة مكتبة أشكال الرتب وربطها بالرتب', member_decoration_manage:'تخصيص وإزالة زخرفة عضو محدد', permission_manage:'تعديل صلاحيات الرتب', member_ip:'عرض IP',
   reset_likes:'تصفير اللايكات', shortcuts_manage:'إدارة الاختصارات', smileys_manage:'إدارة السميلات', room_move:'نقل عضو بين الغرف', room_create:'إنشاء غرفة', room_edit:'تعديل بيانات الغرفة', room_delete:'حذف غرفة', room_lock:'تعيين أو إزالة كلمة مرور الغرفة', room_image_manage:'إدارة صور الغرف', gift_catalog_manage:'إضافة وحذف هدايا الكتالوج', wall_stop:'إيقاف الحائط', wall_restart:'تشغيل الحائط', wall_clear:'حذف جميع منشورات الحائط', wall_delete_user:'حذف منشورات عضو محدد من الحائط', welcome_manage:'إدارة رسائل الترحيب',
   audit_view:'عرض سجل العمليات وتصديره', stats_view:'عرض إحصائيات الموقع', chat_filter_manage:'إدارة فلتر الكلمات', member_status_manage:'إدارة حالات الأعضاء', private_chat_override:'تجاوز إغلاق المحادثات الخاصة', presence_hidden_view:'مشاهدة الأعضاء المخفيين', hidden_login:'الدخول المخفي', ghost_login:'دخول الشبح', bots_manage:'إدارة وتشغيل بوتات الدردشة', site_admin:'إدارة الموقع الكاملة (الإعدادات والسجلات والنسخ والاستعادة)', subscriptions_manage:'إدارة خطط واشتراكات الأعضاء وتجديدها وإلغاؤها', ads_manage:'إدارة الحملات الإعلانية والصور والروابط والمدد', control_center_manage:'التحكم بتشغيل وإيقاف وحدات الدردشة', audit_details_view:'عرض تفاصيل الأهداف والإجراءات في سجل العمليات', health_view:'مراقبة صحة الخادم واستهلاك الذاكرة'
 };
@@ -642,6 +644,7 @@ const ALL_PERMISSION_KEYS=Object.keys(PERMISSION_CATALOG);
 // Convert old bundled permissions into the granular capabilities used by the current UI.
 function normalizePermissionList(list){
  const set=new Set(Array.isArray(list)?list:[]);
+ if(set.has('banner_upload')){set.add('personal_banner');set.delete('banner_upload');}
  if(set.has('rooms_manage')){for(const key of ['room_create','room_edit','room_delete','room_lock','room_image_manage'])set.add(key);set.delete('rooms_manage');}
  if(set.has('chat_tools_manage')){set.add('shortcuts_manage');set.add('smileys_manage');set.delete('chat_tools_manage');}
  if(set.has('gifts'))set.add('gift_catalog_manage');
@@ -734,14 +737,16 @@ db.permissionModelVersion=3;
 }
 migrateLegacyPermissionModel();
 for(const [name,permissions] of Object.entries(db.accountPermissions||{}))if(Array.isArray(permissions))db.accountPermissions[name]=normalizePermissionList(permissions);
-// Add the new personal-banner capability only to previously full-access admin ranks/accounts.
-if(Number(db.bannerUploadPermissionMigrationVersion||0)<1){
- const previous=ALL_PERMISSION_KEYS.filter(key=>key!=='banner_upload');
+// Split the former banner permission into personal banners and rank/chat banners.
+// Legacy banner_upload maps only to personal_banner; full-access admins also receive chat_banners_manage.
+if(Number(db.bannerPermissionsSplitMigrationVersion||0)<1){
+ const introduced=['personal_banner','chat_banners_manage'];
+ const previous=ALL_PERMISSION_KEYS.filter(key=>!introduced.includes(key));
  const adminFull=rankDefinition('admin-full');
- if(adminFull&&previous.every(key=>(adminFull.permissions||[]).includes(key))&&!adminFull.permissions.includes('banner_upload'))adminFull.permissions.push('banner_upload');
- for(const permissions of Object.values(db.accountPermissions||{}))if(Array.isArray(permissions)&&previous.every(key=>permissions.includes(key))&&!permissions.includes('banner_upload'))permissions.push('banner_upload');
- db.bannerUploadPermissionMigrationVersion=1;
- try{save()}catch(error){console.error('Could not persist banner permission migration:',error.message);}
+ if(adminFull&&previous.every(key=>(adminFull.permissions||[]).includes(key)))adminFull.permissions=[...new Set([...(adminFull.permissions||[]),'personal_banner','chat_banners_manage'])];
+ for(const permissions of Object.values(db.accountPermissions||{}))if(Array.isArray(permissions)&&previous.every(key=>permissions.includes(key)))for(const key of introduced)if(!permissions.includes(key))permissions.push(key);
+ db.bannerPermissionsSplitMigrationVersion=1;
+ try{save()}catch(error){console.error('Could not persist split banner permission migration:',error.message);}
 }
 // One-time permission-schema migration: preserve full-admin intent when new admin capabilities are introduced.
 // Only accounts/ranks that already held every prior capability receive the new ones; limited custom overrides stay limited.
@@ -1357,6 +1362,36 @@ app.delete('/api/admin/rank-art/:id',requireAuth,(req,res)=>{
  if(item.image?.startsWith('/uploads/')){const file=path.resolve(UP_DIR,path.basename(item.image));if(file.startsWith(path.resolve(UP_DIR)+path.sep)){try{fs.unlinkSync(file)}catch{}}}
  io.emit('rank-art-updated',{deleted:id,ranks:(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).map(r=>({id:r.id,artUrl:r.artUrl||''}))});res.json({ok:true,deleted:id});
 });
+// Chat/rank banners are independent from the small rank artwork library and personal profile banners.
+function canManageChatBanners(user){return isOwner(user)||hasPermission(user,'chat_banners_manage');}
+app.get('/api/admin/chat-banners',requireAuth,(req,res)=>{
+ if(!canManageChatBanners(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة بنرات الدردشة'});
+ res.set('Cache-Control','no-store');
+ res.json({ranks:(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)).map(r=>({id:r.id,name:r.name,bannerUrl:r.bannerUrl||'',bannerName:r.bannerName||''}))});
+});
+app.post('/api/admin/chat-banners/:rank',requireAuth,(req,res,next)=>{if(!canManageChatBanners(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة بنرات الدردشة'});next();},uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{
+ const rank=String(req.params.rank||''),definition=rankDefinition(rank);
+ if(!definition){removeUploadedFile(req.file);return res.status(400).json({error:'اختر رتبة صحيحة من الرتب السبع'});}
+ if(!req.file||!['image/gif','image/png','image/jpeg','image/webp'].includes(String(req.file.mimetype||''))){removeUploadedFile(req.file);return res.status(400).json({error:'ارفع صورة GIF أو PNG أو JPG أو WEBP'});}
+ const previous={url:definition.bannerUrl,name:definition.bannerName};
+ definition.bannerUrl='/uploads/'+req.file.filename;
+ definition.bannerName=String(req.body?.name||'').trim().slice(0,50)||definition.name;
+ try{save()}catch(error){if(previous.url!==undefined)definition.bannerUrl=previous.url;else delete definition.bannerUrl;if(previous.name!==undefined)definition.bannerName=previous.name;else delete definition.bannerName;removeUploadedFile(req.file);console.error('Chat rank banner save failed:',error.message);return res.status(500).json({error:'تعذر حفظ بنر الرتبة'});}
+ if(previous.url&&previous.url.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous.url)))}catch{}}
+ const ranks=(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).map(r=>({id:r.id,bannerUrl:r.bannerUrl||'',bannerName:r.bannerName||''}));
+ io.emit('rank-banners-updated',{rank,bannerUrl:definition.bannerUrl,bannerName:definition.bannerName,ranks});
+ emitState();res.json({ok:true,rank,bannerUrl:definition.bannerUrl,bannerName:definition.bannerName});
+});
+app.delete('/api/admin/chat-banners/:rank',requireAuth,(req,res)=>{
+ if(!canManageChatBanners(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة بنرات الدردشة'});
+ const rank=String(req.params.rank||''),definition=rankDefinition(rank);if(!definition)return res.status(400).json({error:'اختر رتبة صحيحة من الرتب السبع'});
+ const previous={url:definition.bannerUrl,name:definition.bannerName};delete definition.bannerUrl;delete definition.bannerName;
+ try{save()}catch(error){if(previous.url!==undefined)definition.bannerUrl=previous.url;if(previous.name!==undefined)definition.bannerName=previous.name;return res.status(500).json({error:'تعذر حذف بنر الرتبة'});}
+ if(previous.url&&previous.url.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous.url)))}catch{}}
+ const ranks=(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).map(r=>({id:r.id,bannerUrl:r.bannerUrl||'',bannerName:r.bannerName||''}));
+ io.emit('rank-banners-updated',{rank,bannerUrl:'',bannerName:'',ranks});emitState();res.json({ok:true,rank});
+});
+
 app.put('/api/admin/member-decoration',requireAuth,(req,res)=>{
  if(!hasPermission(req.user,'member_decoration_manage'))return res.status(403).json({error:'ما عندك صلاحية تخصيص زخرفة الأعضاء'});
  const n=accountKey(cleanName(req.body?.name||''));if(!n)return res.status(400).json({error:'اختر عضواً صالحاً'});if(isOwnerName(n)||isOwner({name:n,role:(getUser(n)||getGuest(n)||{}).role})){if(!isOwner(req.user))notifyOwnerProtectedAttempt(req.user,'تغيير زخرفة/شعار حسابك');return res.status(400).json({error:'حساب صاحب الموقع محمي'});}
@@ -1383,12 +1418,12 @@ app.put('/api/admin/bots',requireAuth,(req,res)=>{
 });
 
 // Rank definitions are editable independently from chat UI, buttons and colors.
-app.get('/api/admin/ranks' ,requireAuth,(req,res)=>{const canAssign=isOwner(req.user)||hasPermission(req.user,'rank_assign');const canArt=canManageRankArt(req.user);if(!canAssign&&!canArt)return res.status(403).json({error:'ما عندك صلاحية عرض الرتب أو أشكالها'});const ranks=(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)).map(r=>{const item={...r};if(!canAssign)delete item.permissions;return item;});res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:9,permissionKeys:canAssign?ALL_PERMISSION_KEYS:[],ranks,catalog:canAssign?PERMISSION_CATALOG:{}});});
+app.get('/api/admin/ranks' ,requireAuth,(req,res)=>{const canAssign=isOwner(req.user)||hasPermission(req.user,'rank_assign');const canArt=canManageRankArt(req.user);if(!canAssign&&!canArt)return res.status(403).json({error:'ما عندك صلاحية عرض الرتب أو أشكالها'});const ranks=(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)).map(r=>{const item={...r};if(!canAssign)delete item.permissions;return item;});res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:10,permissionKeys:canAssign?ALL_PERMISSION_KEYS:[],ranks,catalog:canAssign?PERMISSION_CATALOG:{}});});
 // Rank definitions are fixed: only the seven built-in ranks can be assigned or permission-edited.
 app.get('/api/admin/permissions',requireAuth,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الرتب'});
  const ranks=Object.fromEntries(RANK_PERMISSION_PROFILES.map(id=>[id,[...(rankDefinition(id)?.permissions||[])].filter(p=>Object.hasOwn(PERMISSION_CATALOG,p))]));
- res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:9,permissionKeys:ALL_PERMISSION_KEYS,catalog:PERMISSION_CATALOG,defaults:DEFAULT_RANK_PERMISSIONS,ranks,rankIds:RANK_PERMISSION_PROFILES});
+ res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:10,permissionKeys:ALL_PERMISSION_KEYS,catalog:PERMISSION_CATALOG,defaults:DEFAULT_RANK_PERMISSIONS,ranks,rankIds:RANK_PERMISSION_PROFILES});
 });
 app.put('/api/admin/permissions',requireAuth,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الرتب'});
@@ -1641,8 +1676,8 @@ app.post('/api/profile',requireAuth,(req,res)=>{
 app.post('/api/profile/avatar',requireAuth,uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!isOwner(req.user)&&Number(getUser(req.user.name)?.likes??getGuest(req.user.name)?.likes??0)<10){removeUploadedFile(req.file);return res.status(403).json({error:'تغيير الصورة يفتح عند 10 إعجابات'});}if(!req.file||!req.file.mimetype.startsWith('image/')){removeUploadedFile(req.file);return res.status(400).json({error:'اختر صورة'});}const p=profile(req.user.name),previous=p.avatar;p.avatar='/uploads/'+req.file.filename;try{save()}catch(e){p.avatar=previous;removeUploadedFile(req.file);console.error('Avatar save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الصورة'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}res.json({ok:true,avatar:p.avatar});});
 app.delete('/api/profile/avatar',requireAuth,(req,res)=>{if(isOwner(req.user))return res.status(403).json({error:'حذف صورة صاحب الموقع محمي'});const p=profile(req.user.name),previous=p.avatar;p.avatar='';try{save()}catch(e){p.avatar=previous;return res.status(500).json({error:'تعذر حفظ حذف الصورة'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}res.json({ok:true,avatar:''});});
 // Personal banners are intentionally separate from rank artwork and member decorations.
-app.post('/api/profile/banner',requireAuth,(req,res,next)=>{if(!hasPermission(req.user,'banner_upload'))return res.status(403).json({error:'ما عندك صلاحية رفع البنر'});next();},uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!req.file){return res.status(400).json({error:'اختر صورة للبنر'});}const p=profile(req.user.name),previous=p.banner;p.banner='/uploads/'+req.file.filename;try{save()}catch(e){p.banner=previous;removeUploadedFile(req.file);return res.status(500).json({error:'تعذر حفظ البنر'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}io.emit('profile-changed',{name:req.user.name,profile:p,displayName:p.displayName||cleanName(req.user.name)});emitState();res.json({ok:true,banner:p.banner});});
-app.delete('/api/profile/banner',requireAuth,(req,res)=>{if(!hasPermission(req.user,'banner_upload'))return res.status(403).json({error:'ما عندك صلاحية حذف البنر'});const p=profile(req.user.name),previous=p.banner;p.banner='';try{save()}catch(e){p.banner=previous;return res.status(500).json({error:'تعذر حذف البنر'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}io.emit('profile-changed',{name:req.user.name,profile:p,displayName:p.displayName||cleanName(req.user.name)});emitState();res.json({ok:true,banner:''});});
+app.post('/api/profile/banner',requireAuth,(req,res,next)=>{if(!hasPermission(req.user,'personal_banner'))return res.status(403).json({error:'ما عندك صلاحية رفع البنر'});next();},uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!req.file){return res.status(400).json({error:'اختر صورة للبنر'});}const p=profile(req.user.name),previous=p.banner;p.banner='/uploads/'+req.file.filename;try{save()}catch(e){p.banner=previous;removeUploadedFile(req.file);return res.status(500).json({error:'تعذر حفظ البنر'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}io.emit('profile-changed',{name:req.user.name,profile:p,displayName:p.displayName||cleanName(req.user.name)});emitState();res.json({ok:true,banner:p.banner});});
+app.delete('/api/profile/banner',requireAuth,(req,res)=>{if(!hasPermission(req.user,'personal_banner'))return res.status(403).json({error:'ما عندك صلاحية حذف البنر'});const p=profile(req.user.name),previous=p.banner;p.banner='';try{save()}catch(e){p.banner=previous;return res.status(500).json({error:'تعذر حذف البنر'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}io.emit('profile-changed',{name:req.user.name,profile:p,displayName:p.displayName||cleanName(req.user.name)});emitState();res.json({ok:true,banner:''});});
 
 app.post('/api/media',requireAuth,upload.single('file'),validateUploadedContent('media'),(req,res)=>{
   const u=req.user, to=cleanName(req.body.to||''), scope=String(req.body.scope||'private');

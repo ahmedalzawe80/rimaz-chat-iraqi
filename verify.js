@@ -726,7 +726,7 @@ try {
     if (!permissionHtml.includes(label)) throw new Error(`missing Arabic label ${label}`);
   }
   if (!permissionHtml.includes('عدم توافق نسخة الواجهة والسيرفر')) throw new Error('client compatibility preflight missing');
-  if (!permissionServer.includes('permissionSchemaVersion:9') || !permissionServer.includes('permissionKeys:ALL_PERMISSION_KEYS')) throw new Error('server permission schema metadata missing');
+  if (!permissionServer.includes('permissionSchemaVersion:10') || !permissionServer.includes('permissionKeys:ALL_PERMISSION_KEYS')) throw new Error('server permission schema metadata missing');
   if (!permissionHtml.includes("['الأدوات والإضافات الجديدة',['audit_view','stats_view','health_view','chat_filter_manage','member_status_manage','private_chat_override','presence_hidden_view','hidden_login','ghost_login']]")) throw new Error('custom rank editor missing new permission group');
   pass('v46.27 Arabic permission labels and client/server schema compatibility');
 } catch (error) { fail('v46.27 permission compatibility checks', error.message); }
@@ -937,7 +937,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.29 package version is current', pkg.version === '46.93.31'],
+    ['v46.93.29 package version is current', pkg.version === '46.93.32'],
     ['no dangling async-only lines remain in the browser entry script', !/^\s*async\s*$/m.test(html)],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
@@ -1108,7 +1108,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.29 package version',pkgNow.version==='46.93.31'],
+  ['v46.93.29 package version',pkgNow.version==='46.93.32'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
@@ -1168,14 +1168,18 @@ try {
 try {
  const src=fs.readFileSync(server,'utf8'), html=fs.readFileSync(mainPath,'utf8');
  const checks=[
-  ['v46.93.2 banner_upload is an independent permission in the server catalog',src.includes("banner_upload:'رفع وتغيير وحذف البنر الشخصي'")],
-  ['v46.93.2 banner upload and deletion routes enforce banner_upload server-side',src.includes("app.post('/api/profile/banner',requireAuth,(req,res,next)=>{if(!hasPermission(req.user,'banner_upload'))")&&src.includes("app.delete('/api/profile/banner',requireAuth,(req,res)=>{if(!hasPermission(req.user,'banner_upload'))")],
+  ['v46.93.32 personal and chat banner permissions are separate server capabilities',src.includes("personal_banner:'رفع وحذف البنر الشخصي للحساب نفسه'")&&src.includes("chat_banners_manage:'إدارة بنرات الدردشة للرتب السبع'")],
+  ['v46.93.32 personal banner upload and deletion are restricted to personal_banner server-side',src.includes("app.post('/api/profile/banner',requireAuth,(req,res,next)=>{if(!hasPermission(req.user,'personal_banner'))")&&src.includes("app.delete('/api/profile/banner',requireAuth,(req,res)=>{if(!hasPermission(req.user,'personal_banner'))")],
   ['v46.93.2 banner images use validated image-only upload middleware',src.includes("'/api/profile/banner'")&&src.includes('uploadImage.single(\'file\'),validateUploadedContent(\'image\')')],
   ['v46.93.2 banners are separate from rank art and member decorations',src.includes('Personal banners are intentionally separate from rank artwork and member decorations')&&src.includes('p.banner=')],
-  ['v46.93.2 rank permission editor exposes banner_upload',html.includes("['الملف الشخصي',['profile_edit','avatar_delete','banner_upload']]")],
+  ['v46.93.32 permission editor separates personal banners and chat banners',html.includes("['الملف الشخصي',['profile_edit','avatar_delete','personal_banner']]")&&html.includes("['بنرات الدردشة',['chat_banners_manage']]")],
   ['v46.93.2 authorized members can manage their personal banner and oversized images are compressed',html.includes('choosePersonalBanner')&&html.includes("canvas.toBlob(resolve,'image/webp',0.84)")&&html.includes('deletePersonalBanner')],
   ['v46.93.2 member information panel renders the personal banner',html.includes('personalBannerIdentity(p,dn')&&html.includes('rimazProfileMiniAvatar')&&html.includes('profileTop')],
-  ['v46.93.2 full-admin migration adds banner permission without broadening limited ranks',src.includes('bannerUploadPermissionMigrationVersion')&&src.includes("previous.every(key=>(adminFull.permissions||[]).includes(key))")],
+  ['v46.93.32 legacy banner permission migrates to personal only and full-admin migration is bounded',src.includes("set.add('personal_banner');set.delete('banner_upload')")&&src.includes('bannerPermissionsSplitMigrationVersion')&&src.includes("previous.every(key=>(adminFull.permissions||[]).includes(key))")],
+  ['v46.93.32 rank banner endpoints require chat_banners_manage and are restricted to seven ranks',src.includes("app.get('/api/admin/chat-banners',requireAuth")&&src.includes("hasPermission(user,'chat_banners_manage')")&&src.includes('canManageChatBanners(req.user)')&&src.includes("app.post('/api/admin/chat-banners/:rank'")&&src.includes("app.delete('/api/admin/chat-banners/:rank'")],
+  ['v46.93.32 rank banner display is inherited by rank and personal banner takes precedence',src.includes('p.rankBanner=visualRank?.bannerUrl||')&&html.includes('banner=p.banner||p.rankBanner||')&&html.includes('personal=!!p.banner')],
+  ['v46.93.32 login waits for an explicit login-button submit even when credentials autofill',html.includes("mode==='new'?'submit':'button'")&&html.includes("mode==='in'?'onclick=\"doLogin()\"':''")&&html.includes("'current-password'")],
+  ['v46.93.32 admin banner tab and controls are gated by chat_banners_manage',html.includes("adminTab('chatbanners')")&&html.includes("chatbanners:hasClientPermission('chat_banners_manage')")&&html.includes("allowedTabs={")&&html.includes("chatbanners:hasClientPermission('chat_banners_manage')")],
   ['v46.93.2 browser entry files remain identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')]
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error){fail('v46.93.2 personal banner checks',error.message)}
@@ -1222,7 +1226,7 @@ try {
     ['call offer gates the caller only and does not inspect recipient likes', offerLine.includes('if(!canMedia(u))') && !offerLine.includes('canMedia(target[1])') && !offerLine.includes('500 إعجاب للطرفين')],
     ['call answer exempts the recipient and revalidates only the original caller', answerLine.includes('if(!canMedia(target[1]))') && !answerLine.includes('!canMedia(u)') && answerLine.includes('state.callee!==sid')],
     ['retired staff/media/mic bypass permissions are absent from catalog and UI', !source.includes("staff_notice:'") && !source.includes("staff_media:'") && !source.includes("voice_mic_override:'") && !client.includes("'staff_notice'") && !client.includes("'staff_media'") && !client.includes("'voice_mic_override'")],
-    ['permission schema version reflects the retired bypass capabilities', source.includes('permissionSchemaVersion:9') && client.includes('permissionSchemaVersion:compatibility.permissionSchemaVersion||9')],
+    ['permission schema version reflects the retired bypass capabilities', source.includes('permissionSchemaVersion:10') && client.includes('permissionSchemaVersion:compatibility.permissionSchemaVersion||10')],
     ['private text messages remain independent of likes restrictions', source.includes("socket.on('private-message',d=>") && !/socket\.on\('private-message',d=>[\s\S]{0,1200}likes/.test(source)]
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
@@ -1237,7 +1241,7 @@ try {
     if (!match) throw new Error(`missing ${name}`);
     return match[0];
   }).join('\n');
-  const permissionKeys = ['panel_access','users_view','grant_likes','site_admin','banner_upload','permission_manage','health_view'];
+  const permissionKeys = ['panel_access','users_view','grant_likes','site_admin','personal_banner','chat_banners_manage','permission_manage','health_view'];
   const accountPermissions = new Map();
   const owners = new Set(['Owner']);
   const context = {

@@ -1,4 +1,13 @@
-# Rimaz Chat — Final archive audit (v46.93.30)
+# Rimaz Chat — Final archive audit (v46.93.32)
+
+## v46.93.32 — Banner permissions and login confirmation
+
+- Split the former personal-banner capability into `personal_banner` and `chat_banners_manage`. Existing `banner_upload` permission values migrate to `personal_banner`; only previously full-access administrators receive both new capabilities through the bounded one-time migration.
+- Personal banner endpoints remain self-only: a member can upload or delete only their own profile banner.
+- Added a separate seven-rank chat-banner manager with per-rank preview, upload/replacement, optional label, and deletion. All routes validate the selected built-in rank and enforce `chat_banners_manage` on the server.
+- Rank banners appear for members carrying that rank unless their own personal banner takes precedence. Updates are broadcast live to connected clients.
+- Login uses browser-managed username/password autofill but the login action is now a dedicated button click, not a form auto-submit.
+- Local regression suite: 365 checks passed. JavaScript syntax and both entry-page equality checks passed. Live hosting/browser behavior still requires deployment testing.
 
 ## Scope and method
 

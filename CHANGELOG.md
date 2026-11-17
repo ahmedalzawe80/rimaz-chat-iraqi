@@ -1,3 +1,11 @@
+## v46.93.32 — Split banner permissions and rank banner manager
+
+- Split banner permissions into `personal_banner` and `chat_banners_manage`; legacy `banner_upload` values migrate to personal banner only.
+- Added a separate manager for the seven chat-rank banners with upload/replace/delete operations protected by server-side permission checks.
+- Rank banners display for members of the assigned rank unless the member has their own personal banner.
+- Login form ignores automatic credential-manager submissions; login requires an explicit submit from the Login button.
+- Kept personal banner editing limited to the signed-in account.
+
 ## v46.93.31 — Blank-page hotfix
 
 - Removed incomplete `async` fragments left behind by the previous unused-function cleanup; these caused a JavaScript syntax error that stopped the entire page script from running.

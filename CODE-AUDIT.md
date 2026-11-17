@@ -1,3 +1,11 @@
+## v46.93.32 — Banner permissions split and rank banner management
+
+- Introduced independent `personal_banner` and `chat_banners_manage` permission keys; legacy `banner_upload` is normalized to `personal_banner`.
+- Added permission-gated server routes and a dedicated admin tab for managing one banner per built-in rank. Upload, replacement, deletion, and persistence rollback are handled server-side.
+- Rank banner is inherited by accounts with that rank, while an account's personal banner overrides it. Live updates are broadcast to connected clients.
+- The login form no longer triggers login from browser autofill or implicit form submission; the member must tap the Login button.
+- `node --check server.js`, `node --check verify.js`, and `node verify.js` pass (365 checks). Live-server testing is still required.
+
 ## v46.93.30 — Credential safety and dead-code cleanup
 
 - Removed plaintext password persistence in browser `localStorage`. The legacy `rimaz_saved_password` key is cleared on page load and after successful login.
