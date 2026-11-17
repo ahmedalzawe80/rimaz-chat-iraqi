@@ -1,3 +1,24 @@
+## v46.93.30 — Credential safety and dead-code cleanup
+
+- Removed plaintext password persistence in browser `localStorage`. The legacy `rimaz_saved_password` key is cleared on page load and after successful login.
+- Kept username remembering and delegated password autofill/save prompts to the browser password manager with standard autocomplete semantics.
+- Preserved the existing password policy and all current account records.
+- Removed 14 client functions and two server helpers with no call sites or source references.
+- Added `.gitignore` and `.dockerignore` rules to reduce accidental inclusion of credentials, runtime data, private uploads, local tooling, and archives.
+- Kept both HTML entry files because the server uses the public copy as a fallback; retained all referenced image/catalogue and verification assets.
+- `node --check server.js`, `node --check verify.js`, and `node verify.js` pass (360 checks). Live browser/hosting verification remains required.
+- No user database, account, upload, room, or permission data was modified.
+
+## v46.93.29 — Final source and package hygiene audit
+
+- Confirmed `index.html` and `public/index.html` remain byte-identical; both are retained because the server uses the root file first and the public copy as a deployment fallback.
+- Removed the unused root-level `rimaz-hero.jpg` duplicate. The served image remains `public/rimaz-hero.jpg`, exposed at `/rimaz-hero.jpg` by the public static middleware.
+- Removed the invalid `/public/rimaz-hero.jpg` browser fallback; `/public` is the filesystem directory, not part of the public URL namespace.
+- Retained packed smiley/gift catalogues, Google verification file, default avatar, crawler files, and regression suite because the active server, client, or deployment fallback references them.
+- Corrected the current room-microphone threshold documentation to 30 likes. Notices remain 400; private media and call initiation remain 500.
+- Updated package version and regression assertions. No authorization, persistence, chat, room, call, or UI feature logic was intentionally changed.
+- `npm test` and JavaScript syntax checks must pass after this audit. Live deployment and two-account/browser verification remain outside the local archive test scope.
+
 ## v46.93.26 — Profile color picker and alignment root-cause audit
 
 - The previous palette was nested inside `.svalue`, which is a block/flex child rather than the `.colorField` grid. Its `grid-column:1/-1` therefore had no effect, and the click handler was attached to a native `input[type=color]`, allowing the browser picker to appear too.
@@ -33,7 +54,7 @@
 
 ### Canonical thresholds
 - `NOTICE_LIKES_REQUIRED = 400`: checked against the authenticated sender for notices.
-- `ROOM_MIC_LIKES_REQUIRED = 400`: checked against the authenticated speaker before a room mic is raised. The browser checks before requesting microphone access, and the server independently enforces the same rule. The former per-room `micLikesRequired` setting (default 30) was removed from room creation, room updates, and persisted room records.
+- `ROOM_MIC_LIKES_REQUIRED = 30`: checked against the authenticated speaker before a room mic is raised. The browser checks before requesting microphone access, and the server independently enforces the same 30-like rule. The former per-room `micLikesRequired` setting (default 30) was removed from room creation, room updates, and persisted room records.
 - `PRIVATE_MEDIA_LIKES_REQUIRED = 500`: checked against the authenticated sender for private image/video/audio uploads and when initiating private voice/video calls.
 
 ### Sender and recipient separation

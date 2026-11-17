@@ -1,3 +1,12 @@
+## v46.93.30 — Credential safety and dead-code cleanup
+- Removed plaintext password reads/writes from `localStorage`; the legacy `rimaz_saved_password` value is cleared on page load and after a successful sign-in.
+- Kept remembering the member username. Password autofill and optional saving are delegated to the browser password manager using the standard `username` and `current-password` autocomplete fields.
+- Preserved the existing password-length policy and did not migrate, reset, or disable existing accounts.
+- Removed 14 browser functions and two server helpers that had no call sites or references in the shipped source.
+- Added `.gitignore` and `.dockerignore` rules for local runtime data, private uploads, credentials, development-only files, and exported archives. The tracked `data.json` remains only a placeholder and is excluded from Docker build context.
+- Added regression checks for secure remembered-login behavior. The local suite passes 360 checks; live-host and browser password-manager behavior still require deployment testing.
+- No user database, uploaded media, room settings, permission catalogues, or account records were changed.
+
 ## v46.93.29 — Final source and package hygiene audit
 - Removed the unused root-level duplicate of `rimaz-hero.jpg`; the public static asset remains unchanged.
 - Removed a broken image fallback URL that incorrectly included the filesystem directory `/public` in the browser path.

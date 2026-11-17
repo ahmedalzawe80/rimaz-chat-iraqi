@@ -53,6 +53,18 @@ try {
   else fail('index.html and public/index.html differ');
 } catch (error) { fail('HTML files readable', error.message); }
 
+// Passwords must be handled by the browser password manager, never plaintext site storage.
+try {
+  const passwordRead = /localStorage\.getItem\(['"]rimaz_saved_password['"]\)/.test(html);
+  const passwordWrite = /localStorage\.setItem\(['"]rimaz_saved_password['"]/.test(html);
+  const legacyCleanup = /localStorage\.removeItem\(['"]rimaz_saved_password['"]\)/.test(html);
+  const rememberedPassword = /remembered\.password/.test(html);
+  const loginPassword = html.match(/<input id="lp" name="password" type="password" autocomplete="current-password"[^>]*>/);
+  const browserManaged = !!loginPassword && !/\bvalue=/.test(loginPassword[0]);
+  if (!passwordRead && !passwordWrite && legacyCleanup && !rememberedPassword && browserManaged) pass('plaintext saved passwords are removed; browser password manager handles login credentials');
+  else fail('plaintext password storage removal and browser autofill', JSON.stringify({passwordRead,passwordWrite,legacyCleanup,rememberedPassword,browserManaged}));
+} catch (error) { fail('password storage regression checks', error.message); }
+
 // Privileged login and role-aware presence visibility are enforced server-side.
 try {
   const source = fs.readFileSync(server, 'utf8');
@@ -257,8 +269,8 @@ try {
   const html = fs.readFileSync(mainPath, 'utf8');
   if (html.includes("let sid='',me=null") && html.includes('// Always show the entry screen on a fresh page load.') && html.includes('login();') && !html.includes('if(sid)boot();')) pass('fresh page loads always show the login screen instead of auto-entering chat');
   else fail('fresh page loads must require an explicit login tap');
-  if (html.includes("localStorage.setItem('rimaz_saved_username'") && html.includes("localStorage.setItem('rimaz_saved_password'") && html.includes('value="${esc(remembered.password)}"') && html.includes('rememberLoginCredentials(n,p)')) pass('successful member login remembers username and masked password field locally');
-  else fail('saved username and password are prefilled on the login screen');
+  if (html.includes("localStorage.setItem('rimaz_saved_username'") && html.includes("localStorage.removeItem('rimaz_saved_password')") && !html.includes("localStorage.setItem('rimaz_saved_password'") && !html.includes("localStorage.getItem('rimaz_saved_password'") && !html.includes('remembered.password') && html.includes('autocomplete="current-password"')) pass('username is remembered while browser password manager handles passwords and legacy plaintext is cleared');
+  else fail('secure remembered-login behavior');
   if (!html.includes("localStorage.setItem('rimaz_sid',sid)") && html.includes("sessionStorage.setItem('rimaz_sid',sid)") && html.includes("localStorage.removeItem('rimaz_sid')")) pass('authenticated session is tab-scoped and legacy persistent session tokens are cleared');
   else fail('session token must not persistently bypass the login screen');
 } catch (error) { fail('v46.80.8 remembered credentials regression checks', error.message); }
@@ -925,7 +937,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.29 package version is current', pkg.version === '46.93.29'],
+    ['v46.93.29 package version is current', pkg.version === '46.93.30'],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
@@ -1095,7 +1107,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.29 package version',pkgNow.version==='46.93.29'],
+  ['v46.93.29 package version',pkgNow.version==='46.93.30'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
@@ -1117,7 +1129,7 @@ try {
   ['v46.80.7 room creation button is compact and physically left aligned',html.includes('margin:4px auto 4px 4px;width:max-content')&&html.includes('font-size:15px')],
   ['v46.80.7 member avatar, badge and name use top alignment and a clear gap',html.includes('grid-template-columns:5px 54px 30px minmax(0,1fr) 58px!important')&&html.includes('column-gap:5px!important')&&html.includes('align-self:start!important;margin:0!important')],
   ['v46.80.8 login form is always shown on page load and no old session token auto-boots chat',html.includes('// Always show the entry screen on a fresh page load.')&&!html.includes('if(sid)boot();')&&html.includes("let sid='',me=null")],
-  ['v46.80.8 successful login remembers username and password for prefilled fields',html.includes("localStorage.setItem('rimaz_saved_username'")&&html.includes("localStorage.setItem('rimaz_saved_password'")&&html.includes('value="${esc(remembered.password)}"')],
+  ['secure login remembers username, clears legacy plaintext password, and delegates password autofill to the browser',html.includes("localStorage.setItem('rimaz_saved_username'")&&html.includes("localStorage.removeItem('rimaz_saved_password')")&&!html.includes("localStorage.setItem('rimaz_saved_password'")&&!html.includes("localStorage.getItem('rimaz_saved_password'")&&!html.includes('remembered.password')&&html.includes('autocomplete="current-password"')],
   ['v46.80.8 session token is tab-only and old persistent tokens are cleared',!html.includes("localStorage.setItem('rimaz_sid',sid)")&&html.includes("sessionStorage.setItem('rimaz_sid',sid)")&&html.includes("localStorage.removeItem('rimaz_sid')")],
   ['online-members rank art is inline with the name and banner has its own compact column',html.includes('rimaz-member-layout-single-source-v46937')&&html.includes('.memberNameLine .memberBadges')&&html.includes('grid-template-columns:3px 42px minmax(0,1fr) 23px 19px!important')]
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);

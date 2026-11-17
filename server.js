@@ -903,7 +903,6 @@ function recordLoginEvent(req,name,type,mode='normal'){
   }catch(error){console.error('Login history save failed:',error.message)}
 }
 function socketClientIp(socket){ const h=socket.handshake?.headers||{}; return normalizeIp(h['cf-connecting-ip']||h['x-real-ip']||socket.handshake?.address||''); }
-function globalIpBanned(ip){ const k=normalizeIp(ip); if(!k)return false; const item=(db.globalIpBans||{})[k]; if(!item)return false; if(Number(item.until||0)<=Date.now()){delete db.globalIpBans[k];save();return false;} return true; }
 function globalBanStatus(name,ip,now=Date.now()){
   const n=keyName(name); let until=0,changed=false;
   const nameBan=(db.globalBans||{})[n];
@@ -920,7 +919,6 @@ function globalBanResponse(res,name,ip){const ban=globalBanStatus(name,ip);if(!b
 function globalBanned(name,ip){return !!globalBanStatus(name,ip);}
 function nameTaken(name){const n=keyName(name);if(!n)return false;return n==='owner'||(!!process.env.OWNER_NAME&&n===keyName(process.env.OWNER_NAME))||Object.keys(db.users||{}).some(x=>keyName(x)===n)||Object.keys(db.guests||{}).some(x=>keyName(x)===n);} 
 function removeFromChat(name, banned){ const n=keyName(name); for(const so of io.sockets.sockets.values()){ const sid2=so.data?.sid, u2=so.data?.user||socketUsers.get(sid2); if(!u2||keyName(u2.name)!==n)continue; const oldRoom=u2.room||''; if(oldRoom){so.leave(oldRoom);roomSockets.get(oldRoom)?.delete(sid2);} if(so.data?.user)so.data.user.room=''; if(socketUsers.get(sid2))socketUsers.get(sid2).room=''; so.emit('kicked',{global:true,banned:!!banned,room:oldRoom,...(banned?(globalBanStatus(n,'')||{}):{})}); if(banned)so.disconnect(true); } emitState(); }
-function safeMessage(m){ return {...m, text:String(m.text||'').slice(0,2000)}; }
 let messageSaveTimer=null;
 function scheduleMessageSave(delay=350){
   if(messageSaveTimer)return;
