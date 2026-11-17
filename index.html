@@ -1587,9 +1587,10 @@ async function flushCallIce(){if(!pc?.remoteDescription)return;while(pendingCall
 async function switchCallCamera(){
  if(callMode!=='camera'||!localStream||!pc||callCameraSwitching)return;
  if(!navigator.mediaDevices?.getUserMedia)return toast('المتصفح لا يدعم تبديل الكاميرا');
- const oldTrack=localStream.getVideoTracks()[0];
+ const activePeer=pc,activeStream=localStream;
+ const oldTrack=activeStream.getVideoTracks()[0];
  if(!oldTrack)return toast('مسار الكاميرا غير متاح');
- const sender=pc.getSenders().find(item=>item.track?.kind==='video');
+ const sender=activePeer.getSenders().find(item=>item.track?.id===oldTrack.id)||activePeer.getSenders().find(item=>item.track?.kind==='video');
  if(!sender)return toast('مسار إرسال الفيديو غير جاهز');
  const oldSettings=oldTrack.getSettings?.()||{};
  const oldDeviceId=oldSettings.deviceId||'';
@@ -1599,11 +1600,14 @@ async function switchCallCamera(){
  const button=document.getElementById('switchCallCameraButton');
  if(button){button.disabled=true;button.textContent='جارٍ التبديل…'}
  let freshStream=null,oldTrackStopped=false;
- const stopFresh=()=>{if(freshStream){freshStream.getTracks().forEach(track=>track.stop());freshStream=null}};
- const rejectWrongCamera=(stream)=>{stream?.getTracks().forEach(track=>track.stop());const error=new Error('WRONG_CAMERA_SELECTED');error.name='OverconstrainedError';throw error};
+ const isSameCall=()=>pc===activePeer&&localStream===activeStream&&callMode==='camera'&&activePeer.connectionState!=='closed';
+ const stopStream=stream=>stream?.getTracks?.().forEach(track=>track.stop());
+ const stopFresh=()=>{stopStream(freshStream);freshStream=null};
+ const ensureSameCall=()=>{if(!isSameCall())throw new Error('CALL_ENDED_DURING_CAMERA_SWITCH')};
+ const rejectWrongCamera=stream=>{stopStream(stream);const error=new Error('WRONG_CAMERA_SELECTED');error.name='OverconstrainedError';throw error};
  const validateCandidate=(stream,avoidId,direction)=>{
   const track=stream?.getVideoTracks?.()[0];
-  if(!track){stream?.getTracks?.().forEach(item=>item.stop());const error=new Error('NO_VIDEO_TRACK');error.name='NotFoundError';throw error}
+  if(!track){stopStream(stream);const error=new Error('NO_VIDEO_TRACK');error.name='NotFoundError';throw error}
   const settings=track.getSettings?.()||{};
   if(avoidId&&settings.deviceId&&settings.deviceId===avoidId)rejectWrongCamera(stream);
   if(settings.facingMode&&settings.facingMode!==direction)rejectWrongCamera(stream);
@@ -1612,72 +1616,81 @@ async function switchCallCamera(){
  const acquireFacing=async(direction,avoidId='')=>{
   const errors=[];
   let devices=[];
-  try{devices=(await navigator.mediaDevices.enumerateDevices()).filter(device=>device.kind==='videoinput'&&device.deviceId)}catch(error){errors.push(error)}
+  try{devices=(await navigator.mediaDevices.enumerateDevices()).filter(device=>device.kind==='videoinput'&&device.deviceId)}catch(error){if(['NotAllowedError','SecurityError'].includes(error?.name))throw error;errors.push(error)}
   const isBack=direction==='environment';
   const labelPattern=isBack?/(back|rear|environment|world|خلف)/i:/(front|user|face|أمام)/i;
   const candidates=devices.filter(device=>device.deviceId!==avoidId&&labelPattern.test(device.label||''));
   for(const device of candidates){
-   try{
-    const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{deviceId:{exact:device.deviceId}}});
-    return validateCandidate(stream,avoidId,direction);
-   }catch(error){errors.push(error);console.warn('Camera device selection failed',error)}
+   try{const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{deviceId:{exact:device.deviceId}}});return validateCandidate(stream,avoidId,direction)}
+   catch(error){if(['NotAllowedError','SecurityError'].includes(error?.name))throw error;errors.push(error);console.warn('Camera device selection failed',error)}
   }
-  // Use an exact facing-mode request when device labels are missing or unreliable.
-  try{
-   const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{exact:direction}}});
-   return validateCandidate(stream,avoidId,direction);
-  }catch(error){errors.push(error)}
-  // Last fallback lets the browser select the requested direction, then verifies it did not return the old lens.
-  try{
-   const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:direction}}});
-   return validateCandidate(stream,avoidId,direction);
-  }catch(error){errors.push(error)}
-  const hardwareBusy=errors.find(error=>['NotReadableError','TrackStartError'].includes(error?.name));
+  try{const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{exact:direction}}});return validateCandidate(stream,avoidId,direction)}
+  catch(error){if(['NotAllowedError','SecurityError'].includes(error?.name))throw error;errors.push(error)}
+  try{const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:direction}}});return validateCandidate(stream,avoidId,direction)}
+  catch(error){if(['NotAllowedError','SecurityError'].includes(error?.name))throw error;errors.push(error)}
+  const hardwareBusy=errors.find(error=>['NotReadableError','TrackStartError','AbortError'].includes(error?.name));
   throw hardwareBusy||errors[errors.length-1]||new Error('CAMERA_NOT_AVAILABLE');
  };
+ const isHardwareBusy=error=>['NotReadableError','TrackStartError','AbortError'].includes(error?.name);
+ const restorePreviousCamera=async()=>{
+  let restoredStream=null;
+  try{
+   if(oldDeviceId){try{restoredStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{deviceId:{exact:oldDeviceId}}})}catch(restoreByIdError){console.warn('Restore by previous camera ID failed',restoreByIdError)}}
+   if(!restoredStream)restoredStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:oldFacing}}});
+   if(!isSameCall()){stopStream(restoredStream);return false}
+   const restoredTrack=restoredStream.getVideoTracks()[0];
+   if(!restoredTrack)throw new Error('ORIGINAL_CAMERA_RESTORE_FAILED');
+   const restoredSettings=restoredTrack.getSettings?.()||{};
+   if(restoredSettings.facingMode&&restoredSettings.facingMode!==oldFacing)throw new Error('ORIGINAL_CAMERA_RESTORE_WRONG_DIRECTION');
+   await sender.replaceTrack(restoredTrack);
+   if(!isSameCall()){stopStream(restoredStream);return false}
+   activeStream.removeTrack(oldTrack);
+   activeStream.addTrack(restoredTrack);
+   restoredStream.getTracks().filter(track=>track!==restoredTrack).forEach(track=>track.stop());
+   callFacingMode=oldFacing;
+   attachCallLocal(activeStream);
+   return true;
+  }catch(restoreError){stopStream(restoredStream);throw restoreError}
+ };
  try{
-  try{freshStream=await acquireFacing(nextFacing,oldDeviceId)}
+  try{freshStream=await acquireFacing(nextFacing,oldDeviceId);ensureSameCall()}
   catch(firstError){
-   // A number of Android camera HALs expose one active camera at a time. Release the old capture only for that hardware-busy response.
-   if(!['NotReadableError','TrackStartError'].includes(firstError?.name))throw firstError;
+   ensureSameCall();
+   if(!isHardwareBusy(firstError))throw firstError;
+   // Release the active capture only for errors that indicate a camera/HAL lock.
    oldTrack.stop();oldTrackStopped=true;
-   await new Promise(resolve=>setTimeout(resolve,200));
+   await new Promise(resolve=>setTimeout(resolve,450));
+   ensureSameCall();
    freshStream=await acquireFacing(nextFacing,oldDeviceId);
+   ensureSameCall();
   }
   const nextTrack=freshStream.getVideoTracks()[0];
+  if(!nextTrack)throw new Error('NO_VIDEO_TRACK');
   await sender.replaceTrack(nextTrack);
-  localStream.removeTrack(oldTrack);
-  localStream.addTrack(nextTrack);
+  ensureSameCall();
+  activeStream.removeTrack(oldTrack);
+  activeStream.addTrack(nextTrack);
   freshStream.getTracks().filter(track=>track!==nextTrack).forEach(track=>track.stop());
   freshStream=null;
   if(!oldTrackStopped)oldTrack.stop();
   callFacingMode=nextFacing;
-  attachCallLocal(localStream);
+  attachCallLocal(activeStream);
  }catch(error){
   stopFresh();
+  if(error?.message==='CALL_ENDED_DURING_CAMERA_SWITCH')return;
   console.error('Private-call camera switch failed',error);
-  if(oldTrackStopped){
-   try{
-    let restoredStream=null;
-    if(oldDeviceId){try{restoredStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{deviceId:{exact:oldDeviceId}}})}catch(restoreByIdError){console.warn('Restore by previous camera ID failed',restoreByIdError)}}
-    if(!restoredStream)restoredStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:oldFacing}}});
-    const restoredTrack=restoredStream.getVideoTracks()[0];
-    if(!restoredTrack)throw new Error('ORIGINAL_CAMERA_RESTORE_FAILED');
-    await sender.replaceTrack(restoredTrack);
-    localStream.removeTrack(oldTrack);
-    localStream.addTrack(restoredTrack);
-    restoredStream.getTracks().filter(track=>track!==restoredTrack).forEach(track=>track.stop());
-    callFacingMode=oldFacing;
-    attachCallLocal(localStream);
-   }catch(restoreError){console.error('Original camera restore failed',restoreError);toast('تعذر تبديل الكاميرا وتعذر استرجاع الكاميرا السابقة؛ أعد تشغيل الكاميرا')}
+  if(oldTrackStopped&&isSameCall()){
+   try{await restorePreviousCamera()}
+   catch(restoreError){console.error('Original camera restore failed',restoreError);if(isSameCall())toast('تعذر تبديل الكاميرا وتعذر استرجاع الكاميرا السابقة؛ أعد تشغيل الكاميرا')}
   }
+  if(!isSameCall())return;
   if(error?.name==='NotAllowedError'||error?.name==='SecurityError')toast('المتصفح منع الوصول للكاميرا؛ راجع إذن الكاميرا للموقع');
   else if(error?.name==='NotFoundError'||error?.name==='OverconstrainedError'||error?.message==='CAMERA_NOT_AVAILABLE'||error?.message==='WRONG_CAMERA_SELECTED')toast('لم يتم العثور على الكاميرا المطلوبة بهذا الاتجاه على الجهاز');
-  else if(['NotReadableError','TrackStartError'].includes(error?.name))toast('الكاميرا مشغولة من تطبيق أو عملية أخرى؛ أغلق تطبيق الكاميرا وحاول مجدداً');
+  else if(isHardwareBusy(error))toast('الكاميرا مشغولة من تطبيق أو عملية أخرى؛ أغلق تطبيق الكاميرا وحاول مجدداً');
   else toast('تعذر تبديل الكاميرا؛ بقي الاتصال على الكاميرا السابقة');
  }finally{
   callCameraSwitching=false;
-  if(button){button.disabled=false;button.textContent=callFacingMode==='environment'?'⇄ الكاميرا الأمامية':'⇄ الكاميرا الخلفية'}
+  if(button&&button.isConnected){button.disabled=false;button.textContent=callFacingMode==='environment'?'⇄ الكاميرا الأمامية':'⇄ الكاميرا الخلفية'}
  }
 }
 

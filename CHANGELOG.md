@@ -1,3 +1,18 @@
+## v46.93.35 — Transactional Android camera switching audit
+
+- Restricted release-and-retry to camera-busy errors (`NotReadableError`, `TrackStartError`, `AbortError`); missing-camera, unsupported-constraint, and permission errors no longer stop the working camera.
+- Increased the post-release settle interval and retained direction/device validation for the requested camera.
+- Added call/session identity checks around asynchronous camera acquisition and track replacement so a late result cannot attach to an ended or replaced call.
+- Added restoration validation for the previous camera direction and kept the existing RTCPeerConnection sender instead of renegotiating the call.
+- Synchronized both browser entry files and expanded regression checks. Hardware testing on physical Android devices is still required.
+
+## v46.93.34 — Android front/rear camera switch retry fix
+
+- Improved private video-call camera switching when Android devices keep the previous camera capture locked or report camera-busy failures under different error names.
+- Permission-denied errors now stop the retry path immediately; other camera acquisition failures release the old video track, wait briefly, and retry the requested direction.
+- Preserved the existing sender replacement flow and restoration of the previous camera if the requested camera still cannot be opened.
+- Kept both browser entry files synchronized and added regression checks for the broader retry behavior.
+
 ## v46.93.33 — Separate personal-banner permission section
 
 - Moved `personal_banner` out of the general profile permissions group into its own clearly labeled **البنر الشخصي** group, alongside the separate **بنرات الدردشة** group.
