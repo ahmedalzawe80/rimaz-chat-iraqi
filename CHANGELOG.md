@@ -1,3 +1,9 @@
+## v46.93.33 — Separate personal-banner permission section
+
+- Moved `personal_banner` out of the general profile permissions group into its own clearly labeled **البنر الشخصي** group, alongside the separate **بنرات الدردشة** group.
+- Renamed the permission label to **إدارة البنر الشخصي — رفع وحذف بنر الحساب نفسه** so its effect is explicit in the permission editor.
+- Kept the existing per-account personal-banner restriction and server-side authorization unchanged; disabling the permission hides the personal upload/delete controls and rejects direct upload/delete requests.
+
 ## v46.93.32 — Split banner permissions and rank banner manager
 
 - Split banner permissions into `personal_banner` and `chat_banners_manage`; legacy `banner_upload` values migrate to personal banner only.

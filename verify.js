@@ -937,7 +937,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.29 package version is current', pkg.version === '46.93.32'],
+    ['v46.93.29 package version is current', pkg.version === '46.93.33'],
     ['no dangling async-only lines remain in the browser entry script', !/^\s*async\s*$/m.test(html)],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
@@ -1108,7 +1108,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.29 package version',pkgNow.version==='46.93.32'],
+  ['v46.93.29 package version',pkgNow.version==='46.93.33'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
@@ -1168,11 +1168,13 @@ try {
 try {
  const src=fs.readFileSync(server,'utf8'), html=fs.readFileSync(mainPath,'utf8');
  const checks=[
-  ['v46.93.32 personal and chat banner permissions are separate server capabilities',src.includes("personal_banner:'رفع وحذف البنر الشخصي للحساب نفسه'")&&src.includes("chat_banners_manage:'إدارة بنرات الدردشة للرتب السبع'")],
+  ['v46.93.33 personal banner has its own permission section and explicit label',html.includes("['البنر الشخصي',['personal_banner']]")&&src.includes("personal_banner:'إدارة البنر الشخصي — رفع وحذف بنر الحساب نفسه'")],
+  ['v46.93.33 disabling personal_banner hides settings controls and server rejects direct changes',html.includes("hasClientPermission('personal_banner')||me.owner")&&src.includes("if(!hasPermission(req.user,'personal_banner'))return res.status(403)")],
+  ['v46.93.32 personal and chat banner permissions are separate server capabilities',src.includes("personal_banner:'إدارة البنر الشخصي — رفع وحذف بنر الحساب نفسه'")&&src.includes("chat_banners_manage:'إدارة بنرات الدردشة للرتب السبع'")],
   ['v46.93.32 personal banner upload and deletion are restricted to personal_banner server-side',src.includes("app.post('/api/profile/banner',requireAuth,(req,res,next)=>{if(!hasPermission(req.user,'personal_banner'))")&&src.includes("app.delete('/api/profile/banner',requireAuth,(req,res)=>{if(!hasPermission(req.user,'personal_banner'))")],
   ['v46.93.2 banner images use validated image-only upload middleware',src.includes("'/api/profile/banner'")&&src.includes('uploadImage.single(\'file\'),validateUploadedContent(\'image\')')],
   ['v46.93.2 banners are separate from rank art and member decorations',src.includes('Personal banners are intentionally separate from rank artwork and member decorations')&&src.includes('p.banner=')],
-  ['v46.93.32 permission editor separates personal banners and chat banners',html.includes("['الملف الشخصي',['profile_edit','avatar_delete','personal_banner']]")&&html.includes("['بنرات الدردشة',['chat_banners_manage']]")],
+  ['v46.93.32 permission editor separates personal banners and chat banners',html.includes("['الملف الشخصي',['profile_edit','avatar_delete']]")&&html.includes("['البنر الشخصي',['personal_banner']]")&&html.includes("['بنرات الدردشة',['chat_banners_manage']]")],
   ['v46.93.2 authorized members can manage their personal banner and oversized images are compressed',html.includes('choosePersonalBanner')&&html.includes("canvas.toBlob(resolve,'image/webp',0.84)")&&html.includes('deletePersonalBanner')],
   ['v46.93.2 member information panel renders the personal banner',html.includes('personalBannerIdentity(p,dn')&&html.includes('rimazProfileMiniAvatar')&&html.includes('profileTop')],
   ['v46.93.32 legacy banner permission migrates to personal only and full-admin migration is bounded',src.includes("set.add('personal_banner');set.delete('banner_upload')")&&src.includes('bannerPermissionsSplitMigrationVersion')&&src.includes("previous.every(key=>(adminFull.permissions||[]).includes(key))")],
