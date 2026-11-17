@@ -54,6 +54,20 @@ const ROOT = __dirname;
 const INDEX_CANDIDATES = [path.join(ROOT, 'index.html'), path.join(ROOT, 'public', 'index.html')];
 const INDEX_FILE = INDEX_CANDIDATES.find(file => fs.existsSync(file));
 if (!INDEX_FILE) console.error('FATAL: index.html is missing. Expected /app/index.html or /app/public/index.html');
+// One authoritative public origin is shared by canonical URLs, social metadata,
+// structured data, robots.txt and sitemap.xml. Set PUBLIC_SITE_URL if the site
+// is moved to a verified custom domain; never derive canonical URLs from Host.
+const PUBLIC_SITE_URL = (() => {
+  const configured = String(process.env.PUBLIC_SITE_URL || 'https://noble-horizon-5826.de.deplexo.com').trim();
+  try {
+    const parsed = new URL(configured);
+    if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Unsupported protocol');
+    return parsed.origin;
+  } catch (error) {
+    console.error('Invalid PUBLIC_SITE_URL; using the deployment default:', error.message);
+    return 'https://noble-horizon-5826.de.deplexo.com';
+  }
+})();
 // Prefer persistent hosting storage. Never silently fall back to /tmp: that can
 // make existing accounts appear to disappear after a restart/redeploy.
 let DATA_DIR = process.env.DATA_DIR || (fs.existsSync('/data') ? '/data/rimaz' : path.join(ROOT, 'data'));
@@ -108,6 +122,17 @@ app.get('/gifts/:file', (req,res)=>{
   res.send(item.data);
 });
 app.get('/vip-gifts/:file',(req,res)=>{const file=String(req.params.file||'');const item=VIP_GIFT_PACK[file];if(!item||!/^vip-[a-z0-9_-]+\.gif$/i.test(file))return res.sendStatus(404);res.setHeader('Content-Type',item.type||'image/gif');res.setHeader('Cache-Control','public,max-age=31536000,immutable');res.send(item.data);});
+// Keep crawler directives and the sitemap on the same authoritative origin as
+// the canonical URL. API, socket transport and private media are intentionally
+// excluded; the public homepage and public uploads remain crawlable.
+app.get('/robots.txt', (req,res)=>{
+  res.type('text/plain; charset=utf-8').set('Cache-Control','public, max-age=3600');
+  res.send(`User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /socket.io/\nDisallow: /private-media/\n\nSitemap: ${PUBLIC_SITE_URL}/sitemap.xml\n`);
+});
+app.get('/sitemap.xml', (req,res)=>{
+  res.type('application/xml; charset=utf-8').set('Cache-Control','public, max-age=3600');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${PUBLIC_SITE_URL}/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n</urlset>`);
+});
 // Static assets must not serve index.html before the dynamic SEO-aware page handler.
 app.get('/index.html', (req,res)=>res.redirect(301,'/'));
 app.use(express.static(path.join(ROOT, 'public'), { index: false }));
@@ -138,8 +163,12 @@ function renderSeoIndex() {
   setMeta('og:description', description, 'property');
   setMeta('twitter:title', siteName, 'name');
   setMeta('twitter:description', description, 'name');
+  setMeta('og:url', PUBLIC_SITE_URL + '/', 'property');
+  setMeta('og:image', PUBLIC_SITE_URL + '/rimaz-hero.jpg', 'property');
+  setMeta('twitter:image', PUBLIC_SITE_URL + '/rimaz-hero.jpg', 'name');
+  html = html.replace(/<link\b[^>]*rel=["']canonical["'][^>]*>/i, `<link rel="canonical" href="${escapeHtmlAttribute(PUBLIC_SITE_URL + '/')}" />`);
   html = html.replace(/(<script\s+type=["']application\/ld\+json["'][^>]*>)([\s\S]*?)(<\/script>)/i, (whole, open, body, close) => {
-    try { const schema = JSON.parse(body); schema.name = siteName; schema.description = description; return open + JSON.stringify(schema).replace(/</g,'\\u003c') + close; }
+    try { const schema = JSON.parse(body); schema.name = siteName; schema.description = description; schema.url = PUBLIC_SITE_URL + '/'; return open + JSON.stringify(schema).replace(/</g,'\\u003c') + close; }
     catch { return whole; }
   });
   return html;

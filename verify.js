@@ -213,7 +213,7 @@ try {
   const start = source.indexOf('function escapeHtmlAttribute(value) {');
   const end = source.indexOf('\nfunction sendSeoIndex(req,res) {', start);
   if (start < 0 || end < 0) throw new Error('SEO renderer not found');
-  const context = { fs, INDEX_FILE: path.join(root, 'index.html'), db: { siteSettings: { siteName: 'ريماز اختبار', tagline: 'وصف اختبار مميز & آمن' } } };
+  const context = { fs, INDEX_FILE: path.join(root, 'index.html'), PUBLIC_SITE_URL: 'https://seo-test.example', db: { siteSettings: { siteName: 'ريماز اختبار', tagline: 'وصف اختبار مميز & آمن' } } };
   vm.createContext(context);
   vm.runInContext(source.slice(start, end) + ';globalThis.__seoHtml=renderSeoIndex();', context);
   const rendered = context.__seoHtml;
@@ -222,11 +222,16 @@ try {
     'property="og:description" content="وصف اختبار مميز &amp; آمن"',
     'name="twitter:description" content="وصف اختبار مميز &amp; آمن"',
     '"description":"وصف اختبار مميز & آمن"',
-    '<title>ريماز اختبار | دردشة عراقية وتعارف</title>'
+    '<title>ريماز اختبار | دردشة عراقية وتعارف</title>',
+    '<link rel="canonical" href="https://seo-test.example/" />',
+    'property="og:url" content="https://seo-test.example/"',
+    '"url":"https://seo-test.example/"'
   ];
   if (!expected.every(value => rendered.includes(value))) throw new Error('One or more SEO tags did not receive the saved site settings');
   if (!source.includes("slice(0,300)") || !html.includes('id="siteTagline" maxlength=300')) throw new Error('SEO description limit is not consistently 300 characters');
-  pass('admin SEO description is server-rendered into meta, Open Graph, Twitter and Schema tags');
+  if (!source.includes("app.get('/robots.txt'") || !source.includes("app.get('/sitemap.xml'") || source.indexOf("app.get('/robots.txt'") > source.indexOf("app.use(express.static(path.join(ROOT, 'public')")) throw new Error('crawler routes must be served dynamically before static public files');
+  if (!source.includes('Disallow: /api/') || !source.includes('Disallow: /socket.io/') || !source.includes('Disallow: /private-media/')) throw new Error('private and API crawl exclusions must remain intentional');
+  pass('saved admin description, canonical URL, Open Graph, Twitter, Schema, robots and sitemap share one SEO source');
 } catch (error) { fail('server-rendered SEO description integration', error.message); }
 
 // Scheduled announcements must not replay alongside welcome cards on room entry.
@@ -920,7 +925,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.27 package version is current', pkg.version === '46.93.27'],
+    ['v46.93.27 package version is current', pkg.version === '46.93.28'],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
@@ -1090,7 +1095,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.27 package version',pkgNow.version==='46.93.27'],
+  ['v46.93.27 package version',pkgNow.version==='46.93.28'],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],

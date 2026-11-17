@@ -1,3 +1,10 @@
+## v46.93.28 — ربط الوصف المحفوظ بمرجع فهرسة موحّد
+- جعل عنوان الموقع العام مصدراً موحداً لرابط canonical وOpen Graph URL وبيانات Schema وrobots.txt وsitemap.xml، مع إمكانية ضبطه من متغير البيئة PUBLIC_SITE_URL عند اعتماد نطاق مخصص.
+- تقديم robots.txt وsitemap.xml ديناميكياً قبل الملفات الثابتة حتى لا تختلف تعليمات الزحف أو خريطة الموقع عن النطاق الأساسي.
+- الإبقاء على حظر واجهات API وSocket.IO والوسائط الخاصة فقط، مع السماح بزحف الصفحة العامة والملفات العامة.
+- إبقاء الوصف المحفوظ من إعدادات الموقع هو الوصف الذي يُحقن في HTML المرسل من الخادم داخل meta description وOpen Graph وTwitter وSchema.
+- إضافة اختبارات انحدار للرابط الأساسي وتطابق مصادر الفهرسة؛ لا يتضمن التغيير ضماناً لعرض Google الوصف حرفياً، إذ يختار Google المقتطف النهائي.
+
 ## v46.93.27 — Settings alignment, quiet success feedback, and owner protection alerts
 - Centered only the text inside the existing dark profile-setting labels (decoration, status, name color, font color, and background color); the dark label blocks and field layout remain unchanged.
 - Restored the profile settings save button to the existing green theme without changing its save handler.
