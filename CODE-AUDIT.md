@@ -50,3 +50,12 @@
 - Added regression checks for the 0/400/500 likes matrix, owner/full-admin exemptions, partial moderator restrictions, fixed voice-room mic threshold, sender-only media/call authorization, and retired permission keys.
 - `index.html` and `public/index.html` must remain byte-identical.
 - Automated checks do not replace a live two-account browser test on the deployed host.
+
+
+## v46.93.27 focused audit
+- Profile-setting label text alignment is changed at the canonical label rules only; dark backgrounds and layout geometry are preserved.
+- The settings save button uses the established `--green` theme value (`#58bf61`) and retains its original save action.
+- Success-toast suppression is presentation-only: the shared toast node and error/actionable toast path remain; server/API operations are unchanged.
+- Protected-owner attempt alerts are generated server-side from `req.user`, persisted through the existing notifications store, emitted to the resolved owner account in real time, and surfaced once after a later login if the owner was offline. The blocked request still returns 403 and does not mutate the owner's profile or moderation state.
+- Owner protection checks run before the general higher-rank rejection on covered routes so a valid authorized attempt is recorded rather than silently rejected by the hierarchy guard.
+- Automated regression checks cover the new paths. Live two-account verification is still required to validate delivery on the deployed host.

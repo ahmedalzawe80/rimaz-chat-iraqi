@@ -393,7 +393,7 @@ try {
     ['rank guard returns the requested Arabic permission message', source.includes('صلاحية هذه الرتبة أعلى منك') && source.includes('HIGHER_RANK_PROTECTED')],
     ['central member actions enforce hierarchy before moderation and global bans', source.includes("app.post('/api/admin/member-action'") && source.includes('denyHigherRankTarget(actor,n,res)')],
     ['room ban/mute helper enforces hierarchy server-side', source.includes('function roomAction(type,req,res)') && source.includes('denyHigherRankTarget(req.user,name,res)')],
-    ['profile name/color edits and avatar deletion enforce hierarchy', source.includes("app.patch('/api/admin/profile/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return") && source.includes("app.delete('/api/admin/avatar/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return")],
+    ['profile name/color edits and avatar deletion enforce hierarchy after owner-protection handling', source.includes("app.patch('/api/admin/profile/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);const protectedTarget=getUser(n)||getGuest(n);if((isOwnerName(n)||isOwner({name:n,role:protectedTarget?.role}))&&!isOwner(req.user))") && source.includes("app.delete('/api/admin/avatar/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);const target=getUser(n)||getGuest(n);") && source.includes('if(denyHigherRankTarget(req.user,n,res))return')],
     ['direct rank assignment enforces hierarchy and generic role route is retired', source.includes("app.post('/api/admin/rank'") && source.includes('if(denyHigherRankTarget(actor,n,res))return') && !source.includes("app.post('/api/admin/role'") && !source.includes('role_assign')],
     ['additional member edits and removals enforce hierarchy', source.includes("app.patch('/api/admin/member-stats/:name',requireAuth,(req,res)=>{const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return") && source.includes("app.put('/api/admin/account-permissions/:name'") && source.includes("if(action==='delete-user')") && source.includes("app.post('/api/admin/unban'") && source.includes('if(denyHigherRankTarget(req.user,name,res))return')],
     ['rank badge cannot be replaced by gift or VIP', source.includes('function denyBadgeForRank(name,p,res)') && source.includes('if(!hasActiveVisualRank(p))return false') && source.includes('لا يمكن استبدالها بهدية أو VIP')],
@@ -920,7 +920,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.24 package version is current', pkg.version === '46.93.26'],
+    ['v46.93.27 package version is current', pkg.version === '46.93.27'],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
@@ -1090,7 +1090,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.24 package version',pkgNow.version==='46.93.26'],
+  ['v46.93.27 package version',pkgNow.version==='46.93.27'],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],
@@ -1278,3 +1278,38 @@ try {
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
 } catch (error) { fail('v46.93.26 profile settings regression checks', error.message); }
+
+
+// v46.93.27: center only the dark label text, restore green save, suppress success strips, and notify the owner of blocked admin attempts.
+try {
+  const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+  const publicHtml = fs.readFileSync(path.join(__dirname, 'public/index.html'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+  const checks = [
+    ['settings label text is centered while the dark label background remains intact', html.includes('justify-content:center;width:45%;height:23px') && html.includes('background:#101820;color:#fff;text-align:center') && html.includes('colorField>.slabel{grid-column:1;grid-row:1;display:flex;align-items:center;justify-content:center')],
+    ['settings save button is restored to the original green without changing its action', html.includes('.settings .save{background:#58bf61;color:#fff;border:0') && html.includes('onclick="saveSettings()"')],
+    ['routine success confirmations are hidden while the shared toast element and error path remain', html.includes('function toast(t,duration)') && html.includes('const routineSuccess=') && html.includes("x.style.display='none';x.textContent='';return") && html.includes("x.style.display='block'") && html.includes('id="toast" class="toast"')],
+    ['private-window close still performs cleanup but no longer relies on a success toast', html.includes("function closePrivateConversation(){") && html.includes('clearPrivateMediaObjectUrls();closeLayer();toast(')],
+    ['admin action notice uses the incoming notice without a redundant top toast', html.includes("socket.on('admin-action-notice',d=>{const title=d?.title||'تنبيه من الإدارة',text=d?.text||'';showIncomingNotice(title,text);});")],
+    ['owner protection attempts are persisted, delivered live, and surfaced once after a later login', source.includes('function protectedOwnerAccountName()') && source.includes('function notifyOwnerProtectedAttempt(actor,action)') && source.includes("notify(ownerName,{type:'admin-protected-attempt',title,from:actorName,text})") && source.includes("emitToUser(ownerName,'admin-action-notice',{title,text})") && html.includes("notifications.find(item=>item?.type==='admin-protected-attempt'") && html.includes('rimaz_owner_alert_seen_')],
+    ['owner avatar deletion, kick/ban, profile colors/name and member decoration attempts trigger owner alerts', source.includes("notifyOwnerProtectedAttempt(req.user,'حذف صورتك الشخصية')") && source.includes("notifyOwnerProtectedAttempt(req.user,'طردك من الغرفة')") && source.includes("type==='roomBans'?'حظرك في الغرفة':'كتمك في الغرفة'") && source.includes("'تغيير زخرفة اسمك'") && source.includes("'تغيير ألوان ملفك'") && source.includes("'تغيير زخرفة/شعار حسابك'")],
+    ['both browser entry files remain identical', html === publicHtml]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+  const toastSource = html.match(/function toast\(t,duration\)\{[^\n]*\}/)?.[0];
+  if (!toastSource) throw new Error('toast function not found');
+  const toastNode = {style:{display:'none'},textContent:'',_t:null};
+  const toastContext = {document:{getElementById:id=>id==='toast'?toastNode:null},clearTimeout(){},setTimeout(){return 1;}};
+  vm.createContext(toastContext);
+  vm.runInContext(`${toastSource}\nglobalThis.runToast=toast;`,toastContext);
+  toastContext.runToast('تم الحفظ');
+  const saveHidden = toastNode.style.display==='none';
+  toastContext.runToast('تم النشر');
+  const publishHidden = toastNode.style.display==='none';
+  toastContext.runToast('تم إغلاق النافذة');
+  const closeHidden = toastNode.style.display==='none';
+  toastContext.runToast('تعذر حفظ الإعدادات');
+  const errorVisible = toastNode.style.display==='block' && toastNode.textContent==='تعذر حفظ الإعدادات';
+  if(saveHidden&&publishHidden&&closeHidden&&errorVisible)pass('toast runtime hides save/publish/close success only and preserves visible errors');
+  else fail('toast runtime success/error behavior');
+} catch (error) { fail('v46.93.27 owner-protection and settings feedback checks', error.message); }

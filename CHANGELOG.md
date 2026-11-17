@@ -1,3 +1,12 @@
+## v46.93.27 — Settings alignment, quiet success feedback, and owner protection alerts
+- Centered only the text inside the existing dark profile-setting labels (decoration, status, name color, font color, and background color); the dark label blocks and field layout remain unchanged.
+- Restored the profile settings save button to the existing green theme without changing its save handler.
+- Kept the shared toast component and all underlying save/publish/close actions, but suppressed routine success confirmations so the black top strip no longer appears for successful actions. Error and actionable messages remain visible.
+- Removed the duplicate top-strip message from real-time administrative action notices; the actual incoming notice remains.
+- Added server-side, persistent and real-time owner alerts when an authorized administrator attempts a protected action against the site owner, including avatar deletion, room kick/ban/mute, profile status, name decoration, profile colors, member decoration, and room transfer. The alert identifies the authenticated administrator and accurately states that the action was blocked; it appears live when the owner is online and is surfaced once after the owner next logs in if offline.
+- Owner protections and permission checks remain enforced on the server; no protected action is executed by these attempts.
+- Synchronized `index.html` and `public/index.html`; added regression checks for the changes.
+
 # v46.93.26 — إصلاح عميق لقائمة الألوان ومحاذاة حقول الملف الشخصي
 
 - إزالة تنفيذ قائمة الألوان السابق الذي كان يربط قائمة HTML مباشرة بحقل `input[type=color]`؛ هذا كان يسمح بظهور نافذة النظام بالتزامن، كما أن القائمة كانت داخل عنصر Flex لا يطبق عليه `grid-column`، وهو سبب الخطوط/التخطيط المشوّه.
