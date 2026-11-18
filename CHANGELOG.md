@@ -1,10 +1,3 @@
-## v46.93.47 — Unified media preview with explicit actions
-- Restored both original action buttons: عرض الصورة and عرض الفيديو.
-- Added inline image/video previews in public, private, and wall conversations.
-- Media opens full-screen only after the corresponding button is pressed.
-- Video playback starts only after explicit button press; no autoplay on message arrival.
-- Increased responsive preview dimensions and replaced private-media loading text with a small spinner.
-
 ## v46.93.44 — Left-aligned composer entry fields
 - Corrected the single canonical `.composerRichInput` rule so the public, private, and wall input fields begin from the left edge.
 - Preserved `direction: rtl` for Arabic text shaping and did not alter the rendering/alignment of already-sent private or wall messages.
