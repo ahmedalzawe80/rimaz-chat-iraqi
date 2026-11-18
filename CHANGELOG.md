@@ -1,3 +1,12 @@
+## v46.93.41 — Root-level Arabic shortcut and message layout repair
+
+- Removed the shortcut editor from the generic admin grid instead of overriding the three-column admin rule. The editor now owns a dedicated single-column layout with a full-width, RTL multiline field; the saved-shortcut row has a matching specific layout rule.
+- Removed the imperative textarea sizing handler. The field sizing and resizing behavior now come from its component CSS rather than inline JavaScript mutations.
+- Removed the legacy public-message rule that forced `white-space: pre` and horizontal scrolling. Public message bodies now preserve explicit newlines while naturally wrapping long Arabic text inside the available width.
+- Changed public, private, and wall contenteditable composers to RTL plaintext direction and right alignment, avoiding the previous global LTR direction for Arabic entry.
+- Kept the shortcut storage and expansion API unchanged; no saved shortcut data or server persistence behavior was altered.
+- Updated regression checks to assert the new component structure and absence of the conflicting legacy rules. `index.html` and `public/index.html` remain byte-identical.
+
 ## v46.93.40
 - Fixed the shortcut editor textarea sizing: restored a comfortable 220px starting height and bounded auto-growth while typing, with internal scrolling only after the viewport-safe limit.
 - Consolidated duplicate shortcut textarea CSS rules so a later 125px override cannot collapse the editor.

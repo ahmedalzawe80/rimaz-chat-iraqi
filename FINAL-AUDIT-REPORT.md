@@ -1,4 +1,26 @@
-# Final Audit Report — Rimaz Chat v46.93.37
+# Final Audit Report — Rimaz Chat v46.93.41
+
+## Shortcut and Arabic text repair
+
+The mobile shortcut editor and chat-message wrapping defects were traced to conflicting layout rules rather than shortcut data:
+
+1. The shortcut form inherited `.adminPanel .adminGrid`'s three-column layout. It is now a dedicated `.shortcutEditorGrid` component, structurally separate from `.adminGrid`.
+2. The shortcut textarea no longer depends on an inline resize handler. Width, RTL direction, text alignment, and multiline wrapping are defined by the component stylesheet.
+3. A later `.msg .msgtext` rule forced preformatted, non-wrapping text with horizontal overflow. That override was removed; public messages use `pre-wrap` and wrap within their message column.
+4. The shared contenteditable composer rule previously forced LTR direction and left alignment. Public, private, and wall composers now use RTL plaintext direction and right alignment.
+
+## Verification
+
+- `npm test`: passed all local static and runtime-fixture checks.
+- Inline browser JavaScript: both executable inline scripts pass `node --check`.
+- CSS: all 80 embedded style blocks parse without CSS syntax errors.
+- `index.html` and `public/index.html`: byte-identical.
+- Archive integrity: checked after packaging.
+
+A live deployment/browser acceptance test is still required to confirm the exact appearance on the production host and target Android browser. No production site was modified by this package.
+
+---
+
 
 ## Release result
 
