@@ -848,7 +848,7 @@ try {
     ['incoming call rejection and call termination are server-relayed',fs.readFileSync(server,'utf8').includes("socket.on('call-reject',d=>")&&fs.readFileSync(server,'utf8').includes("socket.on('call-end',d=>")],
     ['room audio output mute control is retained independently from microphone mute',html.includes('function toggleRoomSpeaker()')&&html.includes('function toggleVoiceMute()')&&html.includes('roomOutputMuted')],
     ['incoming call header places call type left and close control right',html.includes('direction:ltr;align-items:center;justify-content:space-between') && html.includes('.incomingCallTop{height:36px')],
-    ['incoming call identity is avatar, rank, name, then caller status',html.includes('class=\"incomingCallTitleLine\"><span class=\"incomingCallRank\">${memberBadge(member)}</span><strong>') && html.includes('<small>يتصل بك الآن</small>')],
+    ['incoming call identity is avatar, rank, name, then caller status',html.includes('class=\"incomingCallTitleLine\"><span class=\"incomingCallRank\">${memberBadge(member)}</span><strong class=\"incomingCallName\">') && html.includes('<small class=\"incomingCallStatus\">يتصل بك الآن</small>')],
     ['incoming-call accept button is on the left and reject button is on the right',html.includes('.incomingCallActions{direction:ltr}')],
     ['private audio/video call panels are centered and medium-sized on mobile',html.includes('.call{inset:auto;left:50%;top:50%;transform:translate(-50%,-50%)') && html.includes('.call.cameraCall{width:min(390px,calc(100% - 36px));height:min(560px,calc(100% - 110px))}') && html.includes('.call.voiceCall{width:min(360px,calc(100% - 44px));height:min(340px,calc(100% - 140px))}')]
   ];
@@ -947,7 +947,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.37 package version is current', pkg.version === '46.93.41'],
+    ['v46.93.42 package version is current', pkg.version === '46.93.42'],
     ['no dangling async-only lines remain in the browser entry script', !/^\s*async\s*$/m.test(html)],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
@@ -1118,7 +1118,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.37 package version',pkgNow.version==='46.93.41'],
+  ['v46.93.42 package version',pkgNow.version==='46.93.42'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
@@ -1151,12 +1151,16 @@ try {
 {
   const html=fs.readFileSync(mainPath,'utf8');
   const checks=[
-    ['v46.93.16 has one canonical chat typography source', (html.match(/id="rimaz-chat-typography-single-source-v1"/g)||[]).length===1],
-    ['v46.93.17 typography is 17px names and 16px supporting text on desktop and mobile', html.includes('--rimaz-chat-name-size:17px')&&html.includes('--rimaz-chat-body-size:16px')&&!html.includes('--rimaz-chat-name-size:15px')],
-    ['v46.93.17 names share typography across public, presence, private list/conversation, notices, and wall surfaces', html.includes('.msg .msghead .rimazIdentityName')&&html.includes('.member .memberNameLine .rimazIdentityName')&&html.includes('.presence .presenceNameRow .rimazIdentityName')&&html.includes('.privateContactIdentity .rimazIdentityName')&&html.includes('.pmsgTitle .rimazIdentityName')&&html.includes('.rimazUnifiedName b')&&html.includes('.rimazChatNotice .noticeContent>b')],
-    ['v46.93.17 supporting text shares 16px across all chat surfaces', html.includes('.msg .msgtext')&&html.includes('.member .memberSub')&&html.includes('.presence .presenceText')&&html.includes('.privateListOverlay .privateLastMessage')&&html.includes('.wallPost .wallText')&&html.includes('.pmsg .pmsgText')&&html.includes('.noticeMessageText')],
-    ['v46.93.17 private conversation messages have a semantic body class', html.includes('class="pmsgText"')],
-    ['v46.93.17 entry and online-member rank badges align to the top of the avatar row', html.includes('.presence .presenceBody{align-self:start!important;justify-content:flex-start!important;}')&&html.includes('.member .memberNameLine .memberBadge{align-self:flex-start!important;}')],
+    ['v46.93.42 has exactly one canonical typography source', (html.match(/id="rimaz-chat-typography-single-source-v2"/g)||[]).length===1 && !html.includes('rimaz-chat-typography-single-source-v1')],
+    ['v46.93.42 canonical tokens are 15px names and 14px body text', html.includes('--rimaz-chat-name-size:15px')&&html.includes('--rimaz-chat-body-size:14px')&&!html.includes('--rimaz-chat-name-size:17px')&&!html.includes('--rimaz-chat-body-size:16px')],
+    ['v46.93.42 all member identity names use the canonical token', html.includes('.rimazIdentityName')&&html.includes('.member .memberName')&&html.includes('.presence .presenceName')&&html.includes('.privateHeadTitle')&&html.includes('.pmsgTitle')&&html.includes('.rimazUnifiedName')&&html.includes('.incomingCallName')],
+    ['v46.93.42 all chat body surfaces use the canonical token', html.includes('.msg .msgtext')&&html.includes('.member .memberSub')&&html.includes('.presence .presenceText')&&html.includes('.privateLastMessage')&&html.includes('.pmsg .pmsgText')&&html.includes('.wallPost .wallPostBody')],
+    ['v46.93.42 temporary and permanent announcements share 15px/14px typography', html.includes('.rimazChatNotice .noticeContent>b')&&html.includes('.rimazChatNotice .noticeMessageText')&&html.includes('.rimazWelcomeNotice .noticeContent>b')&&html.includes('.rimazWelcomeNotice .noticeMessageText')&&html.includes('.announcementAdminTitle')],
+    ['v46.93.42 campaign ad title and meta use the shared name/body classes', html.includes('class="rimazPublicAdTitle"')&&html.includes('class="rimazPublicAdMeta"')],
+    ['v46.93.42 wall text has a semantic body class and no mixed name/body selector', html.includes('class="wallPostBody"')&&!html.includes('.wallPost .wallText>div:not(.rimazUnifiedName)')],
+    ['v46.93.42 announcement and transient notice markup uses semantic typography classes', html.includes('class="noticeMessageText"')&&html.includes('class="noticeContent"')],
+    ['v46.93.42 presence text has no inline font-size or font-weight override', !/class="presenceText"[^>]*style=/.test(html)],
+    ['v46.93.42 entry and online-member rank badges retain their layout alignment', html.includes('.presence .presenceBody{grid-column:2!important;grid-row:1!important;')&&html.includes('.member .memberMain{grid-column:4!important;grid-row:1!important;')&&html.includes('.msg .msghead{align-items:flex-start!important;')],
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 }
@@ -1356,7 +1360,7 @@ try {
   const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   const route=source.slice(source.indexOf("app.post('/api/media'"),source.indexOf('function normalizeChatFilterText'));
   const checks=[
-    ['v46.93.38 package version is current',pkgNow.version==='46.93.41'],
+    ['v46.93.42 package version is current (private-media regression suite)',pkgNow.version==='46.93.42'],
     ['private media verifies an active recipient account and fans out to all its active sessions',route.includes('hasConnectedSessionForUser(to)')&&route.includes("emitToUser(to,'private-media',m)")&&!route.includes('targetSocket[0]')],
     ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',m)")&&source.includes("emitToUser(to,'private-media',m)")],
     ['QuickTime MOV uploads have a safe extension and require a valid ISO-BMFF signature',source.includes("'video/quicktime':'.mov'")&&source.includes("['video/mp4','video/quicktime'].includes(mime) && actual==='mp4'")],

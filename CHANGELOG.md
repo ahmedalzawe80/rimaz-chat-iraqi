@@ -477,3 +477,11 @@
 - Restored natural wrapping for public and private Arabic messages, with RTL text direction and preserved explicit line breaks.
 - Set public, private, and wall composers to RTL Arabic text alignment while retaining the existing shortcut expansion and persistence flow.
 - Updated regression checks to cover the final CSS overrides and prevent the legacy nowrap/LTR rules from reintroducing the reported issue.
+
+## v46.93.42 — unified chat typography refactor
+
+- Replaced the previous 17px/16px typography layer with one canonical 15px member-name and 14px chat-body token system.
+- Removed legacy font-size, font-weight and line-height declarations from semantic chat identity, message, wall, presence, private-chat, announcement and campaign-ad selectors.
+- Added semantic wall-body, announcement, incoming-call and campaign-ad hooks so dynamic markup uses the same typography contract.
+- Kept unrelated UI typography (controls, buttons, room cards, profile metadata and emoji artwork) outside the chat typography contract.
+- Added regression checks for the canonical tokens, all chat surfaces and temporary/permanent announcements.
