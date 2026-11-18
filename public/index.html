@@ -973,7 +973,7 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 @media(max-width:650px){
  #layer .privateOverlay .pmsgHead{grid-template-columns:42px minmax(0,1fr)!important;gap:7px!important;min-height:42px!important;}
  #layer .privateOverlay .pmsgHead>img{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;max-width:42px!important;max-height:42px!important;}
- #layer .privateOverlay .pmsg .privateMediaArea{margin-top:1px!important;margin-left:49px!important;}
+ #layer .privateOverlay .pmsg .privateMediaArea{margin-top:2px!important;margin-left:0!important;}
 }
 </style>
 
@@ -1024,15 +1024,16 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 <style id="rimaz-media-two-stage">
 .privateMediaArea{display:block!important;width:100%!important;margin:0!important;direction:ltr!important;text-align:left!important}
 #layer .privateOverlay .pmsg:has(.privateMediaArea) .pmsgHead{margin-bottom:0!important}
+#layer .privateOverlay .pmsg .pmsgIdentity>.privateMediaArea{margin-top:2px!important;margin-left:0!important;}
 .privateMediaCard,.wallMediaCard{display:block!important;width:max-content!important;max-width:100%!important;margin:0!important;padding:0!important;background:transparent!important;border:0!important;box-sizing:border-box!important}
 .privateMediaView,.wallMediaView{display:block!important;min-height:38px!important;padding:7px 15px!important;border:1px solid #c9c9c9!important;border-radius:5px!important;background:#f1f1f1!important;color:#171717!important;font-size:15px!important;font-weight:800!important;cursor:pointer!important}
 .privateMediaView:disabled{opacity:.65!important}
-.privateInlineMedia,.wallInlineMedia{display:block!important;width:min(100%,300px)!important;max-width:300px!important;max-height:220px!important;height:auto!important;object-fit:contain!important;margin:1px 0!important;border-radius:5px!important;background:#111!important;cursor:zoom-in!important}
+.privateInlineMedia,.wallInlineMedia{display:block!important;width:min(100%,320px)!important;max-width:320px!important;max-height:210px!important;height:auto!important;object-fit:contain!important;margin:1px 0!important;border-radius:5px!important;background:#111!important;cursor:zoom-in!important}
 .privateAudio{max-width:100%;width:250px;height:38px}
 .privateMediaViewer{position:fixed!important;inset:0!important;z-index:2147483000!important;width:100vw!important;height:100dvh!important;max-width:none!important;max-height:none!important;margin:0!important;padding:12px!important;box-sizing:border-box!important;background:rgba(0,0,0,.96)!important;display:flex!important;align-items:center!important;justify-content:center!important;overflow:hidden!important}
 .privateMediaFullImage,.privateMediaFullVideo{display:block!important;width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;object-fit:contain!important;background:#000!important}
 .privateMediaClose{position:fixed!important;z-index:2!important;top:max(12px,env(safe-area-inset-top))!important;right:12px!important;width:42px!important;height:42px!important;border:0!important;border-radius:50%!important;background:#df5555!important;color:#fff!important;font-size:30px!important;line-height:1!important;font-weight:900!important}
-@media(max-width:600px){.privateInlineMedia,.wallInlineMedia{width:min(100%,300px)!important;max-width:300px!important;max-height:220px!important}}
+@media(max-width:600px){.privateInlineMedia,.wallInlineMedia{width:min(100%,320px)!important;max-width:320px!important;max-height:210px!important}}
 </style>
 
 </head><body><div id="app"></div>
@@ -1289,7 +1290,7 @@ async function addPrivateMedia(m){
  const mine=key(m.from)===key(me.name),prof=m.profile||(mine?(me.profile||{}):privatePeerProfile),av=avatarFor(prof);
  const url=String(m.media?.url||''),mime=String(m.media?.mime||''),type=mime.startsWith('image/')?'image':mime.startsWith('video/')?'video':mime.startsWith('audio/')?'audio':'';
  const placeholderId='private-media-'+Math.random().toString(36).slice(2),badge=privateSenderBadge(m,mine,prof);
- b.insertAdjacentHTML('beforeend',`<div class="pmsg ${mine?'me':''}"><div class="pmsgHead"><img src="${esc(av)}"><div class="pmsgIdentity"><div class="pmsgTitle" data-from="${esc(m.from)}">${personalBannerIdentity(prof,m.fromDisplayName||prof.displayName||m.from,badge,false,'privateIdentity')}</div></div></div><div class="privateMediaArea" id="${placeholderId}"><div class="privateMediaCard ${type==='video'?'videoMediaCard':'imageMediaCard'}" data-media-type="${esc(type)}" data-media-url="${esc(url)}"><button type="button" class="privateMediaView" onclick="revealPrivateMedia(this)">${type==='video'?'▶ عرض الفيديو':type==='image'?'▧ عرض الصورة':'عرض الملف الصوتي'}</button></div></div></div>`);
+ b.insertAdjacentHTML('beforeend',`<div class="pmsg ${mine?'me':''}"><div class="pmsgHead"><img src="${esc(av)}"><div class="pmsgIdentity"><div class="pmsgTitle" data-from="${esc(m.from)}">${personalBannerIdentity(prof,m.fromDisplayName||prof.displayName||m.from,badge,false,'privateIdentity')}</div><div class="privateMediaArea" id="${placeholderId}"><div class="privateMediaCard ${type==='video'?'videoMediaCard':'imageMediaCard'}" data-media-type="${esc(type)}" data-media-url="${esc(url)}"><button type="button" class="privateMediaView" onclick="revealPrivateMedia(this)">${type==='video'?'▶ عرض الفيديو':type==='image'?'▧ عرض الصورة':'عرض الملف الصوتي'}</button></div></div></div></div></div>`);
  b.scrollTop=b.scrollHeight;
 }
 async function revealPrivateMedia(button){
@@ -2352,9 +2353,9 @@ login();
 <style id="rimaz-v4639-private-wall-view-buttons-left">
 /* v46.39: move ONLY private-chat and wall media view buttons to the left and slightly compact them. */
 #layer .privateOverlay .pmsg .privateMediaArea{
-  width:100%!important; margin:1px 0 0 0!important;
-  direction:ltr!important; text-align:left!important;
-  display:flex!important; justify-content:flex-start!important;
+  display:flex!important;justify-content:flex-start!important;align-items:flex-start!important;
+  width:100%!important;max-width:100%!important;margin:2px 0 0!important;padding:0!important;
+  direction:ltr!important;text-align:left!important;box-sizing:border-box!important;
 }
 #layer .privateOverlay .pmsg .privateMediaCard{
   margin-left:0!important; margin-right:auto!important;
