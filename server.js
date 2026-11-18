@@ -202,7 +202,7 @@ const defaults = () => ({
     { id:'admin-room', name:'غرفة الإدارة', desc:'غرفة الإدارة ..', kind:'private', capacity:100, mics:0, owner:'admin', theme:'black' }
   ],
   roomBans:{}, roomMutes:{}, roomKicks:{}, globalBans:{}, globalIpBans:{},
-  wallLikes:{}, wallComments:{}, privateMessages:[], privateHidden:{}, privateRead:{}, ignored:{}
+  wallLikes:{}, wallComments:{}, wallReadAt:{}, privateMessages:[], privateHidden:{}, privateRead:{}, ignored:{}
 });
 
 let db;
@@ -227,6 +227,7 @@ try {
   }
 }
 for (const [k,v] of Object.entries(defaults())) if (db[k] === undefined) db[k] = v;
+if(!db.wallReadAt||typeof db.wallReadAt!=='object'||Array.isArray(db.wallReadAt))db.wallReadAt={};
 if(!Array.isArray(db.adminAuditLogs)) db.adminAuditLogs=[];
 if(!Array.isArray(db.loginHistory)) db.loginHistory=[];
 if(!Array.isArray(db.adCampaigns)) db.adCampaigns=[];
@@ -530,10 +531,31 @@ const welcomeSentSessions = new Set();
 // Per-room raised-mic state (not shared across rooms).
 const voiceSpeakers = new Map();
 function emitVoiceState(room){ const r=db.rooms.find(x=>x.id===room); if(!r||r.kind!=='voice')return; const speakers=[...(voiceSpeakers.get(room)||new Map()).values()].sort((a,b)=>Number(a.seatIndex)-Number(b.seatIndex)); io.to(room).emit('voice-state',{room,speakers,count:speakers.length,limit:Number(r.mics)||5}); }
-const guestDisconnectTimers = new Map();
+const sessionDisconnectTimers = new Map();
 const privateDisconnectTimers = new Map();
-const PRIVATE_DISCONNECT_GRACE_MS=25000;
-function hasConnectedSessionForUser(name){return [...io.sockets.sockets.values()].some(so=>so.connected&&keyName(so.data?.user?.name)===keyName(name));}
+const SESSION_DISCONNECT_GRACE_MS=60000;
+const PRIVATE_DISCONNECT_GRACE_MS=60000;
+function hasConnectedSessionForUser(name){return [...socketUsers.values()].some(active=>keyName(active?.name)===keyName(name));}
+function cancelSessionDisconnectCleanup(sid){const timer=sessionDisconnectTimers.get(sid);if(timer){clearTimeout(timer);sessionDisconnectTimers.delete(sid);}}
+function scheduleSessionDisconnectCleanup(sid,user){
+  if(!sid||!user?.name||!sessions.has(sid))return;
+  cancelSessionDisconnectCleanup(sid);
+  const timer=setTimeout(()=>{
+    sessionDisconnectTimers.delete(sid);
+    if(socketUsers.has(sid))return;
+    const current=sessions.get(sid);if(!current)return;
+    const hadWelcome=welcomeSentSessions.has(sid),previousGuest=current.type==='guest'?db.guests[current.name]:undefined,previousProfile=current.type==='guest'?db.profiles[current.name]:undefined,guestKey=keyName(current.name),previousWallReadAt=db.wallReadAt?.[guestKey];
+    sessions.delete(sid);welcomeSentSessions.delete(sid);delete db.sessions[sid];
+    if(current.type==='guest'&&!hasConnectedSessionForUser(current.name)){delete db.guests[current.name];delete db.profiles[current.name];delete db.wallReadAt[guestKey];}
+    try{save();}catch(error){
+      console.error('Disconnected session cleanup failed:',error.message);sessions.set(sid,current);db.sessions[sid]=current;
+      if(current.type==='guest'){if(previousGuest!==undefined)db.guests[current.name]=previousGuest;if(previousProfile!==undefined)db.profiles[current.name]=previousProfile;if(previousWallReadAt!==undefined)db.wallReadAt[guestKey]=previousWallReadAt;}
+      if(hadWelcome)welcomeSentSessions.add(sid);return;
+    }
+    emitState();
+  },SESSION_DISCONNECT_GRACE_MS);
+  timer.unref?.();sessionDisconnectTimers.set(sid,timer);
+}
 function clearPrivateConversationForUser(name){
   const userKey=keyName(name);if(!userKey||hasConnectedSessionForUser(name))return;
   const removed=(db.privateMessages||[]).filter(message=>keyName(message.from)===userKey||keyName(message.to)===userKey);
@@ -591,11 +613,13 @@ function profile(name){
   if (!db.profiles[name]) db.profiles[name]={displayName:cleanName(name),avatar:'',status:defaultStatus(name),bio:'عضو في دردشة ريماز عراقية',nameColor:'#222222',fontColor:'#222222',bgColor:'#ffffff',privateOpen:true,notificationsOpen:true};
   const p=db.profiles[name];
   if(!p.displayName) p.displayName=cleanName(name);
+  // Expire temporary visual ranks before projecting their assigned rank artwork/banner.
+  if(p.rankUntil && Number(p.rankUntil)<=Date.now()) { p.rank='none'; delete p.rankUntil; delete p.rankPreviousRole; delete p.rankDurationDays; save(); }
   const visualRank=rankDefinition(p.rank);
   p.rankArt=visualRank?.artUrl||'';
+  p.rankBanner=visualRank?.bannerUrl||'';
+  p.rankBannerName=visualRank?.bannerName||'';
   p.customDecorationImage=String(p.customDecorationImage||'');
-  // Expire temporary visual ranks without changing the existing badge artwork or staff role.
-  if(p.rankUntil && Number(p.rankUntil)<=Date.now()) { p.rank='none'; delete p.rankUntil; delete p.rankPreviousRole; delete p.rankDurationDays; save(); }
   // Never let the old automatic status survive as a default. Custom statuses remain untouched.
   if(!p.status || p.status==='متصل الآن' || p.status==='زائر جديد' || p.status==='غير مسجل' || p.status==='عضو جديد') p.status=defaultStatus(name);
   if(!p.fontColor) p.fontColor=p.nameColor||'#222222';
@@ -611,6 +635,7 @@ if(statusMigrated) save();
 function displayName(name){ return profile(name).displayName || cleanName(name); }
 function sessionUser(sid){ const s=sessions.get(sid); if(!s)return null; const role=roleOf(s); return {...s, role, owner:isOwner(s), admin:isAdmin(s), fullAdmin:isFullPermissionAdmin(s), staff:isStaff(s), myPermissions:Object.keys(PERMISSION_CATALOG).filter(permission=>hasPermission(s,permission)), panelAccess:isOwner(s)||hasPermission(s,'panel_access')||hasPermission(s,'health_view'), vip:vipActive(s.name), likes:isOwner(s)?999999:userLikes(s)}; }
 function makeSession(name,type,visibility={}){
+  cancelPrivateConversationCleanup(name);
   const sid=crypto.randomBytes(24).toString('hex');
   const s={name,type,created:Date.now(),hidden:!!visibility.hidden,ghost:!!visibility.ghost}; sessions.set(sid,s); db.sessions[sid]=s; save(); return sid;
 }
@@ -633,7 +658,7 @@ const PERMISSION_CATALOG = {
   messages_delete:'حذف الرسائل', announcement_post:'نشر الإعلانات', announcement_delete:'حذف الإعلانات',
   gifts:'إرسال الهدايا', vip:'منح VIP', profile_edit:'تعديل ألوان الملف الشخصي',
   avatar_delete:'حذف الصور', grant_likes:'منح اللايكات',
-  rank_assign:'منح الشارات ومدتها', banner_upload:'رفع وتغيير وحذف البنر الشخصي', rank_art_manage:'إدارة مكتبة أشكال الرتب وربطها بالرتب', member_decoration_manage:'تخصيص وإزالة زخرفة عضو محدد', permission_manage:'تعديل صلاحيات الرتب', member_ip:'عرض IP',
+  rank_assign:'منح الشارات ومدتها', personal_banner:'إدارة البنر الشخصي — رفع وحذف بنر الحساب نفسه', chat_banners_manage:'إدارة بنرات الدردشة للرتب السبع', rank_art_manage:'إدارة مكتبة أشكال الرتب وربطها بالرتب', member_decoration_manage:'تخصيص وإزالة زخرفة عضو محدد', permission_manage:'تعديل صلاحيات الرتب', member_ip:'عرض IP',
   reset_likes:'تصفير اللايكات', shortcuts_manage:'إدارة الاختصارات', smileys_manage:'إدارة السميلات', room_move:'نقل عضو بين الغرف', room_create:'إنشاء غرفة', room_edit:'تعديل بيانات الغرفة', room_delete:'حذف غرفة', room_lock:'تعيين أو إزالة كلمة مرور الغرفة', room_image_manage:'إدارة صور الغرف', gift_catalog_manage:'إضافة وحذف هدايا الكتالوج', wall_stop:'إيقاف الحائط', wall_restart:'تشغيل الحائط', wall_clear:'حذف جميع منشورات الحائط', wall_delete_user:'حذف منشورات عضو محدد من الحائط', welcome_manage:'إدارة رسائل الترحيب',
   audit_view:'عرض سجل العمليات وتصديره', stats_view:'عرض إحصائيات الموقع', chat_filter_manage:'إدارة فلتر الكلمات', member_status_manage:'إدارة حالات الأعضاء', private_chat_override:'تجاوز إغلاق المحادثات الخاصة', presence_hidden_view:'مشاهدة الأعضاء المخفيين', hidden_login:'الدخول المخفي', ghost_login:'دخول الشبح', bots_manage:'إدارة وتشغيل بوتات الدردشة', site_admin:'إدارة الموقع الكاملة (الإعدادات والسجلات والنسخ والاستعادة)', subscriptions_manage:'إدارة خطط واشتراكات الأعضاء وتجديدها وإلغاؤها', ads_manage:'إدارة الحملات الإعلانية والصور والروابط والمدد', control_center_manage:'التحكم بتشغيل وإيقاف وحدات الدردشة', audit_details_view:'عرض تفاصيل الأهداف والإجراءات في سجل العمليات', health_view:'مراقبة صحة الخادم واستهلاك الذاكرة'
 };
@@ -642,6 +667,7 @@ const ALL_PERMISSION_KEYS=Object.keys(PERMISSION_CATALOG);
 // Convert old bundled permissions into the granular capabilities used by the current UI.
 function normalizePermissionList(list){
  const set=new Set(Array.isArray(list)?list:[]);
+ if(set.has('banner_upload')){set.add('personal_banner');set.delete('banner_upload');}
  if(set.has('rooms_manage')){for(const key of ['room_create','room_edit','room_delete','room_lock','room_image_manage'])set.add(key);set.delete('rooms_manage');}
  if(set.has('chat_tools_manage')){set.add('shortcuts_manage');set.add('smileys_manage');set.delete('chat_tools_manage');}
  if(set.has('gifts'))set.add('gift_catalog_manage');
@@ -734,14 +760,16 @@ db.permissionModelVersion=3;
 }
 migrateLegacyPermissionModel();
 for(const [name,permissions] of Object.entries(db.accountPermissions||{}))if(Array.isArray(permissions))db.accountPermissions[name]=normalizePermissionList(permissions);
-// Add the new personal-banner capability only to previously full-access admin ranks/accounts.
-if(Number(db.bannerUploadPermissionMigrationVersion||0)<1){
- const previous=ALL_PERMISSION_KEYS.filter(key=>key!=='banner_upload');
+// Split the former banner permission into personal banners and rank/chat banners.
+// Legacy banner_upload maps only to personal_banner; full-access admins also receive chat_banners_manage.
+if(Number(db.bannerPermissionsSplitMigrationVersion||0)<1){
+ const introduced=['personal_banner','chat_banners_manage'];
+ const previous=ALL_PERMISSION_KEYS.filter(key=>!introduced.includes(key));
  const adminFull=rankDefinition('admin-full');
- if(adminFull&&previous.every(key=>(adminFull.permissions||[]).includes(key))&&!adminFull.permissions.includes('banner_upload'))adminFull.permissions.push('banner_upload');
- for(const permissions of Object.values(db.accountPermissions||{}))if(Array.isArray(permissions)&&previous.every(key=>permissions.includes(key))&&!permissions.includes('banner_upload'))permissions.push('banner_upload');
- db.bannerUploadPermissionMigrationVersion=1;
- try{save()}catch(error){console.error('Could not persist banner permission migration:',error.message);}
+ if(adminFull&&previous.every(key=>(adminFull.permissions||[]).includes(key)))adminFull.permissions=[...new Set([...(adminFull.permissions||[]),'personal_banner','chat_banners_manage'])];
+ for(const permissions of Object.values(db.accountPermissions||{}))if(Array.isArray(permissions)&&previous.every(key=>permissions.includes(key)))for(const key of introduced)if(!permissions.includes(key))permissions.push(key);
+ db.bannerPermissionsSplitMigrationVersion=1;
+ try{save()}catch(error){console.error('Could not persist split banner permission migration:',error.message);}
 }
 // One-time permission-schema migration: preserve full-admin intent when new admin capabilities are introduced.
 // Only accounts/ranks that already held every prior capability receive the new ones; limited custom overrides stay limited.
@@ -806,19 +834,22 @@ function requireAdmin(req,res,next){ requireAuth(req,res,()=>{const permission=p
 // broadcasting one live-state update. It is rebuilt per broadcast so it cannot go stale.
 function buildPresenceContext(){
   const socketsBySid = new Map();
-  for (const so of io.sockets.sockets.values()) if (so.data?.sid) socketsBySid.set(so.data.sid, so);
   const activeEntries = [];
   const sessionsBySid = new Map();
   const sessionsByAccount = new Map();
-  for (const [sid,u] of sessions) {
-    if (!socketUsers.has(sid)) continue;
-    activeEntries.push([sid,u]);
-    sessionsBySid.set(sid,u);
-    const accountKey = keyName(u.name);
+  for (const [sid,active] of socketUsers) {
+    const so = active?.socketId ? io.sockets.sockets.get(active.socketId) : null;
+    const user = sessions.get(sid);
+    if (!so?.connected || so.data?.sid !== sid || !user || so.id !== active.socketId) continue;
+    socketsBySid.set(sid,so);
+    activeEntries.push([sid,user]);
+    sessionsBySid.set(sid,user);
+    const accountKey = keyName(user.name);
     let group = sessionsByAccount.get(accountKey);
     if (!group) sessionsByAccount.set(accountKey, group = []);
-    group.push(u);
+    group.push(user);
   }
+  activeEntries.sort((a,b)=>Number(socketUsers.get(b[0])?.joinedAt||0)-Number(socketUsers.get(a[0])?.joinedAt||0));
   return { socketsBySid, activeEntries, sessionsBySid, sessionsByAccount };
 }
 function canSeePresence(viewer,target,context=null){
@@ -826,7 +857,7 @@ function canSeePresence(viewer,target,context=null){
   if(viewer&&keyName(viewer.name)===keyName(target.name))return true;
   const sameAccountSessions = context
     ? (context.sessionsByAccount.get(keyName(target.name)) || [])
-    : [...sessions.entries()].filter(([sid,u])=>socketUsers.has(sid)&&keyName(u.name)===keyName(target.name)).map(([,u])=>u);
+    : [...buildPresenceContext().sessionsBySid.values()].filter(u=>keyName(u.name)===keyName(target.name));
   if(sameAccountSessions.some(u=>u.ghost))return false;
   if(target.ghost)return false;
   if(target.hidden)return !!viewer&&(isOwner(viewer)||hasPermission(viewer,'presence_hidden_view'));
@@ -836,10 +867,11 @@ function canSeePresenceNotice(viewer,notice){
   if(!notice||notice.presenceVisibility!=='staff')return true;
   return !!viewer&&(keyName(viewer.name)===keyName(notice.from)||isOwner(viewer)||hasPermission(viewer,'presence_hidden_view'));
 }
-function visibleRooms(viewer,context=null){return db.rooms.map(r=>{const {passwordHash,...safe}=r;return {...safe,locked:!!passwordHash,online:onlineInRoom(r.id,viewer,context)};});}
-function hasInvisibleActiveSession(name,viewer){
-  const active=[...sessions.entries()].filter(([sid,u])=>socketUsers.has(sid)&&keyName(u.name)===keyName(name));
-  return active.length>0&&!active.some(([,u])=>canSeePresence(viewer,u));
+function visibleRooms(viewer,context=null){context=context||buildPresenceContext();return db.rooms.map(r=>{const {passwordHash,...safe}=r;return {...safe,locked:!!passwordHash,online:onlineInRoom(r.id,viewer,context)};});}
+function hasInvisibleActiveSession(name,viewer,context=null){
+  context=context||buildPresenceContext();
+  const active=[...context.sessionsBySid.entries()].filter(([sid,u])=>keyName(u.name)===keyName(name));
+  return active.length>0&&!active.some(([,u])=>canSeePresence(viewer,u,context));
 }
 function emitState(){
   const context=buildPresenceContext();
@@ -849,33 +881,48 @@ function emitState(){
     so.emit('live-state',{online:getOnlineUsers(viewer,context),rooms:visibleRooms(viewer,context)});
   }
 }
-// socketUsers is keyed by the login session id, not Socket.IO's socket.id.
-function socketBySession(sid){ for(const s of io.sockets.sockets.values()){ if(s.data?.sid===sid) return s; } return null; }
+// Each authenticated tab/session owns exactly one live Socket.IO connection.
+function socketBySession(sid){
+  const active=socketUsers.get(sid);
+  if(!active?.socketId)return null;
+  const socket=io.sockets.sockets.get(active.socketId);
+  return socket?.connected&&socket.data?.sid===sid?socket:null;
+}
+function isCurrentSessionSocket(socket){
+  const sid=socket?.data?.sid,active=sid&&socketUsers.get(sid);
+  return !!(sid&&socket?.connected&&active?.socketId===socket.id&&socket.data?.sid===sid);
+}
 function emitToUser(name,event,payload){
   const target=keyName(name);
   for(const [sid,u] of socketUsers){
-    if(keyName(u.name)===target) socketBySession(sid)?.emit(event,payload);
+    if(keyName(u.name)===target)socketBySession(sid)?.emit(event,payload);
   }
 }
-
+function countryCodeFromSocket(so){
+  const headers=so?.handshake?.headers||{};
+  const candidates=[headers['cf-ipcountry'],headers['x-country-code'],headers['x-vercel-ip-country'],headers['fly-client-country'],headers['cloudfront-viewer-country']];
+  for(const candidate of candidates){const code=String(candidate||'').trim().toUpperCase();if(/^[A-Z]{2}$/.test(code)&&code!=='XX'&&code!=='T1')return code;}
+  return '';
+}
 function getOnlineUsers(viewer=null,context=null){
+  context=context||buildPresenceContext();
   const arr=[];
-  const entries=context?context.activeEntries:sessions;
-  for(const [sid,u] of entries){
-    if(!context&&!socketUsers.has(sid)||!canSeePresence(viewer,u,context))continue;
-    const role=roleOf(u),so=context?context.socketsBySid.get(sid):socketBySession(sid);
-    arr.push({...u,role,owner:role==='owner',admin:['owner','admin'].includes(role),staff:['owner','admin','banner','super'].includes(role),panelAccess:role==='owner'||hasPermission(u,'panel_access'),room:socketUsers.get(sid)?.room||u.room||'',countryCode:(so?.handshake?.headers?.['cf-ipcountry']||so?.handshake?.headers?.['x-country-code']||'').toUpperCase(),displayName:displayName(u.name),likes:userLikes(u),level:level(userLikes(u)),profile:profile(u.name)});
+  for(const [sid,u] of context.activeEntries){
+    if(!canSeePresence(viewer,u,context))continue;
+    const role=roleOf(u),so=context.socketsBySid.get(sid),active=socketUsers.get(sid);
+    arr.push({...u,role,owner:role==='owner',admin:['owner','admin'].includes(role),staff:['owner','admin','banner','super'].includes(role),panelAccess:role==='owner'||hasPermission(u,'panel_access'),room:active?.room||u.room||'',countryCode:countryCodeFromSocket(so),displayName:displayName(u.name),likes:userLikes(u),level:level(userLikes(u)),profile:profile(u.name)});
   }
-  const seen=new Set(); return arr.filter(x=>{const k=keyName(x.name);if(seen.has(k))return false;seen.add(k);return true;});
+  const seen=new Set();return arr.filter(x=>{const k=keyName(x.name);if(seen.has(k))return false;seen.add(k);return true;});
 }
 function onlineInRoom(room,viewer=null,context=null){
-  const set=roomSockets.get(room);if(!set)return 0;
-  let count=0;
-  for(const sid of set){
-    const user=context?context.sessionsBySid.get(sid):sessions.get(sid);
-    if(socketUsers.has(sid)&&canSeePresence(viewer,user,context))count++;
+  context=context||buildPresenceContext();
+  const seen=new Set();
+  for(const [sid,user] of context.activeEntries){
+    const active=socketUsers.get(sid);
+    if(active?.room!==room||!canSeePresence(viewer,user,context))continue;
+    const account=keyName(user.name);if(account)seen.add(account);
   }
-  return count;
+  return seen.size;
 }
 function emitPresenceToRoom(room,notice){
   for(const sid of (roomSockets.get(room)||[])){
@@ -903,7 +950,6 @@ function recordLoginEvent(req,name,type,mode='normal'){
   }catch(error){console.error('Login history save failed:',error.message)}
 }
 function socketClientIp(socket){ const h=socket.handshake?.headers||{}; return normalizeIp(h['cf-connecting-ip']||h['x-real-ip']||socket.handshake?.address||''); }
-function globalIpBanned(ip){ const k=normalizeIp(ip); if(!k)return false; const item=(db.globalIpBans||{})[k]; if(!item)return false; if(Number(item.until||0)<=Date.now()){delete db.globalIpBans[k];save();return false;} return true; }
 function globalBanStatus(name,ip,now=Date.now()){
   const n=keyName(name); let until=0,changed=false;
   const nameBan=(db.globalBans||{})[n];
@@ -920,7 +966,6 @@ function globalBanResponse(res,name,ip){const ban=globalBanStatus(name,ip);if(!b
 function globalBanned(name,ip){return !!globalBanStatus(name,ip);}
 function nameTaken(name){const n=keyName(name);if(!n)return false;return n==='owner'||(!!process.env.OWNER_NAME&&n===keyName(process.env.OWNER_NAME))||Object.keys(db.users||{}).some(x=>keyName(x)===n)||Object.keys(db.guests||{}).some(x=>keyName(x)===n);} 
 function removeFromChat(name, banned){ const n=keyName(name); for(const so of io.sockets.sockets.values()){ const sid2=so.data?.sid, u2=so.data?.user||socketUsers.get(sid2); if(!u2||keyName(u2.name)!==n)continue; const oldRoom=u2.room||''; if(oldRoom){so.leave(oldRoom);roomSockets.get(oldRoom)?.delete(sid2);} if(so.data?.user)so.data.user.room=''; if(socketUsers.get(sid2))socketUsers.get(sid2).room=''; so.emit('kicked',{global:true,banned:!!banned,room:oldRoom,...(banned?(globalBanStatus(n,'')||{}):{})}); if(banned)so.disconnect(true); } emitState(); }
-function safeMessage(m){ return {...m, text:String(m.text||'').slice(0,2000)}; }
 let messageSaveTimer=null;
 function scheduleMessageSave(delay=350){
   if(messageSaveTimer)return;
@@ -963,7 +1008,7 @@ function notifyOwnerProtectedAttempt(actor,action){
 const SAFE_UPLOAD_TYPES = Object.freeze({
   'image/jpeg':'.jpg', 'image/png':'.png', 'image/gif':'.gif', 'image/webp':'.webp',
   'image/avif':'.avif', 'image/bmp':'.bmp',
-  'video/mp4':'.mp4', 'video/webm':'.webm', 'video/ogg':'.ogv',
+  'video/mp4':'.mp4', 'video/webm':'.webm', 'video/ogg':'.ogv', 'video/quicktime':'.mov',
   'audio/mpeg':'.mp3', 'audio/mp3':'.mp3', 'audio/ogg':'.ogg',
   'audio/wav':'.wav', 'audio/x-wav':'.wav', 'audio/mp4':'.m4a',
   'audio/aac':'.aac', 'audio/webm':'.weba'
@@ -1046,7 +1091,7 @@ function uploadedSignatureMatches(file, category='any') {
     if (category === 'image') return actual === 'image' && mime.startsWith('image/');
     if (category === 'media') {
       if (mime.startsWith('image/')) return actual === 'image';
-      if (mime.startsWith('video/')) return (mime==='video/mp4' && actual==='mp4') || (mime==='video/webm' && actual==='webm') || (mime==='video/ogg' && actual==='ogg');
+      if (mime.startsWith('video/')) return (['video/mp4','video/quicktime'].includes(mime) && actual==='mp4') || (mime==='video/webm' && actual==='webm') || (mime==='video/ogg' && actual==='ogg');
       if (mime.startsWith('audio/')) return (['audio/mpeg','audio/mp3','audio/aac'].includes(mime) && actual==='audio') || (['audio/ogg'].includes(mime) && actual==='ogg') || (['audio/wav','audio/x-wav'].includes(mime) && actual==='audio') || (mime==='audio/mp4' && actual==='mp4') || (mime==='audio/webm' && actual==='webm');
       return false;
     }
@@ -1120,11 +1165,14 @@ app.post('/api/logout',requireAuth,(req,res)=>{
   const previousMessages=db.messages;
   const previousGuest=u?.type==='guest'?db.guests[u.name]:undefined;
   const previousProfile=u?.type==='guest'?db.profiles[u.name]:undefined;
+  const guestWallReadKey=u?.type==='guest'?keyName(u.name):'';
+  const previousGuestWallReadAt=guestWallReadKey?db.wallReadAt?.[guestWallReadKey]:undefined;
   const hadWelcome=welcomeSentSessions.has(sid);
+  cancelSessionDisconnectCleanup(sid);
   if(name)db.messages=(db.messages||[]).filter(m=>!(m?.type==='presence'&&keyName(m.from)===keyName(name)));
-  if(u?.type==='guest'){delete db.guests[u.name];delete db.profiles[u.name];}
+  if(u?.type==='guest'){delete db.guests[u.name];delete db.profiles[u.name];delete db.wallReadAt[guestWallReadKey];}
   sessions.delete(sid);welcomeSentSessions.delete(sid);delete db.sessions[sid];
-  try{save()}catch(e){if(previousMessages!==undefined)db.messages=previousMessages;if(u){sessions.set(sid,u);db.sessions[sid]=u;if(u.type==='guest'){if(previousGuest!==undefined)db.guests[u.name]=previousGuest;if(previousProfile!==undefined)db.profiles[u.name]=previousProfile;}if(hadWelcome)welcomeSentSessions.add(sid);}console.error('Logout persistence failed:',e.message);return res.status(500).json({error:'تعذر حفظ تسجيل الخروج، حاول مرة أخرى'});}
+  try{save()}catch(e){if(previousMessages!==undefined)db.messages=previousMessages;if(u){sessions.set(sid,u);db.sessions[sid]=u;if(u.type==='guest'){if(previousGuest!==undefined)db.guests[u.name]=previousGuest;if(previousProfile!==undefined)db.profiles[u.name]=previousProfile;if(previousGuestWallReadAt!==undefined)db.wallReadAt[guestWallReadKey]=previousGuestWallReadAt;}if(hadWelcome)welcomeSentSessions.add(sid);}console.error('Logout persistence failed:',e.message);return res.status(500).json({error:'تعذر حفظ تسجيل الخروج، حاول مرة أخرى'});}
   for(const so of [...io.sockets.sockets.values()])if(so.data?.sid===sid)so.disconnect(true);
   if(name)schedulePrivateConversationCleanup(name);
   res.json({ok:true});
@@ -1141,8 +1189,10 @@ app.get('/api/state',requireAuth,(req,res)=>{
 });
 app.get('/api/history',requireAuth,(req,res)=>{ const room=String(req.query.room||'public'),started=Number(req.user.created)||0;res.set('Cache-Control','no-store');res.json(roomHistoryWithAnnouncements(room,req.user,started)); });
 app.get('/api/rooms',requireAuth,(req,res)=>{res.set('Cache-Control','no-store');res.json(visibleRooms(req.user));});
-app.get('/api/members',requireAuth,(req,res)=>{const online=new Map(getOnlineUsers(req.user).map(x=>[keyName(x.name),x]));const rows=[];const registeredKeys=new Set(Object.keys(db.users).map(keyName));const seenMemberKeys=new Set();for(const [name,u] of Object.entries(db.users)){const normalized=keyName(name);if(hasInvisibleActiveSession(name,req.user))continue;if(seenMemberKeys.has(normalized))continue;seenMemberKeys.add(normalized);const x=online.get(keyName(name));rows.push({name,type:'member',likes:Number(u.likes)||0,points:Number(u.points)||0,level:level(Number(u.likes)||0),profile:profile(name),online:!!x,room:x?.room||'',countryCode:x?.countryCode||'',role:isOwnerName(name)?'owner':'member',vip:vipActive(name)});}for(const [name,g] of Object.entries(db.guests)){const normalized=keyName(name);if(registeredKeys.has(normalized)||seenMemberKeys.has(normalized)||hasInvisibleActiveSession(name,req.user))continue;const x=online.get(normalized);if(x){seenMemberKeys.add(normalized);rows.push({name,type:'guest',likes:Number(g.likes)||0,points:Number(g.points)||0,level:level(Number(g.likes)||0),profile:profile(name),online:true,room:x?.room||'',countryCode:x?.countryCode||'',ignoredByMe:(db.ignored?.[keyName(req.user.name)]||[]).some(x=>keyName(x)===normalized),role:isOwnerName(name)?'owner':'member',vip:false});}}const rank=x=>{if(x.role==='owner')return 0;const r=x.profile?.rank||'';const rankOrder={'admin-full':1,'admin-shield':2,'crown-gold':3,'crown-silver':4,'super-black':5,'super-white':6,'super-red':7};if(rankOrder[r]!==undefined)return rankOrder[r];if(x.vip)return 8;if((x.profile?.gifts||[]).length)return 9;if(x.type==='guest')return 11;return 10;};rows.sort((a,b)=>rank(a)-rank(b)||b.likes-a.likes||a.name.localeCompare(b.name,'ar'));res.json(rows);});
+app.get('/api/members',requireAuth,(req,res)=>{const presence=buildPresenceContext();const online=new Map(getOnlineUsers(req.user,presence).map(x=>[keyName(x.name),x]));const rows=[];const registeredKeys=new Set(Object.keys(db.users).map(keyName));const seenMemberKeys=new Set();for(const [name,u] of Object.entries(db.users)){const normalized=keyName(name);if(hasInvisibleActiveSession(name,req.user,presence))continue;if(seenMemberKeys.has(normalized))continue;seenMemberKeys.add(normalized);const x=online.get(keyName(name));rows.push({name,type:'member',likes:Number(u.likes)||0,points:Number(u.points)||0,level:level(Number(u.likes)||0),profile:profile(name),online:!!x,room:x?.room||'',countryCode:x?.countryCode||'',role:isOwnerName(name)?'owner':'member',vip:vipActive(name)});}for(const [name,g] of Object.entries(db.guests)){const normalized=keyName(name);if(registeredKeys.has(normalized)||seenMemberKeys.has(normalized)||hasInvisibleActiveSession(name,req.user,presence))continue;const x=online.get(normalized);if(x){seenMemberKeys.add(normalized);rows.push({name,type:'guest',likes:Number(g.likes)||0,points:Number(g.points)||0,level:level(Number(g.likes)||0),profile:profile(name),online:true,room:x?.room||'',countryCode:x?.countryCode||'',ignoredByMe:(db.ignored?.[keyName(req.user.name)]||[]).some(x=>keyName(x)===normalized),role:isOwnerName(name)?'owner':'member',vip:false});}}const rank=x=>{if(x.role==='owner')return 0;const r=x.profile?.rank||'';const rankOrder={'admin-full':1,'admin-shield':2,'crown-gold':3,'crown-silver':4,'super-black':5,'super-white':6,'super-red':7};if(rankOrder[r]!==undefined)return rankOrder[r];if(x.vip)return 8;if((x.profile?.gifts||[]).length)return 9;if(x.type==='guest')return 11;return 10;};rows.sort((a,b)=>rank(a)-rank(b)||b.likes-a.likes||a.name.localeCompare(b.name,'ar'));res.json(rows);});
 app.get('/api/wall/status',requireAuth,(req,res)=>{res.set('Cache-Control','no-store');res.json({enabled:db.wallEnabled!==false&&siteModuleEnabled('wall')});});
+app.get('/api/wall/unread',requireAuth,(req,res)=>{const me=keyName(req.user.name),started=Number(req.user.created)||0,readAt=Number(db.wallReadAt?.[me]||0);const count=siteModuleEnabled('wall')?db.wall.filter(p=>Number(p.at||0)>=started&&Number(p.at||0)>readAt&&keyName(p.from)!==me).length:0;res.set('Cache-Control','no-store');res.json({count});});
+app.post('/api/wall/read',requireAuth,(req,res)=>{const me=keyName(req.user.name),requested=Number(req.body?.throughAt),throughAt=Number.isFinite(requested)?Math.min(Date.now(),Math.max(0,requested)):0;db.wallReadAt=db.wallReadAt||{};const previous=Number(db.wallReadAt[me]||0);if(throughAt>previous){db.wallReadAt[me]=throughAt;try{save();}catch(error){db.wallReadAt[me]=previous;return res.status(500).json({error:'تعذر تحديث قراءة الحائط'});}}const started=Number(req.user.created)||0,readAt=Number(db.wallReadAt[me]||0),count=siteModuleEnabled('wall')?db.wall.filter(p=>Number(p.at||0)>=started&&Number(p.at||0)>readAt&&keyName(p.from)!==me).length:0;res.json({ok:true,count,readAt});});
 app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))return res.status(403).json({error:'ميزة الحائط متوقفة من إدارة الموقع'});const started=Number(req.user.created)||0;res.set('Cache-Control','no-store');res.json(db.wall.filter(x=>Number(x.at||0)>=started).slice(-100).reverse());});
 app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))return res.status(403).json({error:'ميزة الحائط متوقفة من إدارة الموقع'});if(db.wallEnabled===false)return res.status(403).json({error:'الجدار متوقف مؤقتاً من الإدارة'});const text=String(req.body.text||'').trim();if(!text)return res.status(400).json({error:'اكتب منشورك'});const previous=db.wall.slice();const p={id:crypto.randomUUID(),from:req.user.name,text:text.slice(0,2000),media:null,at:Date.now(),likes:0};db.wall.push(p);db.wall=db.wall.slice(-300);try{save()}catch(e){db.wall=previous;console.error('Wall post save failed:',e.message);return res.status(500).json({error:'تعذر حفظ المنشور'});}io.emit('wall-new',p);res.json(p);});
 app.post('/api/wall/like',requireAuth,(req,res)=>{
@@ -1177,7 +1227,21 @@ app.post('/api/private/hide',requireAuth,(req,res)=>{if(!siteModuleEnabled('priv
   for(const message of removed){const url=String(message?.media?.url||'');const prefix='/api/private/media/';if(!url.startsWith(prefix))continue;const filename=url.slice(prefix.length);if(!/^[a-zA-Z0-9._-]{1,180}$/.test(filename))continue;const stillUsed=(db.privateMessages||[]).some(m=>m?.media?.url===url);if(!stillUsed){try{fs.unlinkSync(path.join(PRIVATE_MEDIA_DIR,filename))}catch(e){if(e.code!=='ENOENT')console.warn('Private media cleanup failed:',e.message)}}}
   res.json({ok:true});
 });
-app.get('/api/private/contacts',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))return res.status(403).json({error:'المحادثات الخاصة متوقفة من إدارة الموقع'});const meName=req.user.name,meKey=keyName(meName),hidden=new Set((db.privateHidden?.[meKey]||[]).map(keyName)),read=db.privateRead?.[meKey]||{},map=new Map();for(const m of (db.privateMessages||[])){const from=keyName(m.from),to=keyName(m.to),other=from===meKey?m.to:to===meKey?m.from:null;if(!other||hidden.has(keyName(other)))continue;const k=keyName(other),old=map.get(k)||{name:other,last:'',at:0,unread:0};if(Number(m.at)>=old.at){old.name=other;old.last=m.text||'';old.at=Number(m.at)||0;}if(to===meKey&&Number(m.at)>Number(read[k]||0))old.unread++;map.set(k,old);}const rows=[...map.values()].sort((a,b)=>b.at-a.at).map(x=>({name:x.name,profile:profile(x.name),online:[...socketUsers.entries()].some(([sid,u])=>keyName(u.name)===keyName(x.name)&&canSeePresence(req.user,sessions.get(sid))),last:x.last,at:x.at,unread:x.unread}));res.json(rows);});
+app.get('/api/private/contacts',requireAuth,(req,res)=>{
+  if(!siteModuleEnabled('privateChat'))return res.status(403).json({error:'المحادثات الخاصة متوقفة من إدارة الموقع'});
+  const meKey=keyName(req.user.name),hidden=new Set((db.privateHidden?.[meKey]||[]).map(keyName)),read=db.privateRead?.[meKey]||{},map=new Map();
+  for(const message of (db.privateMessages||[])){
+    const from=keyName(message.from),to=keyName(message.to),other=from===meKey?message.to:to===meKey?message.from:null;
+    if(!other||hidden.has(keyName(other)))continue;
+    const key=keyName(other),row=map.get(key)||{name:other,last:'',at:0,unread:0};
+    if(Number(message.at)>=row.at){row.name=other;row.last=message.text||'';row.at=Number(message.at)||0;}
+    if(to===meKey&&Number(message.at)>Number(read[key]||0))row.unread++;
+    map.set(key,row);
+  }
+  const online=new Map(getOnlineUsers(req.user).map(user=>[keyName(user.name),user]));
+  const rows=[...map.values()].sort((a,b)=>b.at-a.at).map(row=>({name:row.name,profile:profile(row.name),online:online.has(keyName(row.name)),last:row.last,at:row.at,unread:row.unread}));
+  res.set('Cache-Control','no-store');res.json(rows);
+});
 app.get('/api/notifications',requireAuth,(req,res)=>{const started=Number(req.user.created)||0;res.set('Cache-Control','no-store');res.json((db.notifications[accountKey(req.user.name)]||db.notifications[req.user.name]||[]).filter(x=>Number(x.at||0)>=started).slice(0,50));});
 app.post('/api/notifications/read',requireAuth,(req,res)=>{db.notifications[accountKey(req.user.name)]=[];save();res.json({ok:true});});
 
@@ -1359,6 +1423,36 @@ app.delete('/api/admin/rank-art/:id',requireAuth,(req,res)=>{
  if(item.image?.startsWith('/uploads/')){const file=path.resolve(UP_DIR,path.basename(item.image));if(file.startsWith(path.resolve(UP_DIR)+path.sep)){try{fs.unlinkSync(file)}catch{}}}
  io.emit('rank-art-updated',{deleted:id,ranks:(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).map(r=>({id:r.id,artUrl:r.artUrl||''}))});res.json({ok:true,deleted:id});
 });
+// Chat/rank banners are independent from the small rank artwork library and personal profile banners.
+function canManageChatBanners(user){return isOwner(user)||hasPermission(user,'chat_banners_manage');}
+app.get('/api/admin/chat-banners',requireAuth,(req,res)=>{
+ if(!canManageChatBanners(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة بنرات الدردشة'});
+ res.set('Cache-Control','no-store');
+ res.json({ranks:(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)).map(r=>({id:r.id,name:r.name,bannerUrl:r.bannerUrl||'',bannerName:r.bannerName||''}))});
+});
+app.post('/api/admin/chat-banners/:rank',requireAuth,(req,res,next)=>{if(!canManageChatBanners(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة بنرات الدردشة'});next();},uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{
+ const rank=String(req.params.rank||''),definition=rankDefinition(rank);
+ if(!definition){removeUploadedFile(req.file);return res.status(400).json({error:'اختر رتبة صحيحة من الرتب السبع'});}
+ if(!req.file||!['image/gif','image/png','image/jpeg','image/webp'].includes(String(req.file.mimetype||''))){removeUploadedFile(req.file);return res.status(400).json({error:'ارفع صورة GIF أو PNG أو JPG أو WEBP'});}
+ const previous={url:definition.bannerUrl,name:definition.bannerName};
+ definition.bannerUrl='/uploads/'+req.file.filename;
+ definition.bannerName=String(req.body?.name||'').trim().slice(0,50)||definition.name;
+ try{save()}catch(error){if(previous.url!==undefined)definition.bannerUrl=previous.url;else delete definition.bannerUrl;if(previous.name!==undefined)definition.bannerName=previous.name;else delete definition.bannerName;removeUploadedFile(req.file);console.error('Chat rank banner save failed:',error.message);return res.status(500).json({error:'تعذر حفظ بنر الرتبة'});}
+ if(previous.url&&previous.url.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous.url)))}catch{}}
+ const ranks=(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).map(r=>({id:r.id,bannerUrl:r.bannerUrl||'',bannerName:r.bannerName||''}));
+ io.emit('rank-banners-updated',{rank,bannerUrl:definition.bannerUrl,bannerName:definition.bannerName,ranks});
+ emitState();res.json({ok:true,rank,bannerUrl:definition.bannerUrl,bannerName:definition.bannerName});
+});
+app.delete('/api/admin/chat-banners/:rank',requireAuth,(req,res)=>{
+ if(!canManageChatBanners(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة بنرات الدردشة'});
+ const rank=String(req.params.rank||''),definition=rankDefinition(rank);if(!definition)return res.status(400).json({error:'اختر رتبة صحيحة من الرتب السبع'});
+ const previous={url:definition.bannerUrl,name:definition.bannerName};delete definition.bannerUrl;delete definition.bannerName;
+ try{save()}catch(error){if(previous.url!==undefined)definition.bannerUrl=previous.url;if(previous.name!==undefined)definition.bannerName=previous.name;return res.status(500).json({error:'تعذر حذف بنر الرتبة'});}
+ if(previous.url&&previous.url.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous.url)))}catch{}}
+ const ranks=(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).map(r=>({id:r.id,bannerUrl:r.bannerUrl||'',bannerName:r.bannerName||''}));
+ io.emit('rank-banners-updated',{rank,bannerUrl:'',bannerName:'',ranks});emitState();res.json({ok:true,rank});
+});
+
 app.put('/api/admin/member-decoration',requireAuth,(req,res)=>{
  if(!hasPermission(req.user,'member_decoration_manage'))return res.status(403).json({error:'ما عندك صلاحية تخصيص زخرفة الأعضاء'});
  const n=accountKey(cleanName(req.body?.name||''));if(!n)return res.status(400).json({error:'اختر عضواً صالحاً'});if(isOwnerName(n)||isOwner({name:n,role:(getUser(n)||getGuest(n)||{}).role})){if(!isOwner(req.user))notifyOwnerProtectedAttempt(req.user,'تغيير زخرفة/شعار حسابك');return res.status(400).json({error:'حساب صاحب الموقع محمي'});}
@@ -1385,12 +1479,12 @@ app.put('/api/admin/bots',requireAuth,(req,res)=>{
 });
 
 // Rank definitions are editable independently from chat UI, buttons and colors.
-app.get('/api/admin/ranks' ,requireAuth,(req,res)=>{const canAssign=isOwner(req.user)||hasPermission(req.user,'rank_assign');const canArt=canManageRankArt(req.user);if(!canAssign&&!canArt)return res.status(403).json({error:'ما عندك صلاحية عرض الرتب أو أشكالها'});const ranks=(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)).map(r=>{const item={...r};if(!canAssign)delete item.permissions;return item;});res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:9,permissionKeys:canAssign?ALL_PERMISSION_KEYS:[],ranks,catalog:canAssign?PERMISSION_CATALOG:{}});});
+app.get('/api/admin/ranks' ,requireAuth,(req,res)=>{const canAssign=isOwner(req.user)||hasPermission(req.user,'rank_assign');const canArt=canManageRankArt(req.user);if(!canAssign&&!canArt)return res.status(403).json({error:'ما عندك صلاحية عرض الرتب أو أشكالها'});const ranks=(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)).map(r=>{const item={...r};if(!canAssign)delete item.permissions;return item;});res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:10,permissionKeys:canAssign?ALL_PERMISSION_KEYS:[],ranks,catalog:canAssign?PERMISSION_CATALOG:{}});});
 // Rank definitions are fixed: only the seven built-in ranks can be assigned or permission-edited.
 app.get('/api/admin/permissions',requireAuth,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الرتب'});
  const ranks=Object.fromEntries(RANK_PERMISSION_PROFILES.map(id=>[id,[...(rankDefinition(id)?.permissions||[])].filter(p=>Object.hasOwn(PERMISSION_CATALOG,p))]));
- res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:9,permissionKeys:ALL_PERMISSION_KEYS,catalog:PERMISSION_CATALOG,defaults:DEFAULT_RANK_PERMISSIONS,ranks,rankIds:RANK_PERMISSION_PROFILES});
+ res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:10,permissionKeys:ALL_PERMISSION_KEYS,catalog:PERMISSION_CATALOG,defaults:DEFAULT_RANK_PERMISSIONS,ranks,rankIds:RANK_PERMISSION_PROFILES});
 });
 app.put('/api/admin/permissions',requireAuth,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الرتب'});
@@ -1547,10 +1641,11 @@ app.post('/api/admin/restore/database/confirm',requireAuth,(req,res)=>{
 app.get('/api/admin/data',requireAuth,(req,res)=>{
  const allowed=Object.keys(PERMISSION_CATALOG).some(p=>hasPermission(req.user,p));
  if(!allowed)return res.status(403).json({error:'ما عندك صلاحية لهذا القسم'});
- const visibleOnline=new Map(getOnlineUsers(req.user).map(x=>[keyName(x.name),x]));
+ const presence=buildPresenceContext();
+ const visibleOnline=new Map(getOnlineUsers(req.user,presence).map(x=>[keyName(x.name),x]));
  const registeredAccountKeys=new Set(Object.keys(db.users||{}).map(keyName));
  const seenAdminAccountKeys=new Set();
- const payload={users:Object.entries(db.users).filter(([name])=>{const k=keyName(name);if(seenAdminAccountKeys.has(k))return false;seenAdminAccountKeys.add(k);return true;}).filter(([name])=>!hasInvisibleActiveSession(name,req.user)).sort(([a],[b])=>Number(isOwnerName(b))-Number(isOwnerName(a))).map(([name,u])=>({name,type:'member',likes:Number(u.likes)||0,points:Number(u.points)||0,level:level(Number(u.likes)||0),role:isOwnerName(name)?'owner':'member',vip:vipActive(name),online:visibleOnline.has(keyName(name)),room:visibleOnline.get(keyName(name))?.room||'',profile:profile(name)})),guests:Object.entries(db.guests).filter(([name])=>{const k=keyName(name);if(registeredAccountKeys.has(k)||seenAdminAccountKeys.has(k))return false;seenAdminAccountKeys.add(k);return true;}).sort(([a],[b])=>Number(isOwnerName(b))-Number(isOwnerName(a))).map(([name,g])=>({name,type:'guest',likes:Number(g.likes)||0,points:Number(g.points)||0,level:level(Number(g.likes)||0),role:isOwnerName(name)?'owner':'member',online:visibleOnline.has(keyName(name)),room:visibleOnline.get(keyName(name))?.room||'',profile:profile(name)})).filter(x=>x.online),rooms:db.rooms.map(r=>{const {passwordHash,...safe}=r;return {...safe,locked:!!passwordHash,online:onlineInRoom(r.id,req.user)};}),announcements:(db.announcements||[]).slice(0,100),messages:db.messages.slice(-100).reverse(),bans:Object.entries(db.roomBans||{}).flatMap(([room,items])=>(items||[]).map(x=>({room,name:typeof x==='string'?x:x.name,until:typeof x==='string'?null:x.until}))),mutes:Object.entries(db.roomMutes||{}).flatMap(([room,items])=>(items||[]).map(name=>({room,name}))),globalBans:Object.values(db.globalBans||{}).filter(x=>Number(x.until)>Date.now()),globalIpBans:Object.values(db.globalIpBans||{}).filter(x=>Number(x.until)>Date.now()),rankAudit:(db.rankAudit||[]).slice(0,200),adminAuditLogs:(db.adminAuditLogs||[]).slice(0,200),chatFilter:db.chatFilter||{enabled:false,words:[]},stats:{registeredUsers:Object.keys(db.users||{}).length,knownGuests:Object.keys(db.guests||{}).length,onlineUsers:getOnlineUsers(req.user).length,rooms:(db.rooms||[]).length,publicMessages:(db.messages||[]).length,privateMessages:(db.privateMessages||[]).length,wallPosts:(db.wall||[]).length,adminOperations:(db.adminAuditLogs||[]).length,rankChanges:(db.rankAudit||[]).length},rankDefinitions:(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)),myPermissions:Object.keys(PERMISSION_CATALOG).filter(permission=>hasPermission(req.user,permission)),wallEnabled:db.wallEnabled!==false,wallCount:(db.wall||[]).length,giftCatalog:Array.isArray(db.giftCatalog)?db.giftCatalog:[],vipGiftCatalog:Array.isArray(db.vipGiftCatalog)?db.vipGiftCatalog:[],chatShortcuts:db.chatShortcuts||[],customSmileys:db.customSmileys||[] };
+ const payload={users:Object.entries(db.users).filter(([name])=>{const k=keyName(name);if(seenAdminAccountKeys.has(k))return false;seenAdminAccountKeys.add(k);return true;}).filter(([name])=>!hasInvisibleActiveSession(name,req.user,presence)).sort(([a],[b])=>Number(isOwnerName(b))-Number(isOwnerName(a))).map(([name,u])=>({name,type:'member',likes:Number(u.likes)||0,points:Number(u.points)||0,level:level(Number(u.likes)||0),role:isOwnerName(name)?'owner':'member',vip:vipActive(name),online:visibleOnline.has(keyName(name)),room:visibleOnline.get(keyName(name))?.room||'',profile:profile(name)})),guests:Object.entries(db.guests).filter(([name])=>{const k=keyName(name);if(registeredAccountKeys.has(k)||seenAdminAccountKeys.has(k))return false;seenAdminAccountKeys.add(k);return true;}).sort(([a],[b])=>Number(isOwnerName(b))-Number(isOwnerName(a))).map(([name,g])=>({name,type:'guest',likes:Number(g.likes)||0,points:Number(g.points)||0,level:level(Number(g.likes)||0),role:isOwnerName(name)?'owner':'member',online:visibleOnline.has(keyName(name)),room:visibleOnline.get(keyName(name))?.room||'',profile:profile(name)})).filter(x=>x.online),rooms:db.rooms.map(r=>{const {passwordHash,...safe}=r;return {...safe,locked:!!passwordHash,online:onlineInRoom(r.id,req.user,presence)};}),announcements:(db.announcements||[]).slice(0,100),messages:db.messages.slice(-100).reverse(),bans:Object.entries(db.roomBans||{}).flatMap(([room,items])=>(items||[]).map(x=>({room,name:typeof x==='string'?x:x.name,until:typeof x==='string'?null:x.until}))),mutes:Object.entries(db.roomMutes||{}).flatMap(([room,items])=>(items||[]).map(name=>({room,name}))),globalBans:Object.values(db.globalBans||{}).filter(x=>Number(x.until)>Date.now()),globalIpBans:Object.values(db.globalIpBans||{}).filter(x=>Number(x.until)>Date.now()),rankAudit:(db.rankAudit||[]).slice(0,200),adminAuditLogs:(db.adminAuditLogs||[]).slice(0,200),chatFilter:db.chatFilter||{enabled:false,words:[]},stats:{registeredUsers:Object.keys(db.users||{}).length,knownGuests:Object.keys(db.guests||{}).length,onlineUsers:getOnlineUsers(req.user,presence).length,rooms:(db.rooms||[]).length,publicMessages:(db.messages||[]).length,privateMessages:(db.privateMessages||[]).length,wallPosts:(db.wall||[]).length,adminOperations:(db.adminAuditLogs||[]).length,rankChanges:(db.rankAudit||[]).length},rankDefinitions:(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)),myPermissions:Object.keys(PERMISSION_CATALOG).filter(permission=>hasPermission(req.user,permission)),wallEnabled:db.wallEnabled!==false,wallCount:(db.wall||[]).length,giftCatalog:Array.isArray(db.giftCatalog)?db.giftCatalog:[],vipGiftCatalog:Array.isArray(db.vipGiftCatalog)?db.vipGiftCatalog:[],chatShortcuts:db.chatShortcuts||[],customSmileys:db.customSmileys||[] };
  payload.subscriptionPlans=(isOwner(req.user)||hasPermission(req.user,'subscriptions_manage'))?(db.subscriptionPlans||[]):[];payload.subscriptions=(isOwner(req.user)||hasPermission(req.user,'subscriptions_manage'))?(db.subscriptions||[]):[];payload.adCampaigns=(isOwner(req.user)||hasPermission(req.user,'ads_manage'))?(db.adCampaigns||[]):[];
  // Always shape the response by the caller's exact permissions. panel_access
  // opens the panel only; it never grants access to every dataset or button.
@@ -1643,8 +1738,8 @@ app.post('/api/profile',requireAuth,(req,res)=>{
 app.post('/api/profile/avatar',requireAuth,uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!isOwner(req.user)&&Number(getUser(req.user.name)?.likes??getGuest(req.user.name)?.likes??0)<10){removeUploadedFile(req.file);return res.status(403).json({error:'تغيير الصورة يفتح عند 10 إعجابات'});}if(!req.file||!req.file.mimetype.startsWith('image/')){removeUploadedFile(req.file);return res.status(400).json({error:'اختر صورة'});}const p=profile(req.user.name),previous=p.avatar;p.avatar='/uploads/'+req.file.filename;try{save()}catch(e){p.avatar=previous;removeUploadedFile(req.file);console.error('Avatar save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الصورة'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}res.json({ok:true,avatar:p.avatar});});
 app.delete('/api/profile/avatar',requireAuth,(req,res)=>{if(isOwner(req.user))return res.status(403).json({error:'حذف صورة صاحب الموقع محمي'});const p=profile(req.user.name),previous=p.avatar;p.avatar='';try{save()}catch(e){p.avatar=previous;return res.status(500).json({error:'تعذر حفظ حذف الصورة'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}res.json({ok:true,avatar:''});});
 // Personal banners are intentionally separate from rank artwork and member decorations.
-app.post('/api/profile/banner',requireAuth,(req,res,next)=>{if(!hasPermission(req.user,'banner_upload'))return res.status(403).json({error:'ما عندك صلاحية رفع البنر'});next();},uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!req.file){return res.status(400).json({error:'اختر صورة للبنر'});}const p=profile(req.user.name),previous=p.banner;p.banner='/uploads/'+req.file.filename;try{save()}catch(e){p.banner=previous;removeUploadedFile(req.file);return res.status(500).json({error:'تعذر حفظ البنر'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}io.emit('profile-changed',{name:req.user.name,profile:p,displayName:p.displayName||cleanName(req.user.name)});emitState();res.json({ok:true,banner:p.banner});});
-app.delete('/api/profile/banner',requireAuth,(req,res)=>{if(!hasPermission(req.user,'banner_upload'))return res.status(403).json({error:'ما عندك صلاحية حذف البنر'});const p=profile(req.user.name),previous=p.banner;p.banner='';try{save()}catch(e){p.banner=previous;return res.status(500).json({error:'تعذر حذف البنر'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}io.emit('profile-changed',{name:req.user.name,profile:p,displayName:p.displayName||cleanName(req.user.name)});emitState();res.json({ok:true,banner:''});});
+app.post('/api/profile/banner',requireAuth,(req,res,next)=>{if(!hasPermission(req.user,'personal_banner'))return res.status(403).json({error:'ما عندك صلاحية رفع البنر'});next();},uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!req.file){return res.status(400).json({error:'اختر صورة للبنر'});}const p=profile(req.user.name),previous=p.banner;p.banner='/uploads/'+req.file.filename;try{save()}catch(e){p.banner=previous;removeUploadedFile(req.file);return res.status(500).json({error:'تعذر حفظ البنر'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}io.emit('profile-changed',{name:req.user.name,profile:p,displayName:p.displayName||cleanName(req.user.name)});emitState();res.json({ok:true,banner:p.banner});});
+app.delete('/api/profile/banner',requireAuth,(req,res)=>{if(!hasPermission(req.user,'personal_banner'))return res.status(403).json({error:'ما عندك صلاحية حذف البنر'});const p=profile(req.user.name),previous=p.banner;p.banner='';try{save()}catch(e){p.banner=previous;return res.status(500).json({error:'تعذر حذف البنر'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}io.emit('profile-changed',{name:req.user.name,profile:p,displayName:p.displayName||cleanName(req.user.name)});emitState();res.json({ok:true,banner:''});});
 
 app.post('/api/media',requireAuth,upload.single('file'),validateUploadedContent('media'),(req,res)=>{
   const u=req.user, to=cleanName(req.body.to||''), scope=String(req.body.scope||'private');
@@ -1658,7 +1753,7 @@ app.post('/api/media',requireAuth,upload.single('file'),validateUploadedContent(
     const target=getUser(to)||getGuest(to)||null; if(!target){removeUploadedFile(req.file);return res.status(404).json({error:'العضو غير موجود'});}
     const tp=profile(to); if(tp.privateOpen===false&&!canMessageClosedPrivate(u)){removeUploadedFile(req.file);return res.status(403).json({error:`لقد أغلق ${displayName(to)} المحادثة الخاصة`});}
     const ignored=(db.ignored?.[keyName(to)]||[]).some(x=>keyName(x)===keyName(u.name)); if(ignored){removeUploadedFile(req.file);return res.status(403).json({error:`لقد قام ${displayName(to)} بتجاهلك`});}
-    const targetSocket=[...socketUsers.entries()].find(([,x])=>keyName(x.name)===keyName(to)); if(!targetSocket){removeUploadedFile(req.file);return res.status(403).json({error:'هذا المستخدم غير متصل'});}
+    if(!hasConnectedSessionForUser(to)){removeUploadedFile(req.file);return res.status(403).json({error:'هذا المستخدم غير متصل'});}
     const privateFilename=path.basename(req.file.filename),privatePath=path.join(PRIVATE_MEDIA_DIR,privateFilename);
     try{fs.renameSync(req.file.path,privatePath);req.file.path=privatePath;media.url='/api/private/media/'+privateFilename;}
     catch(error){removeUploadedFile(req.file);console.error('Private media move failed:',error.message);return res.status(500).json({error:'تعذر تأمين تخزين الوسائط الخاصة'});}
@@ -1667,7 +1762,9 @@ app.post('/api/media',requireAuth,upload.single('file'),validateUploadedContent(
     db.privateMessages=[...(db.privateMessages||[]),m].slice(-5000);
     if(db.privateHidden?.[toKey])db.privateHidden[toKey]=db.privateHidden[toKey].filter(x=>keyName(x)!==fromKey);
     if(db.privateHidden?.[fromKey])db.privateHidden[fromKey]=db.privateHidden[fromKey].filter(x=>keyName(x)!==toKey);
-    socketBySession(targetSocket[0])?.emit('private-media',m); return res.json(m);
+    // Match text-DM delivery: fan out to every currently owned socket for this account.
+    // Selecting only the first session can miss the recipient's active private-chat tab.
+    emitToUser(to,'private-media',m); return res.json(m);
   }
   if(scope!=='wall'){removeUploadedFile(req.file);return res.status(400).json({error:'نوع إرسال الوسائط غير صحيح'});}
   const previousWall=db.wall.slice();const post={id:crypto.randomUUID(),from:u.name,text:'',media,at:Date.now(),likes:0}; db.wall.push(post);try{save()}catch(e){db.wall=previousWall;removeUploadedFile(req.file);console.error('Wall media save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الوسائط على الحائط'});} io.emit('wall-new',post); res.json(post);
@@ -1703,32 +1800,41 @@ function processBuiltInBotCommand(socket,user,room,text){
 
 io.on('connection',socket=>{
   socket.on('join',({sid,room='public',password=''}={})=>{
-    const pendingGuestCleanup=guestDisconnectTimers.get(sid); if(pendingGuestCleanup){clearTimeout(pendingGuestCleanup);guestDisconnectTimers.delete(sid);}
     const u=sessionUser(sid); if(!u)return;
     const targetRoom=db.rooms.find(r=>r.id===room); if(!targetRoom){socket.emit('join-error',{error:'الغرفة غير موجودة'});return;}if(targetRoom.kind==='voice'&&!siteModuleEnabled('voiceRooms')){socket.emit('join-error',{error:'الغرف الصوتية متوقفة من إدارة الموقع'});return;}
     if(targetRoom.passwordHash&&!bcrypt.compareSync(String(password||''),targetRoom.passwordHash)){socket.emit('join-error',{error:'الغرفة مقفلة؛ أدخل الباسورد الصحيح'});return;} 
     // Validate access before changing the active room, then move this socket atomically.
     if(globalBanned(u.name,socketClientIp(socket))){socket.emit('join-error',{error:'عنوان الإنترنت محظور من الدردشة، حاول بعد انتهاء 5 دقائق'});return;}
     if(roomBanned(u.name,room)){socket.emit('join-error',{error:'أنت محظور من هذه الغرفة'});return;}
+    const capacity=Math.max(1,Number(targetRoom.capacity)||200);
+    const roomAccounts=new Set([...socketUsers.entries()].filter(([activeSid,active])=>activeSid!==sid&&active.room===room).map(([,active])=>keyName(active.name)));
+    if(!roomAccounts.has(keyName(u.name))&&roomAccounts.size>=capacity){socket.emit('join-error',{error:'الغرفة ممتلئة؛ اختر غرفة أخرى'});return;}
+    const previousSocket=socketBySession(sid);
+    const replacingSocket=!!previousSocket&&previousSocket.id!==socket.id;
     const previousRoom=socket.data.user?.room||socketUsers.get(sid)?.room||'';
+    const alreadyInPreviousRoom=!!previousRoom&&[...socketUsers.entries()].some(([otherSid,active])=>otherSid!==sid&&active.room===previousRoom&&keyName(active.name)===keyName(u.name));
+    const alreadyInTargetRoom=previousRoom===room||[...socketUsers.entries()].some(([otherSid,active])=>otherSid!==sid&&active.room===room&&keyName(active.name)===keyName(u.name));
     if(previousRoom && previousRoom!==room){
-      socket.leave(previousRoom);
+      if(replacingSocket)previousSocket.leave(previousRoom);else socket.leave(previousRoom);
       roomSockets.get(previousRoom)?.delete(sid);
       voiceSpeakers.get(previousRoom)?.delete(sid);clearVoicePairsForSession(previousRoom,sid);for(const peerSid of (roomSockets.get(previousRoom)||new Set()))if(peerSid!==sid)socketBySession(peerSid)?.emit('voice-peer-left',{room:previousRoom,sid});
-      if(!u.ghost){const leaveNotice={id:crypto.randomUUID(),room:previousRoom,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'move',exitKind:'room',targetRoom:room,text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{addMessage(leaveNotice)}catch(e){console.warn('Room-move presence could not be saved:',e.message)}emitPresenceToRoom(previousRoom,leaveNotice);}
+      if(!u.ghost&&!alreadyInPreviousRoom){const leaveNotice={id:crypto.randomUUID(),room:previousRoom,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'move',exitKind:'room',targetRoom:room,text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{addMessage(leaveNotice)}catch(e){console.warn('Room-move presence could not be saved:',e.message)}emitPresenceToRoom(previousRoom,leaveNotice);}
       emitVoiceState(previousRoom);
       const oldMembers=roomSockets.get(previousRoom)||new Set();
       for(const memberSid of [...oldMembers]){const active=socketUsers.get(memberSid);if(!active||active.room!==previousRoom)oldMembers.delete(memberSid);}
       if(oldMembers.size===0)roomSockets.delete(previousRoom);
     }
-    cancelPrivateConversationCleanup(u.name);socket.data.sid=sid; socket.data.user={...u,room}; socketUsers.set(sid,{...u,room});
+    if(replacingSocket&&previousRoom){voiceSpeakers.get(previousRoom)?.delete(sid);clearVoicePairsForSession(previousRoom,sid);for(const peerSid of (roomSockets.get(previousRoom)||new Set()))if(peerSid!==sid)socketBySession(peerSid)?.emit('voice-peer-left',{room:previousRoom,sid});emitVoiceState(previousRoom);}
+    cancelSessionDisconnectCleanup(sid);cancelPrivateConversationCleanup(u.name);socket.data.sid=sid;socket.data.user={...u,room};socketUsers.set(sid,{...u,room,socketId:socket.id,joinedAt:Date.now()});
+    if(replacingSocket)previousSocket.disconnect(true);
     socket.join(room); if(!roomSockets.has(room))roomSockets.set(room,new Set());roomSockets.get(room).add(sid);
     socket.emit('room-joined',{room});
     // Deliver welcome cards before the room history so the entry sequence is stable and predictable.
     if(!welcomeSentSessions.has(sid)){for(const item of (db.welcomeMessages||[]).filter(x=>x.enabled!==false&&String(x.text||'').trim())){const welcome={id:'welcome-'+crypto.randomUUID(),room,from:'شات ريماز',displayName:item.title||'الترحيب',type:'welcome',text:item.text,at:Date.now(),profile:{nameColor:'#2877b9',bgColor:'#eaf5ff'}};socket.emit('message',welcome);}welcomeSentSessions.add(sid);}
-    socket.emit('history',{room,items:roomHistoryWithAnnouncements(room,u,Number(u.created)||0)}); if(!u.ghost){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'join',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{addMessage(pm)}catch(e){console.warn('Join presence could not be saved:',e.message)}emitPresenceToRoom(room,pm);const bot=normalizedBotSettings(db.botSettings).welcome;if(bot.enabled===true&&room==='public'){const welcomeText=String(bot.text||'أهلاً وسهلاً بك في دردشة رماز ❤️').slice(0,240);const welcomeMessage={id:crypto.randomUUID(),room,from:'رماز بوت',displayName:'🤖 رماز بوت',type:'text',text:welcomeText.replace(/\{name\}/g,displayName(u.name)),at:Date.now(),role:'bot',bot:true};try{addMessage(welcomeMessage);io.to(room).emit('message',welcomeMessage)}catch(error){console.warn('Welcome bot message failed:',error.message)}}} emitState(); const joinedRoom=db.rooms.find(r=>r.id===room); if(joinedRoom?.kind==='voice'){for(const [speakerSid,speaker] of (voiceSpeakers.get(room)||new Map()))socketBySession(speakerSid)?.emit('voice-peer-joined',{room,sid,name:u.name});emitVoiceState(room);}
+    socket.emit('history',{room,items:roomHistoryWithAnnouncements(room,u,Number(u.created)||0)}); if(!u.ghost&&!alreadyInTargetRoom){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'join',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{addMessage(pm)}catch(e){console.warn('Join presence could not be saved:',e.message)}emitPresenceToRoom(room,pm);const bot=normalizedBotSettings(db.botSettings).welcome;if(bot.enabled===true&&room==='public'){const welcomeText=String(bot.text||'أهلاً وسهلاً بك في دردشة رماز ❤️').slice(0,240);const welcomeMessage={id:crypto.randomUUID(),room,from:'رماز بوت',displayName:'🤖 رماز بوت',type:'text',text:welcomeText.replace(/\{name\}/g,displayName(u.name)),at:Date.now(),role:'bot',bot:true};try{addMessage(welcomeMessage);io.to(room).emit('message',welcomeMessage)}catch(error){console.warn('Welcome bot message failed:',error.message)}}} emitState(); const joinedRoom=db.rooms.find(r=>r.id===room); if(joinedRoom?.kind==='voice'){for(const [speakerSid,speaker] of (voiceSpeakers.get(room)||new Map()))socketBySession(speakerSid)?.emit('voice-peer-joined',{room,sid,name:u.name});emitVoiceState(room);}
   });
   socket.on('request-mic',({room,raised,seatIndex}={})=>{
+    if(!isCurrentSessionSocket(socket))return;
     if(!siteModuleEnabled('voiceRooms'))return socket.emit('error-msg',{error:'الغرف الصوتية متوقفة من إدارة الموقع'});
     const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!room||u.room!==room||!socket.rooms.has(room))return;
     const r=db.rooms.find(x=>x.id===room);if(!r||r.kind!=='voice')return socket.emit('error-msg',{error:'هذا الخيار متاح بالغرف الصوتية فقط'});
@@ -1751,32 +1857,43 @@ io.on('connection',socket=>{
     }
     emitVoiceState(room);
   });
-  socket.on('voice-peer-offer',d=>{if(!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validSessionDescription(d.offer,'offer'))return;const speakers=voiceSpeakers.get(room),members=roomSockets.get(room);if(!speakers?.has(sid)||!members?.has(d.to)||d.to===sid)return;const target=socketUsers.get(d.to);if(!target||target.room!==room)return;activeVoicePairs.set(voiceRoomPairKey(room,sid,d.to),{room,a:sid,b:d.to,offerer:sid,created:Date.now()});socketBySession(d.to)?.emit('voice-peer-offer',{room,from:sid,fromName:u.name,offer:d.offer});});
-  socket.on('voice-peer-answer',d=>{if(!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validSessionDescription(d.answer,'answer'))return;const speakers=voiceSpeakers.get(room),members=roomSockets.get(room),state=activeVoicePairs.get(voiceRoomPairKey(room,d.to,sid));if(!members?.has(sid)||!speakers?.has(d.to)||!state||state.offerer!==d.to||state.b!==sid)return;socketBySession(d.to)?.emit('voice-peer-answer',{room,from:sid,answer:d.answer});});
-  socket.on('voice-peer-ice',d=>{if(!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validIceCandidate(d.candidate))return;const members=roomSockets.get(room),state=activeVoicePairs.get(voiceRoomPairKey(room,sid,d.to));if(!members?.has(sid)||!members?.has(d.to)||!state)return;socketBySession(d.to)?.emit('voice-peer-ice',{room,from:sid,candidate:d.candidate});});
-  socket.on('leave-room',({room}={})=>{const u=socket.data.user,sid=socket.data.sid;if(!u||!room)return;socket.leave(room);roomSockets.get(room)?.delete(sid);voiceSpeakers.get(room)?.delete(sid);clearVoicePairsForSession(room,sid);for(const peerSid of (roomSockets.get(room)||new Set()))socketBySession(peerSid)?.emit('voice-peer-left',{room,sid});emitVoiceState(room);if(socketUsers.get(sid))socketUsers.get(sid).room='';if(socket.data.user)socket.data.user.room='';if(!u.ghost){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',exitKind:'room',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{addMessage(pm)}catch(e){console.warn('Leave presence could not be saved:',e.message)}emitPresenceToRoom(room,pm);}{const members=roomSockets.get(room)||new Set();for(const memberSid of [...members]){const active=socketUsers.get(memberSid);if(!active||active.room!==room)members.delete(memberSid);}if(members.size===0){roomSockets.delete(room);try{save()}catch(e){console.error('Room state save failed:',e.message)}}}emitState();});
-  socket.on('send-message',d=>{const u=socket.data.user;if(!u)return;const room=String(d?.room||'');if(!room||u.room!==room||!socket.rooms.has(room))return socket.emit('error-msg',{error:'أنت خارج الغرفة'});const targetRoom=db.rooms.find(r=>r.id===room);if(!targetRoom)return socket.emit('error-msg',{error:'الغرفة غير موجودة'});if(roomMuted(u.name,room)||roomBanned(u.name,room))return socket.emit('error-msg',{error:'لا يمكنك الكتابة هنا'});const text=String(d?.text||'').trim();if(!text)return;const botConfig=normalizedBotSettings(db.botSettings).antiSpam;if(botConfig.enabled){const now=Date.now(),windowState=botMessageWindows.get(socket.data.sid)||{start:now,count:0,lastText:'',repeat:0};if(now-windowState.start>5000){windowState.start=now;windowState.count=0;windowState.lastText='';windowState.repeat=0;}windowState.count++;windowState.repeat=windowState.lastText===text?windowState.repeat+1:1;windowState.lastText=text;botMessageWindows.set(socket.data.sid,windowState);if(windowState.count>7||windowState.repeat>3)return socket.emit('error-msg',{error:'🤖 بوت الحماية: تم إيقاف الرسائل المتكررة أو السريعة، انتظر قليلاً'});}if(processBuiltInBotCommand(socket,u,room,text))return;if(blockedChatTerm(text))return socket.emit('error-msg',{error:'رسالتك تحتوي على كلمة غير مسموح بها'});const m={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'text',text:text.slice(0,2000),at:Date.now(),likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)};try{addMessage(m)}catch(e){console.error('Socket room message save failed:',e.message);return socket.emit('error-msg',{error:'تعذر حفظ الرسالة، حاول مرة أخرى'});}io.to(room).emit('message',m);});
-  socket.on('private-message',d=>{const u=socket.data.user;if(!u||!d?.to)return;if(!siteModuleEnabled('privateChat'))return socket.emit('error-msg',{error:'المحادثات الخاصة متوقفة من إدارة الموقع'});if(globalBanned(u.name,socketClientIp(socket)))return socket.emit('error-msg',{error:'لا يمكنك المراسلة أثناء الحظر العام'});const toKey=keyName(d.to),to=accountKey(d.to),text=String(d.text||'').trim().slice(0,2000);if(!text)return;if(blockedChatTerm(text))return socket.emit('error-msg',{error:'رسالتك تحتوي على كلمة غير مسموح بها'});const tp=profile(to);if(tp.privateOpen===false&&!canMessageClosedPrivate(u))return socket.emit('error-msg',{error:`لقد أغلق ${displayName(to)} المحادثة الخاصة`});const ignored=(db.ignored?.[keyName(to)]||[]).some(x=>keyName(x)===keyName(u.name));if(ignored)return socket.emit('error-msg',{error:`لقد قام ${displayName(to)} بتجاهلك`});if(!getUser(to)&&!getGuest(to))return socket.emit('error-msg',{error:'هذا المستخدم غير موجود'});if(!hasConnectedSessionForUser(to))return socket.emit('error-msg',{error:'العضو غير متصل؛ المحادثات الخاصة مؤقتة بين المتصلين فقط'});const m={id:crypto.randomUUID(),from:u.name,fromDisplayName:displayName(u.name),to,toDisplayName:displayName(to),type:'text',text,at:Date.now(),profile:profile(u.name),role:roleOf(u),vip:vipActive(u.name),likes:userLikes(u)};const previousPrivateMessages=db.privateMessages;const fromKey=keyName(u.name);const previousHiddenTo=db.privateHidden?.[toKey];const previousHiddenFrom=db.privateHidden?.[fromKey];db.privateMessages=[...(db.privateMessages||[]),m].slice(-5000);if(db.privateHidden?.[toKey])db.privateHidden[toKey]=db.privateHidden[toKey].filter(x=>keyName(x)!==fromKey);if(db.privateHidden?.[fromKey])db.privateHidden[fromKey]=db.privateHidden[fromKey].filter(x=>keyName(x)!==toKey);emitToUser(to,'private-message',m);socket.emit('private-message',m);});
-  socket.on('call-offer',d=>{if(!siteModuleEnabled('videoCalls'))return socket.emit('call-failed',{error:'المكالمات متوقفة من إدارة الموقع'});const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!d?.to)return;if(!canMedia(u))return socket.emit('call-failed',{error:`الاتصال الصوتي والكاميرا يفتحان عند ${PRIVATE_MEDIA_LIKES_REQUIRED} إعجاب من المتصل`});if(!allowCallSignal(sid))return socket.emit('call-failed',{error:'طلبات الاتصال كثيرة جداً، حاول بعد قليل'});if(!validSessionDescription(d.offer,'offer'))return socket.emit('call-failed',{error:'بيانات الاتصال غير صالحة'});const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return socket.emit('call-failed',{error:'المستخدم غير متصل'});for(const [oldPair,oldState] of activeCallPairs){const pendingCallee=socketUsers.get(oldState.callee),waitingOnRoomMic=!!pendingCallee&&voiceSpeakers.get(pendingCallee.room)?.has(oldState.callee);if(!oldState.answered&&Date.now()-oldState.created>120000&&!waitingOnRoomMic)activeCallPairs.delete(oldPair);else if(oldState.caller===sid||oldState.callee===sid||oldState.caller===target[0]||oldState.callee===target[0])return socket.emit('call-failed',{error:'أحد الطرفين مشغول باتصال آخر'});}const pair=callPairKey(sid,target[0]),state={caller:sid,callee:target[0],created:Date.now(),video:!!d.video,answered:false};activeCallPairs.set(pair,state);const timeoutCall=()=>{if(activeCallPairs.get(pair)!==state||state.answered)return;const callee=socketUsers.get(target[0]);if(callee&&voiceSpeakers.get(callee.room)?.has(target[0])){const next=setTimeout(timeoutCall,60000);next.unref?.();return;}activeCallPairs.delete(pair);socket.emit('call-timeout',{from:target[1].name});socketBySession(target[0])?.emit('call-timeout',{from:u.name})};const timeout=setTimeout(timeoutCall,60000);timeout.unref?.();socketBySession(target[0])?.emit('call-offer',{from:u.name,fromDisplayName:displayName(u.name),fromProfile:(()=>{const p=profile(u.name);return {avatar:p.avatar||'',displayName:p.displayName||'',rank:p.rank||'',rankUntil:p.rankUntil||0,gifts:(p.gifts||[]).slice(0,1),vipUntil:p.vipUntil||0}})(),fromRole:roleOf(u),fromVip:vipActive(u.name),fromLikes:userLikes(u),offer:d.offer,video:!!d.video});});
-  socket.on('call-answer',d=>{if(!siteModuleEnabled('videoCalls'))return;const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!d?.to)return;if(!allowCallSignal(sid))return socket.emit('error-msg',{error:'طلبات الاتصال كثيرة جداً، حاول بعد قليل'});if(!validSessionDescription(d.answer,'answer'))return socket.emit('error-msg',{error:'بيانات الرد غير صالحة'});if(voiceSpeakers.get(u.room)?.has(sid))return socket.emit('call-answer-denied',{reason:'room-mic'});const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||state.callee!==sid||state.caller!==target[0])return;if(!canMedia(target[1])){activeCallPairs.delete(pair);socket.emit('call-answer-denied',{reason:'sender-likes'});socketBySession(target[0])?.emit('call-failed',{error:`الاتصال يحتاج ${PRIVATE_MEDIA_LIKES_REQUIRED} إعجاب من المتصل`});return;}state.answered=true;socket.emit('call-answer-accepted');socketBySession(target[0])?.emit('call-answer',{from:u.name,answer:d.answer,video:state.video});});
-  socket.on('call-reject',d=>{const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!d?.to||!allowCallSignal(sid))return;const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||state.callee!==sid||state.caller!==target[0])return;activeCallPairs.delete(pair);socketBySession(target[0])?.emit('call-rejected',{from:u.name,reason:String(d.reason||'declined').slice(0,32)});});
-  socket.on('call-end',d=>{const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!d?.to)return;const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||(state.caller!==sid&&state.callee!==sid))return;activeCallPairs.delete(pair);socketBySession(target[0])?.emit('call-ended',{from:u.name});});
-  socket.on('ice',d=>{const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!d?.to)return;if(!allowCallSignal(sid))return;if(!validIceCandidate(d.candidate))return;const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const state=activeCallPairs.get(callPairKey(sid,target[0]));if(!state||(!state.answered&&Date.now()-state.created>120000))return;socketBySession(target[0])?.emit('ice',{from:u.name,candidate:d.candidate});});
+  socket.on('voice-peer-offer',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validSessionDescription(d.offer,'offer'))return;const speakers=voiceSpeakers.get(room),members=roomSockets.get(room);if(!speakers?.has(sid)||!members?.has(d.to)||d.to===sid)return;const target=socketUsers.get(d.to);if(!target||target.room!==room)return;activeVoicePairs.set(voiceRoomPairKey(room,sid,d.to),{room,a:sid,b:d.to,offerer:sid,created:Date.now()});socketBySession(d.to)?.emit('voice-peer-offer',{room,from:sid,fromName:u.name,offer:d.offer});});
+  socket.on('voice-peer-answer',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validSessionDescription(d.answer,'answer'))return;const speakers=voiceSpeakers.get(room),members=roomSockets.get(room),state=activeVoicePairs.get(voiceRoomPairKey(room,d.to,sid));if(!members?.has(sid)||!speakers?.has(d.to)||!state||state.offerer!==d.to||state.b!==sid)return;socketBySession(d.to)?.emit('voice-peer-answer',{room,from:sid,answer:d.answer});});
+  socket.on('voice-peer-ice',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validIceCandidate(d.candidate))return;const members=roomSockets.get(room),state=activeVoicePairs.get(voiceRoomPairKey(room,sid,d.to));if(!members?.has(sid)||!members?.has(d.to)||!state)return;socketBySession(d.to)?.emit('voice-peer-ice',{room,from:sid,candidate:d.candidate});});
+  socket.on('leave-room',({room}={})=>{const u=socket.data.user,sid=socket.data.sid;if(!isCurrentSessionSocket(socket)||!u||!room)return;const accountStillInRoom=[...socketUsers.entries()].some(([otherSid,active])=>otherSid!==sid&&active.room===room&&keyName(active.name)===keyName(u.name));socket.leave(room);roomSockets.get(room)?.delete(sid);voiceSpeakers.get(room)?.delete(sid);clearVoicePairsForSession(room,sid);for(const peerSid of (roomSockets.get(room)||new Set()))socketBySession(peerSid)?.emit('voice-peer-left',{room,sid});emitVoiceState(room);if(socketUsers.get(sid))socketUsers.get(sid).room='';if(socket.data.user)socket.data.user.room='';if(!u.ghost&&!accountStillInRoom){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',exitKind:'room',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{addMessage(pm)}catch(e){console.warn('Leave presence could not be saved:',e.message)}emitPresenceToRoom(room,pm);}{const members=roomSockets.get(room)||new Set();for(const memberSid of [...members]){const active=socketUsers.get(memberSid);if(!active||active.room!==room)members.delete(memberSid);}if(members.size===0){roomSockets.delete(room);try{save()}catch(e){console.error('Room state save failed:',e.message)}}}emitState();});
+  socket.on('send-message',d=>{const u=socket.data.user;if(!u||!isCurrentSessionSocket(socket))return;const room=String(d?.room||'');if(!room||u.room!==room||!socket.rooms.has(room))return socket.emit('error-msg',{error:'أنت خارج الغرفة'});const targetRoom=db.rooms.find(r=>r.id===room);if(!targetRoom)return socket.emit('error-msg',{error:'الغرفة غير موجودة'});if(roomMuted(u.name,room)||roomBanned(u.name,room))return socket.emit('error-msg',{error:'لا يمكنك الكتابة هنا'});const text=String(d?.text||'').trim();if(!text)return;const botConfig=normalizedBotSettings(db.botSettings).antiSpam;if(botConfig.enabled){const now=Date.now(),windowState=botMessageWindows.get(socket.data.sid)||{start:now,count:0,lastText:'',repeat:0};if(now-windowState.start>5000){windowState.start=now;windowState.count=0;windowState.lastText='';windowState.repeat=0;}windowState.count++;windowState.repeat=windowState.lastText===text?windowState.repeat+1:1;windowState.lastText=text;botMessageWindows.set(socket.data.sid,windowState);if(windowState.count>7||windowState.repeat>3)return socket.emit('error-msg',{error:'🤖 بوت الحماية: تم إيقاف الرسائل المتكررة أو السريعة، انتظر قليلاً'});}if(processBuiltInBotCommand(socket,u,room,text))return;if(blockedChatTerm(text))return socket.emit('error-msg',{error:'رسالتك تحتوي على كلمة غير مسموح بها'});const m={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'text',text:text.slice(0,2000),at:Date.now(),likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)};try{addMessage(m)}catch(e){console.error('Socket room message save failed:',e.message);return socket.emit('error-msg',{error:'تعذر حفظ الرسالة، حاول مرة أخرى'});}io.to(room).emit('message',m);});
+  socket.on('private-message',d=>{const u=socket.data.user;if(!u||!isCurrentSessionSocket(socket)||!d?.to)return;if(!siteModuleEnabled('privateChat'))return socket.emit('error-msg',{error:'المحادثات الخاصة متوقفة من إدارة الموقع'});if(globalBanned(u.name,socketClientIp(socket)))return socket.emit('error-msg',{error:'لا يمكنك المراسلة أثناء الحظر العام'});const toKey=keyName(d.to),to=accountKey(d.to),text=String(d.text||'').trim().slice(0,2000);if(!text)return;if(blockedChatTerm(text))return socket.emit('error-msg',{error:'رسالتك تحتوي على كلمة غير مسموح بها'});const tp=profile(to);if(tp.privateOpen===false&&!canMessageClosedPrivate(u))return socket.emit('error-msg',{error:`لقد أغلق ${displayName(to)} المحادثة الخاصة`});const ignored=(db.ignored?.[keyName(to)]||[]).some(x=>keyName(x)===keyName(u.name));if(ignored)return socket.emit('error-msg',{error:`لقد قام ${displayName(to)} بتجاهلك`});if(!getUser(to)&&!getGuest(to))return socket.emit('error-msg',{error:'هذا المستخدم غير موجود'});if(!hasConnectedSessionForUser(to))return socket.emit('error-msg',{error:'العضو غير متصل؛ المحادثات الخاصة مؤقتة بين المتصلين فقط'});const m={id:crypto.randomUUID(),from:u.name,fromDisplayName:displayName(u.name),to,toDisplayName:displayName(to),type:'text',text,at:Date.now(),profile:profile(u.name),role:roleOf(u),vip:vipActive(u.name),likes:userLikes(u)};const previousPrivateMessages=db.privateMessages;const fromKey=keyName(u.name);const previousHiddenTo=db.privateHidden?.[toKey];const previousHiddenFrom=db.privateHidden?.[fromKey];db.privateMessages=[...(db.privateMessages||[]),m].slice(-5000);if(db.privateHidden?.[toKey])db.privateHidden[toKey]=db.privateHidden[toKey].filter(x=>keyName(x)!==fromKey);if(db.privateHidden?.[fromKey])db.privateHidden[fromKey]=db.privateHidden[fromKey].filter(x=>keyName(x)!==toKey);emitToUser(to,'private-message',m);socket.emit('private-message',m);});
+  socket.on('call-offer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))return socket.emit('call-failed',{error:'المكالمات متوقفة من إدارة الموقع'});const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!d?.to)return;if(!canMedia(u))return socket.emit('call-failed',{error:`الاتصال الصوتي والكاميرا يفتحان عند ${PRIVATE_MEDIA_LIKES_REQUIRED} إعجاب من المتصل`});if(!allowCallSignal(sid))return socket.emit('call-failed',{error:'طلبات الاتصال كثيرة جداً، حاول بعد قليل'});if(!validSessionDescription(d.offer,'offer'))return socket.emit('call-failed',{error:'بيانات الاتصال غير صالحة'});const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return socket.emit('call-failed',{error:'المستخدم غير متصل'});for(const [oldPair,oldState] of activeCallPairs){const pendingCallee=socketUsers.get(oldState.callee),waitingOnRoomMic=!!pendingCallee&&voiceSpeakers.get(pendingCallee.room)?.has(oldState.callee);if(!oldState.answered&&Date.now()-oldState.created>120000&&!waitingOnRoomMic)activeCallPairs.delete(oldPair);else if(oldState.caller===sid||oldState.callee===sid||oldState.caller===target[0]||oldState.callee===target[0])return socket.emit('call-failed',{error:'أحد الطرفين مشغول باتصال آخر'});}const pair=callPairKey(sid,target[0]),state={caller:sid,callee:target[0],created:Date.now(),video:!!d.video,answered:false};activeCallPairs.set(pair,state);const timeoutCall=()=>{if(activeCallPairs.get(pair)!==state||state.answered)return;const callee=socketUsers.get(target[0]);if(callee&&voiceSpeakers.get(callee.room)?.has(target[0])){const next=setTimeout(timeoutCall,60000);next.unref?.();return;}activeCallPairs.delete(pair);socket.emit('call-timeout',{from:target[1].name});socketBySession(target[0])?.emit('call-timeout',{from:u.name})};const timeout=setTimeout(timeoutCall,60000);timeout.unref?.();socketBySession(target[0])?.emit('call-offer',{from:u.name,fromDisplayName:displayName(u.name),fromProfile:(()=>{const p=profile(u.name);return {avatar:p.avatar||'',displayName:p.displayName||'',rank:p.rank||'',rankUntil:p.rankUntil||0,gifts:(p.gifts||[]).slice(0,1),vipUntil:p.vipUntil||0}})(),fromRole:roleOf(u),fromVip:vipActive(u.name),fromLikes:userLikes(u),offer:d.offer,video:!!d.video});});
+  socket.on('call-answer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))return;const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!d?.to)return;if(!allowCallSignal(sid))return socket.emit('error-msg',{error:'طلبات الاتصال كثيرة جداً، حاول بعد قليل'});if(!validSessionDescription(d.answer,'answer'))return socket.emit('error-msg',{error:'بيانات الرد غير صالحة'});if(voiceSpeakers.get(u.room)?.has(sid))return socket.emit('call-answer-denied',{reason:'room-mic'});const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||state.callee!==sid||state.caller!==target[0])return;if(!canMedia(target[1])){activeCallPairs.delete(pair);socket.emit('call-answer-denied',{reason:'sender-likes'});socketBySession(target[0])?.emit('call-failed',{error:`الاتصال يحتاج ${PRIVATE_MEDIA_LIKES_REQUIRED} إعجاب من المتصل`});return;}state.answered=true;socket.emit('call-answer-accepted');socketBySession(target[0])?.emit('call-answer',{from:u.name,answer:d.answer,video:state.video});});
+  socket.on('call-reject',d=>{const u=socket.data.user,sid=socket.data.sid;if(!isCurrentSessionSocket(socket)||!u||!d?.to||!allowCallSignal(sid))return;const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||state.callee!==sid||state.caller!==target[0])return;activeCallPairs.delete(pair);socketBySession(target[0])?.emit('call-rejected',{from:u.name,reason:String(d.reason||'declined').slice(0,32)});});
+  socket.on('call-end',d=>{const u=socket.data.user,sid=socket.data.sid;if(!isCurrentSessionSocket(socket)||!u||!sid||!d?.to)return;const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||(state.caller!==sid&&state.callee!==sid))return;activeCallPairs.delete(pair);socketBySession(target[0])?.emit('call-ended',{from:u.name});});
+  socket.on('ice',d=>{const u=socket.data.user,sid=socket.data.sid;if(!isCurrentSessionSocket(socket)||!u||!sid||!d?.to)return;if(!allowCallSignal(sid))return;if(!validIceCandidate(d.candidate))return;const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const state=activeCallPairs.get(callPairKey(sid,target[0]));if(!state||(!state.answered&&Date.now()-state.created>120000))return;socketBySession(target[0])?.emit('ice',{from:u.name,candidate:d.candidate});});
   socket.on('disconnect',()=>{
-    const sid=socket.data.sid,u=socket.data.user,room=socket.data.user&&socket.data.user.room;
-    if(sid){socketUsers.delete(sid);for(const [pair,state] of activeCallPairs){if(state.caller===sid||state.callee===sid){const other=state.caller===sid?state.callee:state.caller;activeCallPairs.delete(pair);socketBySession(other)?.emit('call-ended',{from:u?.name||''});}}for(const [pair,state] of activeVoicePairs){if(state.a===sid||state.b===sid)activeVoicePairs.delete(pair);}callSignalWindows.delete(sid);voiceSignalWindows.delete(sid);}
-    if(room){roomSockets.get(room)?.delete(sid);voiceSpeakers.get(room)?.delete(sid);clearVoicePairsForSession(room,sid);for(const peerSid of (roomSockets.get(room)||new Set()))socketBySession(peerSid)?.emit('voice-peer-left',{room,sid});emitVoiceState(room);}
-    if(u&&room&&!u.ghost){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',exitKind:'chat',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{addMessage(pm)}catch(e){console.warn('Disconnect presence could not be saved:',e.message)}emitPresenceToRoom(room,pm);{const members=roomSockets.get(room)||new Set();for(const memberSid of [...members]){const active=socketUsers.get(memberSid);if(!active||active.room!==room)members.delete(memberSid);}if(members.size===0){roomSockets.delete(room);try{save()}catch(e){console.error('Room state save failed:',e.message)}}}}
-    if(u?.name)schedulePrivateConversationCleanup(u.name);
-    if(sid&&u?.type==='guest'){
-      const timer=setTimeout(()=>{
-        guestDisconnectTimers.delete(sid);
-        const stillOnline=[...socketUsers.values()].some(x=>keyName(x.name)===keyName(u.name));
-        if(!stillOnline){delete db.guests[u.name];delete db.profiles[u.name];sessions.delete(sid);delete db.sessions[sid];save();}
-        emitState();
-      },25000);
-      guestDisconnectTimers.set(sid,timer);
+    const sid=socket.data.sid,u=socket.data.user,active=sid?socketUsers.get(sid):null;
+    // A late disconnect from a superseded socket must never evict the new live session.
+    if(!sid||!active||active.socketId!==socket.id)return;
+    const room=active.room||u?.room||'';
+    socketUsers.delete(sid);
+    for(const [pair,state] of activeCallPairs){if(state.caller===sid||state.callee===sid){const other=state.caller===sid?state.callee:state.caller;activeCallPairs.delete(pair);socketBySession(other)?.emit('call-ended',{from:u?.name||''});}}
+    for(const [pair,state] of activeVoicePairs){if(state.a===sid||state.b===sid)activeVoicePairs.delete(pair);}
+    callSignalWindows.delete(sid);voiceSignalWindows.delete(sid);
+    if(room){
+      roomSockets.get(room)?.delete(sid);voiceSpeakers.get(room)?.delete(sid);clearVoicePairsForSession(room,sid);
+      for(const peerSid of (roomSockets.get(room)||new Set()))socketBySession(peerSid)?.emit('voice-peer-left',{room,sid});
+      emitVoiceState(room);
     }
+    const accountStillInRoom=!!room&&[...socketUsers.values()].some(other=>other.room===room&&keyName(other.name)===keyName(u?.name));
+    if(u&&room&&!u.ghost&&!accountStillInRoom){
+      const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',exitKind:'chat',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};
+      try{addMessage(pm)}catch(e){console.warn('Disconnect presence could not be saved:',e.message)}
+      emitPresenceToRoom(room,pm);
+    }
+    if(room){
+      const members=roomSockets.get(room)||new Set();
+      for(const memberSid of [...members]){const current=socketUsers.get(memberSid);if(!current||current.room!==room)members.delete(memberSid);}
+      if(members.size===0)roomSockets.delete(room);
+    }
+    if(u?.name){schedulePrivateConversationCleanup(u.name);scheduleSessionDisconnectCleanup(sid,u);}
     emitState();
   });
 });
