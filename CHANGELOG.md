@@ -1,3 +1,9 @@
+## v46.93.51 — ضبط حجم الوسائط وتشغيل فيديو الخاص
+- توحيد عرض الصور والفيديو في الخاص والحائط ضمن عرض أقصى 280px وارتفاع أقصى 240px.
+- تقليل الفراغ العمودي قبل الوسائط وبعدها مع إبقاء محاذاة أزرار الكشف.
+- إصلاح حدث النقر على فيديو الخاص: لم يعد `preventDefault()` يلغي تشغيل عناصر التحكم الأصلية؛ النقر على مساحة الصورة يفتح المعاينة، والنقر ضمن شريط التحكم السفلي يترك التشغيل للمتصفح.
+- إزالة كتلة CSS المكررة الخاصة ببطاقات الوسائط والإبقاء على قواعد العرض الموحدة.
+
 ## v46.93.44 — Left-aligned composer entry fields
 - Corrected the single canonical `.composerRichInput` rule so the public, private, and wall input fields begin from the left edge.
 - Preserved `direction: rtl` for Arabic text shaping and did not alter the rendering/alignment of already-sent private or wall messages.
