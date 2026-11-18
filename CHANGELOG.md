@@ -1,3 +1,15 @@
+## v46.93.44 — Left-aligned composer entry fields
+- Corrected the single canonical `.composerRichInput` rule so the public, private, and wall input fields begin from the left edge.
+- Preserved `direction: rtl` for Arabic text shaping and did not alter the rendering/alignment of already-sent private or wall messages.
+- Kept the public sent-message alignment correction from v46.93.43.
+- Added a regression assertion and synchronized both HTML entry points.
+
+## v46.93.43 — Public chat left-start alignment
+- Corrected the public message composer so the caret, typed text, and placeholder start from the left edge while Arabic glyph shaping remains handled by the browser bidirectional algorithm.
+- Corrected public-room message text alignment to start at the left edge after sending.
+- Kept private-chat and wall composer alignment rules unchanged; removed the conflicting public-message RTL/right-alignment declarations at their existing source rules rather than layering a broad override.
+- Added regression checks and kept `index.html` and `public/index.html` identical.
+
 ## v46.93.40
 - Fixed the shortcut editor textarea sizing: restored a comfortable 220px starting height and bounded auto-growth while typing, with internal scrolling only after the viewport-safe limit.
 - Consolidated duplicate shortcut textarea CSS rules so a later 125px override cannot collapse the editor.

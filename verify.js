@@ -53,6 +53,15 @@ try {
   else fail('index.html and public/index.html differ');
 } catch (error) { fail('HTML files readable', error.message); }
 
+// All chat input fields align their entry point left while retaining RTL text direction.
+try {
+  const composerRule = html.match(/\.composerRichInput\{min-width:0;min-height:32px;[^}]*\}/);
+  const publicRule = html.match(/\.chat \.composer>\.composerRichInput\{[^}]*\}/);
+  const ok = !!composerRule && /text-align:left/.test(composerRule[0]) && /direction:rtl/.test(composerRule[0]) && !!publicRule && /text-align:left/.test(publicRule[0]);
+  if (ok) pass('public, private, and wall composer inputs start from the left without changing RTL direction');
+  else fail('chat composer input alignment and RTL direction');
+} catch (error) { fail('chat composer alignment regression check', error.message); }
+
 // Passwords must be handled by the browser password manager, never plaintext site storage.
 try {
   const passwordRead = /localStorage\.getItem\(['"]rimaz_saved_password['"]\)/.test(html);
@@ -80,7 +89,7 @@ try {
     ['admin three-column grid excludes shortcut editor instead of overriding it', html.includes('.adminPanel .adminGrid:not(.shortcutEditorGrid){grid-template-columns:repeat(3,minmax(0,1fr))}') && !html.includes('rimaz-shortcut-editor-and-arabic-message-fix')],
     ['shortcut editor height is fixed and independent of mobile viewport or keyboard resizing', html.includes('height:160px;min-height:160px;max-height:160px') && !html.includes('window.innerHeight||600)*0.52')],
     ['shortcut text is normalized to one logical line before persistence and insertion', html.includes('function normalizeShortcutText(value)') && html.includes('text=normalizeShortcutText(document.getElementById(\'shortcutText\')?.value||\'\')') && html.includes('createTextNode(normalizeShortcutText(item.text))')],
-    ['public Arabic shortcut messages stay on one RTL line with horizontal access and no forced wrap', html.includes('.msgtext{display:block;min-width:0;max-width:100%;direction:rtl;text-align:right;unicode-bidi:plaintext;white-space:nowrap;overflow-x:auto;overflow-y:hidden;word-break:normal;scrollbar-width:none;}') && !html.includes('.msg .msgtext{display:block!important;clear:both!important;white-space:pre!important;')],
+    ['public Arabic shortcut messages stay on one RTL line with horizontal access and no forced wrap', html.includes('.msgtext{display:block;min-width:0;max-width:100%;direction:ltr;text-align:left;unicode-bidi:plaintext;white-space:nowrap;overflow-x:auto;overflow-y:hidden;word-break:normal;scrollbar-width:none;}') && !html.includes('.msg .msgtext{display:block!important;clear:both!important;white-space:pre!important;')],
     ['ghost login is restricted to owner or explicitly authorized admin', privileged && privileged[0].includes("mode==='ghost'&&!isOwner(account)&&!hasPermission(account,'ghost_login')")],
     ['hidden login remains restricted to staff or panel-authorized rank', privileged && privileged[0].includes("mode==='hidden'&&!isOwner(account)&&!hasPermission(account,'hidden_login')")],
     ['presence visibility is viewer-aware and ghost is invisible to others', source.includes('function canSeePresence(viewer,target,context=null)') && source.includes('if(target.ghost)return false')],
@@ -947,7 +956,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.42 package version is current', pkg.version === '46.93.42'],
+    ['v46.93.44 package version is current', pkg.version === '46.93.44'],
     ['no dangling async-only lines remain in the browser entry script', !/^\s*async\s*$/m.test(html)],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
@@ -1118,7 +1127,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.42 package version',pkgNow.version==='46.93.42'],
+  ['v46.93.44 package version',pkgNow.version==='46.93.44'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
@@ -1227,8 +1236,8 @@ try {
   const micLine = source.split('\n').find(line => line.includes("socket.on('request-mic'")) || '';
   const roomCreateRoutes = source.split('\n').filter(line => line.includes("app.post('/api/rooms'") || line.includes("app.post('/api/admin/room'"));
   const checks = [
-    ['all three chat composers share the canonical RTL Arabic text alignment', client.includes('font:inherit;line-height:1.25;text-align:right;direction:rtl;unicode-bidi:plaintext}') && ['msgInput','privateText','wallText'].every(id => client.includes(`id="${id}"`))],
-    ['legacy left-aligned composer declarations are superseded by the final RTL override', client.includes('unicode-bidi:plaintext!important;') && client.includes('text-align:right!important;')],
+    ['public, private, and wall composer inputs align left while preserving RTL direction', client.includes('font-size:14px!important;direction:ltr;text-align:left;unicode-bidi:plaintext}') && client.includes('font:inherit;line-height:1.25;text-align:left;direction:rtl;unicode-bidi:plaintext}') && ['msgInput','privateText','wallText'].every(id => client.includes(`id="${id}"`))],
+    ['public composer left alignment is scoped and does not override private or wall composers', client.includes('font-size:14px!important;direction:ltr;text-align:left;unicode-bidi:plaintext}') && !client.includes('.composerRichInput{text-align:left!important;direction:ltr!important')],
     ['private media UI uses 500 sender likes or full-admin exemption', client.includes('function sharePrivate(){if(me.likes<500&&!me.fullAdmin)') && !client.includes('function sharePrivate(){if(me.likes<500&&!me.admin)')],
     ['private call UI uses 500 sender likes or full-admin exemption', client.includes('function startCall(camera){if(Number(me.likes||0)<500&&!me.fullAdmin)') && !client.includes('function startCall(camera){if(me.likes<500&&!me.admin)')],
     ['session payload exposes a distinct full-permission admin flag', source.includes('fullAdmin:isFullPermissionAdmin(s)')],
@@ -1360,7 +1369,7 @@ try {
   const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   const route=source.slice(source.indexOf("app.post('/api/media'"),source.indexOf('function normalizeChatFilterText'));
   const checks=[
-    ['v46.93.42 package version is current (private-media regression suite)',pkgNow.version==='46.93.42'],
+    ['v46.93.44 package version is current (private-media regression suite)',pkgNow.version==='46.93.44'],
     ['private media verifies an active recipient account and fans out to all its active sessions',route.includes('hasConnectedSessionForUser(to)')&&route.includes("emitToUser(to,'private-media',m)")&&!route.includes('targetSocket[0]')],
     ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',m)")&&source.includes("emitToUser(to,'private-media',m)")],
     ['QuickTime MOV uploads have a safe extension and require a valid ISO-BMFF signature',source.includes("'video/quicktime':'.mov'")&&source.includes("['video/mp4','video/quicktime'].includes(mime) && actual==='mp4'")],
@@ -1412,3 +1421,20 @@ try {
   if(runtimeOk)pass('presence runtime fixture: stale socket ignored, duplicate account counted once, latest session metadata selected');
   else fail('presence runtime fixture',JSON.stringify({active:presence.activeEntries.length,online:online.map(x=>({name:x.name,room:x.room,countryCode:x.countryCode})),publicCount,friendsCount}));
 } catch(error) { fail('v46.93.37 presence and unread-counter regression suite',error.message); }
+
+
+// v46.93.43: public chat input and sent messages start from the left; private/wall defaults stay scoped.
+try {
+  const html=fs.readFileSync(mainPath,'utf8');
+  const publicInputs=[...html.matchAll(/\.chat \.composer>\.composerRichInput\{([^}]*)\}/g)];
+  const publicMessage=html.match(/\.msgtext\{display:block;[^}]*\}/);
+  const finalMessage=html.match(/\.msgtext\{text-align:left;direction:ltr;\}/);
+  const checks=[
+    ['public composer uses left alignment and LTR caret origin',publicInputs.some(m=>/text-align:left/.test(m[1])&&/direction:ltr/.test(m[1]))],
+    ['public sent-message text uses left alignment at its base rule',!!publicMessage&&/text-align:left/.test(publicMessage[0])&&/direction:ltr/.test(publicMessage[0])],
+    ['final public-message rule no longer restores RTL/right alignment',!!finalMessage],
+    ['private and wall composer inputs share the left-aligned entry origin while retaining RTL direction',/\.composerRichInput\{[^}]*text-align:left;direction:rtl;unicode-bidi:plaintext\}/.test(html)],
+    ['public input keeps its existing grid slot and compact dimensions',/\.chat \.composer>\.composerRichInput\{[^}]*grid-column:2!important;[^}]*height:34px!important/.test(html)]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('v46.93.43 public alignment regression checks',error.message); }

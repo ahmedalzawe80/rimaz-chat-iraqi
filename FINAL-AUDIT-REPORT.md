@@ -1,3 +1,8 @@
+## v46.93.43 public alignment correction
+- Public composer and sent-message text now start from the left.
+- Private and wall composer defaults are unchanged.
+- Regression checks cover public alignment, preserved layout dimensions, and private/wall scope.
+
 # Final Audit Report — Rimaz Chat v46.93.37
 
 ## Release result
