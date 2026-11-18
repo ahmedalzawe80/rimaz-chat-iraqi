@@ -1,11 +1,3 @@
-## v46.93.45 — Inline-first media UI
-
-- Private-chat and wall image/video content now render inline in the message/post instead of button-only placeholders.
-- Image tap opens a full-screen mobile viewer; video remains playable inline and exposes a dedicated full-screen control.
-- Verbose loading text is replaced by a small progress indicator; failures retain an explicit error state.
-- Private-media fetching still uses the authenticated session and protected blob URLs. Upload endpoints and authorization checks are unchanged.
-- Full local verification suite and HTML duplicate check passed. Live Deplexo testing remains required.
-
 ## v46.93.43 public alignment correction
 - Public composer and sent-message text now start from the left.
 - Private and wall composer defaults are unchanged.

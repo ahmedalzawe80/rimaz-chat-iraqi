@@ -785,20 +785,26 @@ try {
   pass('v46.35 rank-grant notice is durably queued before the same gift-card renderer is triggered');
 } catch (error) { fail('v46.34 rank-grant card checks', error.message); }
 
-// v46.93.45: private and wall media use the same inline-first media component as public chat.
+// v46.36: cancellable, real upload progress is scoped to private chat and wall only.
 try {
-  const mediaHtml = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
-  if (!mediaHtml.includes('function renderInlineMedia(') || !mediaHtml.includes('function openInlineMediaViewer(')) throw new Error('shared inline media renderer/viewer is missing');
-  if (!mediaHtml.includes('class=\"rimazMediaImage\"') || !mediaHtml.includes('class=\"rimazMediaVideo\"')) throw new Error('inline image/video elements are missing');
-  if (!mediaHtml.includes('onclick=\"openInlineMediaViewer(\'image\',this.src)\"')) throw new Error('image does not open the full-screen viewer on tap');
-  if (!mediaHtml.includes('privateMediaViewer{position:fixed;inset:0') || !mediaHtml.includes('height:100dvh')) throw new Error('media viewer is not full-screen on mobile');
-  if (!mediaHtml.includes('class=\"rimazMediaLoading\"') || mediaHtml.includes('جاري تحميل الوسائط…')) throw new Error('verbose loading text remains instead of a compact loading indicator');
-  if (!mediaHtml.includes('function wallCard(p)') || !mediaHtml.includes("renderInlineMedia(t,url,'wall')")) throw new Error('wall does not use the shared inline renderer');
-  if (!mediaHtml.includes("area.innerHTML=renderInlineMedia(type,objectUrl,\'private\')")) throw new Error('private chat does not use the shared inline renderer');
-  if (mediaHtml.includes('class=\"privateMediaView\"') || mediaHtml.includes('class=\"wallMediaView\"')) throw new Error('legacy view-button-only media UI remains');
-  if (!mediaHtml.includes('function uploadMediaWithProgress(') || !mediaHtml.includes('function sharePrivate()') || !mediaHtml.includes('function wallMedia(kind)')) throw new Error('existing upload flows were unintentionally removed');
-  pass('v46.93.45 shared inline-first private/wall media, full-screen tap viewer, and compact loading state');
-} catch (error) { fail('v46.93.45 media behavior checks', error.message); }
+  const mediaHtml = fs.readFileSync(mainPath, 'utf8');
+  if (!mediaHtml.includes('xhr.upload.onprogress') || !mediaHtml.includes('function uploadMediaWithProgress(')) throw new Error('real upload progress handler is missing');
+  if (!mediaHtml.includes('function cancelMediaUpload(') || !mediaHtml.includes('item.xhr?.abort()')) throw new Error('cancel button does not abort active upload');
+  if (!mediaHtml.includes('function sharePrivate()') || !mediaHtml.includes('function wallMedia(kind)')) throw new Error('private or wall media upload entrypoint is missing');
+  if (!mediaHtml.includes('onclick="openWallMediaFrom(this.parentElement)"') || !mediaHtml.includes('function openWallMediaFrom(')) throw new Error('wall media view button is missing');
+  if (!mediaHtml.includes('عرض الصورة') || !mediaHtml.includes('عرض الفيديو') || !mediaHtml.includes('onclick="openPrivateMediaFrom(this.parentElement)"')) throw new Error('private image/video explicit view buttons are missing');
+  const wallCardSource=(mediaHtml.match(/function wallCard\([\s\S]*?function postWall\(/)||[])[0]||'';
+  const privateMediaSource=(mediaHtml.match(/async function addPrivateMedia\([\s\S]*?function openWallMediaFrom\(/)||[])[0]||'';
+  if (/<(?:img|video)[^>]*class="(?:privateMediaPreview|wallMediaPreview)/i.test(wallCardSource+privateMediaSource)) throw new Error('private/wall renderer still embeds media previews that display immediately');
+  if (!wallCardSource.includes('wallMediaView') || !privateMediaSource.includes('privateMediaView')) throw new Error('private/wall media explicit view controls are missing');
+  if (!mediaHtml.includes('id="rimaz-wall-media-left-final"') || !mediaHtml.includes('margin:5px auto 5px 0!important')) throw new Error('wall media view button is not pinned to the left edge');
+  const wallOpenSource=(mediaHtml.match(/async function openWall\([\s\S]*?function wallCard\(/)||[])[0]||'';
+  if (!wallOpenSource.includes('class="overlay wallOverlay"')) throw new Error('wall overlay root is missing the wallOverlay class required by the left-alignment CSS');
+  if (mediaHtml.includes('class="privateMediaPreview') || mediaHtml.includes('class="wallMediaPreview')) throw new Error('obsolete automatic private/wall media preview elements remain');
+  if (mediaHtml.includes('class="privateMediaThumb') || mediaHtml.includes('class="wallMedia wallMediaOpen')) throw new Error('legacy click-anywhere media controls remain');
+  if (!mediaHtml.includes('rimazUploadCancel') || !mediaHtml.includes('rimazUploadFill') || !mediaHtml.includes('wallMediaCard')) throw new Error('red progress strip or wall card is missing');
+  pass('v46.38 private and wall media remain closed until explicit view button; no auto-preview elements');
+} catch (error) { fail('v46.37 media view-card checks', error.message); }
 
 
 // v46.44: a narrow blue marker follows each viewer's currently active room only.
@@ -950,7 +956,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.45 package version is current', pkg.version === '46.93.45'],
+    ['v46.93.44 package version is current', pkg.version === '46.93.44'],
     ['no dangling async-only lines remain in the browser entry script', !/^\s*async\s*$/m.test(html)],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
@@ -1121,7 +1127,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.45 package version',pkgNow.version==='46.93.45'],
+  ['v46.93.44 package version',pkgNow.version==='46.93.44'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
@@ -1363,7 +1369,7 @@ try {
   const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   const route=source.slice(source.indexOf("app.post('/api/media'"),source.indexOf('function normalizeChatFilterText'));
   const checks=[
-    ['v46.93.45 package version is current (private-media regression suite)',pkgNow.version==='46.93.45'],
+    ['v46.93.44 package version is current (private-media regression suite)',pkgNow.version==='46.93.44'],
     ['private media verifies an active recipient account and fans out to all its active sessions',route.includes('hasConnectedSessionForUser(to)')&&route.includes("emitToUser(to,'private-media',m)")&&!route.includes('targetSocket[0]')],
     ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',m)")&&source.includes("emitToUser(to,'private-media',m)")],
     ['QuickTime MOV uploads have a safe extension and require a valid ISO-BMFF signature',source.includes("'video/quicktime':'.mov'")&&source.includes("['video/mp4','video/quicktime'].includes(mime) && actual==='mp4'")],

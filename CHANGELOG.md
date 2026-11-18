@@ -1,9 +1,9 @@
-## v46.93.45 — Unified inline media presentation
-- Private chat and wall now render image/video previews directly inside the message/post, matching the inline-first behavior of public chat.
-- Tapping an image opens a full-screen mobile viewer; videos play inline with controls and have a dedicated full-screen expand control.
-- Replaced the verbose “جاري تحميل الوسائط” text with a compact loading indicator and a clear error state.
-- Consolidated media rendering and viewer behavior into shared functions and removed the obsolete button-only media-card styles.
-- Preserved upload routes, private-media authorization, and the existing message/post layout.
+## v46.93.47 — Unified media preview with explicit actions
+- Restored both original action buttons: عرض الصورة and عرض الفيديو.
+- Added inline image/video previews in public, private, and wall conversations.
+- Media opens full-screen only after the corresponding button is pressed.
+- Video playback starts only after explicit button press; no autoplay on message arrival.
+- Increased responsive preview dimensions and replaced private-media loading text with a small spinner.
 
 ## v46.93.44 — Left-aligned composer entry fields
 - Corrected the single canonical `.composerRichInput` rule so the public, private, and wall input fields begin from the left edge.
