@@ -511,6 +511,9 @@ const publicRetentionTimer=setInterval(()=>cleanupExpiredPublicContent(),5*60*10
 publicRetentionTimer.unref?.();
 
 const sessions = new Map(); // sid -> {name,type,created}
+const privateMediaPlaybackTickets = new Map(); // short-lived, account-bound stream tickets
+const privateMediaPlaybackTicketCleanup=setInterval(()=>{const now=Date.now();for(const [token,ticket] of privateMediaPlaybackTickets){if(ticket.expiresAt<=now)privateMediaPlaybackTickets.delete(token);}},5*60*1000);
+privateMediaPlaybackTicketCleanup.unref?.();
 for (const [sid,s] of Object.entries(db.sessions||{})) sessions.set(sid,s);
 const roomSockets = new Map();
 const socketUsers = new Map();
@@ -642,6 +645,39 @@ function makeSession(name,type,visibility={}){
 function requireAuth(req,res,next){
   const u=sessionUser(req.get('x-session')); if(!u)return res.status(401).json({error:'يجب تسجيل الدخول'}); req.user=u; next();
 }
+app.post('/api/private/media-ticket',requireAuth,(req,res)=>{
+  if(!siteModuleEnabled('privateChat'))return res.status(403).json({error:'المحادثات الخاصة متوقفة من إدارة الموقع'});
+  const mediaUrl=String(req.body?.url||'');
+  const prefix='/api/private/media/';
+  if(!mediaUrl.startsWith(prefix))return res.status(400).json({error:'رابط الوسائط غير صالح'});
+  const filename=mediaUrl.slice(prefix.length);
+  if(!/^[a-zA-Z0-9._-]{1,180}$/.test(filename)||path.basename(filename)!==filename)return res.status(404).json({error:'الوسائط غير موجودة'});
+  const allowed=(db.privateMessages||[]).some(message=>message?.media?.url===mediaUrl&&(keyName(message.from)===keyName(req.user.name)||keyName(message.to)===keyName(req.user.name)));
+  if(!allowed)return res.status(404).json({error:'الوسائط غير موجودة أو لا تملك صلاحية عرضها'});
+  ticket.expiresAt=Date.now()+15*60*1000;
+  const file=path.resolve(PRIVATE_MEDIA_DIR,filename);
+  if(!file.startsWith(path.resolve(PRIVATE_MEDIA_DIR)+path.sep)||!fs.existsSync(file))return res.status(404).json({error:'الوسائط غير موجودة'});
+  const now=Date.now();
+  for(const [token,ticket] of privateMediaPlaybackTickets){if(ticket.expiresAt<=now)privateMediaPlaybackTickets.delete(token);}
+  const token=crypto.randomBytes(32).toString('hex');
+  privateMediaPlaybackTickets.set(token,{filename,account:keyName(req.user.name),expiresAt:now+15*60*1000});
+  res.set('Cache-Control','no-store');
+  res.json({url:'/api/private/media-stream/'+encodeURIComponent(filename)+'?ticket='+token});
+});
+app.get('/api/private/media-stream/:filename',(req,res)=>{
+  if(!siteModuleEnabled('privateChat'))return res.status(403).json({error:'المحادثات الخاصة متوقفة من إدارة الموقع'});
+  const filename=String(req.params.filename||''),token=String(req.query.ticket||'');
+  const ticket=privateMediaPlaybackTickets.get(token);
+  if(!ticket||ticket.expiresAt<=Date.now()||ticket.filename!==filename){if(ticket)privateMediaPlaybackTickets.delete(token);return res.status(401).json({error:'انتهت صلاحية رابط تشغيل الفيديو'});}
+  if(!/^[a-zA-Z0-9._-]{1,180}$/.test(filename)||path.basename(filename)!==filename)return res.status(404).json({error:'الوسائط غير موجودة'});
+  const mediaUrl='/api/private/media/'+filename;
+  const allowed=(db.privateMessages||[]).some(message=>message?.media?.url===mediaUrl&&(keyName(message.from)===ticket.account||keyName(message.to)===ticket.account));
+  if(!allowed)return res.status(404).json({error:'الوسائط غير موجودة أو لا تملك صلاحية عرضها'});
+  const file=path.resolve(PRIVATE_MEDIA_DIR,filename);
+  if(!file.startsWith(path.resolve(PRIVATE_MEDIA_DIR)+path.sep)||!fs.existsSync(file))return res.status(404).json({error:'الوسائط غير موجودة'});
+  res.set({'Cache-Control':'private, no-store','Accept-Ranges':'bytes','X-Content-Type-Options':'nosniff'});
+  res.sendFile(file,{headers:{'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}},error=>{if(error&&!res.headersSent)res.status(error.statusCode||404).json({error:'تعذر فتح الوسائط'});});
+});
 app.get('/api/private/media/:filename',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))return res.status(403).json({error:'المحادثات الخاصة متوقفة من إدارة الموقع'});
   const filename=String(req.params.filename||'');
   if(!/^[a-zA-Z0-9._-]{1,180}$/.test(filename)||path.basename(filename)!==filename)return res.status(404).json({error:'الوسائط غير موجودة'});
