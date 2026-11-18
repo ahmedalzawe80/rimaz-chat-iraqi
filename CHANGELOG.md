@@ -1,3 +1,8 @@
+## v46.93.40
+- Fixed the shortcut editor textarea sizing: restored a comfortable 220px starting height and bounded auto-growth while typing, with internal scrolling only after the viewport-safe limit.
+- Consolidated duplicate shortcut textarea CSS rules so a later 125px override cannot collapse the editor.
+- Normalize hard line breaks in saved shortcut messages to spaces, keeping a shortcut as one logical message line. Visual wrapping on narrow screens remains natural and does not insert a newline.
+
 ## v46.93.39 — Complete shortcut editing workflow and mobile editor layout
 
 - Reworked shortcut management as a complete create/edit/delete workflow. Each saved shortcut now has adjacent Edit and Delete actions; editing loads the existing title and message, preserves its stable ID, and saves in place without creating a duplicate.
