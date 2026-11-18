@@ -1,3 +1,10 @@
+## v46.93.39 — Complete shortcut editing workflow and mobile editor layout
+
+- Reworked shortcut management as a complete create/edit/delete workflow. Each saved shortcut now has adjacent Edit and Delete actions; editing loads the existing title and message, preserves its stable ID, and saves in place without creating a duplicate.
+- Added explicit cancel-edit behavior and validation for missing records and duplicate shortcut names. The existing server-side chat-tools save endpoint remains the single persistence path for both create and update operations.
+- Rebuilt the shortcut editor layout as a single-column mobile-first form. The message field has a stable multiline editing area, readable wrapping for Arabic text, and clear side-by-side form actions. Saved shortcut text wraps within its own row without pushing the action buttons off-screen.
+- Kept `index.html` and `public/index.html` byte-identical and added regression checks for edit, cancel, ID preservation, and the paired edit/delete controls.
+
 ## v46.93.38 — Private media delivery across sessions and iPhone video MIME support
 - Fixed private image/video/audio delivery to use the same account-wide Socket.IO fan-out as private text messages. The previous implementation selected only the first active session for the recipient, so a different active tab/device could miss the media event.
 - Replaced the single-session lookup with an authoritative connected-account check before accepting a private-media upload; delivery now targets every currently owned socket for the recipient.

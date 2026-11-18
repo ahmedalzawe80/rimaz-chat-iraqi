@@ -72,6 +72,11 @@ try {
   const html = fs.readFileSync(mainPath, 'utf8');
   const checks = [
 
+    ['shortcut manager exposes edit and delete actions for each saved shortcut', html.includes('editChatShortcut(${jsq(x.id)})') && html.includes("deleteChatTool('shortcut',${jsq(x.id)})") && html.includes('shortcutSavedActions')],
+    ['shortcut edit loads the selected record and preserves its stable ID on save', html.includes('function editChatShortcut(id)') && html.includes('window.editingShortcutId=String(item.id)') && html.includes('String(x.id)===editingId?{...x,title,text}:x')],
+    ['shortcut editing can be cancelled without changing saved data', html.includes('function cancelShortcutEdit()') && html.includes("window.editingShortcutId='';adminTab('shortcuts')")],
+    ['shortcut create and update share one validated persistence workflow', html.includes('async function saveShortcut()') && html.includes('await saveChatTools(updated,d.customSmileys||[])') && html.includes('duplicate shortcut') === false && html.includes('اسم الاختصار مستخدم مسبقاً')],
+    ['shortcut editor uses a mobile-first single-column multiline layout', html.includes('shortcutEditorGrid{grid-template-columns:minmax(0,1fr)}') && html.includes('.shortcutSavedRow{grid-template-columns:minmax(0,1fr) auto;') && html.includes('shortcutSavedText')],
     ['ghost login is restricted to owner or explicitly authorized admin', privileged && privileged[0].includes("mode==='ghost'&&!isOwner(account)&&!hasPermission(account,'ghost_login')")],
     ['hidden login remains restricted to staff or panel-authorized rank', privileged && privileged[0].includes("mode==='hidden'&&!isOwner(account)&&!hasPermission(account,'hidden_login')")],
     ['presence visibility is viewer-aware and ghost is invisible to others', source.includes('function canSeePresence(viewer,target,context=null)') && source.includes('if(target.ghost)return false')],
@@ -938,7 +943,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.37 package version is current', pkg.version === '46.93.38'],
+    ['v46.93.37 package version is current', pkg.version === '46.93.39'],
     ['no dangling async-only lines remain in the browser entry script', !/^\s*async\s*$/m.test(html)],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
@@ -1109,7 +1114,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.37 package version',pkgNow.version==='46.93.38'],
+  ['v46.93.37 package version',pkgNow.version==='46.93.39'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
@@ -1347,7 +1352,7 @@ try {
   const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   const route=source.slice(source.indexOf("app.post('/api/media'"),source.indexOf('function normalizeChatFilterText'));
   const checks=[
-    ['v46.93.38 package version is current',pkgNow.version==='46.93.38'],
+    ['v46.93.38 package version is current',pkgNow.version==='46.93.39'],
     ['private media verifies an active recipient account and fans out to all its active sessions',route.includes('hasConnectedSessionForUser(to)')&&route.includes("emitToUser(to,'private-media',m)")&&!route.includes('targetSocket[0]')],
     ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',m)")&&source.includes("emitToUser(to,'private-media',m)")],
     ['QuickTime MOV uploads have a safe extension and require a valid ISO-BMFF signature',source.includes("'video/quicktime':'.mov'")&&source.includes("['video/mp4','video/quicktime'].includes(mime) && actual==='mp4'")],
