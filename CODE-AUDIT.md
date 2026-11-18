@@ -1,84 +1,78 @@
-# Rimaz Chat — v46.93.37 Code Audit
+## v46.93.29 — Final source and package hygiene audit
+
+- Confirmed `index.html` and `public/index.html` remain byte-identical; both are retained because the server uses the root file first and the public copy as a deployment fallback.
+- Removed the unused root-level `rimaz-hero.jpg` duplicate. The served image remains `public/rimaz-hero.jpg`, exposed at `/rimaz-hero.jpg` by the public static middleware.
+- Removed the invalid `/public/rimaz-hero.jpg` browser fallback; `/public` is the filesystem directory, not part of the public URL namespace.
+- Retained packed smiley/gift catalogues, Google verification file, default avatar, crawler files, and regression suite because the active server, client, or deployment fallback references them.
+- Corrected the current room-microphone threshold documentation to 30 likes. Notices remain 400; private media and call initiation remain 500.
+- Updated package version and regression assertions. No authorization, persistence, chat, room, call, or UI feature logic was intentionally changed.
+- `npm test` and JavaScript syntax checks must pass after this audit. Live deployment and two-account/browser verification remain outside the local archive test scope.
+
+## v46.93.26 — Profile color picker and alignment root-cause audit
+
+- The previous palette was nested inside `.svalue`, which is a block/flex child rather than the `.colorField` grid. Its `grid-column:1/-1` therefore had no effect, and the click handler was attached to a native `input[type=color]`, allowing the browser picker to appear too.
+- The profile settings now retain the saved color inputs as hidden values and use a visible button swatch as the sole trigger. The palette is a direct grid child of the color row, with 105 selectable colors.
+- The selection handler updates the hidden input and visible swatch, dispatches the existing input/change events, and keeps the existing `saveSettings()` payload/API unchanged.
+- Removed the previous appended compact-profile CSS override block. One canonical profile-settings rule set now defines left-aligned decoration/status labels and inputs, and the palette grid structure.
+- Admin color controls and unrelated buttons/settings remain unchanged.
+- `index.html` and `public/index.html` are synchronized.
+
+# v46.93.14 — Targeted layout audit
+
+## Private conversations list
+- Actual row markup contains four visual columns: status marker, avatar, `.memberMain` identity/message, and delete button.
+- Legacy CSS allocated a phantom rank/badge column despite no direct rank column in the private-contact row markup. This reduced available identity width and shifted the banner.
+- Removed all old `.privateListOverlay` row/contact selectors from prior style blocks and replaced them with one canonical rule group using `5px 54px minmax(0,1fr) 58px` (mobile: `4px 48px minmax(0,1fr) 48px`).
+
+## Member card top strip
+- Replaced previous profile identity-specific sizing rules with one canonical compact header rule.
+- Banner height: 22px (previously 26px). Black strip: 26px total height, zero padding; bottom border retained within border-box sizing.
+- Mini-avatar, rank artwork, and close control are constrained to the compact header height.
 
 ## Scope
-
-Audited the v46.93.36 project source and made a focused corrective release for the live-presence model, room membership counts, private-chat unread state, wall unread state, country flags, and disconnect/reconnect lifecycle. The audit covered `server.js`, both browser entry files, database defaults, relevant HTTP endpoints, Socket.IO handlers, and the regression suite.
-
-## Confirmed defects and corrections
-
-### 1. Socket ownership and disappearing members
-
-**Defect:** `socketUsers` is keyed by the authenticated session token, but the disconnect handler previously deleted that key without checking whether the disconnecting Socket.IO connection still owned it. If an older/replaced socket disconnected late, it could remove the newer socket's active session entry. This could make the member disappear and make the online counter jump incorrectly.
-
-**Correction:** Each active entry now records the owning `socket.id`. Presence projections accept only a connected socket whose ID matches the active session owner. `socketBySession()` resolves only that socket. Disconnect cleanup returns immediately when the disconnecting socket is no longer the owner. Stateful Socket.IO actions reject stale sockets.
-
-### 2. Inconsistent online and room counts
-
-**Defect:** The global online list deduplicated accounts, but room counts counted active session IDs. A person with multiple tabs/sessions could therefore be counted differently in the global list and room list.
-
-**Correction:** Global online and per-room counts now use the same active-session projection and deduplicate by normalized account name. The latest active session supplies the displayed room and country metadata. Room capacity is enforced on the server using distinct account names, not a client-side display limit.
-
-### 3. Duplicate room presence notices
-
-**Defect:** Separate active sessions for the same account could emit duplicate join/leave notices when one tab moved or disconnected while another tab remained in the same room.
-
-**Correction:** Join, explicit leave, move, and disconnect notices are emitted only when the account actually enters or leaves that room, not when one of its other active sessions changes.
-
-### 4. Session cleanup and reconnect grace
-
-**Defect:** Registered-member session records could remain in the persistent session store after their socket disconnected. Guest cleanup used a separate short timer, and the old cleanup path was not tied to a verified active socket owner.
-
-**Correction:** All disconnected sessions receive a bounded 60-second reconnect grace period. Rejoining cancels cleanup. Expired disconnected sessions are removed, and guest account/profile data is removed only when no active session for that guest remains. Transient private conversations use the same 60-second reconnect grace. Cleanup restores guest/session state if durable save fails.
-
-### 5. Private unread counter
-
-**Defect:** Opening the private contacts list called `/api/private/read-all`, marking every conversation as read even if the member had not opened those conversations. The client also cleared its unread map while opening the list.
-
-**Correction:** Opening the list no longer marks messages read. It loads each contact's unread count from `/api/private/contacts`, displays a per-contact badge, and updates the total badge. Incoming private text/media refreshes the list when it is open. Only opening an individual conversation marks that conversation read.
-
-### 6. Wall unread counter
-
-**Defect:** Wall unread count existed only in browser memory and increased only for live events. It was lost on reload and could count the member's own posts.
-
-**Correction:** Added `wallReadAt` per-account read cursors and authenticated `/api/wall/unread` and `/api/wall/read` endpoints. The count survives reloads and excludes the current member's own posts. Opening the wall marks the latest loaded snapshot as read; posts arriving after that snapshot remain unread. Request generations prevent a slower, older wall/private-list response from overwriting newer UI state.
-
-### 7. Country flags
-
-**Defect:** The member list hard-coded the Iraqi flag for registered members and used a person icon for guests. This was not a country lookup and produced inconsistent flags.
-
-**Correction:** Country display now uses valid two-letter country metadata from supported hosting-proxy headers. If the hosting layer does not provide a country code, the UI displays an unknown flag rather than inventing Iraq. No IP-geolocation provider was added.
-
-## Database compatibility
-
-- Added the `wallReadAt` object to database defaults and normalizes it for existing databases.
-- Existing accounts, public messages, wall posts, uploads, and private-media files are not reset by this change.
-- Guest wall-read cursors are removed when a guest account is deleted/logged out.
-- The existing placeholder `data.json` is not a live database. Keep the persistent Deplexo data volume and never replace it with the archive placeholder.
-
-## Verification
-
-- `node --check server.js`: passed.
-- `node --check verify.js`: passed.
-- `node verify.js`: all local static and runtime-fixture checks passed.
-- Runtime fixture verifies stale socket exclusion, exact socket ownership, duplicate-account deduplication, per-room unique counts, and latest-session metadata selection.
-- Browser entry files `index.html` and `public/index.html` are byte-identical.
-- JavaScript inline-script compilation and existing project regression checks passed.
-
-## Not verified in this environment
-
-No live Deplexo server, real multi-device network session, or physical Android/iPhone browser session was available to this audit. Therefore this report does not claim real-world load testing or a guarantee that every hosting proxy supplies country headers. Final validation still requires simultaneous sessions on multiple devices and a deploy smoke test.
+- General chat and wall styles were not changed.
+- Shared banner height outside the member card remains 14px.
+- `index.html` and `public/index.html` are identical.
 
 
-## v46.93.38 media delivery follow-up
+## v46.93.20 — Composer alignment and initial likes gate
+- The three active editable composer nodes are `#msgInput`, `#privateText`, and `#wallText`. Their shared `.composerRichInput` rule was changed in place from right/RTL to left/LTR; other inputs were not changed.
+- The initial release corrected notice and private-media upload checks but did not yet unify voice-room mic and private-call signaling. Those remaining paths were identified and corrected in v46.93.21 below.
 
-### Confirmed defect
-The private-media HTTP upload route located only the first `socketUsers` entry matching the recipient and emitted `private-media` to that one session. The private text-message path already uses `emitToUser`, which fans out to every active socket owned by the account. If the recipient had multiple tabs/devices and the first matching session was not the tab showing the conversation, the visible client could miss the media event.
+## v46.93.21 — Unified likes authorization audit
 
-### Correction
-Private-media delivery now checks `hasConnectedSessionForUser(to)` and calls `emitToUser(to, 'private-media', message)`, matching private text delivery. This preserves session ownership validation in the shared helper and covers all active sessions for the recipient.
+### Canonical thresholds
+- `NOTICE_LIKES_REQUIRED = 400`: checked against the authenticated sender for notices.
+- `ROOM_MIC_LIKES_REQUIRED = 30`: checked against the authenticated speaker before a room mic is raised. The browser checks before requesting microphone access, and the server independently enforces the same 30-like rule. The former per-room `micLikesRequired` setting (default 30) was removed from room creation, room updates, and persisted room records.
+- `PRIVATE_MEDIA_LIKES_REQUIRED = 500`: checked against the authenticated sender for private image/video/audio uploads and when initiating private voice/video calls.
 
-### Format compatibility
-Added `video/quicktime` as a supported upload MIME type with `.mov` storage extension. The existing signature validator must still recognize an ISO-BMFF `ftyp` header, so the MIME label alone cannot make arbitrary content pass. This covers common iPhone MOV uploads. HEIC/HEIF is not added: current browser rendering does not reliably decode it cross-platform, so accepting it without a conversion pipeline would risk delivering a file the recipient cannot view.
+### Sender and recipient separation
+- Private media upload authorization checks only the sender. The recipient's likes are not read.
+- `call-offer` authorizes only the caller; it does not inspect the recipient's likes. `call-answer` permits a zero-like recipient to answer and revalidates the original caller's eligibility.
+- Ordinary public and private text messages remain independent of likes.
 
-### Retention model
-Private conversations/media remain intentionally transient. `save()` explicitly excludes `privateMessages`, startup purges private-media storage, and disconnect cleanup removes the transient conversation after the reconnect grace. This release preserves that policy; it does not claim private messages survive a server restart.
+### Exemptions and obsolete bypass removal
+- The site owner and accounts with the complete `admin-full` permission set (all current permission keys except the separately optional `health_view`) bypass the likes thresholds.
+- Partial moderators are not exempt. Removed the legacy `staff_notice`, `staff_media`, and `voice_mic_override` capabilities that previously bypassed these gates. Old saved references to those keys are filtered from account permission sets on startup.
+- The browser uses the explicit `fullAdmin` session flag for private media and call initiation; generic panel access is not treated as full-admin status.
+
+### Verification scope
+- Added regression checks for the 0/400/500 likes matrix, owner/full-admin exemptions, partial moderator restrictions, fixed voice-room mic threshold, sender-only media/call authorization, and retired permission keys.
+- `index.html` and `public/index.html` must remain byte-identical.
+- Automated checks do not replace a live two-account browser test on the deployed host.
+
+
+## v46.93.27 focused audit
+- Profile-setting label text alignment is changed at the canonical label rules only; dark backgrounds and layout geometry are preserved.
+- The settings save button uses the established `--green` theme value (`#58bf61`) and retains its original save action.
+- Success-toast suppression is presentation-only: the shared toast node and error/actionable toast path remain; server/API operations are unchanged.
+- Protected-owner attempt alerts are generated server-side from `req.user`, persisted through the existing notifications store, emitted to the resolved owner account in real time, and surfaced once after a later login if the owner was offline. The blocked request still returns 403 and does not mutate the owner's profile or moderation state.
+- Owner protection checks run before the general higher-rank rejection on covered routes so a valid authorized attempt is recorded rather than silently rejected by the hierarchy guard.
+- Automated regression checks cover the new paths. Live two-account verification is still required to validate delivery on the deployed host.
+
+
+## v46.93.28 — SEO output and crawler endpoints
+- The saved `siteSettings.tagline` is rendered into the raw homepage HTML on every request: description, Open Graph, Twitter and WebSite JSON-LD.
+- `PUBLIC_SITE_URL` is the single canonical origin for canonical, Open Graph URL/images, JSON-LD URL, robots sitemap declaration and sitemap location. It defaults to the current Deplexo deployment hostname; custom domains must be explicitly configured with this environment variable.
+- `/robots.txt` and `/sitemap.xml` are generated by the server before static middleware, preventing stale static copies from diverging. Only API, Socket.IO and private-media paths are disallowed; the public homepage and `/uploads/` remain crawlable.
+- Google independently selects search snippets and indexing timing; metadata correctness does not guarantee that Google displays the exact description text.

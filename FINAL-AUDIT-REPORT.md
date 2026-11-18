@@ -1,50 +1,47 @@
-## v46.93.43 public alignment correction
-- Public composer and sent-message text now start from the left.
-- Private and wall composer defaults are unchanged.
-- Regression checks cover public alignment, preserved layout dimensions, and private/wall scope.
+# Rimaz Chat — Final archive audit (v46.93.29)
 
-# Final Audit Report — Rimaz Chat v46.93.37
+## Scope and method
 
-## Release result
+This audit examined the supplied ZIP archive, the Node.js server, the browser entry page, the packed image catalogues, deployment files, project documentation, and the included regression suite. It included JavaScript syntax checks, JSON parsing/asset validation through the project tests, duplicate/reference checks, and a full run of `npm test`.
 
-<badge>LOCAL CHECKS PASSED</badge>
+## Changes made
 
-The release corrects the presence/session ownership defect and aligns the global online count, room counts, private unread count, and wall unread count around consistent server-side state.
+1. Removed the root-level `rimaz-hero.jpg` duplicate. The actual static asset is `public/rimaz-hero.jpg`, which Express serves at `/rimaz-hero.jpg`.
+2. Removed the invalid browser fallback URL `/public/rimaz-hero.jpg`. `/public` is the server's filesystem directory, not part of the public URL path.
+3. Kept `index.html` and `public/index.html`: they are byte-identical and the server explicitly chooses the root file first and the public copy as a fallback. The regression suite also checks this invariant.
+4. Kept the packed smiley, standard-gift, and VIP-gift catalogues: the server loads and serves these assets. Their large sizes are image payloads, not unused code.
+5. Kept `public/google1a84d9d1dec7b85d.html`, `public/robots.txt`, and `public/sitemap.xml` as deployment/verification compatibility files. The server currently generates robots and sitemap responses dynamically before static middleware.
+6. Kept `verify.js`; it is the project's automated regression suite, not runtime application code.
+7. Updated the package version to `46.93.29`, synchronized the README/audit notes, and corrected the current room-microphone threshold documentation.
 
-## Changes delivered
+## Confirmed current authorization thresholds
 
-1. Socket ownership is explicit. A late disconnect from an older socket cannot delete a newer live session.
-2. Stale sockets cannot send room messages, private messages, room-mic signals, or private-call signaling.
-3. Online counts and room counts deduplicate by account. The room capacity is enforced on the server.
-4. Multiple tabs for the same account no longer produce duplicate room join/leave notices, including explicit room exits.
-5. Disconnected sessions and transient private conversations have a 60-second reconnect grace period. Expired session records are cleaned up safely.
-6. Opening the private contacts list no longer marks every conversation read. Per-contact and total unread counts are loaded from the server and shown.
-7. Wall unread counts persist across page reloads and use a per-account read cursor. Overlapping feed/list fetches cannot apply stale responses over newer state.
-8. Country flags use available proxy country metadata. If no code is supplied, the country is shown as unknown rather than assumed to be Iraq.
+- Notices: 400 likes.
+- Voice-room microphone: 30 likes.
+- Private media and initiating private calls: 500 likes.
+- Owner and full-permission administrator exemptions are enforced by the current server logic.
 
-## Checks
+The older v46.93.21 historical changelog describes the 400-like microphone rule that was present at that point in history. The current server, client, and regression tests agree on 30 likes; the current audit documentation now states 30.
 
-- Server and verification-script syntax checks: passed.
-- Full local `verify.js` suite: passed.
-- Presence runtime fixture: passed.
-- Main/public HTML equality: passed.
-- The local suite reports that live-server testing is still required.
+## Findings retained rather than destructively removed
 
-## Deployment precautions
+- The HTML source contains many repeated CSS selectors across multiple style blocks. These are cascading overrides accumulated through responsive and targeted UI fixes. A selector appearing more than once does not prove it is dead or conflicting; removing those layers without browser visual regression tests risks changing mobile layouts and profile/chat surfaces.
+- A text-level scan finds repeated IDs inside client-side template strings and alternate UI fragments. This does not prove that duplicate IDs coexist in the live DOM. They were not renamed without tracing every template and event binding.
+- The source-level declaration scan found no repeated named function declarations in `server.js` or the browser page. Two arrow-function declarations named `tick` occur in separate scopes; they are not evidence of a global collision.
+- No TODO/FIXME/XXX markers, debugger statements, or server-side `eval`/`new Function` execution were found. The test harness itself uses `new Function` for isolated test fixtures; that is test-only code.
+- `public/robots.txt` and `public/sitemap.xml` are shadowed by dynamic server routes in the current Express ordering, but retained as compatibility/deployment artifacts rather than assuming every hosting path uses the Node server.
 
-1. Back up the live database and the `uploads` and `private-media` directories before deployment.
-2. Do not overwrite Deplexo's persistent data volume with the archive's placeholder `data.json`.
-3. After deployment, test two or more accounts simultaneously on separate devices. Check the global count, each room count, private unread badges, wall unread badges after a page reload, disconnect/reconnect, and room movement.
+## Verification results
 
-## Limits
+- `node --check server.js`: passed.
+- `node --check verify.js`: passed.
+- `npm test`: passed, 359 successful checks, zero reported failures.
+- Browser entry files: byte-identical.
+- Packed smiley/gift catalogues: validated by the included regression suite.
+- JSON catalogues: parse successfully.
 
-The local tests are not a substitute for testing against Deplexo's actual proxy and multiple real devices. In particular, country flags depend on the country headers supplied by the hosting layer; when absent, the correct behavior is an unknown flag.
+## Explicit limitations
 
+The archive does not include installed `node_modules`, and the local environment has no installed Express, Socket.IO, bcryptjs, or Multer packages. Therefore this audit did not boot the actual HTTP/Socket.IO server, execute authenticated browser sessions, or perform a live two-account WebRTC/media test. It also did not connect to the deployed Deplexo instance. Those checks require installing the declared dependencies and testing on the target host with test accounts.
 
-## v46.93.38 — Media delivery audit
-
-- Confirmed private media was delivered to only the first matching active recipient session, unlike private text messages which fan out through `emitToUser`.
-- Corrected private media to fan out to all current sockets for the target account after validating that the account has a connected session.
-- Added QuickTime MOV MIME/extension support while retaining binary signature validation.
-- Preserved the documented transient private-chat retention policy.
-- Static regression coverage added; no live Deplexo, multi-device browser, or physical iPhone/Android upload test was possible in this local audit.
+This is a conservative cleanup: only the clearly unused duplicate hero file and its invalid fallback were removed. No database, user uploads, private media, permissions, chat features, or account data were altered.
