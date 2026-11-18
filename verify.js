@@ -53,6 +53,27 @@ try {
   else fail('index.html and public/index.html differ');
 } catch (error) { fail('HTML files readable', error.message); }
 
+// All chat input fields align their entry point left while retaining RTL text direction.
+try {
+  const composerRule = html.match(/\.composerRichInput\{min-width:0;min-height:32px;[^}]*\}/);
+  const publicRule = html.match(/\.chat \.composer>\.composerRichInput\{[^}]*\}/);
+  const ok = !!composerRule && /text-align:left/.test(composerRule[0]) && /direction:rtl/.test(composerRule[0]) && !!publicRule && /text-align:left/.test(publicRule[0]);
+  if (ok) pass('public, private, and wall composer inputs start from the left without changing RTL direction');
+  else fail('chat composer input alignment and RTL direction');
+} catch (error) { fail('chat composer alignment regression check', error.message); }
+
+// Passwords must be handled by the browser password manager, never plaintext site storage.
+try {
+  const passwordRead = /localStorage\.getItem\(['"]rimaz_saved_password['"]\)/.test(html);
+  const passwordWrite = /localStorage\.setItem\(['"]rimaz_saved_password['"]/.test(html);
+  const legacyCleanup = /localStorage\.removeItem\(['"]rimaz_saved_password['"]\)/.test(html);
+  const rememberedPassword = /remembered\.password/.test(html);
+  const loginPassword = html.match(/<input id="lp" name="password" type="password" autocomplete="current-password"[^>]*>/);
+  const browserManaged = !!loginPassword && !/\bvalue=/.test(loginPassword[0]);
+  if (!passwordRead && !passwordWrite && legacyCleanup && !rememberedPassword && browserManaged) pass('plaintext saved passwords are removed; browser password manager handles login credentials');
+  else fail('plaintext password storage removal and browser autofill', JSON.stringify({passwordRead,passwordWrite,legacyCleanup,rememberedPassword,browserManaged}));
+} catch (error) { fail('password storage regression checks', error.message); }
+
 // Privileged login and role-aware presence visibility are enforced server-side.
 try {
   const source = fs.readFileSync(server, 'utf8');
@@ -60,6 +81,15 @@ try {
   const html = fs.readFileSync(mainPath, 'utf8');
   const checks = [
 
+    ['shortcut manager exposes edit and delete actions for each saved shortcut', html.includes('editChatShortcut(${jsq(x.id)})') && html.includes("deleteChatTool('shortcut',${jsq(x.id)})") && html.includes('shortcutSavedActions')],
+    ['shortcut edit loads the selected record and preserves its stable ID on save', html.includes('function editChatShortcut(id)') && html.includes('window.editingShortcutId=String(item.id)') && html.includes('String(x.id)===editingId?{...x,title,text}:x')],
+    ['shortcut editing can be cancelled without changing saved data', html.includes('function cancelShortcutEdit()') && html.includes("window.editingShortcutId='';adminTab('shortcuts')")],
+    ['shortcut create and update share one validated persistence workflow', html.includes('async function saveShortcut()') && html.includes('await saveChatTools(updated,d.customSmileys||[])') && html.includes('duplicate shortcut') === false && html.includes('اسم الاختصار مستخدم مسبقاً')],
+    ['shortcut editor has one canonical full-width grid and multiline RTL textarea', html.includes('.shortcutEditorGrid{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;width:100%;min-width:0;box-sizing:border-box}') && html.includes('.shortcutEditorGrid>*{grid-column:1;display:block;width:100%;min-width:0;max-width:100%;box-sizing:border-box}') && html.includes('direction:rtl;text-align:right;unicode-bidi:plaintext') && html.includes('.shortcutSavedRow{grid-template-columns:minmax(0,1fr) auto;') && html.includes('shortcutSavedText')],
+    ['admin three-column grid excludes shortcut editor instead of overriding it', html.includes('.adminPanel .adminGrid:not(.shortcutEditorGrid){grid-template-columns:repeat(3,minmax(0,1fr))}') && !html.includes('rimaz-shortcut-editor-and-arabic-message-fix')],
+    ['shortcut editor height is fixed and independent of mobile viewport or keyboard resizing', html.includes('height:160px;min-height:160px;max-height:160px') && !html.includes('window.innerHeight||600)*0.52')],
+    ['shortcut text is normalized to one logical line before persistence and insertion', html.includes('function normalizeShortcutText(value)') && html.includes('text=normalizeShortcutText(document.getElementById(\'shortcutText\')?.value||\'\')') && html.includes('createTextNode(normalizeShortcutText(item.text))')],
+    ['public Arabic shortcut messages stay on one RTL line with horizontal access and no forced wrap', html.includes('.msgtext{display:block;min-width:0;max-width:100%;direction:ltr;text-align:left;unicode-bidi:plaintext;white-space:nowrap;overflow-x:auto;overflow-y:hidden;word-break:normal;scrollbar-width:none;}') && !html.includes('.msg .msgtext{display:block!important;clear:both!important;white-space:pre!important;')],
     ['ghost login is restricted to owner or explicitly authorized admin', privileged && privileged[0].includes("mode==='ghost'&&!isOwner(account)&&!hasPermission(account,'ghost_login')")],
     ['hidden login remains restricted to staff or panel-authorized rank', privileged && privileged[0].includes("mode==='hidden'&&!isOwner(account)&&!hasPermission(account,'hidden_login')")],
     ['presence visibility is viewer-aware and ghost is invisible to others', source.includes('function canSeePresence(viewer,target,context=null)') && source.includes('if(target.ghost)return false')],
@@ -67,7 +97,7 @@ try {
     ['live presence state is emitted individually per viewer', source.includes("const context=buildPresenceContext()") && source.includes("so.emit('live-state',{online:getOnlineUsers(viewer,context),rooms:visibleRooms(viewer,context)})")],
     ['packed image assets are decoded once and reused as Buffers', source.includes('function decodePackedAssets(pack)') && source.includes('decodePackedAssets(SMILEY_PACK)') && source.includes('res.send(item.data);') && !source.includes("res.send(Buffer.from(item.data,'base64'))")],
     ['presence broadcasts reuse indexed session and socket lookups', source.includes('function buildPresenceContext()') && source.includes('sessionsBySid') && source.includes('sessionsByAccount') && source.includes('socketsBySid')],
-    ['member directory omits accounts hidden from the current viewer', source.includes('if(hasInvisibleActiveSession(name,req.user))continue')],
+    ['member directory omits accounts hidden from the current viewer', source.includes('if(hasInvisibleActiveSession(name,req.user,presence))continue')],
     ['hidden join/leave notices are staff-only and ghost emits no presence notices', source.includes("presenceVisibility:u.hidden?'staff':'public'") && source.includes('function emitPresenceToRoom(room,notice)')],
     ['private conversation history is memory-only and cleared after full disconnect', source.includes('privateMessages: []') && source.includes('function clearPrivateConversationForUser(name)') && source.includes('schedulePrivateConversationCleanup(u.name)')],
     ['existing private conversations can be reopened even when the peer is not publicly online', html.includes("const existing=contacts.find(x=>key(x.name)===key(name))")]
@@ -83,7 +113,7 @@ try {
   const checks = [
     ['private X closes only the window and preserves the conversation history', html.includes("function closePrivateConversation(){const other=String(privateTo||'').trim();if(!other){closeLayer();return;}privateOpen=false;privateTo='';privatePeerProfile={};privatePeerUser=null;clearPrivateMediaObjectUrls();closeLayer();toast('تم إغلاق نافذة المحادثة مع الاحتفاظ بسجل الرسائل');}")],
     ['private minimize preserves a restorable peer entry instead of discarding the conversation', html.includes('privateMinimizedPeer={name:other') && html.includes("a.unshift({name:privateMinimizedPeer.name") && html.includes('محادثة مصغّرة')],
-    ['private contacts, members, and read receipts load concurrently', /Promise\.all\(\[api\('\/api\/private\/contacts'\),api\('\/api\/members'\),api\('\/api\/private\/read-all'/.test(html)],
+    ['private contacts and members load concurrently without marking every chat as read', /Promise\.all\(\[api\('\/api\/private\/contacts'\),api\('\/api\/members'\)\]\)/.test(html) && !html.slice(html.indexOf('async function openPrivateList()'),html.indexOf('function showBlockModal')).includes('/api/private/read-all')],
     ['conversation deletion remains an explicit action in the private contacts list', html.includes('onclick="event.stopPropagation();hidePrivate(') && html.includes("api('/api/private/hide'")]
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
@@ -257,8 +287,8 @@ try {
   const html = fs.readFileSync(mainPath, 'utf8');
   if (html.includes("let sid='',me=null") && html.includes('// Always show the entry screen on a fresh page load.') && html.includes('login();') && !html.includes('if(sid)boot();')) pass('fresh page loads always show the login screen instead of auto-entering chat');
   else fail('fresh page loads must require an explicit login tap');
-  if (html.includes("localStorage.setItem('rimaz_saved_username'") && html.includes("localStorage.setItem('rimaz_saved_password'") && html.includes('value="${esc(remembered.password)}"') && html.includes('rememberLoginCredentials(n,p)')) pass('successful member login remembers username and masked password field locally');
-  else fail('saved username and password are prefilled on the login screen');
+  if (html.includes("localStorage.setItem('rimaz_saved_username'") && html.includes("localStorage.removeItem('rimaz_saved_password')") && !html.includes("localStorage.setItem('rimaz_saved_password'") && !html.includes("localStorage.getItem('rimaz_saved_password'") && !html.includes('remembered.password') && html.includes('autocomplete="current-password"')) pass('username is remembered while browser password manager handles passwords and legacy plaintext is cleared');
+  else fail('secure remembered-login behavior');
   if (!html.includes("localStorage.setItem('rimaz_sid',sid)") && html.includes("sessionStorage.setItem('rimaz_sid',sid)") && html.includes("localStorage.removeItem('rimaz_sid')")) pass('authenticated session is tab-scoped and legacy persistent session tokens are cleared');
   else fail('session token must not persistently bypass the login screen');
 } catch (error) { fail('v46.80.8 remembered credentials regression checks', error.message); }
@@ -519,7 +549,7 @@ try {
   else fail('private media is isolated and restricted to conversation participants');
   if (mediaUpload && mediaUpload[0].includes('media.url=\'/api/private/media/\'') && mediaUpload[0].includes('fs.renameSync(req.file.path,privatePath)')) pass('new private uploads are moved out of public uploads storage');
   else fail('new private uploads are moved out of public uploads storage');
-  if (html.includes("fetch(url,{headers:{'x-session':sid},cache:'no-store'})") && html.includes('URL.createObjectURL(await response.blob())')) pass('private media UI fetches with session auth and renders protected blobs');
+  if (html.includes("fetch(url,{headers:{'x-session':sid},cache:'no-store'})") && html.includes('URL.createObjectURL(await r.blob())') && html.includes('revealPrivateMedia(this)')) pass('private media loads only after explicit reveal using session auth and protected blobs');
   else fail('private media UI fetches with session auth and renders protected blobs');
   if (hideRoute && hideRoute[0].includes('Private conversation hide failed:') && hideRoute[0].includes('Private media cleanup failed:')) pass('ending a private conversation rolls back on failure and removes orphaned attachments');
   else fail('ending a private conversation rolls back on failure and removes orphaned attachments');
@@ -714,7 +744,7 @@ try {
     if (!permissionHtml.includes(label)) throw new Error(`missing Arabic label ${label}`);
   }
   if (!permissionHtml.includes('عدم توافق نسخة الواجهة والسيرفر')) throw new Error('client compatibility preflight missing');
-  if (!permissionServer.includes('permissionSchemaVersion:9') || !permissionServer.includes('permissionKeys:ALL_PERMISSION_KEYS')) throw new Error('server permission schema metadata missing');
+  if (!permissionServer.includes('permissionSchemaVersion:10') || !permissionServer.includes('permissionKeys:ALL_PERMISSION_KEYS')) throw new Error('server permission schema metadata missing');
   if (!permissionHtml.includes("['الأدوات والإضافات الجديدة',['audit_view','stats_view','health_view','chat_filter_manage','member_status_manage','private_chat_override','presence_hidden_view','hidden_login','ghost_login']]")) throw new Error('custom rank editor missing new permission group');
   pass('v46.27 Arabic permission labels and client/server schema compatibility');
 } catch (error) { fail('v46.27 permission compatibility checks', error.message); }
@@ -761,10 +791,10 @@ try {
   if (!mediaHtml.includes('xhr.upload.onprogress') || !mediaHtml.includes('function uploadMediaWithProgress(')) throw new Error('real upload progress handler is missing');
   if (!mediaHtml.includes('function cancelMediaUpload(') || !mediaHtml.includes('item.xhr?.abort()')) throw new Error('cancel button does not abort active upload');
   if (!mediaHtml.includes('function sharePrivate()') || !mediaHtml.includes('function wallMedia(kind)')) throw new Error('private or wall media upload entrypoint is missing');
-  if (!mediaHtml.includes('onclick="openWallMediaFrom(this.parentElement)"') || !mediaHtml.includes('function openWallMediaFrom(')) throw new Error('wall media view button is missing');
-  if (!mediaHtml.includes('عرض الصورة') || !mediaHtml.includes('عرض الفيديو') || !mediaHtml.includes('onclick="openPrivateMediaFrom(this.parentElement)"')) throw new Error('private image/video explicit view buttons are missing');
+  if (!mediaHtml.includes('onclick="revealWallMedia(this)"') || !mediaHtml.includes('function revealWallMedia(')) throw new Error('wall media reveal button is missing');
+  if (!mediaHtml.includes('عرض الصورة') || !mediaHtml.includes('عرض الفيديو') || !mediaHtml.includes('onclick="revealPrivateMedia(this)"')) throw new Error('private image/video explicit reveal buttons are missing');
   const wallCardSource=(mediaHtml.match(/function wallCard\([\s\S]*?function postWall\(/)||[])[0]||'';
-  const privateMediaSource=(mediaHtml.match(/async function addPrivateMedia\([\s\S]*?function openWallMediaFrom\(/)||[])[0]||'';
+  const privateMediaSource=(mediaHtml.match(/async function addPrivateMedia\([\s\S]*?function revealPrivateMedia\(/)||[])[0]||'';
   if (/<(?:img|video)[^>]*class="(?:privateMediaPreview|wallMediaPreview)/i.test(wallCardSource+privateMediaSource)) throw new Error('private/wall renderer still embeds media previews that display immediately');
   if (!wallCardSource.includes('wallMediaView') || !privateMediaSource.includes('privateMediaView')) throw new Error('private/wall media explicit view controls are missing');
   if (!mediaHtml.includes('id="rimaz-wall-media-left-final"') || !mediaHtml.includes('margin:5px auto 5px 0!important')) throw new Error('wall media view button is not pinned to the left edge');
@@ -827,7 +857,7 @@ try {
     ['incoming call rejection and call termination are server-relayed',fs.readFileSync(server,'utf8').includes("socket.on('call-reject',d=>")&&fs.readFileSync(server,'utf8').includes("socket.on('call-end',d=>")],
     ['room audio output mute control is retained independently from microphone mute',html.includes('function toggleRoomSpeaker()')&&html.includes('function toggleVoiceMute()')&&html.includes('roomOutputMuted')],
     ['incoming call header places call type left and close control right',html.includes('direction:ltr;align-items:center;justify-content:space-between') && html.includes('.incomingCallTop{height:36px')],
-    ['incoming call identity is avatar, rank, name, then caller status',html.includes('class=\"incomingCallTitleLine\"><span class=\"incomingCallRank\">${memberBadge(member)}</span><strong>') && html.includes('<small>يتصل بك الآن</small>')],
+    ['incoming call identity is avatar, rank, name, then caller status',html.includes('class=\"incomingCallTitleLine\"><span class=\"incomingCallRank\">${memberBadge(member)}</span><strong class=\"incomingCallName\">') && html.includes('<small class=\"incomingCallStatus\">يتصل بك الآن</small>')],
     ['incoming-call accept button is on the left and reject button is on the right',html.includes('.incomingCallActions{direction:ltr}')],
     ['private audio/video call panels are centered and medium-sized on mobile',html.includes('.call{inset:auto;left:50%;top:50%;transform:translate(-50%,-50%)') && html.includes('.call.cameraCall{width:min(390px,calc(100% - 36px));height:min(560px,calc(100% - 110px))}') && html.includes('.call.voiceCall{width:min(360px,calc(100% - 44px));height:min(340px,calc(100% - 140px))}')]
   ];
@@ -843,7 +873,7 @@ try {
   const serverText = fs.readFileSync(server, 'utf8');
   const videoChecks = [
     ['private video call renders live local and remote video elements', html.includes('id=\"remoteVideo\"') && html.includes('id=\"localVideo\"') && html.includes('function attachCallLocal(stream)')],
-    ['private video call switches camera using verified opposite-facing device selection and sender replacement', html.includes('function switchCallCamera()') && html.includes('enumerateDevices()') && html.includes('deviceId:{exact:device.deviceId}') && html.includes('facingMode:{exact:direction}') && html.includes('facingMode:{ideal:direction}') && html.includes('validateCandidate(stream,avoidId,direction)') && html.includes('sender.replaceTrack(nextTrack)') && html.includes('switchCallCameraButton')],
+    ['private video call releases the current camera before acquiring the opposite lens and replaces the same sender', html.includes('function switchCallCamera()') && html.includes('await sender.replaceTrack(null)') && html.includes('oldTrack.stop();oldReleased=true') && html.includes('facingMode:{exact:direction}') && html.includes('facingMode:{ideal:direction}') && html.includes('await sender.replaceTrack(nextTrack)') && html.includes('switchCallCameraButton')],
     ['incoming video call installs remote offer before adding local tracks and creating answer', html.includes('await pc.setRemoteDescription(incoming.offer);await flushCallIce();addPrivateCallTracks(localStream);const answer=await pc.createAnswer()')],
     ['outgoing video call adds local tracks before creating offer', html.includes('addPrivateCallTracks(localStream);const offer=await pc.createOffer()')],
     ['private call obtains server ICE configuration and preserves STUN fallback', html.includes("api('/api/rtc-config')") && html.includes('function configureCallPeer(peerName,iceServers)')],
@@ -859,25 +889,26 @@ try {
 } catch (error) { fail('v46.61 private video-call repair checks', error.message); }
 
 
-// v46.65: replace the unreliable camera-toggle selection path with verified direction-aware acquisition.
+// v46.93.36: release-first cross-device camera switching and connected-call duration/audio routing.
 try {
   const html = fs.readFileSync(mainPath, 'utf8');
   const fn = (html.match(/async function switchCallCamera\(\)\{[\s\S]*?\n\}/)||[])[0]||'';
   const checks = [
-    ['camera switch derives the target direction from the active camera settings', fn.includes("oldSettings.facingMode||callFacingMode||'user'") && fn.includes("oldFacing==='environment'?'user':'environment'")],
-    ['camera switch prefers labelled opposite-facing devices without assuming device enumeration order', fn.includes('labelPattern.test(device.label||\'\')') && fn.includes('device.deviceId!==avoidId')],
-    ['camera switch verifies the acquired track is not the currently active lens', fn.includes('validateCandidate(stream,avoidId,direction)') && fn.includes("settings.deviceId===avoidId") && fn.includes('settings.facingMode!==direction')],
-    ['camera switch uses exact facing mode then a verified ideal fallback', fn.includes('facingMode:{exact:direction}') && fn.includes('facingMode:{ideal:direction}')],
-    ['camera switch releases the old track only after an explicit hardware-busy error and retries', fn.includes("['NotReadableError','TrackStartError'].includes(firstError?.name)") && fn.includes('oldTrack.stop();oldTrackStopped=true') && fn.includes('await new Promise(resolve=>setTimeout(resolve,200))')],
-    ['camera switch restores the original camera if the old capture had to be released', fn.includes('if(oldTrackStopped)') && fn.includes('Restore by previous camera ID failed') && fn.includes('await sender.replaceTrack(restoredTrack)')],
-    ['camera switch keeps the existing video sender and changes only its camera track', fn.includes('await sender.replaceTrack(nextTrack)') && fn.includes('localStream.removeTrack(oldTrack)') && fn.includes('localStream.addTrack(nextTrack)')],
-    ['camera toggle button text always reflects the next camera direction', fn.includes("callFacingMode==='environment'?'⇄ الكاميرا الأمامية':'⇄ الكاميرا الخلفية'")],
-    ['private call and room-mic media variables remain isolated', html.includes('let pc=null,localStream=null') && html.includes('voiceLocalStream=null') && html.includes('const voicePeers=new Map()')],
+    ['camera switch derives the opposite direction from active track settings', fn.includes("oldSettings.facingMode||callFacingMode||'user'") && fn.includes("oldFacing==='environment'?'user':'environment'")],
+    ['camera hardware is detached and released before requesting the next lens', fn.includes('await sender.replaceTrack(null)') && fn.indexOf('await sender.replaceTrack(null)') < fn.indexOf('freshStream=await acquireFacing(nextFacing)') && fn.includes('activeStream.removeTrack(oldTrack);oldTrack.stop();oldReleased=true')],
+    ['camera candidates are checked for device identity and facing direction', fn.includes('settings.deviceId===avoidId') && fn.includes('settings.facingMode!==direction') && fn.includes('enumerateDevices()')],
+    ['failed camera switching attempts to restore the previous device and reattach it to the same sender', fn.includes('const restorePreviousCamera=async()=>') && fn.includes('acquireFacing(oldFacing,oldDeviceId)') && fn.includes('await sender.replaceTrack(track)') && fn.includes('activeStream.addTrack(track)')],
+    ['camera switching aborts safely if the call changes during asynchronous acquisition', fn.includes('const activePeer=pc,activeStream=localStream') && fn.includes('const isSameCall=()=>pc===activePeer&&localStream===activeStream') && fn.includes('CALL_ENDED_DURING_CAMERA_SWITCH')],
+    ['successful camera switch keeps the same peer connection and updates the local preview', fn.includes('await sender.replaceTrack(nextTrack)') && fn.includes('activeStream.addTrack(nextTrack)') && fn.includes('attachCallLocal(activeStream)')],
+    ['call duration begins only after RTCPeerConnection reaches connected', html.includes("activePeer.connectionState==='connected')startPrivateCallDuration()") && html.includes('function startPrivateCallDuration()')],
+    ['call duration uses elapsed wall-clock time and is cleared on end', html.includes('Date.now()-callConnectedAt') && html.includes("resetPrivateCallDuration();setPrivateCallAudioSession(\'auto\')")],
+    ['outgoing call remains waiting until actual connection', html.includes("const initialStatus=outgoing?'بانتظار الرد':'جارٍ الاتصال…'") && html.includes("updatePrivateCallStatus('متصل')")],
+    ['audio communication session is requested before microphone capture where supported', html.includes("setPrivateCallAudioSession('play-and-record')") && html.includes("session.type=type")],
+    ['speaker output control uses real browser output routing capability and reports unsupported browsers', html.includes('togglePrivateCallSpeaker()') && html.includes("typeof audio.setSinkId!=='function'") && html.includes('await audio.setSinkId(target.deviceId)')],
+    ['both browser entry files remain identical', html === fs.readFileSync(publicPath, 'utf8')],
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
-  const deployedHtml = fs.readFileSync(publicPath, 'utf8');
-  if (html === deployedHtml) pass('v46.65 browser entry files remain identical'); else fail('v46.65 browser entry files remain identical');
-} catch (error) { fail('v46.65 camera switch regression checks', error.message); }
+} catch (error) { fail('v46.93.36 private call reliability checks', error.message); }
 
 // v46.67: independently managed animated gift catalogue and GIF delivery pipeline.
 try {
@@ -925,14 +956,15 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.29 package version is current', pkg.version === '46.93.29'],
+    ['v46.93.44 package version is current', pkg.version === '46.93.50'],
+    ['no dangling async-only lines remain in the browser entry script', !/^\s*async\s*$/m.test(html)],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
-    ['private chat module is enforced on history, contacts, media, and Socket.IO send', serverText.includes("app.get('/api/private/history',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))") && serverText.includes("app.get('/api/private/contacts',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))") && serverText.includes("socket.on('private-message',d=>{const u=socket.data.user;if(!u||!d?.to)return;if(!siteModuleEnabled('privateChat'))")],
-    ['voice room module is enforced on join, mic requests, and peer signaling', serverText.includes("targetRoom.kind==='voice'&&!siteModuleEnabled('voiceRooms')") && serverText.includes("if(!siteModuleEnabled('voiceRooms'))return socket.emit('error-msg'") && serverText.includes("socket.on('voice-peer-offer',d=>{if(!siteModuleEnabled('voiceRooms'))return")],
-    ['video-call module is enforced on call offer and answer', serverText.includes("socket.on('call-offer',d=>{if(!siteModuleEnabled('videoCalls'))") && serverText.includes("socket.on('call-answer',d=>{if(!siteModuleEnabled('videoCalls'))return")],
+    ['private chat module is enforced on history, contacts, media, and Socket.IO send', serverText.includes("app.get('/api/private/history',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))") && serverText.includes("app.get('/api/private/contacts',requireAuth,(req,res)=>{\n  if(!siteModuleEnabled('privateChat'))") && serverText.includes("socket.on('private-message',d=>{const u=socket.data.user;if(!u||!isCurrentSessionSocket(socket)||!d?.to)return;if(!siteModuleEnabled('privateChat'))")],
+    ['voice room module is enforced on join, mic requests, and peer signaling', serverText.includes("targetRoom.kind==='voice'&&!siteModuleEnabled('voiceRooms')") && serverText.includes("socket.on('request-mic',({room,raised,seatIndex}={})=>{\n    if(!isCurrentSessionSocket(socket))return;\n    if(!siteModuleEnabled('voiceRooms'))") && serverText.includes("socket.on('voice-peer-offer',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))")],
+    ['video-call module is enforced on call offer and answer', serverText.includes("socket.on('call-offer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))") && serverText.includes("socket.on('call-answer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))return")],
     ['gift module is enforced on send, upload, and catalogue deletion', serverText.includes("app.post('/api/admin/gift',(req,res)=>{requireAuth(req,res,()=>{if(!siteModuleEnabled('gifts'))") && serverText.includes("app.post('/api/admin/gifts/catalog/upload',requireAuth,uploadSmallImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!siteModuleEnabled('gifts'))") && serverText.includes("app.post('/api/admin/gifts/catalog/delete',requireAuth,(req,res)=>{if(!siteModuleEnabled('gifts'))")],
     ['admin UI exposes all five module switches and saves them', ['moduleWall','modulePrivateChat','moduleVoiceRooms','moduleVideoCalls','moduleGifts'].every(id=>htmlText.includes(id)) && htmlText.includes('saveSiteSettings()') && htmlText.includes('إدارة الإضافات والوحدات المدمجة')],
     ['mobile admin navigation has larger touch targets and bounded sticky scrolling', htmlText.includes('position:sticky;top:0;z-index:5;max-height:32vh;overflow-y:auto') && htmlText.includes('min-height:34px')],
@@ -1031,12 +1063,12 @@ try {
   const htmlText=fs.readFileSync(mainPath,'utf8');
   const checks=[
     ['v46.77.0 Socket.IO starts before optional chat-tools request',htmlText.includes("async function connect(){if(socket)socket.disconnect();socket=io();api('/api/chat-tools').then(")],
-    ['v46.77.0 independent boot requests run concurrently and login polling stops after authentication',htmlText.includes("Promise.all([api('/api/notifications'),api('/api/private/contacts')])")&&htmlText.includes('clearInterval(window.rimazOnlineTimer)')],
+    ['v46.77.0 independent boot requests run concurrently and login polling stops after authentication',htmlText.includes("Promise.all([api('/api/notifications'),api('/api/private/contacts'),api('/api/wall/unread')])")&&htmlText.includes('clearInterval(window.rimazOnlineTimer)')],
     ['v46.77.0 private read receipt no longer refreshes the entire contacts list per message',htmlText.includes('async function markPrivateRead(name){')&&htmlText.slice(htmlText.indexOf('async function markPrivateRead(name){'),htmlText.indexOf('function countryName',htmlText.indexOf('async function markPrivateRead(name){'))).includes("api('/api/private/read'")&&!htmlText.slice(htmlText.indexOf('async function markPrivateRead(name){'),htmlText.indexOf('function countryName',htmlText.indexOf('async function markPrivateRead(name){'))).includes("api('/api/private/contacts'")],
-    ['v46.77.0 private media object URLs are tracked and revoked on panel exit',htmlText.includes('const privateMediaObjectUrls=new Set()')&&htmlText.includes('URL.revokeObjectURL(url)')&&htmlText.includes("activeOverlay==='private'&&name!=='private'")&&htmlText.includes('privateMediaObjectUrls.add(objectUrl)')],
-    ['v46.77.0 stale private media fetches are discarded after conversation changes',htmlText.includes('!document.contains(area)||!privateOpen||key(privateTo)!==conversationKey')&&htmlText.includes('URL.revokeObjectURL(objectUrl)')],
+    ['private media object URLs are tracked and revoked on panel exit',htmlText.includes('const privateMediaObjectUrls=new Set()')&&htmlText.includes('URL.revokeObjectURL(url)')&&htmlText.includes('privateMediaObjectUrls.add(blobUrl)')],
+    ['private media reveal checks that the message still exists before rendering',htmlText.includes('!document.contains(card)||!privateOpen')&&htmlText.includes('URL.revokeObjectURL(blobUrl)')],
     ['v46.77.0 voice speaker strip starts hidden and cannot flash before room initialization',htmlText.includes('<div class="roombar" style="display:none" aria-hidden="true">')&&htmlText.includes('.chat .roombar[aria-hidden="true"]{display:none!important')],
-    ['v46.77.0 trailing stylesheet is inside head and document has no content after html close',htmlText.indexOf('rimaz-private-video-call-media')<htmlText.indexOf('</head>')&&htmlText.slice(htmlText.indexOf('</html>')+7).trim()===''],
+    ['v46.77.0 trailing stylesheet is inside head and document has no content after html close',htmlText.indexOf('rimaz-media-two-stage')<htmlText.indexOf('</head>')&&htmlText.slice(htmlText.indexOf('</html>')+7).trim()===''],
     ['v46.77.0 obsolete inline.js duplicate is removed and not referenced',!fs.existsSync(path.join(root,'inline.js'))&&!htmlText.includes('inline.js')],
     ['v46.77.0 browser entry files remain byte-identical',htmlText===fs.readFileSync(path.join(root,'public','index.html'),'utf8')]
   ];
@@ -1095,7 +1127,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.29 package version',pkgNow.version==='46.93.29'],
+  ['v46.93.44 package version',pkgNow.version==='46.93.50'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
@@ -1117,7 +1149,7 @@ try {
   ['v46.80.7 room creation button is compact and physically left aligned',html.includes('margin:4px auto 4px 4px;width:max-content')&&html.includes('font-size:15px')],
   ['v46.80.7 member avatar, badge and name use top alignment and a clear gap',html.includes('grid-template-columns:5px 54px 30px minmax(0,1fr) 58px!important')&&html.includes('column-gap:5px!important')&&html.includes('align-self:start!important;margin:0!important')],
   ['v46.80.8 login form is always shown on page load and no old session token auto-boots chat',html.includes('// Always show the entry screen on a fresh page load.')&&!html.includes('if(sid)boot();')&&html.includes("let sid='',me=null")],
-  ['v46.80.8 successful login remembers username and password for prefilled fields',html.includes("localStorage.setItem('rimaz_saved_username'")&&html.includes("localStorage.setItem('rimaz_saved_password'")&&html.includes('value="${esc(remembered.password)}"')],
+  ['secure login remembers username, clears legacy plaintext password, and delegates password autofill to the browser',html.includes("localStorage.setItem('rimaz_saved_username'")&&html.includes("localStorage.removeItem('rimaz_saved_password')")&&!html.includes("localStorage.setItem('rimaz_saved_password'")&&!html.includes("localStorage.getItem('rimaz_saved_password'")&&!html.includes('remembered.password')&&html.includes('autocomplete="current-password"')],
   ['v46.80.8 session token is tab-only and old persistent tokens are cleared',!html.includes("localStorage.setItem('rimaz_sid',sid)")&&html.includes("sessionStorage.setItem('rimaz_sid',sid)")&&html.includes("localStorage.removeItem('rimaz_sid')")],
   ['online-members rank art is inline with the name and banner has its own compact column',html.includes('rimaz-member-layout-single-source-v46937')&&html.includes('.memberNameLine .memberBadges')&&html.includes('grid-template-columns:3px 42px minmax(0,1fr) 23px 19px!important')]
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
@@ -1128,12 +1160,16 @@ try {
 {
   const html=fs.readFileSync(mainPath,'utf8');
   const checks=[
-    ['v46.93.16 has one canonical chat typography source', (html.match(/id="rimaz-chat-typography-single-source-v1"/g)||[]).length===1],
-    ['v46.93.17 typography is 17px names and 16px supporting text on desktop and mobile', html.includes('--rimaz-chat-name-size:17px')&&html.includes('--rimaz-chat-body-size:16px')&&!html.includes('--rimaz-chat-name-size:15px')],
-    ['v46.93.17 names share typography across public, presence, private list/conversation, notices, and wall surfaces', html.includes('.msg .msghead .rimazIdentityName')&&html.includes('.member .memberNameLine .rimazIdentityName')&&html.includes('.presence .presenceNameRow .rimazIdentityName')&&html.includes('.privateContactIdentity .rimazIdentityName')&&html.includes('.pmsgTitle .rimazIdentityName')&&html.includes('.rimazUnifiedName b')&&html.includes('.rimazChatNotice .noticeContent>b')],
-    ['v46.93.17 supporting text shares 16px across all chat surfaces', html.includes('.msg .msgtext')&&html.includes('.member .memberSub')&&html.includes('.presence .presenceText')&&html.includes('.privateListOverlay .privateLastMessage')&&html.includes('.wallPost .wallText')&&html.includes('.pmsg .pmsgText')&&html.includes('.noticeMessageText')],
-    ['v46.93.17 private conversation messages have a semantic body class', html.includes('class="pmsgText"')],
-    ['v46.93.17 entry and online-member rank badges align to the top of the avatar row', html.includes('.presence .presenceBody{align-self:start!important;justify-content:flex-start!important;}')&&html.includes('.member .memberNameLine .memberBadge{align-self:flex-start!important;}')],
+    ['v46.93.42 has exactly one canonical typography source', (html.match(/id="rimaz-chat-typography-single-source-v2"/g)||[]).length===1 && !html.includes('rimaz-chat-typography-single-source-v1')],
+    ['v46.93.42 canonical tokens are 15px names and 14px body text', html.includes('--rimaz-chat-name-size:15px')&&html.includes('--rimaz-chat-body-size:14px')&&!html.includes('--rimaz-chat-name-size:17px')&&!html.includes('--rimaz-chat-body-size:16px')],
+    ['v46.93.42 all member identity names use the canonical token', html.includes('.rimazIdentityName')&&html.includes('.member .memberName')&&html.includes('.presence .presenceName')&&html.includes('.privateHeadTitle')&&html.includes('.pmsgTitle')&&html.includes('.rimazUnifiedName')&&html.includes('.incomingCallName')],
+    ['v46.93.42 all chat body surfaces use the canonical token', html.includes('.msg .msgtext')&&html.includes('.member .memberSub')&&html.includes('.presence .presenceText')&&html.includes('.privateLastMessage')&&html.includes('.pmsg .pmsgText')&&html.includes('.wallPost .wallPostBody')],
+    ['v46.93.42 temporary and permanent announcements share 15px/14px typography', html.includes('.rimazChatNotice .noticeContent>b')&&html.includes('.rimazChatNotice .noticeMessageText')&&html.includes('.rimazWelcomeNotice .noticeContent>b')&&html.includes('.rimazWelcomeNotice .noticeMessageText')&&html.includes('.announcementAdminTitle')],
+    ['v46.93.42 campaign ad title and meta use the shared name/body classes', html.includes('class="rimazPublicAdTitle"')&&html.includes('class="rimazPublicAdMeta"')],
+    ['v46.93.42 wall text has a semantic body class and no mixed name/body selector', html.includes('class="wallPostBody"')&&!html.includes('.wallPost .wallText>div:not(.rimazUnifiedName)')],
+    ['v46.93.42 announcement and transient notice markup uses semantic typography classes', html.includes('class="noticeMessageText"')&&html.includes('class="noticeContent"')],
+    ['v46.93.42 presence text has no inline font-size or font-weight override', !/class="presenceText"[^>]*style=/.test(html)],
+    ['v46.93.42 entry and online-member rank badges retain their layout alignment', html.includes('.presence .presenceBody{grid-column:2!important;grid-row:1!important;')&&html.includes('.member .memberMain{grid-column:4!important;grid-row:1!important;')&&html.includes('.msg .msghead{align-items:flex-start!important;')],
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 }
@@ -1155,14 +1191,20 @@ try {
 try {
  const src=fs.readFileSync(server,'utf8'), html=fs.readFileSync(mainPath,'utf8');
  const checks=[
-  ['v46.93.2 banner_upload is an independent permission in the server catalog',src.includes("banner_upload:'رفع وتغيير وحذف البنر الشخصي'")],
-  ['v46.93.2 banner upload and deletion routes enforce banner_upload server-side',src.includes("app.post('/api/profile/banner',requireAuth,(req,res,next)=>{if(!hasPermission(req.user,'banner_upload'))")&&src.includes("app.delete('/api/profile/banner',requireAuth,(req,res)=>{if(!hasPermission(req.user,'banner_upload'))")],
+  ['v46.93.33 personal banner has its own permission section and explicit label',html.includes("['البنر الشخصي',['personal_banner']]")&&src.includes("personal_banner:'إدارة البنر الشخصي — رفع وحذف بنر الحساب نفسه'")],
+  ['v46.93.33 disabling personal_banner hides settings controls and server rejects direct changes',html.includes("hasClientPermission('personal_banner')||me.owner")&&src.includes("if(!hasPermission(req.user,'personal_banner'))return res.status(403)")],
+  ['v46.93.32 personal and chat banner permissions are separate server capabilities',src.includes("personal_banner:'إدارة البنر الشخصي — رفع وحذف بنر الحساب نفسه'")&&src.includes("chat_banners_manage:'إدارة بنرات الدردشة للرتب السبع'")],
+  ['v46.93.32 personal banner upload and deletion are restricted to personal_banner server-side',src.includes("app.post('/api/profile/banner',requireAuth,(req,res,next)=>{if(!hasPermission(req.user,'personal_banner'))")&&src.includes("app.delete('/api/profile/banner',requireAuth,(req,res)=>{if(!hasPermission(req.user,'personal_banner'))")],
   ['v46.93.2 banner images use validated image-only upload middleware',src.includes("'/api/profile/banner'")&&src.includes('uploadImage.single(\'file\'),validateUploadedContent(\'image\')')],
   ['v46.93.2 banners are separate from rank art and member decorations',src.includes('Personal banners are intentionally separate from rank artwork and member decorations')&&src.includes('p.banner=')],
-  ['v46.93.2 rank permission editor exposes banner_upload',html.includes("['الملف الشخصي',['profile_edit','avatar_delete','banner_upload']]")],
+  ['v46.93.32 permission editor separates personal banners and chat banners',html.includes("['الملف الشخصي',['profile_edit','avatar_delete']]")&&html.includes("['البنر الشخصي',['personal_banner']]")&&html.includes("['بنرات الدردشة',['chat_banners_manage']]")],
   ['v46.93.2 authorized members can manage their personal banner and oversized images are compressed',html.includes('choosePersonalBanner')&&html.includes("canvas.toBlob(resolve,'image/webp',0.84)")&&html.includes('deletePersonalBanner')],
   ['v46.93.2 member information panel renders the personal banner',html.includes('personalBannerIdentity(p,dn')&&html.includes('rimazProfileMiniAvatar')&&html.includes('profileTop')],
-  ['v46.93.2 full-admin migration adds banner permission without broadening limited ranks',src.includes('bannerUploadPermissionMigrationVersion')&&src.includes("previous.every(key=>(adminFull.permissions||[]).includes(key))")],
+  ['v46.93.32 legacy banner permission migrates to personal only and full-admin migration is bounded',src.includes("set.add('personal_banner');set.delete('banner_upload')")&&src.includes('bannerPermissionsSplitMigrationVersion')&&src.includes("previous.every(key=>(adminFull.permissions||[]).includes(key))")],
+  ['v46.93.32 rank banner endpoints require chat_banners_manage and are restricted to seven ranks',src.includes("app.get('/api/admin/chat-banners',requireAuth")&&src.includes("hasPermission(user,'chat_banners_manage')")&&src.includes('canManageChatBanners(req.user)')&&src.includes("app.post('/api/admin/chat-banners/:rank'")&&src.includes("app.delete('/api/admin/chat-banners/:rank'")],
+  ['v46.93.32 rank banner display is inherited by rank and personal banner takes precedence',src.includes('p.rankBanner=visualRank?.bannerUrl||')&&html.includes('banner=p.banner||p.rankBanner||')&&html.includes('personal=!!p.banner')],
+  ['v46.93.32 login waits for an explicit login-button submit even when credentials autofill',html.includes("mode==='new'?'submit':'button'")&&html.includes("mode==='in'?'onclick=\"doLogin()\"':''")&&html.includes("'current-password'")],
+  ['v46.93.32 admin banner tab and controls are gated by chat_banners_manage',html.includes("adminTab('chatbanners')")&&html.includes("chatbanners:hasClientPermission('chat_banners_manage')")&&html.includes("allowedTabs={")&&html.includes("chatbanners:hasClientPermission('chat_banners_manage')")],
   ['v46.93.2 browser entry files remain identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')]
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error){fail('v46.93.2 personal banner checks',error.message)}
@@ -1194,8 +1236,8 @@ try {
   const micLine = source.split('\n').find(line => line.includes("socket.on('request-mic'")) || '';
   const roomCreateRoutes = source.split('\n').filter(line => line.includes("app.post('/api/rooms'") || line.includes("app.post('/api/admin/room'"));
   const checks = [
-    ['all three chat composers retain the canonical left-aligned rule', client.includes('line-height:1.25;text-align:left;direction:ltr}.composerRichInput:empty:before') && ['msgInput','privateText','wallText'].every(id => client.includes(`id="${id}"`))],
-    ['no old right-aligned composer rule remains', !client.includes('line-height:1.25;text-align:right;direction:rtl}.composerRichInput:empty:before')],
+    ['public, private, and wall composer inputs align left while preserving RTL direction', client.includes('font-size:14px!important;direction:ltr;text-align:left;unicode-bidi:plaintext}') && client.includes('font:inherit;line-height:1.25;text-align:left;direction:rtl;unicode-bidi:plaintext}') && ['msgInput','privateText','wallText'].every(id => client.includes(`id="${id}"`))],
+    ['public composer left alignment is scoped and does not override private or wall composers', client.includes('font-size:14px!important;direction:ltr;text-align:left;unicode-bidi:plaintext}') && !client.includes('.composerRichInput{text-align:left!important;direction:ltr!important')],
     ['private media UI uses 500 sender likes or full-admin exemption', client.includes('function sharePrivate(){if(me.likes<500&&!me.fullAdmin)') && !client.includes('function sharePrivate(){if(me.likes<500&&!me.admin)')],
     ['private call UI uses 500 sender likes or full-admin exemption', client.includes('function startCall(camera){if(Number(me.likes||0)<500&&!me.fullAdmin)') && !client.includes('function startCall(camera){if(me.likes<500&&!me.admin)')],
     ['session payload exposes a distinct full-permission admin flag', source.includes('fullAdmin:isFullPermissionAdmin(s)')],
@@ -1209,7 +1251,7 @@ try {
     ['call offer gates the caller only and does not inspect recipient likes', offerLine.includes('if(!canMedia(u))') && !offerLine.includes('canMedia(target[1])') && !offerLine.includes('500 إعجاب للطرفين')],
     ['call answer exempts the recipient and revalidates only the original caller', answerLine.includes('if(!canMedia(target[1]))') && !answerLine.includes('!canMedia(u)') && answerLine.includes('state.callee!==sid')],
     ['retired staff/media/mic bypass permissions are absent from catalog and UI', !source.includes("staff_notice:'") && !source.includes("staff_media:'") && !source.includes("voice_mic_override:'") && !client.includes("'staff_notice'") && !client.includes("'staff_media'") && !client.includes("'voice_mic_override'")],
-    ['permission schema version reflects the retired bypass capabilities', source.includes('permissionSchemaVersion:9') && client.includes('permissionSchemaVersion:compatibility.permissionSchemaVersion||9')],
+    ['permission schema version reflects the retired bypass capabilities', source.includes('permissionSchemaVersion:10') && client.includes('permissionSchemaVersion:compatibility.permissionSchemaVersion||10')],
     ['private text messages remain independent of likes restrictions', source.includes("socket.on('private-message',d=>") && !/socket\.on\('private-message',d=>[\s\S]{0,1200}likes/.test(source)]
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
@@ -1224,7 +1266,7 @@ try {
     if (!match) throw new Error(`missing ${name}`);
     return match[0];
   }).join('\n');
-  const permissionKeys = ['panel_access','users_view','grant_likes','site_admin','banner_upload','permission_manage','health_view'];
+  const permissionKeys = ['panel_access','users_view','grant_likes','site_admin','personal_banner','chat_banners_manage','permission_manage','health_view'];
   const accountPermissions = new Map();
   const owners = new Set(['Owner']);
   const context = {
@@ -1319,3 +1361,80 @@ try {
   if(saveHidden&&publishHidden&&closeHidden&&errorVisible)pass('toast runtime hides save/publish/close success only and preserves visible errors');
   else fail('toast runtime success/error behavior');
 } catch (error) { fail('v46.93.27 owner-protection and settings feedback checks', error.message); }
+
+
+// v46.93.38: private media delivery must fan out to every active recipient session.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
+  const route=source.slice(source.indexOf("app.post('/api/media'"),source.indexOf('function normalizeChatFilterText'));
+  const checks=[
+    ['v46.93.44 package version is current (private-media regression suite)',pkgNow.version==='46.93.50'],
+    ['private media verifies an active recipient account and fans out to all its active sessions',route.includes('hasConnectedSessionForUser(to)')&&route.includes("emitToUser(to,'private-media',m)")&&!route.includes('targetSocket[0]')],
+    ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',m)")&&source.includes("emitToUser(to,'private-media',m)")],
+    ['QuickTime MOV uploads have a safe extension and require a valid ISO-BMFF signature',source.includes("'video/quicktime':'.mov'")&&source.includes("['video/mp4','video/quicktime'].includes(mime) && actual==='mp4'")],
+    ['private conversation media remains transient and is not persisted by save()',source.includes('const snapshot = { ...db, privateMessages: [] }')&&source.includes('purgePrivateHistoryAtStartup()')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('v46.93.38 media-delivery regression checks',error.message); }
+
+// v46.93.37: authoritative presence ownership and reliable private/wall unread counters.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const html=fs.readFileSync(mainPath,'utf8');
+  const publicHtml=fs.readFileSync(publicPath,'utf8');
+  const checks=[
+    ['presence only counts the socket that currently owns a login session',source.includes('function isCurrentSessionSocket(socket)')&&source.includes('active?.socketId===socket.id')&&source.includes('if(!sid||!active||active.socketId!==socket.id)return;')],
+    ['late disconnect events cannot remove a newer socket for the same session',source.includes('A late disconnect from a superseded socket must never evict the new live session')&&source.includes('active.socketId!==socket.id)return;')],
+    ['disconnected login sessions and transient private chats use a bounded 60-second reconnect grace period with rollback-safe cleanup',source.includes('SESSION_DISCONNECT_GRACE_MS=60000')&&source.includes('PRIVATE_DISCONNECT_GRACE_MS=60000')&&source.includes('scheduleSessionDisconnectCleanup(sid,u)')&&source.includes('cancelSessionDisconnectCleanup(sid)')&&source.includes('previousGuestWallReadAt')],
+    ['online projection ignores disconnected or superseded sockets',source.includes('if (!so?.connected || so.data?.sid !== sid || !user || so.id !== active.socketId) continue;')],
+    ['online count and per-room count deduplicate multiple sessions for one account',source.includes('const seen=new Set();return arr.filter')&&source.includes('const seen=new Set();')&&source.includes('return seen.size;')],
+    ['room capacity is enforced server-side using distinct accounts',source.includes('const roomAccounts=new Set(')&&source.includes('roomAccounts.size>=capacity')],
+    ['duplicate tabs do not emit duplicate room join/leave presence notices',source.includes('alreadyInTargetRoom=previousRoom===room')&&source.includes('!u.ghost&&!alreadyInTargetRoom')&&source.includes('!u.ghost&&!alreadyInPreviousRoom')&&source.includes('!u.ghost&&!accountStillInRoom')],
+    ['private contacts use the same canonical online projection as the member list',source.includes('const online=new Map(getOnlineUsers(req.user).map(user=>[keyName(user.name),user]));')],
+    ['opening the private list preserves unread counts instead of marking every conversation read',html.includes('privateUnread={};a.forEach(item=>{privateUnread[key(item.name)]=Math.max(0,Number(item.unread)||0)})')&&!html.slice(html.indexOf('async function openPrivateList()'),html.indexOf('function showBlockModal')).includes('/api/private/read-all')],
+    ['private list displays per-conversation unread counts and updates while open without stale list responses',html.includes('unread?`<span class="unreadBadge">${unread}</span>')&&html.includes('class="privateLastText"')&&html.includes("if(activeOverlay==='privateList')openPrivateList()")&&html.includes('const requestId=++privateListRequest')&&html.includes('if(requestId!==privateListRequest)return;')],
+    ['wall unread count is calculated from a persisted per-account read cursor',source.includes('wallReadAt:{')&&source.includes("app.get('/api/wall/unread',requireAuth")&&source.includes("app.post('/api/wall/read',requireAuth")&&source.includes('Number(p.at||0)>readAt')],
+    ['wall opens mark only the latest post actually loaded as read and ignore stale async responses',html.includes('const throughAt=posts.reduce((max,post)=>Math.max(max,Number(post.at)||0),0)')&&html.includes("api('/api/wall/read'")&&html.includes('const requestId=++wallOpenRequest')&&html.includes('if(requestId!==wallOpenRequest)return;')],
+    ['wall unread count initializes after reload and ignores the member own posts',html.includes("api('/api/wall/unread')")&&html.includes("key(post.from)!==key(me?.name||'')")],
+    ['country flags are based on available country metadata rather than a hard-coded Iraqi flag',html.includes("countryFlag(x.countryCode||x.profile?.countryCode||x.profile?.country||'')")&&!html.includes("x.type==='guest'?'👤':'🇮🇶'")&&source.includes('function countryCodeFromSocket(so)')],
+    ['browser entry files remain identical after the presence and unread-counter changes',html===publicHtml]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+  const start=source.indexOf('function buildPresenceContext(){');
+  const end=source.indexOf('function emitPresenceToRoom(room,notice){',start);
+  if(start<0||end<0)throw new Error('presence projection functions not found');
+  const runtimeSource=source.slice(start,end);
+  const socketOld={id:'socket-old',connected:false,data:{sid:'session-a'},handshake:{headers:{'cf-ipcountry':'IQ'}},emit(){}};
+  const socketA={id:'socket-a',connected:true,data:{sid:'session-a'},handshake:{headers:{'cf-ipcountry':'IQ'}},emit(){}};
+  const socketB={id:'socket-b',connected:true,data:{sid:'session-b'},handshake:{headers:{'cf-ipcountry':'US'}},emit(){}};
+  const socketC={id:'socket-c',connected:true,data:{sid:'session-c'},handshake:{headers:{}},emit(){}};
+  const sockets=new Map([[socketOld.id,socketOld],[socketA.id,socketA],[socketB.id,socketB],[socketC.id,socketC]]);
+  const sessionData=new Map([['session-a',{name:'Ahmed',type:'member',created:1}],['session-b',{name:'Ahmed',type:'member',created:2}],['session-c',{name:'Other',type:'guest',created:3}],['session-stale',{name:'Ghosted',type:'member',created:4}]]);
+  const activeData=new Map([['session-a',{name:'Ahmed',room:'public',socketId:'socket-a',joinedAt:100}],['session-b',{name:'Ahmed',room:'public',socketId:'socket-b',joinedAt:200}],['session-c',{name:'Other',room:'friends',socketId:'socket-c',joinedAt:150}],['session-stale',{name:'Ghosted',room:'public',socketId:'missing-socket',joinedAt:300}]]);
+  const ctx={io:{sockets:{sockets}},socketUsers:activeData,sessions:sessionData,db:{rooms:[]},keyName:x=>String(x||'').trim().toLowerCase(),isOwner:()=>false,hasPermission:()=>false,roleOf:()=> 'member',displayName:x=>x,userLikes:()=>0,level:()=>1,profile:()=>({}),sessionUser:sid=>sessionData.get(sid)};
+  vm.createContext(ctx);
+  vm.runInContext(runtimeSource+`\nglobalThis.testContext=buildPresenceContext;globalThis.testOnline=getOnlineUsers;globalThis.testRoom=onlineInRoom;globalThis.testSocket=socketBySession;globalThis.testCurrent=isCurrentSessionSocket;`,ctx);
+  const presence=ctx.testContext(),online=ctx.testOnline(null,presence),publicCount=ctx.testRoom('public',null,presence),friendsCount=ctx.testRoom('friends',null,presence);
+  const ahmed=online.find(x=>x.name==='Ahmed');
+  const runtimeOk=presence.activeEntries.length===3&&online.length===2&&ahmed?.room==='public'&&ahmed?.countryCode==='US'&&publicCount===1&&friendsCount===1&&ctx.testSocket('session-a')===socketA&&ctx.testCurrent(socketA)&&!ctx.testCurrent(socketOld);
+  if(runtimeOk)pass('presence runtime fixture: stale socket ignored, duplicate account counted once, latest session metadata selected');
+  else fail('presence runtime fixture',JSON.stringify({active:presence.activeEntries.length,online:online.map(x=>({name:x.name,room:x.room,countryCode:x.countryCode})),publicCount,friendsCount}));
+} catch(error) { fail('v46.93.37 presence and unread-counter regression suite',error.message); }
+
+
+// v46.93.43: public chat input and sent messages start from the left; private/wall defaults stay scoped.
+try {
+  const html=fs.readFileSync(mainPath,'utf8');
+  const publicInputs=[...html.matchAll(/\.chat \.composer>\.composerRichInput\{([^}]*)\}/g)];
+  const publicMessage=html.match(/\.msgtext\{display:block;[^}]*\}/);
+  const finalMessage=html.match(/\.msgtext\{text-align:left;direction:ltr;\}/);
+  const checks=[
+    ['public composer uses left alignment and LTR caret origin',publicInputs.some(m=>/text-align:left/.test(m[1])&&/direction:ltr/.test(m[1]))],
+    ['public sent-message text uses left alignment at its base rule',!!publicMessage&&/text-align:left/.test(publicMessage[0])&&/direction:ltr/.test(publicMessage[0])],
+    ['final public-message rule no longer restores RTL/right alignment',!!finalMessage],
+    ['private and wall composer inputs share the left-aligned entry origin while retaining RTL direction',/\.composerRichInput\{[^}]*text-align:left;direction:rtl;unicode-bidi:plaintext\}/.test(html)],
+    ['public input keeps its existing grid slot and compact dimensions',/\.chat \.composer>\.composerRichInput\{[^}]*grid-column:2!important;[^}]*height:34px!important/.test(html)]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('v46.93.43 public alignment regression checks',error.message); }

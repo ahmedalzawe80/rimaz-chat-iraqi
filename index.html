@@ -1020,6 +1020,21 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 #msgs .msg .msghead{background:transparent!important;}
 #msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important;max-width:100%!important;min-width:0!important;padding:0 2px!important;background:var(--rimaz-name-highlight,transparent)!important;box-decoration-break:clone;-webkit-box-decoration-break:clone;}
 </style>
+
+<style id="rimaz-media-two-stage">
+.privateMediaArea{display:block!important;width:100%!important;margin:6px 0!important;direction:ltr!important;text-align:left!important}
+.privateMediaCard,.wallMediaCard{display:block!important;width:max-content!important;max-width:100%!important;margin:5px 0!important;padding:0!important;background:transparent!important;border:0!important;box-sizing:border-box!important}
+.privateMediaView,.wallMediaView{display:block!important;min-height:38px!important;padding:7px 15px!important;border:1px solid #c9c9c9!important;border-radius:5px!important;background:#f1f1f1!important;color:#171717!important;font-size:15px!important;font-weight:800!important;cursor:pointer!important}
+.privateMediaView:disabled{opacity:.65!important}
+.privateInlineMedia,.wallInlineMedia{display:block!important;width:auto!important;max-width:min(100%,420px)!important;max-height:420px!important;height:auto!important;object-fit:contain!important;margin:5px 0!important;border-radius:5px!important;background:#111!important;cursor:zoom-in!important}
+.privateInlineMedia[controls],.wallInlineMedia[controls]{width:min(100%,420px)!important;max-height:420px!important}
+.privateAudio{max-width:100%;width:250px;height:38px}
+.privateMediaViewer{position:fixed!important;inset:0!important;z-index:2147483000!important;width:100vw!important;height:100dvh!important;max-width:none!important;max-height:none!important;margin:0!important;padding:12px!important;box-sizing:border-box!important;background:rgba(0,0,0,.96)!important;display:flex!important;align-items:center!important;justify-content:center!important;overflow:hidden!important}
+.privateMediaFullImage,.privateMediaFullVideo{display:block!important;width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;object-fit:contain!important;background:#000!important}
+.privateMediaClose{position:fixed!important;z-index:2!important;top:max(12px,env(safe-area-inset-top))!important;right:12px!important;width:42px!important;height:42px!important;border:0!important;border-radius:50%!important;background:#df5555!important;color:#fff!important;font-size:30px!important;line-height:1!important;font-weight:900!important}
+@media(max-width:600px){.privateInlineMedia,.wallInlineMedia{max-width:100%!important;max-height:360px!important}.privateInlineMedia[controls],.wallInlineMedia[controls]{width:100%!important;max-height:360px!important}}
+</style>
+
 </head><body><div id="app"></div>
 <script>
 const app=document.getElementById('app');sessionStorage.removeItem('rimaz_sid');localStorage.removeItem('rimaz_sid');let sid='',me=null,rooms=[],currentRoom='public',socket=null,activeOverlay=null,privateTo='',privateOpen=false,notifications=[],privateUnread={},wallUnread=0,wallOpenRequest=0,privateListRequest=0,privatePeerProfile={},privatePeerUser=null,privateMinimizedPeer=null;const privateMediaObjectUrls=new Set();function clearPrivateMediaObjectUrls(){document.querySelectorAll('#layer audio,#layer video,.privateMediaViewer audio,.privateMediaViewer video').forEach(media=>{try{media.pause();media.removeAttribute('src');media.load?.()}catch{}});for(const url of privateMediaObjectUrls){try{URL.revokeObjectURL(url)}catch{}}privateMediaObjectUrls.clear();document.querySelectorAll('.privateMediaViewer').forEach(viewer=>viewer.remove());}
@@ -1142,13 +1157,10 @@ function addPresence(d){if(currentRoom!==d.room)return;const box=document.getEle
 
 function normalizeSmileyShortcut(value){return String(value||'').trim().replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).toLowerCase()}
 function renderChatText(value){let out=esc(value||'');const list=window.chatSmileyCache||[];for(const x of list){const icon=String(x.icon||''),token='[[smiley:'+String(x.id)+']]';if(icon.startsWith('/uploads/')||icon.startsWith('/smileys/')||icon.startsWith('data:image/')||/^\/classic-smileys(?:-[^/]+)?\//.test(icon)){out=out.split(token).join(`<img class="chatSmiley" src="${esc(icon)}" alt="${esc(x.name||'سميل')}">`)}else if(icon){out=out.split(token).join(esc(icon))}}return out.replace(/\n/g,'<br>')}
-function renderInlineMediaCard(type,url,scope='private'){const safeUrl=esc(url);const cardClass=scope==='wall'?'wallMediaCard':'privateMediaCard';const buttonClass=scope==='wall'?'wallMediaView':'privateMediaView';const action=scope==='wall'?'openWallMediaFrom':'openPrivateMediaFrom';const label=type==='image'?'▧ عرض الصورة':'▶ عرض الفيديو';const preview=type==='image'?`<img class="inlineMediaPreview" src="${safeUrl}" alt="معاينة الصورة" loading="eager" decoding="async">`:`<video class="inlineMediaPreview inlineVideoPreview" src="${safeUrl}" muted playsinline preload="metadata" tabindex="-1" aria-label="معاينة الفيديو"></video>`;return `<div class="${cardClass} ${type}MediaCard" data-media-type="${type}" data-media-url="${safeUrl}">${preview}<button type="button" class="${buttonClass}" onclick="${action}(this.parentElement)">${label}</button></div>`}
-const wallMediaObjectUrls=new Set();
-async function fetchProtectedMediaPreview(area,url,mime,scope,isCurrent=()=>true){if(!area||!url)return;let objectUrl='';try{const response=await fetch(url,{headers:{'x-session':sid},cache:'no-store',credentials:'same-origin'});if(!response.ok)throw new Error('تعذر تحميل الوسائط');const blob=await response.blob();if(!blob.size)throw new Error('ملف الوسائط فارغ');objectUrl=URL.createObjectURL(blob);if(!document.contains(area)||!isCurrent()){URL.revokeObjectURL(objectUrl);return;}if(scope==='wall')wallMediaObjectUrls.add(objectUrl);else privateMediaObjectUrls.add(objectUrl);const type=String(mime||blob.type||'').startsWith('image/')?'image':String(mime||blob.type||'').startsWith('video/')?'video':'audio';area.innerHTML=type==='audio'?`<audio class="privateAudio" src="${esc(objectUrl)}" controls preload="metadata"></audio>`:renderInlineMediaCard(type,objectUrl,scope);}catch(error){if(objectUrl)URL.revokeObjectURL(objectUrl);if(document.contains(area)){area.innerHTML=`<span class="mediaLoadError" role="status">تعذر تحميل الوسائط</span>`;console.warn('Media preview failed:',error);}}}
-function addMessage(m){if(m?.type==='presence'){addPresence({id:m.id,name:m.from,displayName:m.displayName||m.from,profile:m.profile||{},action:m.presenceAction||'join',exitKind:m.exitKind,room:m.room,targetRoom:m.targetRoom,at:m.at});return;}const box=document.getElementById('msgs');if(!box)return;if(m?.type==='announcement'||m?.type==='welcome'){const row=document.createElement('div');row.className='rimazChatNotice'+(m.type==='welcome'?' rimazWelcomeNotice':'');row.dataset.messageId=String(m.id||'');const who=m.type==='welcome'?'شات ريماز':(m.displayName||m.from||'الإدارة');const rankHtml=m.type==='welcome'?`<small class="noticeRank">ترحيب شات ريماز</small>`:'';const badges=memberBadge({...m,...(m.profile||{}),name:m.from,from:m.from,role:m.role});row.innerHTML=m.type==='announcement'&&m.duration==='15m'?`<div class="noticeAuthor"><img src="${esc(avatarFor(m.profile||{}))}" alt=""><div class="noticeContent"><b>${m.profile?.rank?badges:''}${esc(who)}${rankHtml}</b><div class="noticeText"><span class="announcementFixedLabel">إعلان</span><span class="noticeMessageText">${esc(m.text||'')}</span></div></div></div><small class="noticeTime">${new Date(m.at||Date.now()).toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'})}</small>`:m.type==='announcement'?`<div class="noticeAuthor"><img src="${esc(avatarFor({}))}" alt="الإدارة"><div class="noticeContent"><b class="announcementAdminTitle">${esc(m.title||'إعلان إداري')}</b><div class="noticeText"><span class="noticeMessageText">${esc(m.text||'')}</span></div></div></div><small class="noticeTime">${new Date(m.at||Date.now()).toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'})}</small>`:`<div class="noticeAuthor"><img src="${esc(avatarFor(m.profile||{}))}" alt=""><div class="noticeContent"><b>${esc(who)}${rankHtml}</b><div class="noticeText"><span class="noticeMessageText">${esc(m.text||'')}</span></div></div></div><small class="noticeTime">${new Date(m.at||Date.now()).toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'})}</small>`;box.appendChild(row);box.scrollTop=box.scrollHeight;return;}const p=m.profile||{};let content=renderChatText(m.text||'');if(m.media){const mediaType=String(m.media.mime||'');content=mediaType.startsWith('image/')?renderInlineMediaCard('image',m.media.url,'private'):mediaType.startsWith('video/')?renderInlineMediaCard('video',m.media.url,'private'):`<audio src="${esc(m.media.url)}" controls preload="metadata"></audio>`}const messageRole=m.role||p.role||(key(m.from)===key(me?.name)?(me?.role||(me?.owner?'owner':me?.admin?'admin':null)):null);const messageBadge=memberBadge({...m,...p,role:messageRole,name:m.from,from:m.from,vip:m.vip??p.vip});box.insertAdjacentHTML('beforeend',`<div class="msg" data-from="${esc(m.from||'')}" data-message-id="${esc(m.id||'')}"><img class="avatar" onclick="openMemberProfile('${esc(m.from)}')" src="${esc(avatarFor(p))}"><div class="msgbody"><div class="msghead" data-from="${esc(m.from||'')}" style="color:${esc(p.nameColor||'#000000')};background:transparent;--rimaz-name-highlight:${esc(p.bgColor||'#ffffff')}">${personalBannerIdentity(p,m.displayName||p.displayName||m.from,messageBadge,false,'messageIdentity')}</div><div class="msgtext" style="color:${esc(p.fontColor||'#000000')}">${content}</div></div><div class="time">${new Date(m.at).toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'})}</div></div>`);box.scrollTop=box.scrollHeight}
+function addMessage(m){if(m?.type==='presence'){addPresence({id:m.id,name:m.from,displayName:m.displayName||m.from,profile:m.profile||{},action:m.presenceAction||'join',exitKind:m.exitKind,room:m.room,targetRoom:m.targetRoom,at:m.at});return;}const box=document.getElementById('msgs');if(!box)return;if(m?.type==='announcement'||m?.type==='welcome'){const row=document.createElement('div');row.className='rimazChatNotice'+(m.type==='welcome'?' rimazWelcomeNotice':'');row.dataset.messageId=String(m.id||'');const who=m.type==='welcome'?'شات ريماز':(m.displayName||m.from||'الإدارة');const rankHtml=m.type==='welcome'?`<small class="noticeRank">ترحيب شات ريماز</small>`:'';const badges=memberBadge({...m,...(m.profile||{}),name:m.from,from:m.from,role:m.role});row.innerHTML=m.type==='announcement'&&m.duration==='15m'?`<div class="noticeAuthor"><img src="${esc(avatarFor(m.profile||{}))}" alt=""><div class="noticeContent"><b>${m.profile?.rank?badges:''}${esc(who)}${rankHtml}</b><div class="noticeText"><span class="announcementFixedLabel">إعلان</span><span class="noticeMessageText">${esc(m.text||'')}</span></div></div></div><small class="noticeTime">${new Date(m.at||Date.now()).toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'})}</small>`:m.type==='announcement'?`<div class="noticeAuthor"><img src="${esc(avatarFor({}))}" alt="الإدارة"><div class="noticeContent"><b class="announcementAdminTitle">${esc(m.title||'إعلان إداري')}</b><div class="noticeText"><span class="noticeMessageText">${esc(m.text||'')}</span></div></div></div><small class="noticeTime">${new Date(m.at||Date.now()).toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'})}</small>`:`<div class="noticeAuthor"><img src="${esc(avatarFor(m.profile||{}))}" alt=""><div class="noticeContent"><b>${esc(who)}${rankHtml}</b><div class="noticeText"><span class="noticeMessageText">${esc(m.text||'')}</span></div></div></div><small class="noticeTime">${new Date(m.at||Date.now()).toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'})}</small>`;box.appendChild(row);box.scrollTop=box.scrollHeight;return;}const p=m.profile||{};let content=renderChatText(m.text||'');if(m.media){content=m.media.mime.startsWith('image/')?`<img src="${esc(m.media.url)}" class="wallMedia">`:m.media.mime.startsWith('video/')?`<video src="${esc(m.media.url)}" class="wallMedia" controls></video>`:`<audio src="${esc(m.media.url)}" controls></audio>`}const messageRole=m.role||p.role||(key(m.from)===key(me?.name)?(me?.role||(me?.owner?'owner':me?.admin?'admin':null)):null);const messageBadge=memberBadge({...m,...p,role:messageRole,name:m.from,from:m.from,vip:m.vip??p.vip});box.insertAdjacentHTML('beforeend',`<div class="msg" data-from="${esc(m.from||'')}" data-message-id="${esc(m.id||'')}"><img class="avatar" onclick="openMemberProfile('${esc(m.from)}')" src="${esc(avatarFor(p))}"><div class="msgbody"><div class="msghead" data-from="${esc(m.from||'')}" style="color:${esc(p.nameColor||'#000000')};background:transparent;--rimaz-name-highlight:${esc(p.bgColor||'#ffffff')}">${personalBannerIdentity(p,m.displayName||p.displayName||m.from,messageBadge,false,'messageIdentity')}</div><div class="msgtext" style="color:${esc(p.fontColor||'#000000')}">${content}</div></div><div class="time">${new Date(m.at).toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'})}</div></div>`);box.scrollTop=box.scrollHeight}
 
 async function sendPublic(){const input=document.getElementById('msgInput');if(!input)return;await expandChatShortcut(input,true);const text=readComposer(input).trim();if(!text)return;socket.emit('send-message',{room:currentRoom,text});input.innerHTML=''}
-function layer(html,name){if(activeOverlay==='private'&&name!=='private')clearPrivateMediaObjectUrls();if(activeOverlay==='wall'&&name!=='wall'){for(const url of wallMediaObjectUrls){try{URL.revokeObjectURL(url)}catch{}}wallMediaObjectUrls.clear()}activeOverlay=name;document.getElementById('layer').innerHTML=html}
+function layer(html,name){if(activeOverlay==='private'&&name!=='private')clearPrivateMediaObjectUrls();activeOverlay=name;document.getElementById('layer').innerHTML=html}
 function closeLayer(){const wasPrivateList=activeOverlay==='privateList';if(activeOverlay==='private')clearPrivateMediaObjectUrls();activeOverlay=null;document.getElementById('layer').innerHTML='';if(wasPrivateList)refreshPrivateUnread()}
 async function refreshPrivateUnread(){try{const contacts=await api('/api/private/contacts');privateUnread={};contacts.forEach(x=>{privateUnread[key(x.name)]=Number(x.unread)||0});updatePrivateButton()}catch(e){console.warn('تعذر تحديث عداد الخاص',e)}}
 function head(t){return `<div class="overlayHead"><span>${t}</span><button class="close" onclick="closeLayer()">×</button></div>`}
@@ -1237,7 +1249,6 @@ async function openWall(){
     const byName=new Map(members.map(u=>[key(u.name),u]));
     const posts=w.map(p=>{const u=byName.get(key(p.from));return {...p,profile:u?.profile||p.profile||{},role:u?.role||p.role,vip:u?.vip||p.vip,displayName:u?(displayFor(u)||p.from):(p.displayName||p.from)}});
     const paused=!status.enabled;
-    for(const oldUrl of wallMediaObjectUrls){URL.revokeObjectURL(oldUrl)}wallMediaObjectUrls.clear();
     layer(`<div class="overlay wallOverlay">${head('الحائط')}<div class="overlayBody wallOverlayBody">${paused?'<div style="padding:10px;background:#fff1f1;color:#a00;text-align:center;font-weight:900">الحائط متوقف مؤقتاً من الإدارة</div>':''}<div id="wallPosts" class="wallPosts">${posts.map(wallCard).join('')}</div><div class="wallInput"><div class="wallCompose"><button ${paused?'disabled style="opacity:.45"':''} onclick="postWall()">إرسال ➤</button><div id="wallText" class="composerRichInput wallComposerRich" contenteditable="${paused?'false':'true'}" role="textbox" aria-label="اكتب منشورك" data-placeholder="${paused?'الحائط متوقف حالياً':'اكتب منشورك...'}" oninput="expandChatShortcut(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();postWall()}"></div>${chatToolButtons('wall',paused)}<button ${paused?'disabled':''} onclick="wallMedia()">📎</button></div></div></div></div>`,'wall');
     const throughAt=posts.reduce((max,post)=>Math.max(max,Number(post.at)||0),0);
     const readState=await api('/api/wall/read',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({throughAt})});
@@ -1245,7 +1256,7 @@ async function openWall(){
     wallUnread=Math.max(0,Number(readState?.count)||0);updateWallButton();
   }catch(error){toast(error.message||'تعذر تحميل الحائط');}
 }
-function wallCard(p){let m='';if(p.media){const t=String(p.media.mime||'').startsWith('image/')?'image':'video';const areaId='wall-media-'+String(p.id).replace(/[^a-zA-Z0-9_-]/g,'');m=`<div class="wallMediaArea" id="${areaId}"><span class="mediaLoadingIndicator" role="status" aria-label="تحميل"></span></div>`;setTimeout(()=>{const area=document.getElementById(areaId);if(area)fetchProtectedMediaPreview(area,p.media.url,p.media.mime,'wall');},0)}return `<div class="wallPost"><img class="wallAvatar" onclick="openMemberProfile('${esc(p.from)}')" src="${esc(avatarFor(p.profile||{}))}"><div class="wallPostMain"><div class="wallText"><div class="rimazUnifiedName" data-from="${esc(p.from)}">${personalBannerIdentity(p.profile||{},p.displayName||p.from,`<span class="rimazRoleBadge">${memberBadge(p)}</span>`,false,'wallIdentity')}</div><div class="wallPostBody">${renderChatText(p.text||'')}</div>${m}</div><div class="wallActions"><button onclick="wallLike('${p.id}')">♥${p.likes||''}</button><button onclick="toast('التعليقات متاحة داخل المنشور')">💬</button></div></div></div>`}
+function wallCard(p){let m='';if(p.media){const t=p.media.mime.startsWith('image/')?'image':'video',url=esc(p.media.url);m=`<div class="wallMediaCard wallMedia-${t}" data-media-type="${t}" data-media-url="${url}"><button type="button" class="wallMediaView" onclick="revealWallMedia(this)">${t==='image'?'▧ عرض الصورة':'▶ عرض الفيديو'}</button></div>`}return `<div class="wallPost"><img class="wallAvatar" onclick="openMemberProfile('${esc(p.from)}')" src="${esc(avatarFor(p.profile||{}))}"><div class="wallPostMain"><div class="wallText"><div class="rimazUnifiedName" data-from="${esc(p.from)}">${personalBannerIdentity(p.profile||{},p.displayName||p.from,`<span class="rimazRoleBadge">${memberBadge(p)}</span>`,false,'wallIdentity')}</div><div class="wallPostBody">${renderChatText(p.text||'')}</div>${m}</div><div class="wallActions"><button onclick="wallLike('${p.id}')">♥${p.likes||''}</button><button onclick="toast('التعليقات متاحة داخل المنشور')">💬</button></div></div></div>`}
 async function postWall(){const input=document.getElementById('wallText');if(!input)return;await expandChatShortcut(input,true);const text=readComposer(input).trim();if(!text)return toast('اكتب شيئاً أولاً');try{await api('/api/wall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});toast('تم النشر');openWall()}catch(e){toast(e.message)}}
 function uploadMediaWithProgress(url,formData,onProgress){return new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();xhr.open('POST',url);xhr.setRequestHeader('x-session',sid);xhr.responseType='json';xhr.upload.onprogress=e=>{if(e.lengthComputable&&onProgress)onProgress(Math.max(0,Math.min(100,Math.round(e.loaded/e.total*100))))};xhr.onload=()=>{const data=xhr.response||{};if(xhr.status>=200&&xhr.status<300)resolve(data);else reject(new Error(data.error||'تعذر رفع الوسائط'))};xhr.onerror=()=>reject(new Error('انقطع الاتصال أثناء رفع الوسائط'));xhr.onabort=()=>reject(new Error('تم إلغاء رفع الوسائط'));xhr.send(formData);window.currentMediaUploadXhr=xhr;});}
 function mediaUploadBar(id,label){return `<div class="rimazUploadProgress" id="${id}" dir="ltr"><button type="button" class="rimazUploadCancel" aria-label="إلغاء الرفع" onclick="cancelMediaUpload('${id}')">×</button><div class="rimazUploadTrack"><div class="rimazUploadFill" style="width:0%"></div></div><span class="rimazUploadPercent">0%</span></div><small class="rimazUploadName">${esc(label||'')}</small>`}
@@ -1273,10 +1284,47 @@ async function hidePrivate(name){try{await api('/api/private/hide',{method:'POST
 async function sendPrivate(){const input=document.getElementById('privateText');if(!input)return;await expandChatShortcut(input,true);const text=readComposer(input).trim();if(!text)return;socket.emit('private-message',{to:privateTo,text});input.innerHTML=''}
 function privateSenderBadge(m,mine,prof){const base=mine?(me||{}):(privatePeerUser||{});const actualProfile=m.profile||prof||base.profile||{};const role=m.role||base.role||actualProfile.role||(mine&&me?.owner?'owner':mine&&me?.admin?'admin':null);return memberBadge({...base,...m,...actualProfile,profile:actualProfile,role,name:m.from,from:m.from,vip:m.vip??base.vip??actualProfile.vip});}
 function addPrivate(m){const b=document.getElementById('privateBody');if(!b)return;const mine=key(m.from)===key(me.name);const prof=m.profile||(mine?(me.profile||{}):privatePeerProfile);const av=avatarFor(prof);const badge=privateSenderBadge(m,mine,prof);b.insertAdjacentHTML('beforeend',`<div class="pmsg ${mine?'me':''}"><div class="pmsgHead"><img src="${esc(av)}"><div class="pmsgIdentity"><div class="pmsgTitle" data-from="${esc(m.from)}">${personalBannerIdentity(prof,m.fromDisplayName||prof.displayName||m.from,badge,false,'privateIdentity')}</div></div></div><div class="pmsgText">${renderChatText(m.text||'')}</div></div>`);b.scrollTop=b.scrollHeight}
-async function addPrivateMedia(m){const b=document.getElementById('privateBody');if(!b)return;const conversationKey=key(privateTo);const mine=key(m.from)===key(me.name);const prof=m.profile||(mine?(me.profile||{}):privatePeerProfile);const av=avatarFor(prof);const url=String(m.media?.url||'');const mime=String(m.media?.mime||'');const placeholderId='private-media-'+Math.random().toString(36).slice(2);const badge=privateSenderBadge(m,mine,prof);b.insertAdjacentHTML('beforeend',`<div class="pmsg ${mine?'me':''}"><div class="pmsgHead"><img src="${esc(av)}"><div class="pmsgIdentity"><div class="pmsgTitle" data-from="${esc(m.from)}">${personalBannerIdentity(prof,m.fromDisplayName||prof.displayName||m.from,badge,false,'privateIdentity')}</div></div></div><div class="privateMediaArea" id="${placeholderId}"><span class="mediaLoadingIndicator" role="status" aria-label="تحميل"></span></div></div>`);b.scrollTop=b.scrollHeight;const area=document.getElementById(placeholderId);if(!area)return;await fetchProtectedMediaPreview(area,url,mime,'private',()=>privateOpen&&key(privateTo)===conversationKey)}
-function openWallMediaFrom(el){const type=el?.dataset?.mediaType,url=el?.dataset?.mediaUrl;if(!type||!url)return;openPrivateMediaViewer(type,url)}
-function openPrivateMediaFrom(el){const type=el?.dataset?.mediaType,url=el?.dataset?.mediaUrl;if(!type||!url)return;openPrivateMediaViewer(type,url)}
-function openPrivateMediaViewer(type,url){const chat=document.querySelector('.chat');if(!chat)return;document.querySelector('.privateMediaViewer')?.remove();const modal=document.createElement('div');modal.className='privateMediaViewer';modal.innerHTML=type==='image'?`<div class="privateMediaFrame imageFrame"><button class="privateMediaClose" type="button" aria-label="إغلاق">×</button><img class="privateMediaFullImage" src="${esc(url)}" alt="الصورة المرسلة"></div>`:`<div class="privateMediaFrame videoFrame"><div class="privateMediaTitle">مشاهدة الفيديو<button class="privateMediaClose" type="button" aria-label="إغلاق">×</button></div><video class="privateMediaFullVideo" src="${esc(url)}" controls playsinline preload="metadata"></video></div>`;chat.appendChild(modal);modal.addEventListener('click',e=>{if(e.target===modal||e.target.closest('.privateMediaClose')){modal.querySelector('video')?.pause();modal.remove()}})}
+async function addPrivateMedia(m){
+ const b=document.getElementById('privateBody');if(!b)return;
+ const mine=key(m.from)===key(me.name),prof=m.profile||(mine?(me.profile||{}):privatePeerProfile),av=avatarFor(prof);
+ const url=String(m.media?.url||''),mime=String(m.media?.mime||''),type=mime.startsWith('image/')?'image':mime.startsWith('video/')?'video':mime.startsWith('audio/')?'audio':'';
+ const placeholderId='private-media-'+Math.random().toString(36).slice(2),badge=privateSenderBadge(m,mine,prof);
+ b.insertAdjacentHTML('beforeend',`<div class="pmsg ${mine?'me':''}"><div class="pmsgHead"><img src="${esc(av)}"><div class="pmsgIdentity"><div class="pmsgTitle" data-from="${esc(m.from)}">${personalBannerIdentity(prof,m.fromDisplayName||prof.displayName||m.from,badge,false,'privateIdentity')}</div></div></div><div class="privateMediaArea" id="${placeholderId}"><div class="privateMediaCard ${type==='video'?'videoMediaCard':'imageMediaCard'}" data-media-type="${esc(type)}" data-media-url="${esc(url)}"><button type="button" class="privateMediaView" onclick="revealPrivateMedia(this)">${type==='video'?'▶ عرض الفيديو':type==='image'?'▧ عرض الصورة':'عرض الملف الصوتي'}</button></div></div></div>`);
+ b.scrollTop=b.scrollHeight;
+}
+async function revealPrivateMedia(button){
+ const card=button?.closest('.privateMediaCard');if(!card||card.dataset.loading==='1'||card.dataset.revealed==='1')return;
+ const type=card.dataset.mediaType,url=card.dataset.mediaUrl;if(!type||!url)return;
+ if(type==='audio'){
+  card.dataset.loading='1';button.disabled=true;
+  try{const r=await fetch(url,{headers:{'x-session':sid},cache:'no-store'});if(!r.ok)throw new Error('تعذر تحميل الملف الصوتي');const blobUrl=URL.createObjectURL(await r.blob());privateMediaObjectUrls.add(blobUrl);card.innerHTML=`<audio class="privateAudio" src="${esc(blobUrl)}" controls preload="metadata"></audio>`;}
+  catch(e){card.dataset.loading='0';button.disabled=false;toast(e.message||'تعذر تحميل الوسائط');}return;
+ }
+ card.dataset.loading='1';button.disabled=true;
+ try{
+  const r=await fetch(url,{headers:{'x-session':sid},cache:'no-store'});if(!r.ok)throw new Error('تعذر تحميل الوسائط الخاصة');
+  const blobUrl=URL.createObjectURL(await r.blob());
+  if(!document.contains(card)||!privateOpen){URL.revokeObjectURL(blobUrl);return;}
+  privateMediaObjectUrls.add(blobUrl);card.dataset.revealed='1';card.dataset.mediaUrl=blobUrl;
+  card.innerHTML=type==='image'?`<img class="privateInlineMedia" src="${esc(blobUrl)}" alt="صورة مرسلة" onclick="openPrivateMediaViewer('image',this.src)">`:`<video class="privateInlineMedia" src="${esc(blobUrl)}" controls playsinline preload="metadata" onclick="event.preventDefault();openPrivateMediaViewer('video',this.currentSrc||this.src)"></video>`;
+ }catch(e){card.dataset.loading='0';button.disabled=false;toast(e.message||'تعذر تحميل الوسائط الخاصة');}
+}
+function revealWallMedia(button){
+ const card=button?.closest('.wallMediaCard');if(!card||card.dataset.revealed==='1')return;
+ const type=card.dataset.mediaType,url=card.dataset.mediaUrl;if(!type||!url)return;
+ card.dataset.revealed='1';
+ card.innerHTML=type==='image'?`<img class="wallInlineMedia" src="${esc(url)}" alt="صورة منشور" onclick="openPrivateMediaViewer('image',this.src)">`:`<video class="wallInlineMedia" src="${esc(url)}" controls playsinline preload="metadata" onclick="event.preventDefault();openPrivateMediaViewer('video',this.currentSrc||this.src)"></video>`;
+}
+function openPrivateMediaViewer(type,url){
+ if(!type||!url)return;
+ document.querySelector('.privateMediaViewer')?.remove();
+ const modal=document.createElement('div');modal.className='privateMediaViewer';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');
+ modal.innerHTML=type==='image'?`<button class="privateMediaClose" type="button" aria-label="إغلاق">×</button><img class="privateMediaFullImage" src="${esc(url)}" alt="الصورة المرسلة">`:`<button class="privateMediaClose" type="button" aria-label="إغلاق">×</button><video class="privateMediaFullVideo" src="${esc(url)}" controls playsinline preload="metadata"></video>`;
+ document.body.appendChild(modal);
+ const close=()=>{modal.querySelector('video')?.pause();modal.remove()};
+ modal.querySelector('.privateMediaClose').addEventListener('click',close);
+ modal.addEventListener('click',e=>{if(e.target===modal)close()});
+}
 function sharePrivate(){if(me.likes<500&&!me.fullAdmin)return toast('إرسال الصور والوسائط الخاصة يفتح عند 500 إعجاب');const f=document.createElement('input');f.type='file';f.accept='image/*,video/*,audio/*';f.onchange=async()=>{const file=f.files?.[0];if(!file)return;const b=document.getElementById('privateBody');if(!b)return;const id='private-upload-'+Date.now();const wrap=document.createElement('div');wrap.className='pmsg me rimazUploadWrap';wrap.innerHTML=mediaUploadBar(id,file.name);b.appendChild(wrap);b.scrollTop=b.scrollHeight;const fd=new FormData();fd.append('file',file);fd.append('to',privateTo);fd.append('scope','private');window.activeMediaUploads=window.activeMediaUploads||{};const entry=window.activeMediaUploads[id]={xhr:null,cancelled:false};try{const promise=uploadMediaWithProgress('/api/media',fd,n=>{const bar=document.getElementById(id);if(bar){bar.querySelector('.rimazUploadFill').style.width=n+'%';bar.querySelector('.rimazUploadPercent').textContent=n+'%'}});entry.xhr=window.currentMediaUploadXhr;const result=await promise;if(entry.cancelled)return;delete window.activeMediaUploads[id];wrap.remove();addPrivateMedia(result)}catch(e){if(!entry.cancelled){wrap.remove();toast(e.message)}delete window.activeMediaUploads[id]}};f.click()}
 async function sendLike(n){try{const j=await api('/api/like',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:n})});toast('تم الإعجاب ♥ '+j.likes);if(activeOverlay==='memberProfile'||activeOverlay==='profile')openMemberProfile(n)}catch(e){showBlockModal(e.message,'تنبيه')}}
 function tryPrivate(n){openPrivate(n)}
@@ -2067,19 +2115,7 @@ login();
 .pmsgHead b{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .wallText{}
 .wallPostMain .wallText b{}
-/* Compact media thumbnails open into a modest square viewer; videos retain playback controls. */
-.privateMediaArea{margin-top:5px!important;direction:ltr!important;text-align:left!important;display:flex!important;justify-content:flex-start!important;margin-right:auto!important;width:100%!important;}
-.videoPlayIcon{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:#df5555;color:#fff;font-size:20px;padding-left:3px;}
-.privateAudio{max-width:100%;width:250px;height:38px;}
-.privateMediaViewer{position:fixed;inset:0;z-index:9999;background:#000f;display:flex;align-items:center;justify-content:center;padding:0;box-sizing:border-box;}
-.privateMediaFrame{position:relative;width:100%;height:100%;max-width:none;max-height:none;aspect-ratio:auto;background:#080808;border:0;border-radius:0;overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:none;}
-.privateMediaFrame.imageFrame{background:#080808;}
-.privateMediaFullImage{display:block;width:100%;height:100%;object-fit:contain;}
-.privateMediaClose{position:absolute;z-index:2;top:6px;right:6px;width:30px;height:30px;border:0;border-radius:5px;background:#df5555;color:#fff;font-size:25px;line-height:1;font-weight:900;}
-.videoFrame{flex-direction:column;aspect-ratio:auto;max-height:none;height:100%;min-height:0;}
-.privateMediaTitle{height:38px;min-height:38px;width:100%;box-sizing:border-box;padding:0 42px 0 10px;display:flex;align-items:center;background:#111;color:#fff;font-size:13px;font-weight:800;}
-.privateMediaFullVideo{display:block;width:100%;height:calc(100% - 38px);max-height:none;object-fit:contain;background:#000;}
-@media(max-width:400px){.privateMediaFullVideo{height:calc(100% - 38px);}}
+/* Media presentation is defined by the unified reveal/viewer rules below. */
 
 /* Private chat and wall media uploads: exact red left-to-right progress strip with cancel on the far left. */
 .rimazUploadWrap{direction:ltr!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;gap:4px!important;padding:6px 2px!important;max-width:100%!important;}
@@ -2091,17 +2127,13 @@ login();
 .rimazUploadName{direction:rtl!important;max-width:min(260px,100%)!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;color:#777!important;font-size:10px!important;}
 .wallUploadWrap{background:#fff!important;border-bottom:1px solid #eee!important;}
 
-<style id="rimaz-unified-inline-media-system">
-/* One preview layout for private chat and wall; original explicit view buttons remain the only open action. */
-.privateMediaCard,.wallMediaCard{display:flex;flex-direction:column;align-items:flex-start;gap:7px;width:min(100%,520px);max-width:100%;margin:8px 0;padding:0;background:transparent;border:0;box-sizing:border-box;}
-.inlineMediaPreview{display:block;width:100%;height:auto;max-height:480px;min-height:220px;object-fit:contain;object-position:left center;background:#171717;border-radius:7px;}
-.inlineVideoPreview{aspect-ratio:16/9;max-height:360px;object-fit:cover;}
-.privateMediaView,.wallMediaView{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:6px 14px;border:0;border-radius:5px;background:#e9e7eb;color:#111;font-size:14px;font-weight:900;text-align:center;cursor:pointer;}
-.privateMediaView:active,.wallMediaView:active{background:#d8d5dc;}
-.privateMediaArea{display:block;width:100%;min-height:24px;}
-.wallMediaArea{width:100%;min-height:20px;}.mediaLoadError{display:inline-block;color:#a33;font-size:12px;font-weight:700;padding:4px 0}.mediaLoadingIndicator{display:inline-block;width:15px;height:15px;border:2px solid #ddd;border-top-color:#555;border-radius:50%;animation:rimazMediaSpin .8s linear infinite;vertical-align:middle;}
-@keyframes rimazMediaSpin{to{transform:rotate(360deg)}}
-@media(max-width:600px){.privateMediaCard,.wallMediaCard{width:min(100%,calc(100vw - 64px));}.inlineMediaPreview{max-height:52vh;min-height:210px;}.inlineVideoPreview{aspect-ratio:16/9;max-height:42vh;min-height:200px;}.privateMediaView,.wallMediaView{min-height:40px;font-size:14px;padding:7px 15px;}}
+<style id="rimaz-private-wall-media-view-cards-v2">
+/* Private and wall attachments stay closed until the explicit action button is pressed. */
+.privateMediaCard,.wallMediaCard{display:flex!important;flex-direction:column!important;align-items:flex-start!important;gap:0!important;width:max-content!important;max-width:min(100%,180px)!important;margin:5px 0!important;padding:0!important;background:transparent!important;border:0!important;border-radius:0!important;box-sizing:border-box!important;}
+.privateMediaView,.wallMediaView{display:block!important;min-height:34px!important;padding:5px 12px!important;border:0!important;border-radius:2px!important;background:#e9e7eb!important;color:#111!important;font-size:16px!important;font-weight:900!important;text-align:center!important;cursor:pointer!important;}
+.privateMediaView:active,.wallMediaView:active{background:#d8d5dc!important;}
+.privateMediaArea{display:block!important;}
+@media(max-width:600px){.privateMediaView,.wallMediaView{font-size:15px!important;}}
 </style>
 
 <style id="rimaz-exact-two-layout-fixes">
@@ -2316,8 +2348,58 @@ login();
 
 
 
-
-
+<style id="rimaz-v4639-private-wall-view-buttons-left">
+/* v46.39: move ONLY private-chat and wall media view buttons to the left and slightly compact them. */
+#layer .privateOverlay .pmsg .privateMediaArea{
+  width:100%!important; margin:5px 0 0 0!important;
+  direction:ltr!important; text-align:left!important;
+  display:flex!important; justify-content:flex-start!important;
+}
+#layer .privateOverlay .pmsg .privateMediaCard{
+  margin-left:0!important; margin-right:auto!important;
+  align-self:flex-start!important; direction:ltr!important;
+}
+#layer .privateOverlay .pmsg .privateMediaView{
+  min-height:29px!important; padding:3px 9px!important;
+  font-size:13px!important; line-height:1.2!important;
+  width:auto!important; max-width:160px!important;
+}
+@media(max-width:650px){
+  #layer .privateOverlay .pmsg .privateMediaArea{margin-left:0!important;margin-right:0!important;}
+  #layer .privateOverlay .pmsg .privateMediaView{
+    min-height:28px!important;padding:3px 8px!important;font-size:12px!important;
+  }
+}
+</style>
+<style id="rimaz-wall-media-left-final">
+/* Wall media preview action: pin the image/video view control to the left edge. */
+#layer .wallOverlay .wallMediaCard{
+  direction:ltr!important;
+  width:max-content!important;
+  max-width:100%!important;
+  margin:5px auto 5px 0!important;
+}
+#layer .wallOverlay .wallMediaView{
+  display:block!important;
+  margin:0!important;
+  text-align:left!important;
+  min-height:29px!important;
+  padding:3px 9px!important;
+  font-size:13px!important;
+  line-height:1.2!important;
+  width:auto!important;
+  max-width:160px!important;
+}
+@media(max-width:650px){
+  #layer .wallOverlay .wallMediaView{
+    min-height:28px!important;
+    padding:3px 8px!important;
+    font-size:12px!important;
+  }
+}
+.rlLoginFeedback{display:block;margin:9px 0 0;padding:10px 12px;border:1px solid #d34b4b;border-radius:5px;background:#fff0f0;color:#a40000;font-size:14px;font-weight:900;text-align:center;line-height:1.5}
+.rlLoginFeedback[hidden]{display:none!important}
+</style>
 
 <style id="rimaz-current-room-indicator-v1">
 /* A slim edge marker identifies only the room currently occupied by this viewer.
