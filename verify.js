@@ -79,7 +79,7 @@ try {
     ['live presence state is emitted individually per viewer', source.includes("const context=buildPresenceContext()") && source.includes("so.emit('live-state',{online:getOnlineUsers(viewer,context),rooms:visibleRooms(viewer,context)})")],
     ['packed image assets are decoded once and reused as Buffers', source.includes('function decodePackedAssets(pack)') && source.includes('decodePackedAssets(SMILEY_PACK)') && source.includes('res.send(item.data);') && !source.includes("res.send(Buffer.from(item.data,'base64'))")],
     ['presence broadcasts reuse indexed session and socket lookups', source.includes('function buildPresenceContext()') && source.includes('sessionsBySid') && source.includes('sessionsByAccount') && source.includes('socketsBySid')],
-    ['member directory omits accounts hidden from the current viewer', source.includes('if(hasInvisibleActiveSession(name,req.user))continue')],
+    ['member directory omits accounts hidden from the current viewer', source.includes('if(hasInvisibleActiveSession(name,req.user,presence))continue')],
     ['hidden join/leave notices are staff-only and ghost emits no presence notices', source.includes("presenceVisibility:u.hidden?'staff':'public'") && source.includes('function emitPresenceToRoom(room,notice)')],
     ['private conversation history is memory-only and cleared after full disconnect', source.includes('privateMessages: []') && source.includes('function clearPrivateConversationForUser(name)') && source.includes('schedulePrivateConversationCleanup(u.name)')],
     ['existing private conversations can be reopened even when the peer is not publicly online', html.includes("const existing=contacts.find(x=>key(x.name)===key(name))")]
@@ -95,7 +95,7 @@ try {
   const checks = [
     ['private X closes only the window and preserves the conversation history', html.includes("function closePrivateConversation(){const other=String(privateTo||'').trim();if(!other){closeLayer();return;}privateOpen=false;privateTo='';privatePeerProfile={};privatePeerUser=null;clearPrivateMediaObjectUrls();closeLayer();toast('تم إغلاق نافذة المحادثة مع الاحتفاظ بسجل الرسائل');}")],
     ['private minimize preserves a restorable peer entry instead of discarding the conversation', html.includes('privateMinimizedPeer={name:other') && html.includes("a.unshift({name:privateMinimizedPeer.name") && html.includes('محادثة مصغّرة')],
-    ['private contacts, members, and read receipts load concurrently', /Promise\.all\(\[api\('\/api\/private\/contacts'\),api\('\/api\/members'\),api\('\/api\/private\/read-all'/.test(html)],
+    ['private contacts and members load concurrently without marking every chat as read', /Promise\.all\(\[api\('\/api\/private\/contacts'\),api\('\/api\/members'\)\]\)/.test(html) && !html.slice(html.indexOf('async function openPrivateList()'),html.indexOf('function showBlockModal')).includes('/api/private/read-all')],
     ['conversation deletion remains an explicit action in the private contacts list', html.includes('onclick="event.stopPropagation();hidePrivate(') && html.includes("api('/api/private/hide'")]
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
@@ -938,15 +938,15 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.36 package version is current', pkg.version === '46.93.36'],
+    ['v46.93.37 package version is current', pkg.version === '46.93.38'],
     ['no dangling async-only lines remain in the browser entry script', !/^\s*async\s*$/m.test(html)],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
-    ['private chat module is enforced on history, contacts, media, and Socket.IO send', serverText.includes("app.get('/api/private/history',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))") && serverText.includes("app.get('/api/private/contacts',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))") && serverText.includes("socket.on('private-message',d=>{const u=socket.data.user;if(!u||!d?.to)return;if(!siteModuleEnabled('privateChat'))")],
-    ['voice room module is enforced on join, mic requests, and peer signaling', serverText.includes("targetRoom.kind==='voice'&&!siteModuleEnabled('voiceRooms')") && serverText.includes("if(!siteModuleEnabled('voiceRooms'))return socket.emit('error-msg'") && serverText.includes("socket.on('voice-peer-offer',d=>{if(!siteModuleEnabled('voiceRooms'))return")],
-    ['video-call module is enforced on call offer and answer', serverText.includes("socket.on('call-offer',d=>{if(!siteModuleEnabled('videoCalls'))") && serverText.includes("socket.on('call-answer',d=>{if(!siteModuleEnabled('videoCalls'))return")],
+    ['private chat module is enforced on history, contacts, media, and Socket.IO send', serverText.includes("app.get('/api/private/history',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))") && serverText.includes("app.get('/api/private/contacts',requireAuth,(req,res)=>{\n  if(!siteModuleEnabled('privateChat'))") && serverText.includes("socket.on('private-message',d=>{const u=socket.data.user;if(!u||!isCurrentSessionSocket(socket)||!d?.to)return;if(!siteModuleEnabled('privateChat'))")],
+    ['voice room module is enforced on join, mic requests, and peer signaling', serverText.includes("targetRoom.kind==='voice'&&!siteModuleEnabled('voiceRooms')") && serverText.includes("socket.on('request-mic',({room,raised,seatIndex}={})=>{\n    if(!isCurrentSessionSocket(socket))return;\n    if(!siteModuleEnabled('voiceRooms'))") && serverText.includes("socket.on('voice-peer-offer',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))")],
+    ['video-call module is enforced on call offer and answer', serverText.includes("socket.on('call-offer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))") && serverText.includes("socket.on('call-answer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))return")],
     ['gift module is enforced on send, upload, and catalogue deletion', serverText.includes("app.post('/api/admin/gift',(req,res)=>{requireAuth(req,res,()=>{if(!siteModuleEnabled('gifts'))") && serverText.includes("app.post('/api/admin/gifts/catalog/upload',requireAuth,uploadSmallImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!siteModuleEnabled('gifts'))") && serverText.includes("app.post('/api/admin/gifts/catalog/delete',requireAuth,(req,res)=>{if(!siteModuleEnabled('gifts'))")],
     ['admin UI exposes all five module switches and saves them', ['moduleWall','modulePrivateChat','moduleVoiceRooms','moduleVideoCalls','moduleGifts'].every(id=>htmlText.includes(id)) && htmlText.includes('saveSiteSettings()') && htmlText.includes('إدارة الإضافات والوحدات المدمجة')],
     ['mobile admin navigation has larger touch targets and bounded sticky scrolling', htmlText.includes('position:sticky;top:0;z-index:5;max-height:32vh;overflow-y:auto') && htmlText.includes('min-height:34px')],
@@ -1045,7 +1045,7 @@ try {
   const htmlText=fs.readFileSync(mainPath,'utf8');
   const checks=[
     ['v46.77.0 Socket.IO starts before optional chat-tools request',htmlText.includes("async function connect(){if(socket)socket.disconnect();socket=io();api('/api/chat-tools').then(")],
-    ['v46.77.0 independent boot requests run concurrently and login polling stops after authentication',htmlText.includes("Promise.all([api('/api/notifications'),api('/api/private/contacts')])")&&htmlText.includes('clearInterval(window.rimazOnlineTimer)')],
+    ['v46.77.0 independent boot requests run concurrently and login polling stops after authentication',htmlText.includes("Promise.all([api('/api/notifications'),api('/api/private/contacts'),api('/api/wall/unread')])")&&htmlText.includes('clearInterval(window.rimazOnlineTimer)')],
     ['v46.77.0 private read receipt no longer refreshes the entire contacts list per message',htmlText.includes('async function markPrivateRead(name){')&&htmlText.slice(htmlText.indexOf('async function markPrivateRead(name){'),htmlText.indexOf('function countryName',htmlText.indexOf('async function markPrivateRead(name){'))).includes("api('/api/private/read'")&&!htmlText.slice(htmlText.indexOf('async function markPrivateRead(name){'),htmlText.indexOf('function countryName',htmlText.indexOf('async function markPrivateRead(name){'))).includes("api('/api/private/contacts'")],
     ['v46.77.0 private media object URLs are tracked and revoked on panel exit',htmlText.includes('const privateMediaObjectUrls=new Set()')&&htmlText.includes('URL.revokeObjectURL(url)')&&htmlText.includes("activeOverlay==='private'&&name!=='private'")&&htmlText.includes('privateMediaObjectUrls.add(objectUrl)')],
     ['v46.77.0 stale private media fetches are discarded after conversation changes',htmlText.includes('!document.contains(area)||!privateOpen||key(privateTo)!==conversationKey')&&htmlText.includes('URL.revokeObjectURL(objectUrl)')],
@@ -1109,7 +1109,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.36 package version',pkgNow.version==='46.93.36'],
+  ['v46.93.37 package version',pkgNow.version==='46.93.38'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
@@ -1339,3 +1339,63 @@ try {
   if(saveHidden&&publishHidden&&closeHidden&&errorVisible)pass('toast runtime hides save/publish/close success only and preserves visible errors');
   else fail('toast runtime success/error behavior');
 } catch (error) { fail('v46.93.27 owner-protection and settings feedback checks', error.message); }
+
+
+// v46.93.38: private media delivery must fan out to every active recipient session.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
+  const route=source.slice(source.indexOf("app.post('/api/media'"),source.indexOf('function normalizeChatFilterText'));
+  const checks=[
+    ['v46.93.38 package version is current',pkgNow.version==='46.93.38'],
+    ['private media verifies an active recipient account and fans out to all its active sessions',route.includes('hasConnectedSessionForUser(to)')&&route.includes("emitToUser(to,'private-media',m)")&&!route.includes('targetSocket[0]')],
+    ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',m)")&&source.includes("emitToUser(to,'private-media',m)")],
+    ['QuickTime MOV uploads have a safe extension and require a valid ISO-BMFF signature',source.includes("'video/quicktime':'.mov'")&&source.includes("['video/mp4','video/quicktime'].includes(mime) && actual==='mp4'")],
+    ['private conversation media remains transient and is not persisted by save()',source.includes('const snapshot = { ...db, privateMessages: [] }')&&source.includes('purgePrivateHistoryAtStartup()')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('v46.93.38 media-delivery regression checks',error.message); }
+
+// v46.93.37: authoritative presence ownership and reliable private/wall unread counters.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const html=fs.readFileSync(mainPath,'utf8');
+  const publicHtml=fs.readFileSync(publicPath,'utf8');
+  const checks=[
+    ['presence only counts the socket that currently owns a login session',source.includes('function isCurrentSessionSocket(socket)')&&source.includes('active?.socketId===socket.id')&&source.includes('if(!sid||!active||active.socketId!==socket.id)return;')],
+    ['late disconnect events cannot remove a newer socket for the same session',source.includes('A late disconnect from a superseded socket must never evict the new live session')&&source.includes('active.socketId!==socket.id)return;')],
+    ['disconnected login sessions and transient private chats use a bounded 60-second reconnect grace period with rollback-safe cleanup',source.includes('SESSION_DISCONNECT_GRACE_MS=60000')&&source.includes('PRIVATE_DISCONNECT_GRACE_MS=60000')&&source.includes('scheduleSessionDisconnectCleanup(sid,u)')&&source.includes('cancelSessionDisconnectCleanup(sid)')&&source.includes('previousGuestWallReadAt')],
+    ['online projection ignores disconnected or superseded sockets',source.includes('if (!so?.connected || so.data?.sid !== sid || !user || so.id !== active.socketId) continue;')],
+    ['online count and per-room count deduplicate multiple sessions for one account',source.includes('const seen=new Set();return arr.filter')&&source.includes('const seen=new Set();')&&source.includes('return seen.size;')],
+    ['room capacity is enforced server-side using distinct accounts',source.includes('const roomAccounts=new Set(')&&source.includes('roomAccounts.size>=capacity')],
+    ['duplicate tabs do not emit duplicate room join/leave presence notices',source.includes('alreadyInTargetRoom=previousRoom===room')&&source.includes('!u.ghost&&!alreadyInTargetRoom')&&source.includes('!u.ghost&&!alreadyInPreviousRoom')&&source.includes('!u.ghost&&!accountStillInRoom')],
+    ['private contacts use the same canonical online projection as the member list',source.includes('const online=new Map(getOnlineUsers(req.user).map(user=>[keyName(user.name),user]));')],
+    ['opening the private list preserves unread counts instead of marking every conversation read',html.includes('privateUnread={};a.forEach(item=>{privateUnread[key(item.name)]=Math.max(0,Number(item.unread)||0)})')&&!html.slice(html.indexOf('async function openPrivateList()'),html.indexOf('function showBlockModal')).includes('/api/private/read-all')],
+    ['private list displays per-conversation unread counts and updates while open without stale list responses',html.includes('unread?`<span class="unreadBadge">${unread}</span>')&&html.includes('class="privateLastText"')&&html.includes("if(activeOverlay==='privateList')openPrivateList()")&&html.includes('const requestId=++privateListRequest')&&html.includes('if(requestId!==privateListRequest)return;')],
+    ['wall unread count is calculated from a persisted per-account read cursor',source.includes('wallReadAt:{')&&source.includes("app.get('/api/wall/unread',requireAuth")&&source.includes("app.post('/api/wall/read',requireAuth")&&source.includes('Number(p.at||0)>readAt')],
+    ['wall opens mark only the latest post actually loaded as read and ignore stale async responses',html.includes('const throughAt=posts.reduce((max,post)=>Math.max(max,Number(post.at)||0),0)')&&html.includes("api('/api/wall/read'")&&html.includes('const requestId=++wallOpenRequest')&&html.includes('if(requestId!==wallOpenRequest)return;')],
+    ['wall unread count initializes after reload and ignores the member own posts',html.includes("api('/api/wall/unread')")&&html.includes("key(post.from)!==key(me?.name||'')")],
+    ['country flags are based on available country metadata rather than a hard-coded Iraqi flag',html.includes("countryFlag(x.countryCode||x.profile?.countryCode||x.profile?.country||'')")&&!html.includes("x.type==='guest'?'👤':'🇮🇶'")&&source.includes('function countryCodeFromSocket(so)')],
+    ['browser entry files remain identical after the presence and unread-counter changes',html===publicHtml]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+  const start=source.indexOf('function buildPresenceContext(){');
+  const end=source.indexOf('function emitPresenceToRoom(room,notice){',start);
+  if(start<0||end<0)throw new Error('presence projection functions not found');
+  const runtimeSource=source.slice(start,end);
+  const socketOld={id:'socket-old',connected:false,data:{sid:'session-a'},handshake:{headers:{'cf-ipcountry':'IQ'}},emit(){}};
+  const socketA={id:'socket-a',connected:true,data:{sid:'session-a'},handshake:{headers:{'cf-ipcountry':'IQ'}},emit(){}};
+  const socketB={id:'socket-b',connected:true,data:{sid:'session-b'},handshake:{headers:{'cf-ipcountry':'US'}},emit(){}};
+  const socketC={id:'socket-c',connected:true,data:{sid:'session-c'},handshake:{headers:{}},emit(){}};
+  const sockets=new Map([[socketOld.id,socketOld],[socketA.id,socketA],[socketB.id,socketB],[socketC.id,socketC]]);
+  const sessionData=new Map([['session-a',{name:'Ahmed',type:'member',created:1}],['session-b',{name:'Ahmed',type:'member',created:2}],['session-c',{name:'Other',type:'guest',created:3}],['session-stale',{name:'Ghosted',type:'member',created:4}]]);
+  const activeData=new Map([['session-a',{name:'Ahmed',room:'public',socketId:'socket-a',joinedAt:100}],['session-b',{name:'Ahmed',room:'public',socketId:'socket-b',joinedAt:200}],['session-c',{name:'Other',room:'friends',socketId:'socket-c',joinedAt:150}],['session-stale',{name:'Ghosted',room:'public',socketId:'missing-socket',joinedAt:300}]]);
+  const ctx={io:{sockets:{sockets}},socketUsers:activeData,sessions:sessionData,db:{rooms:[]},keyName:x=>String(x||'').trim().toLowerCase(),isOwner:()=>false,hasPermission:()=>false,roleOf:()=> 'member',displayName:x=>x,userLikes:()=>0,level:()=>1,profile:()=>({}),sessionUser:sid=>sessionData.get(sid)};
+  vm.createContext(ctx);
+  vm.runInContext(runtimeSource+`\nglobalThis.testContext=buildPresenceContext;globalThis.testOnline=getOnlineUsers;globalThis.testRoom=onlineInRoom;globalThis.testSocket=socketBySession;globalThis.testCurrent=isCurrentSessionSocket;`,ctx);
+  const presence=ctx.testContext(),online=ctx.testOnline(null,presence),publicCount=ctx.testRoom('public',null,presence),friendsCount=ctx.testRoom('friends',null,presence);
+  const ahmed=online.find(x=>x.name==='Ahmed');
+  const runtimeOk=presence.activeEntries.length===3&&online.length===2&&ahmed?.room==='public'&&ahmed?.countryCode==='US'&&publicCount===1&&friendsCount===1&&ctx.testSocket('session-a')===socketA&&ctx.testCurrent(socketA)&&!ctx.testCurrent(socketOld);
+  if(runtimeOk)pass('presence runtime fixture: stale socket ignored, duplicate account counted once, latest session metadata selected');
+  else fail('presence runtime fixture',JSON.stringify({active:presence.activeEntries.length,online:online.map(x=>({name:x.name,room:x.room,countryCode:x.countryCode})),publicCount,friendsCount}));
+} catch(error) { fail('v46.93.37 presence and unread-counter regression suite',error.message); }

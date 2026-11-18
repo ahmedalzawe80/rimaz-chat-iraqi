@@ -1,3 +1,21 @@
+## v46.93.38 — Private media delivery across sessions and iPhone video MIME support
+- Fixed private image/video/audio delivery to use the same account-wide Socket.IO fan-out as private text messages. The previous implementation selected only the first active session for the recipient, so a different active tab/device could miss the media event.
+- Replaced the single-session lookup with an authoritative connected-account check before accepting a private-media upload; delivery now targets every currently owned socket for the recipient.
+- Added the `video/quicktime` upload MIME mapping and MOV extension for iPhone-originated QuickTime videos. Signature validation still requires an ISO-BMFF `ftyp` container before accepting the file.
+- Kept private conversations and their media transient in memory/by session lifecycle, consistent with the existing privacy model; this release does not silently change private-message retention or persist private conversations to the database.
+- Synchronized `index.html` and `public/index.html`; added regression checks for account-wide media delivery and QuickTime media validation.
+
+## v46.93.37 — Presence/session ownership and unread-counter integrity
+
+- Presence is now projected only from the currently connected Socket.IO connection that owns each authenticated session. A late disconnect from an older/replaced socket cannot remove the newer connection.
+- Online and per-room counts are calculated from active session ownership and deduplicated by account, so multiple tabs do not inflate counts. Room capacity is also enforced on the server using distinct accounts.
+- Reconnects and transient private conversations receive a bounded 60-second server-side grace period; abandoned session records are cleaned up, and guest records are removed only when no active session remains.
+- Room join, explicit leave, move, and disconnect presence notices are deduplicated when the same account has another active tab in that room. Overlapping wall/private-list requests use request generations so older responses cannot overwrite newer unread state.
+- Private unread counts are preserved when opening the contacts list; per-conversation unread counts are displayed and refresh while the list is open.
+- Wall unread counts now use a persisted per-account read cursor, survive page reloads, and count posts from other members only. Opening the wall marks only the loaded snapshot as read.
+- Member flags no longer assume every registered member is in Iraq; they use country metadata supplied by the hosting proxy and show an unknown flag when no reliable country code is available.
+- Added regression coverage for stale sockets, duplicate sessions, per-room counts, private unread behavior, wall read cursors, and country flag sources.
+
 ## v46.93.36 — Cross-browser private-call reliability
 
 - Reworked front/rear camera switching to detach the active video sender and release the current camera track before requesting the opposite lens; failed switches attempt to restore the original camera.

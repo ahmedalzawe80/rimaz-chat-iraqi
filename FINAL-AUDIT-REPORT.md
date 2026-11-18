@@ -1,57 +1,45 @@
-# Rimaz Chat — Final archive audit (v46.93.32)
+# Final Audit Report — Rimaz Chat v46.93.37
 
-## v46.93.32 — Banner permissions and login confirmation
+## Release result
 
-- Split the former personal-banner capability into `personal_banner` and `chat_banners_manage`. Existing `banner_upload` permission values migrate to `personal_banner`; only previously full-access administrators receive both new capabilities through the bounded one-time migration.
-- Personal banner endpoints remain self-only: a member can upload or delete only their own profile banner.
-- Added a separate seven-rank chat-banner manager with per-rank preview, upload/replacement, optional label, and deletion. All routes validate the selected built-in rank and enforce `chat_banners_manage` on the server.
-- Rank banners appear for members carrying that rank unless their own personal banner takes precedence. Updates are broadcast live to connected clients.
-- Login uses browser-managed username/password autofill but the login action is now a dedicated button click, not a form auto-submit.
-- Local regression suite: 365 checks passed. JavaScript syntax and both entry-page equality checks passed. Live hosting/browser behavior still requires deployment testing.
+<badge>LOCAL CHECKS PASSED</badge>
 
-## Scope and method
+The release corrects the presence/session ownership defect and aligns the global online count, room counts, private unread count, and wall unread count around consistent server-side state.
 
-This audit examined the supplied ZIP archive, Node.js server, browser entry pages, packed image catalogues, deployment files, project documentation, and regression suite. It included JavaScript syntax checks, static reference scans, duplicate-entry comparison, asset/catalogue validation, and a full run of `node verify.js`.
+## Changes delivered
 
-## Changes in v46.93.30
+1. Socket ownership is explicit. A late disconnect from an older socket cannot delete a newer live session.
+2. Stale sockets cannot send room messages, private messages, room-mic signals, or private-call signaling.
+3. Online counts and room counts deduplicate by account. The room capacity is enforced on the server.
+4. Multiple tabs for the same account no longer produce duplicate room join/leave notices, including explicit room exits.
+5. Disconnected sessions and transient private conversations have a 60-second reconnect grace period. Expired session records are cleaned up safely.
+6. Opening the private contacts list no longer marks every conversation read. Per-contact and total unread counts are loaded from the server and shown.
+7. Wall unread counts persist across page reloads and use a per-account read cursor. Overlapping feed/list fetches cannot apply stale responses over newer state.
+8. Country flags use available proxy country metadata. If no code is supplied, the country is shown as unknown rather than assumed to be Iraq.
 
-1. Removed plaintext password persistence. The browser page no longer reads or writes `rimaz_saved_password`; it clears that legacy key on startup and after successful sign-in.
-2. Preserved remembered usernames. The password field is no longer populated from site storage and retains `autocomplete="current-password"`, allowing supported browser password managers to offer secure autofill and save prompts.
-3. Preserved the existing password-length policy. No existing account, password hash, or login credential on the server was modified.
-4. Removed 14 browser functions and two server helpers that had no call sites or references in the shipped source. The regression suite and syntax checks pass after removal.
-5. Added `.gitignore` and `.dockerignore` rules for local runtime data, private uploads, credentials, developer files, and archives. The repository's `data.json` remains a placeholder and is excluded from Docker build context.
-6. Kept `index.html` and `public/index.html`: they are byte-identical and the server explicitly chooses the root file first and the public copy as a fallback.
-7. Kept packed smiley/gift catalogues, default avatar, Google verification file, and public crawler assets because the application or deployment compatibility path references them.
+## Checks
 
-## Confirmed authorization thresholds
+- Server and verification-script syntax checks: passed.
+- Full local `verify.js` suite: passed.
+- Presence runtime fixture: passed.
+- Main/public HTML equality: passed.
+- The local suite reports that live-server testing is still required.
 
-- Notices: 400 likes.
-- Voice-room microphone: 30 likes.
-- Private media and initiating private calls: 500 likes.
-- Owner and full-permission administrator exemptions are enforced by current server logic.
+## Deployment precautions
 
-## Dead-code removal details and conservative retention
+1. Back up the live database and the `uploads` and `private-media` directories before deployment.
+2. Do not overwrite Deplexo's persistent data volume with the archive's placeholder `data.json`.
+3. After deployment, test two or more accounts simultaneously on separate devices. Check the global count, each room count, private unread badges, wall unread badges after a page reload, disconnect/reconnect, and room movement.
 
-The 14 removed browser declarations were `adminShowGiftRemoval`, `grantLikeFromProfile`, `chooseRank`, `giftEntryFromText`, `deleteGrantedGiftFromPicker`, `addGiftFromPicker`, `renderGiftCatalogRemovalList`, `openShortcuts`, `applyClassicRank`, `chooseRankFromProfile`, `openProfile`, `refreshRankPermissionEditor`, `addGiftToCatalog`, and `notifyCount`. The two removed server helpers were `safeMessage` and `globalIpBanned`. Static reference scans found no call sites or other source references for these declarations.
+## Limits
 
-Repeated CSS selectors and visually similar template fragments were not bulk-deleted. In this project, many repeated rules are deliberate responsive or targeted overrides; removing them without screenshot-based browser regression tests could change the layout. Likewise, both entry HTML files remain because the server uses one as a fallback for the other.
+The local tests are not a substitute for testing against Deplexo's actual proxy and multiple real devices. In particular, country flags depend on the country headers supplied by the hosting layer; when absent, the correct behavior is an unknown flag.
 
-## Verification results
 
-- `node --check server.js`: passed.
-- `node --check verify.js`: passed.
-- `node verify.js`: passed, 360 checks, zero failures.
-- Inline browser JavaScript blocks: syntax checks passed.
-- Browser entry files: byte-identical.
-- Packed image catalogues and JSON assets: validated by the included regression suite.
-- Static function-reference scan: no remaining named function declarations with only a declaration reference in `server.js` or the browser page.
+## v46.93.38 — Media delivery audit
 
-## Files and data safety
-
-The archive's `data.json` contains only an initial placeholder notice. The live persistent database is not part of this archive and must never be replaced with this placeholder. `.dockerignore` excludes the placeholder from the image build context; the server continues to use its persistent data mount when configured.
-
-## Explicit limitations
-
-The archive does not include installed `node_modules`. The execution environment has no package-registry access, so a `package-lock.json` could not be generated or dependency installation performed. The server was syntax-checked and the project's static/archive regression suite passed, but the HTTP/Socket.IO server was not booted with its production dependencies. Browser password-manager prompts, authenticated multi-account flows, and live WebRTC/media behavior require testing in a real browser and on the target host.
-
-The previous v46.93.29 audit details remain in `CHANGELOG.md`. This cleanup did not alter account records, password hashes, database files, user uploads, private media, room data, or authorization policy.
+- Confirmed private media was delivered to only the first matching active recipient session, unlike private text messages which fan out through `emitToUser`.
+- Corrected private media to fan out to all current sockets for the target account after validating that the account has a connected session.
+- Added QuickTime MOV MIME/extension support while retaining binary signature validation.
+- Preserved the documented transient private-chat retention policy.
+- Static regression coverage added; no live Deplexo, multi-device browser, or physical iPhone/Android upload test was possible in this local audit.
