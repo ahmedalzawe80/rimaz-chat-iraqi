@@ -654,7 +654,6 @@ app.post('/api/private/media-ticket',requireAuth,(req,res)=>{
   if(!/^[a-zA-Z0-9._-]{1,180}$/.test(filename)||path.basename(filename)!==filename)return res.status(404).json({error:'الوسائط غير موجودة'});
   const allowed=(db.privateMessages||[]).some(message=>message?.media?.url===mediaUrl&&(keyName(message.from)===keyName(req.user.name)||keyName(message.to)===keyName(req.user.name)));
   if(!allowed)return res.status(404).json({error:'الوسائط غير موجودة أو لا تملك صلاحية عرضها'});
-  ticket.expiresAt=Date.now()+15*60*1000;
   const file=path.resolve(PRIVATE_MEDIA_DIR,filename);
   if(!file.startsWith(path.resolve(PRIVATE_MEDIA_DIR)+path.sep)||!fs.existsSync(file))return res.status(404).json({error:'الوسائط غير موجودة'});
   const now=Date.now();

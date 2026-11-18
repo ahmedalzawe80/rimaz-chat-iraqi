@@ -521,3 +521,10 @@
 - Full-screen video uses native controls and does not autoplay.
 - Removed the visible “جاري تحميل الوسائط” placeholder; the original reveal button is shown immediately.
 - Public chat media sending was not added; public text messaging remains unchanged.
+
+
+## v46.93.53 — Private media server and message alignment correction
+- Fixed the private-media playback-ticket endpoint: removed an undefined ticket reference that caused HTTP 500 responses when preparing private video playback.
+- Moved the private media area into the sender identity column so the reveal button and revealed media sit directly below the sender identity instead of after the full avatar row.
+- Unified private-chat and wall media dimensions at a 320px maximum width and 210px maximum height, preserving aspect ratio and containment.
+- Kept the two-stage reveal/full-screen preview behavior and protected private media access.
