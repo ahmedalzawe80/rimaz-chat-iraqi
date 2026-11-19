@@ -943,9 +943,15 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
   margin:0!important;align-self:start!important;flex:none!important;
 }
 #layer .privateOverlay .pmsgIdentity{
-  grid-column:2!important;grid-row:1!important;display:block!important;
+  grid-column:2!important;grid-row:1!important;display:flex!important;flex-direction:column!important;
+  align-items:flex-start!important;justify-content:flex-start!important;gap:2px!important;
   width:100%!important;min-width:0!important;max-width:100%!important;
   margin:0!important;padding:0!important;align-self:start!important;overflow:visible!important;
+}
+#layer .privateOverlay .pmsgIdentity .pmsgText{
+  display:block!important;width:100%!important;min-width:0!important;max-width:100%!important;
+  margin:0!important;padding:0!important;line-height:1.35!important;overflow-wrap:anywhere!important;
+  text-align:left!important;direction:rtl!important;box-sizing:border-box!important;
 }
 #layer .privateOverlay .pmsgTitle{
   display:flex!important;flex-flow:row nowrap!important;align-items:center!important;
@@ -1258,7 +1264,22 @@ async function openWall(){
   }catch(error){toast(error.message||'تعذر تحميل الحائط');}
 }
 function wallCard(p){let m='';if(p.media){const t=p.media.mime.startsWith('image/')?'image':'video',url=esc(p.media.url);m=`<div class="wallMediaCard wallMedia-${t}" data-media-type="${t}" data-media-url="${url}"><button type="button" class="wallMediaView" onclick="revealWallMedia(this)">${t==='image'?'▧ عرض الصورة':'▶ عرض الفيديو'}</button></div>`}return `<div class="wallPost"><img class="wallAvatar" onclick="openMemberProfile('${esc(p.from)}')" src="${esc(avatarFor(p.profile||{}))}"><div class="wallPostMain"><div class="wallText"><div class="rimazUnifiedName" data-from="${esc(p.from)}">${personalBannerIdentity(p.profile||{},p.displayName||p.from,`<span class="rimazRoleBadge">${memberBadge(p)}</span>`,false,'wallIdentity')}</div><div class="wallPostBody">${renderChatText(p.text||'')}</div>${m}</div><div class="wallActions"><button onclick="wallLike('${p.id}')">♥${p.likes||''}</button><button onclick="toast('التعليقات متاحة داخل المنشور')">💬</button></div></div></div>`}
-async function postWall(){const input=document.getElementById('wallText');if(!input)return;await expandChatShortcut(input,true);const text=readComposer(input).trim();if(!text)return toast('اكتب شيئاً أولاً');try{await api('/api/wall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});toast('تم النشر');openWall()}catch(e){toast(e.message)}}
+async function wallTextForSend(input){
+ let text=readComposer(input).trim();
+ if(!text||!canUseChatPermission('shortcuts_manage'))return text;
+ try{
+  if(!window.chatShortcutCache||!window.chatSmileyCache){const data=await api('/api/chat-tools');window.chatShortcutCache=Array.isArray(data.shortcuts)?data.shortcuts:[];window.chatSmileyCache=Array.isArray(data.smileys)?data.smileys:[];}
+  const match=text.match(/(?:^|\s)([^\s]+)$/);if(!match)return text;
+  const token=match[1],normalized=normalizeSmileyShortcut(token);
+  const shortcut=(window.chatShortcutCache||[]).find(item=>normalizeSmileyShortcut(item.title)===normalized);
+  const smiley=(window.chatSmileyCache||[]).find(item=>normalizeSmileyShortcut(item.shortcut)===normalized);
+  if(!shortcut&&!smiley)return text;
+  const replacement=smiley?(()=>{const icon=String(smiley.icon||'');return (icon.startsWith('/uploads/')||icon.startsWith('/smileys/')||icon.startsWith('data:image/')||/^\/classic-smileys(?:-[^/]+)?\//.test(icon)||/^https?:\/\//.test(icon))?'[[smiley:'+smiley.id+']]':icon})():normalizeShortcutText(shortcut.text);
+  const start=match.index+match[0].length-token.length;
+  return text.slice(0,start)+replacement+text.slice(start+token.length);
+ }catch(error){console.warn('wall shortcut resolution failed',error);return text}
+}
+async function postWall(){const input=document.getElementById('wallText');if(!input)return;const text=await wallTextForSend(input);if(!text)return toast('اكتب شيئاً أولاً');try{await api('/api/wall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});toast('تم النشر');openWall()}catch(e){toast(e.message)}}
 function uploadMediaWithProgress(url,formData,onProgress){return new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();xhr.open('POST',url);xhr.setRequestHeader('x-session',sid);xhr.responseType='json';xhr.upload.onprogress=e=>{if(e.lengthComputable&&onProgress)onProgress(Math.max(0,Math.min(100,Math.round(e.loaded/e.total*100))))};xhr.onload=()=>{const data=xhr.response||{};if(xhr.status>=200&&xhr.status<300)resolve(data);else reject(new Error(data.error||'تعذر رفع الوسائط'))};xhr.onerror=()=>reject(new Error('انقطع الاتصال أثناء رفع الوسائط'));xhr.onabort=()=>reject(new Error('تم إلغاء رفع الوسائط'));xhr.send(formData);window.currentMediaUploadXhr=xhr;});}
 function mediaUploadBar(id,label){return `<div class="rimazUploadProgress" id="${id}" dir="ltr"><button type="button" class="rimazUploadCancel" aria-label="إلغاء الرفع" onclick="cancelMediaUpload('${id}')">×</button><div class="rimazUploadTrack"><div class="rimazUploadFill" style="width:0%"></div></div><span class="rimazUploadPercent">0%</span></div><small class="rimazUploadName">${esc(label||'')}</small>`}
 function cancelMediaUpload(id){const item=window.activeMediaUploads?.[id];if(!item)return;item.cancelled=true;try{item.xhr?.abort()}catch{};document.getElementById(id)?.closest('.rimazUploadWrap')?.remove();delete window.activeMediaUploads[id];}
@@ -1284,7 +1305,13 @@ function closePrivateConversation(){const other=String(privateTo||'').trim();if(
 async function hidePrivate(name){try{await api('/api/private/hide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});delete privateUnread[key(name)];updatePrivateButton();openPrivateList()}catch(e){toast(e.message)}}
 async function sendPrivate(){const input=document.getElementById('privateText');if(!input)return;await expandChatShortcut(input,true);const text=readComposer(input).trim();if(!text)return;socket.emit('private-message',{to:privateTo,text});input.innerHTML=''}
 function privateSenderBadge(m,mine,prof){const base=mine?(me||{}):(privatePeerUser||{});const actualProfile=m.profile||prof||base.profile||{};const role=m.role||base.role||actualProfile.role||(mine&&me?.owner?'owner':mine&&me?.admin?'admin':null);return memberBadge({...base,...m,...actualProfile,profile:actualProfile,role,name:m.from,from:m.from,vip:m.vip??base.vip??actualProfile.vip});}
-function addPrivate(m){const b=document.getElementById('privateBody');if(!b)return;const mine=key(m.from)===key(me.name);const prof=m.profile||(mine?(me.profile||{}):privatePeerProfile);const av=avatarFor(prof);const badge=privateSenderBadge(m,mine,prof);b.insertAdjacentHTML('beforeend',`<div class="pmsg ${mine?'me':''}"><div class="pmsgHead"><img src="${esc(av)}"><div class="pmsgIdentity"><div class="pmsgTitle" data-from="${esc(m.from)}">${personalBannerIdentity(prof,m.fromDisplayName||prof.displayName||m.from,badge,false,'privateIdentity')}</div></div></div><div class="pmsgText">${renderChatText(m.text||'')}</div></div>`);b.scrollTop=b.scrollHeight}
+function addPrivate(m){
+ const body=document.getElementById('privateBody');if(!body)return;
+ const mine=key(m.from)===key(me.name),profile=m.profile||(mine?(me.profile||{}):privatePeerProfile),avatar=avatarFor(profile),badge=privateSenderBadge(m,mine,profile);
+ const identity=personalBannerIdentity(profile,m.fromDisplayName||profile.displayName||m.from,badge,false,'privateIdentity');
+ body.insertAdjacentHTML('beforeend',`<div class="pmsg ${mine?'me':''}"><div class="pmsgHead"><img src="${esc(avatar)}" alt=""><div class="pmsgIdentity"><div class="pmsgTitle" data-from="${esc(m.from)}">${identity}</div><div class="pmsgText">${renderChatText(m.text||'')}</div></div></div></div>`);
+ body.scrollTop=body.scrollHeight;
+}
 async function addPrivateMedia(m){
  const b=document.getElementById('privateBody');if(!b)return;
  const mine=key(m.from)===key(me.name),prof=m.profile||(mine?(me.profile||{}):privatePeerProfile),av=avatarFor(prof);
@@ -2092,12 +2119,7 @@ login();
 .wallPostMain{grid-column:2!important;min-width:0!important;direction:rtl!important;text-align:left!important}
 .wallText{text-align:left!important;}
 .wallActions{direction:ltr!important;justify-content:flex-end!important;margin-top:4px!important}
-/* private messages: avatar left, name beside it */
-.pmsg{direction:ltr!important;text-align:left!important}
-.pmsgHead{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:6px!important;direction:ltr!important;margin-bottom:3px!important}
-.pmsgHead img{width:34px!important;height:34px!important;object-fit:cover!important;border-radius:3px!important}
-.pmsgHead b{}
-.pmsg > div:last-child{text-align:left!important;direction:rtl!important}
+/* Private message layout is defined by the canonical private identity rules. */
 /* private composer: send right, text, emoji, media, call left */
 .privateComposer{direction:rtl!important;grid-template-columns:47px minmax(0,1fr) 29px 29px 29px!important;gap:2px!important}
 /* notification composer: send on the right */
