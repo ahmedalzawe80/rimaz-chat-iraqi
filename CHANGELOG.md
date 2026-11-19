@@ -528,3 +528,10 @@
 - Moved the private media area into the sender identity column so the reveal button and revealed media sit directly below the sender identity instead of after the full avatar row.
 - Unified private-chat and wall media dimensions at a 320px maximum width and 210px maximum height, preserving aspect ratio and containment.
 - Kept the two-stage reveal/full-screen preview behavior and protected private media access.
+
+
+## v46.93.54 — Root cleanup for private text layout and wall shortcuts
+- Moved private text messages into the sender identity column below the name, so the text no longer occupies or overlaps the avatar row.
+- Removed the obsolete conflicting private-message flex layout override; the canonical grid now controls avatar and identity geometry.
+- Replaced wall send-time DOM mutation with a payload-only shortcut resolver; the shortcut remains unchanged in the composer and expands only in the published post.
+- Kept public/private shortcut behavior and existing media flows unchanged.
