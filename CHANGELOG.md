@@ -1,3 +1,7 @@
+## 46.93.63
+- Rebuilt the private typing indicator at its source: the three animated dots now live inside the private message flow, with no text label.
+- Kept the existing authenticated Socket.IO typing relay and removed the previous detached indicator layout.
+
 ## v46.93.60 — ضبط اتجاه رقم العضو وإكمال مؤشر الكتابة في الخاص
 - فصل رقم العضو عن علامة # بعنصرين مستقلين، وترتيبهما باتجاه RTL داخل سطر الرقم فقط؛ يبقى العلم وعموده وموقعه وأبعاده دون تغيير.
 - إصلاح إخفاء مؤشر الكتابة فور وصول رسالة نصية أو وسائط من الطرف الآخر، بدلاً من الاعتماد على مهلة المؤشر وحدها.
@@ -560,3 +564,14 @@
 - Render member serials as Arabic-Indic digits followed by `#` in an isolated LTR run; country flag markup and layout remain unchanged.
 - Integrate the private typing indicator into the base stylesheet with 15px sizing and right-side RTL alignment; remove the late standalone style patch.
 - Keep the existing authenticated Socket.IO typing relay and client lifecycle; local verification covers the relay contract and UI requirements.
+
+## v46.93.61
+- Numeric online-member search now returns at most three exact matches (or three prefix matches when no exact number exists); name search remains unchanged.
+- Private typing indicator now displays the Arabic "جاري الكتابة" label with three compact animated dots aligned on the right.
+- Private typing heartbeat continues while text is entered so the server-side typing state does not expire during longer typing pauses; incoming private messages still clear the indicator.
+
+
+## v46.93.62
+- Preserved the exact three-dot typing animation and its right-side placement from the supplied video.
+- Made the adjacent Arabic “جاري الكتابة” label explicitly visible without changing the dot animation, timing, size, or chat layout.
+- No unrelated features or member-list/flag styling changed.
