@@ -63,7 +63,7 @@
 .emojiModal{position:absolute;z-index:80;bottom:43px;right:4px;width:calc(100% - 10px);height:280px;background:#fff;border:2px solid #111;box-shadow:0 8px 30px #0005;display:flex;flex-direction:column}.emojiHead{background:#111;color:#fff;height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 6px}.emojiGrid{overflow:auto;padding:6px;display:grid;grid-template-columns:repeat(9,1fr);gap:3px}.emojiGrid button{height:34px;background:#fff;border:1px solid #eee;font-size:23px}.modalShade{position:absolute;inset:0;background:#0006;z-index:120;display:flex;align-items:center;justify-content:center;padding:18px}.modalBox{width:min(360px,94%);background:#fff;border:2px solid #111;box-shadow:0 10px 35px #0008}.modalBox .modalTitle{background:#111;color:#fff;padding:10px;font-size:19px;font-weight:900}.modalBox .modalText{padding:20px 12px;text-align:center;font-size:18px;font-weight:800;line-height:1.5}.modalBox .modalOk{width:100%;height:40px;border:0;background:#55b8df;color:#fff;font-weight:900}
 .toast{position:absolute;z-index:100;left:10px;right:10px;top:10px;background:#111;color:#fff;padding:11px;border-radius:4px;text-align:center;display:none}.call{position:absolute;z-index:60;inset:8px;background:#111;color:#fff;display:flex;flex-direction:column}.call video{width:100%;height:100%;object-fit:cover;background:#222}.callBar{position:absolute;bottom:10px;left:8px;right:8px;display:flex;justify-content:center;gap:7px}.callBar button{border:0;background:#df5555;color:#fff;padding:10px 18px}.callBar .ok{background:#58bf61}.call{inset:auto;left:50%;top:50%;transform:translate(-50%,-50%);width:min(390px,calc(100% - 36px));height:min(560px,calc(100% - 110px));border:1px solid #555;border-radius:14px;overflow:hidden;box-shadow:0 12px 36px #0008}.call.cameraCall{width:min(390px,calc(100% - 36px));height:min(560px,calc(100% - 110px))}.call.voiceCall{width:min(360px,calc(100% - 44px));height:min(340px,calc(100% - 140px))}.callBar{bottom:12px;left:12px;right:12px}.callBar button{border-radius:8px;min-height:42px;font-weight:900}@media(max-height:560px){.call.cameraCall{height:calc(100% - 54px)}.call.voiceCall{height:calc(100% - 54px)}}
 @media(min-width:700px){.chat{max-width:590px;margin:auto;box-shadow:0 0 25px #0002}.overlay{right:calc((100% - 590px)/2);width:443px}.profileOverlay{right:calc((100% - 590px)/2 + 8px);width:427px}}
-.privateOverlay{width:72%;height:calc(100% - 73px);top:36px}.privateOverlay.privateMax{width:92%}.noticeMini{position:absolute;z-index:150;top:48px;right:7px;width:min(290px,calc(100% - 14px));background:#fff;border:2px solid #111;box-shadow:0 8px 28px #0007}.noticeMiniHead{height:34px;background:#111;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 6px;font-size:13px}.noticeMiniHead button{width:28px;height:28px;border:0;background:#df5555;color:#fff;font-weight:900}.noticeMiniBody{padding:7px;display:grid;grid-template-columns:1fr 62px;gap:4px}.noticeMiniBody input{height:34px;border:1px solid #aaa;padding:0 7px;min-width:0}.noticeMiniBody button{height:34px;border:0;background:#58bf61;color:#fff;font-weight:900;font-size:11px}@media(max-width:650px){.loginShell{grid-template-columns:1fr;min-height:0;width:96vw}.loginHero{height:190px;min-height:190px}.loginCard{padding:18px}.loginHeroText b{font-size:23px}.loginTabs button{font-size:12px}.privateOverlay{width:78%}.privateOverlay.privateMax{width:94%}.overlay{width:72%}}
+.privateLocked{padding:20px;text-align:center;color:#888}.privateOverlay{width:72%;height:calc(100% - 73px);top:36px}.privateOverlay.privateMax{width:92%}.noticeMini{position:absolute;z-index:150;top:48px;right:7px;width:min(290px,calc(100% - 14px));background:#fff;border:2px solid #111;box-shadow:0 8px 28px #0007}.noticeMiniHead{height:34px;background:#111;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 6px;font-size:13px}.noticeMiniHead button{width:28px;height:28px;border:0;background:#df5555;color:#fff;font-weight:900}.noticeMiniBody{padding:7px;display:grid;grid-template-columns:1fr 62px;gap:4px}.noticeMiniBody input{height:34px;border:1px solid #aaa;padding:0 7px;min-width:0}.noticeMiniBody button{height:34px;border:0;background:#58bf61;color:#fff;font-weight:900;font-size:11px}@media(max-width:650px){.loginShell{grid-template-columns:1fr;min-height:0;width:96vw}.loginHero{height:190px;min-height:190px}.loginCard{padding:18px}.loginHeroText b{font-size:23px}.loginTabs button{font-size:12px}.privateOverlay{width:78%}.privateOverlay.privateMax{width:94%}.overlay{width:72%}}
 .unreadBadge{display:inline-grid;place-items:center;min-width:17px;height:17px;padding:0 4px;border-radius:99px;background:#df5555;color:#fff;font-size:9px;font-weight:900;margin-right:3px}
 /* Rimaz premium polish */
 .login{background:radial-gradient(circle at 15% 20%,#f6dff1 0,#f7eef7 30%,#fff 70%);}
@@ -74,7 +74,7 @@
 .heroGlow{position:absolute;inset:auto -30% -18% -30%;height:45%;background:radial-gradient(circle,#f4a9d633,transparent 65%);z-index:1}
 .loginHeroText{bottom:28px;right:26px;left:26px}.heroBadge{display:inline-block;padding:7px 11px;border:1px solid #ffffff44;background:#ffffff18;backdrop-filter:blur(8px);border-radius:999px;font-size:11px;margin-bottom:12px}.loginHeroText b{font-size:34px;text-shadow:0 3px 18px #0008}.loginHeroText span{font-size:14px}.heroStats{display:flex;flex-wrap:wrap;gap:7px;margin-top:15px}.heroStats span{padding:7px 9px;border-radius:9px;background:#ffffff18;border:1px solid #ffffff22;font-size:10px}
 .loginCard{padding:42px 34px;background:linear-gradient(180deg,#fff,#fbf6fb)}.brandMark{width:50px;height:50px;border-radius:16px;margin:0 auto 12px;display:grid;place-items:center;background:linear-gradient(135deg,#a85b9d,#713a68);color:#fff;font-weight:900;font-size:25px;box-shadow:0 10px 25px #713a6828}.brand{font-size:29px}.sub{font-size:13px;margin-bottom:25px}.loginTabs{background:#f3e9f2;border-radius:13px;padding:4px;gap:3px}.loginTabs button{border-radius:10px;padding:11px 5px}.loginTabs button.active{background:linear-gradient(135deg,#94548b,#713a68);box-shadow:0 6px 15px #713a6828}.loginForm{gap:11px}.loginForm input{height:48px;border-radius:12px;background:#fff}.primary{height:48px;border-radius:12px;background:linear-gradient(135deg,#96568d,#703866);box-shadow:0 9px 18px #713a6825}.guest{background:#f1e5ef;color:#6d3e66;box-shadow:none}.loginPromise{display:flex;gap:9px;align-items:center;margin-top:18px;padding:11px;border:1px solid #eee0ec;background:#fff;border-radius:12px;color:#64435f}.loginPromise span{font-size:19px}.loginPromise b{display:block;font-size:11px}.loginPromise small{display:block;color:#999;margin-top:2px}.loginCredit{margin-top:12px}
-.overlay{width:60%}.privateOverlay{width:62%;height:calc(100% - 73px);max-width:520px}.privateComposer{grid-template-columns:25px 25px 25px 25px minmax(0,1fr) 47px;gap:2px;padding:3px}.privateComposer button{height:29px;font-size:9px}.privateHead{height:34px;grid-template-columns:30px 1fr 32px 30px}.privateHead button{height:32px}.member{grid-template-columns:58px 1fr 52px;min-height:62px}.member img{width:54px;height:54px}.memberSub{}.memberLikes{font-size:10px}.profileOverlay{width:min(330px,72%);top:42px;right:7px;border-radius:10px;overflow:hidden}.profileInfo{padding:7px}.profileGrid button{min-height:40px;font-size:11px}.bottom{height:34px}.bottom button{font-size:9px}.composer{bottom:34px;height:38px;grid-template-columns:30px 30px 1fr 48px}.composer button{font-size:9px}.composer input{height:30px}.roombar{height:34px;min-height:34px;grid-template-columns:36px 1fr 36px 36px}.roombar button{height:29px;font-size:13px}.roombar .roomName{font-size:13px}
+.overlay{width:60%}.privateOverlay{width:62%;height:calc(100% - 73px);max-width:520px}.privateComposer{grid-template-columns:25px 25px 25px 25px minmax(0,1fr) 47px;gap:2px;padding:3px}.privateComposer button{height:29px;font-size:9px}.privateHead{height:34px;grid-template-columns:30px 1fr 32px 30px}.privateHead button{height:32px}.member{grid-template-columns:58px 1fr 52px;min-height:62px}.member img{width:54px;height:54px}.memberName{}.memberSub{}.memberLikes{font-size:10px}.profileOverlay{width:min(330px,72%);top:42px;right:7px;border-radius:10px;overflow:hidden}.profileInfo{padding:7px}.profileGrid button{min-height:40px;font-size:11px}.bottom{height:34px}.bottom button{font-size:9px}.composer{bottom:34px;height:38px;grid-template-columns:30px 30px 1fr 48px}.composer button{font-size:9px}.composer input{height:30px}.roombar{height:34px;min-height:34px;grid-template-columns:36px 1fr 36px 36px}.roombar button{height:29px;font-size:13px}.roombar .roomName{font-size:13px}
 .noticeMini{width:min(280px,calc(100% - 14px));top:82px;right:7px}.noticeMiniBody{grid-template-columns:1fr 58px}.noticeMiniBody input{height:32px}.noticeMiniBody button{height:32px;font-size:10px}
 @media(max-width:650px){.loginShell{width:97vw;min-height:0;grid-template-columns:1fr}.loginHero{min-height:235px;height:235px}.loginCard{padding:22px 18px}.loginHeroText{bottom:18px}.loginHeroText b{font-size:26px}.heroStats span{font-size:9px;padding:6px 7px}.overlay{width:72%}.privateOverlay{width:72%;max-width:none}.profileOverlay{width:82%}}
 
@@ -179,7 +179,7 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 .presence{grid-template-columns:56px minmax(0,1fr) 48px;padding:3px 0;background:#fbf4ec}
 .presence .presenceAvatar{width:54px;height:54px;cursor:pointer}
 .presence .presenceName{}
-
+.presence .presenceText{}
 .presence .notice{font-size:13px;padding:2px 6px;background:#111;color:#fff}
 .bottom{grid-template-columns:repeat(6,minmax(0,1fr));height:39px}
 .bottom button{font-size:12px;font-weight:900;padding:0 1px}
@@ -240,8 +240,8 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 /* only these three controls become black with white text */
 .settings .audioSetting{background:#111;color:#fff;border-color:#111;}
 /* slightly smaller display names everywhere */
-
-
+.msghead{}
+.memberName{}
 .pmsg > b{font-size:13px!important;}
 .wallText > b{}
 @media(max-width:600px){
@@ -270,7 +270,7 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 .presence .presenceBody{grid-column:2!important;text-align:left!important}
 .presence .presenceTime{grid-column:3!important;text-align:right!important}
 .presence .presenceName{display:block!important;}
-
+.presence .presenceText{}
 .presence .notice{background:#111!important;color:#fff!important;padding:2px 6px!important}
 .roombar{display:none!important;height:0!important;min-height:0!important}
 
@@ -331,11 +331,11 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 .wallCompose{grid-template-columns:58px minmax(0,1fr) 34px 34px!important;gap:3px!important;}
 .wallCompose textarea,.wallInput .wallCompose textarea{height:34px!important;min-height:34px!important;max-height:34px!important;min-width:0!important;width:100%!important;box-sizing:border-box!important;resize:none!important;overflow:auto!important;font-size:13px!important;border-radius:5px!important;}
 .wallPostMain .wallText b{}
-
+.wallText{}
 
 /* Reference layout: compact black masthead, burgundy banner and legacy chat tabs. */
 .rlTop{min-height:52px!important;height:52px!important;background:#101014!important;border-bottom:2px solid #28232a!important;padding:5px 10px!important;direction:rtl!important;gap:8px!important}
-.rlBrand{flex:1;min-width:0;gap:8px!important;direction:rtl!important}.rlBrandTag{flex:1;min-width:0}.rlBrandTag>b{display:block;color:#fff;font-size:clamp(11px,2.4vw,18px);font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rlHeartLogo{width:38px!important;height:38px!important;flex-basis:38px!important;border-radius:50%;background:#7041b6;transform:rotate(-18deg);display:grid;place-items:center!important;color:#fff!important}.rlBMark{font-family:Georgia,serif;font-size:30px!important;line-height:1;color:#fff!important;font-weight:1000}.rlRefresh{width:44px;height:44px;flex:0 0 44px;border:0;background:#58b85f;color:#fff;font-size:30px;font-weight:900}
+.rlBrand{flex:1;min-width:0;gap:8px!important;direction:rtl!important}.rlBrandTag{flex:1;min-width:0}.rlBrandTag>b{display:block;color:#fff;font-size:clamp(11px,2.4vw,18px);font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rlHeartLogo{width:38px!important;height:38px!important;flex-basis:38px!important;border-radius:50%;background:#7041b6;transform:rotate(-18deg);display:grid;place-items:center!important;color:#fff!important}.rlHeartLogo:before{content:none!important}.rlBMark{font-family:Georgia,serif;font-size:30px!important;line-height:1;color:#fff!important;font-weight:1000}.rlRefresh{width:44px;height:44px;flex:0 0 44px;border:0;background:#58b85f;color:#fff;font-size:30px;font-weight:900}
 .rlLegacyBanner{height:clamp(126px,19vw,190px)!important;background:#170e19!important;border-bottom:2px solid #30202f!important}.rlLegacyBanner>img{object-position:78% 35%!important;opacity:.83!important}.rlLegacyBanner:after{background:linear-gradient(90deg,#100b15 0%,#180e1b 37%,#1a101b66 64%,#130d17a8 100%)!important}.rlHeroCopy{margin-right:4%!important;max-width:40%!important;text-align:center!important}.rlHeroCopy h1{font-size:clamp(25px,5vw,46px)!important;line-height:.98!important;margin:0!important;color:#f4d9e7!important}.rlHeroCopy h1 strong{color:#f08aaa!important}.rlHeroCopy p{font-size:clamp(13px,2.5vw,20px)!important;margin:6px 0 0!important}.rlBannerKicker{display:block!important;color:#e6a6c0!important;font-size:11px!important}.rlHeroPills{position:absolute;z-index:2;left:27%;top:22%;display:flex;flex-direction:column;gap:5px}.rlHeroPills span{border:1px solid #95677f;border-radius:16px;color:#e7c6d4;background:#201523c9;padding:3px 12px;font-size:clamp(8px,1.5vw,12px);font-weight:800;text-align:center}.rlBubble{position:absolute;z-index:2;left:4%;top:25%;width:24%;height:58%;border:2px solid #a14d75;border-radius:22px;color:#e58bad;text-align:center;padding-top:5px;font-size:clamp(11px,2vw,18px);font-weight:900;opacity:.9}
 .rlLoginPanel{padding:0!important;max-width:none!important}.rlTabs{margin:0!important;border:0!important;border-bottom:1px solid #d7d7d7!important}.rlTabs button{min-height:58px!important;font-size:clamp(12px,2.2vw,19px)!important;color:#376f99!important}.rlTabs button.active{background:#f3f3f3!important;box-shadow:inset 0 -4px #d94c53!important}.rlForm{padding:8px 8px 7px!important;gap:3px!important}.rlForm input{height:45px!important;border:2px solid #111!important;border-radius:2px!important;font-size:17px!important}.rlForm .primary{height:43px!important;border-radius:2px!important;font-size:18px!important;background:#101014!important}.rlPrivateNote{grid-column:1/-1!important}.rlSpecial{display:none!important}.rlOnline{max-width:none!important;margin:0 0 10px!important;border-radius:0!important}.rlOnlineHead{padding:7px 12px!important;font-size:17px!important}.rlOnlineList{padding:0!important;max-height:58vh!important}.rlOnlineMember{min-height:65px!important;border-bottom:1px solid #dedee5!important;border-radius:0!important;gap:8px!important}.rlAvatar{width:62px!important;height:62px!important;border-radius:0!important;background:#fff!important}.rlMemberInfo b{font-size:17px!important}.rlMemberInfo small{font-size:13px!important}.rlFlagMini{margin-left:3px}.rlOnlineFoot{font-size:12px!important;padding:9px!important}.rlFooter{display:none!important}.rlSecretModal{position:fixed;inset:0;z-index:1000;background:#0009;display:flex;align-items:center;justify-content:center;padding:18px}.rlSecretModal.hidden{display:none!important}.rlSecretBox{width:min(310px,92vw);background:#fff;border:2px solid #171219;box-shadow:0 10px 35px #0007}.rlSecretBox h3{margin:0;padding:10px;background:#111;color:#fff;text-align:center}.rlSecretBox button{display:block;width:calc(100% - 18px);margin:9px;height:42px;border:0;background:#171219;color:#fff;font-weight:900}.rlSecretBox .rlSecretCancel{background:#ddd;color:#222}
 @media(max-width:520px){.rlTop{height:50px!important;min-height:50px!important}.rlBrandTag>b{font-size:11px}.rlRefresh{width:40px;height:40px;flex-basis:40px}.rlLegacyBanner{height:130px!important}.rlHeroCopy{max-width:39%!important}.rlHeroPills{left:26%;top:21%}.rlBubble{left:3%;width:22%;height:58%}.rlLoginPanel{padding:0!important}.rlTabs button{min-height:56px!important}.rlForm input{height:43px!important}.rlOnlineList{max-height:54vh!important}.rlOnlineMember{min-height:59px!important}.rlAvatar{width:54px!important;height:54px!important}}
@@ -355,7 +355,7 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 @media(max-width:520px){.rlHeartLogo{width:38px!important;height:35px!important;flex-basis:38px!important}.rlHeartLogo:before{font-size:42px!important;top:-4px!important}.rlHeartLogo>span,.rlHeartLogo>span b{font-size:7px!important}.rlHeartLogo>span em{font-size:8px!important}.rlBrandTag small{font-size:8px!important}}
 /* Wall only: make poster names and action buttons compact and proportionate to public chat. */
 .wallPostMain .wallText>b{}
-
+.wallText{}
 .wallActions{gap:4px!important}
 .wallActions button{padding:3px 6px!important;font-size:10px!important;min-height:24px!important;line-height:1.15!important}
 /* Notification title on the left, close control on the opposite side. */
@@ -512,7 +512,7 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 .roomStatus{grid-column:1!important;grid-row:1!important;width:48px!important;height:48px!important;min-height:48px!important;flex:none!important}
 .voiceMicSlots{grid-column:2!important;grid-row:1!important;display:flex!important;gap:3px!important;height:48px!important;min-height:48px!important;overflow:hidden!important}
 .voiceMicSlot{position:relative!important;flex:1 1 0!important;min-width:0!important;max-width:none!important;height:48px!important;min-height:48px!important;padding:0!important;background:#f8f8f8!important;border:2px solid #c7c7c7!important;border-radius:5px!important;overflow:hidden!important}
-
+.voiceMicSlot.active{background:#fff!important;border-color:#c7c7c7!important}
 .voiceMicSlot img{width:100%!important;height:100%!important;object-fit:cover!important}
 .voiceMicName{position:absolute!important;left:0!important;right:0!important;bottom:0!important;z-index:2!important;background:#000b!important;color:#fff!important;font-size:9px!important;line-height:1.2!important;padding:2px 1px!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;text-align:center!important}
 .member .memberBadge.roleVip{white-space:nowrap!important;flex:0 0 auto!important;display:inline-flex!important;vertical-align:middle!important}
@@ -1054,8 +1054,8 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 
 
 .msg .avatar,.presence .presenceAvatar,.wallAvatar,.room>img,.room .roomAvatar{width:54px!important;height:54px!important;object-fit:cover!important}
-
-
+.presence .presenceText{}
+.presence .presenceName{}
 @media(max-width:600px){:root{--rimaz-member-avatar:48px;--rimaz-member-row:58px;--rimaz-member-badge:23px}.member{grid-template-columns:4px var(--rimaz-member-avatar) 25px minmax(0,1fr) 48px!important;column-gap:1px!important}.member>img{width:var(--rimaz-member-avatar)!important;height:var(--rimaz-member-avatar)!important;min-width:var(--rimaz-member-avatar)!important}.member .memberName{}.member .memberSub{}.presence .presenceText{}}
 
 /* Consolidated source: rimaz-mobile-overlay-repair-2026 id="rimaz-mobile-overlay-repair-2026" (cascade position 44) */
@@ -1303,7 +1303,7 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 /* latest user alignment — preserve approved sizes, only mirror requested areas */
 .memberSectionBar{height:34px;min-height:34px;display:flex;align-items:center;justify-content:center;background:#111;color:#fff;font-size:15px;font-weight:900;text-align:center;border-top:1px solid #000;border-bottom:1px solid #000}
 .membersHead,.privateListHead{direction:ltr!important;justify-content:space-between!important}
-
+.roomsHead{direction:ltr!important;justify-content:space-between!important}
 .roomsHead .close{order:0}.roomsHead span{order:1}
 /* member rows: flag/count right, photo left, name beside photo */
 .member{direction:ltr!important;grid-template-columns:58px minmax(0,1fr) 62px!important}
@@ -1338,20 +1338,20 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 @media(max-width:650px){#layer>.overlay,#layer>.privateOverlay{top:0!important;bottom:39px!important;height:auto!important;}}
 /* Keep names compact without changing the approved left/right message layout. */
 .msghead{gap:5px!important;}
-
-
-
+.msgtext{}
+.presence .presenceName{}
+.presence .presenceText{}
 .member{grid-template-columns:6px 54px 30px minmax(0,1fr) 48px!important;column-gap:1px!important;}
 .memberName{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
-
+.memberSub{}
 .memberMain{grid-column:4!important;grid-row:1!important;padding:3px 5px!important;min-width:0!important;}
 .member .memberBadge{grid-column:3!important;grid-row:1!important;}
 .memberLikes{grid-column:5!important;grid-row:1!important;}
 .memberLikes{font-size:9px!important;padding-right:3px!important;}
 
 .pmsgHead b{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-
-
+.wallText{}
+.wallPostMain .wallText b{}
 /* Media presentation is defined by the unified reveal/viewer rules below. */
 
 /* Private chat and wall media uploads: exact red left-to-right progress strip with cancel on the far left. */
@@ -1461,8 +1461,8 @@ html,body,.rimazLogin{font-family:Tahoma,Arial,sans-serif!important}
 .presence{grid-template-columns:54px minmax(0,1fr) 48px!important;align-items:center!important;min-height:62px!important}
 .presence .presenceAvatar{grid-column:1!important;grid-row:1!important;width:54px!important;height:54px!important;object-fit:cover!important}
 .presence .presenceBody{grid-column:2!important;grid-row:1!important;min-width:0!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:center!important;gap:3px!important}
-
-
+.presence .presenceName{}
+.presence .presenceText{}
 @media(max-width:600px){.member{grid-template-columns:4px 48px 27px minmax(0,1fr) 48px!important;min-height:60px!important;column-gap:2px!important}.member>img{width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important}.member .memberBadge{width:24px!important;height:24px!important;min-width:24px!important;font-size:15px!important}.member .memberName{}.member .memberSub{}.wallAvatar{width:48px!important;height:48px!important}.wallPost{grid-template-columns:48px minmax(0,1fr)!important}.presence .presenceText{}}
 
 /* Consolidated source: rimaz-unified-wall-crown id="rimaz-unified-wall-crown" (cascade position 63) */

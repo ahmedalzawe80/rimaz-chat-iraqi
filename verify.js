@@ -956,7 +956,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.44 package version is current', pkg.version === '46.93.60'],
+    ['v46.93.44 package version is current', pkg.version === '46.93.59'],
     ['no dangling async-only lines remain in the browser entry script', !/^\s*async\s*$/m.test(html)],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
@@ -1127,7 +1127,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.44 package version',pkgNow.version==='46.93.60'],
+  ['v46.93.44 package version',pkgNow.version==='46.93.59'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
@@ -1369,7 +1369,7 @@ try {
   const html=fs.readFileSync(mainPath,'utf8');
   const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   const checks=[
-    ['v46.93.53 package version is current',pkgNow.version==='46.93.60'],
+    ['v46.93.53 package version is current',pkgNow.version==='46.93.59'],
   ['private text is nested under sender identity, not avatar row',html.includes('pmsgTitle') && html.includes('pmsgIdentity') && /<div class=\"pmsgIdentity\"><div class=\"pmsgTitle\"[\s\S]*?<div class=\"pmsgText\">/.test(html)],
   ['wall post shortcut resolver does not mutate composer and postWall does not call expansion mutator',html.includes('async function wallTextForSend(input)') && /async function postWall\(\)\{[^}]*wallTextForSend\(input\)[^}]*\}/.test(html) && !/async function postWall\(\)\{[^}]*expandChatShortcut\(input,true\)[^}]*\}/.test(html)],
     ['private video obtains a short-lived authorized stream URL instead of buffering the full file into a Blob',html.includes("fetch('/api/private/media-ticket'")&&html.includes("if(type==='video')")&&html.includes('src=\"${esc(streamUrl)}\"')],
@@ -1389,7 +1389,7 @@ try {
   const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   const route=source.slice(source.indexOf("app.post('/api/media'"),source.indexOf('function normalizeChatFilterText'));
   const checks=[
-    ['v46.93.44 package version is current (private-media regression suite)',pkgNow.version==='46.93.60'],
+    ['v46.93.44 package version is current (private-media regression suite)',pkgNow.version==='46.93.59'],
     ['private media verifies an active recipient account and fans out to all its active sessions',route.includes('hasConnectedSessionForUser(to)')&&route.includes("emitToUser(to,'private-media',m)")&&!route.includes('targetSocket[0]')],
     ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',m)")&&source.includes("emitToUser(to,'private-media',m)")],
     ['QuickTime MOV uploads have a safe extension and require a valid ISO-BMFF signature',source.includes("'video/quicktime':'.mov'")&&source.includes("['video/mp4','video/quicktime'].includes(mime) && actual==='mp4'")],
@@ -1476,11 +1476,11 @@ try {
 } catch(error) { fail('v46.93.55 member-number regression checks',error.message); }
 
 
-// v46.93.60 exact duplicate CSS rule cleanup; member layout and private typing indicator remain protected.
+// v46.93.59 consolidated member layout and private typing indicator.
 try {
  const html=fs.readFileSync(mainPath,'utf8'),source=fs.readFileSync(server,'utf8'),pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
  const checks=[
-  ['v46.93.60 package version is current',pkgNow.version==='46.93.60'],
+  ['v46.93.59 package version is current',pkgNow.version==='46.93.59'],
   ['all 83 stylesheet source blocks are consolidated into one stylesheet after repairing malformed nesting',([...html.matchAll(/<style\b/g)]).length===1&&html.includes('id=\"rimaz-styles-v1\"')&&html.includes('Consolidated source: rimaz-final-overrides')],
   ['online member identity cell places flag/square left of member number',html.includes('flex-direction:row;align-items:center;')&&html.includes('text-align:left;font-size:17px')&&html.includes('direction:ltr;text-align:right;white-space:nowrap')],
   ['online member search uses a dedicated left-anchored row and preserves input dimensions',html.includes('class="membersSearchRow"')&&html.includes('justify-content:flex-start;direction:ltr')&&html.includes('height:38px')],

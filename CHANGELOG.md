@@ -1,9 +1,3 @@
-## v46.93.60 — safe exact-duplicate CSS cleanup
-- Removed only top-level CSS rules whose selector and complete ordered declaration list were identical to an earlier rule; retained the first occurrence and original cascade order.
-- Did not remove rules with differing values, media-query rules, responsive overrides, or any unrelated `!important` declaration.
-- Kept the member list/search/typing-indicator implementation unchanged and synchronized both browser entry files.
-- Static parser, syntax, regression, and archive-integrity checks are required before release; real-browser visual verification remains outstanding.
-
 ## v46.93.55 — أرقام هوية ثابتة للأعضاء والزوار والبحث بالرقم
 - إضافة سجل أرقام هوية دائم مستقل عن وجود الزائر حالياً؛ رقم الزائر يبقى محفوظاً حتى بعد حذف سجل دخوله المؤقت.
 - ترحيل حسابات الأعضاء والزوار الموجودين إلى أرقام فريدة، وتخصيص رقم جديد عند إنشاء هوية جديدة، مع فصل هوية العضو المسجل عن هوية الزائر الذي يحمل الاسم نفسه.
