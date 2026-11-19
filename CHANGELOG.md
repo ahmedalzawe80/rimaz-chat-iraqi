@@ -549,3 +549,8 @@
 - Member search input keeps its existing container geometry and placement; only its text direction/caret alignment is LTR.
 - Private typing is relayed by the authenticated Socket.IO server to the intended recipient, with permission/ignore/online checks and cleanup on idle, message send, close, and disconnect.
 - Admin/rank like grants persist a recipient notification and emit the same `like-received` event with the granted amount, sender display name, and resulting total.
+
+## v46.93.58 — member serial direction and private typing indicator
+- Render member serials as Arabic-Indic digits followed by `#` in an isolated LTR run; country flag markup and layout remain unchanged.
+- Integrate the private typing indicator into the base stylesheet with 15px sizing and right-side RTL alignment; remove the late standalone style patch.
+- Keep the existing authenticated Socket.IO typing relay and client lifecycle; local verification covers the relay contract and UI requirements.
