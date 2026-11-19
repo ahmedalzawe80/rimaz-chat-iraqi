@@ -1,3 +1,9 @@
+## v46.93.61 — conservative responsive CSS audit
+
+- Removed one empty mobile media-query block with no effect on rendering.
+- Rechecked stylesheet parse validity, repeated declarations, and adjacent media-query merge safety.
+- Retained differing selector overrides and responsive rules pending browser visual regression; no uncertain CSS was deleted.
+
 ## v46.93.60 — safe exact-duplicate CSS cleanup
 - Removed only top-level CSS rules whose selector and complete ordered declaration list were identical to an earlier rule; retained the first occurrence and original cascade order.
 - Did not remove rules with differing values, media-query rules, responsive overrides, or any unrelated `!important` declaration.
