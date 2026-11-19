@@ -550,3 +550,9 @@
 - Added a private-chat typing state over Socket.IO, with validated recipient delivery, a short server-side expiry, and cleanup on blur, send, conversation close, and disconnect.
 - Added a WhatsApp-style three-dot animated indicator aligned to the right side of the private conversation, matching the message text scale and respecting reduced-motion preferences.
 - Kept root and public browser entry files identical.
+
+## v46.93.58
+- Consolidated the online-member list, search field, and private typing indicator into a single scoped component stylesheet; removed their earlier duplicate declarations.
+
+## v46.93.59
+- Repaired malformed nested style markup and consolidated all stylesheet source blocks into one ordered source while preserving the existing cascade.
