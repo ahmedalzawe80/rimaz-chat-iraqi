@@ -542,3 +542,10 @@
 - Removed the obsolete conflicting private-message flex layout override; the canonical grid now controls avatar and identity geometry.
 - Replaced wall send-time DOM mutation with a payload-only shortcut resolver; the shortcut remains unchanged in the composer and expands only in the published post.
 - Kept public/private shortcut behavior and existing media flows unchanged.
+
+
+## 46.93.57 — Root fixes for member number, private typing, and likes
+- Member serial text is isolated LTR and rendered as `1#`, `11#`, `500#`; country flag markup and layout rules are unchanged.
+- Member search input keeps its existing container geometry and placement; only its text direction/caret alignment is LTR.
+- Private typing is relayed by the authenticated Socket.IO server to the intended recipient, with permission/ignore/online checks and cleanup on idle, message send, close, and disconnect.
+- Admin/rank like grants persist a recipient notification and emit the same `like-received` event with the granted amount, sender display name, and resulting total.
