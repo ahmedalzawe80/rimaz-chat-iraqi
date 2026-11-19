@@ -111,7 +111,7 @@ try {
 try {
   const html = fs.readFileSync(mainPath, 'utf8');
   const checks = [
-    ['private X closes only the window and preserves the conversation history', html.includes("function closePrivateConversation(){const other=String(privateTo||'').trim();if(!other){closeLayer();return;}privateOpen=false;privateTo='';privatePeerProfile={};privatePeerUser=null;clearPrivateMediaObjectUrls();closeLayer();toast('تم إغلاق نافذة المحادثة مع الاحتفاظ بسجل الرسائل');}")],
+    ['private X stops typing and closes only the window while preserving conversation history', html.includes("function closePrivateConversation(){stopPrivateTyping();const other=String(privateTo||'').trim();")&&html.includes('clearPrivateMediaObjectUrls();closeLayer();')],
     ['private minimize preserves a restorable peer entry instead of discarding the conversation', html.includes('privateMinimizedPeer={name:other') && html.includes("a.unshift({name:privateMinimizedPeer.name") && html.includes('محادثة مصغّرة')],
     ['private contacts and members load concurrently without marking every chat as read', /Promise\.all\(\[api\('\/api\/private\/contacts'\),api\('\/api\/members'\)\]\)/.test(html) && !html.slice(html.indexOf('async function openPrivateList()'),html.indexOf('function showBlockModal')).includes('/api/private/read-all')],
     ['conversation deletion remains an explicit action in the private contacts list', html.includes('onclick="event.stopPropagation();hidePrivate(') && html.includes("api('/api/private/hide'")]
@@ -956,7 +956,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.44 package version is current', pkg.version === '46.93.55'],
+    ['v46.93.44 package version is current', pkg.version === '46.93.58'],
     ['no dangling async-only lines remain in the browser entry script', !/^\s*async\s*$/m.test(html)],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
@@ -1127,7 +1127,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.44 package version',pkgNow.version==='46.93.55'],
+  ['v46.93.44 package version',pkgNow.version==='46.93.58'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
@@ -1369,7 +1369,7 @@ try {
   const html=fs.readFileSync(mainPath,'utf8');
   const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   const checks=[
-    ['v46.93.53 package version is current',pkgNow.version==='46.93.55'],
+    ['v46.93.53 package version is current',pkgNow.version==='46.93.58'],
   ['private text is nested under sender identity, not avatar row',html.includes('pmsgTitle') && html.includes('pmsgIdentity') && /<div class=\"pmsgIdentity\"><div class=\"pmsgTitle\"[\s\S]*?<div class=\"pmsgText\">/.test(html)],
   ['wall post shortcut resolver does not mutate composer and postWall does not call expansion mutator',html.includes('async function wallTextForSend(input)') && /async function postWall\(\)\{[^}]*wallTextForSend\(input\)[^}]*\}/.test(html) && !/async function postWall\(\)\{[^}]*expandChatShortcut\(input,true\)[^}]*\}/.test(html)],
     ['private video obtains a short-lived authorized stream URL instead of buffering the full file into a Blob',html.includes("fetch('/api/private/media-ticket'")&&html.includes("if(type==='video')")&&html.includes('src=\"${esc(streamUrl)}\"')],
@@ -1389,7 +1389,7 @@ try {
   const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   const route=source.slice(source.indexOf("app.post('/api/media'"),source.indexOf('function normalizeChatFilterText'));
   const checks=[
-    ['v46.93.44 package version is current (private-media regression suite)',pkgNow.version==='46.93.55'],
+    ['v46.93.44 package version is current (private-media regression suite)',pkgNow.version==='46.93.58'],
     ['private media verifies an active recipient account and fans out to all its active sessions',route.includes('hasConnectedSessionForUser(to)')&&route.includes("emitToUser(to,'private-media',m)")&&!route.includes('targetSocket[0]')],
     ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',m)")&&source.includes("emitToUser(to,'private-media',m)")],
     ['QuickTime MOV uploads have a safe extension and require a valid ISO-BMFF signature',source.includes("'video/quicktime':'.mov'")&&source.includes("['video/mp4','video/quicktime'].includes(mime) && actual==='mp4'")],
@@ -1470,7 +1470,12 @@ try {
     ['online directory API exposes permanent member numbers for both member and guest entries',source.includes("memberNumber:getMemberNumber(name,'member')")&&source.includes("memberNumber:getMemberNumber(name,'guest')")&&source.includes('memberNumber:u.memberNumber')],
     ['member flag is raised and number is directly below it in a right-aligned compact column',html.includes('class=\"memberFlagIdentity\"')&&html.includes('class=\"memberNumber\"')&&html.includes('function formatMemberNumber(number)')&&html.includes('٠١٢٣٤٥٦٧٨٩')&&html.includes('align-items:flex-end!important;justify-content:flex-start!important')&&html.includes('margin-top:-2px!important')],
     ['member search supports Arabic and Persian digits and exact number matches before prefix fallback',html.includes('function normalizeMemberSearchNumber(value)')&&html.includes(/[٠-٩]/.source)&&html.includes(/[۰-۹]/.source)&&html.includes('const exact=rows.filter')&&html.includes('data-member-number=')],
-    ['browser entry files remain synchronized',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(publicPath,'utf8')]
+    ['member serial renders Arabic digits followed by hash in an isolated LTR run without changing flag layout',html.includes('<bdi dir="ltr">${esc(formatMemberNumber(x.memberNumber))}</bdi>')&&html.includes('function formatMemberNumber(number){const raw=')&&html.includes('٠١٢٣٤٥٦٧٨٩')&&html.includes('unicode-bidi:isolate!important')&&html.includes('align-items:flex-end!important;justify-content:flex-start!important')],
+  ['member search changes only the input text direction and left alignment',html.includes('id=\"memberSearch\" dir=\"ltr\"')&&html.includes('text-align:left')],
+  ['private typing indicator uses 15px text sizing and right-side RTL alignment in the base stylesheet',html.includes('.privateTypingIndicator{display:flex;align-items:center;justify-content:flex-start;direction:rtl;text-align:right;width:100%;box-sizing:border-box;min-height:1.35em;padding:2px 10px;color:#777;font-size:15px;line-height:1.2}')&&!html.includes('id="private-typing-indicator"')],
+  ['private typing indicator has a client and server relay with authenticated recipient checks and cleanup',html.includes("socket.on('private-typing',showPrivateTyping)")&&html.includes("socket.emit('private-typing',{to:privateTo,typing:true})")&&fs.readFileSync(server,'utf8').includes("socket.on('private-typing',d=>{")&&fs.readFileSync(server,'utf8').includes("emitToUser(targetName,'private-typing',{from:u.name,typing:true})")&&fs.readFileSync(server,'utf8').includes("socket.data.privateTypingTo")],
+  ['admin and rank like grants persist amount and sender in recipient notifications',fs.readFileSync(server,'utf8').includes("notify(n,{type:'like-received',from:req.user.name,text:likeText,amount,likes})")&&fs.readFileSync(server,'utf8').includes("notify(n,{type:'like-received',from:actor.name,text:likeText,amount,likes:target.likes})")],
+  ['browser entry files remain synchronized',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(publicPath,'utf8')]
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('v46.93.55 member-number regression checks',error.message); }
