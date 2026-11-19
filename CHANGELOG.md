@@ -542,3 +542,11 @@
 - Removed the obsolete conflicting private-message flex layout override; the canonical grid now controls avatar and identity geometry.
 - Replaced wall send-time DOM mutation with a payload-only shortcut resolver; the shortcut remains unchanged in the composer and expands only in the published post.
 - Kept public/private shortcut behavior and existing media flows unchanged.
+
+## v46.93.57 — member directory layout and private typing indicator
+
+- Reversed the country-flag/member-number arrangement in the online-member identity cell: flag/square on the left, member number on the right, retaining the compact responsive dimensions.
+- Moved the online-member search control into a dedicated left-anchored layout row without changing its height or search behavior.
+- Added a private-chat typing state over Socket.IO, with validated recipient delivery, a short server-side expiry, and cleanup on blur, send, conversation close, and disconnect.
+- Added a WhatsApp-style three-dot animated indicator aligned to the right side of the private conversation, matching the message text scale and respecting reduced-motion preferences.
+- Kept root and public browser entry files identical.
