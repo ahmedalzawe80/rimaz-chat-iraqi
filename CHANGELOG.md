@@ -1,3 +1,7 @@
+## 46.93.64
+- إصلاح جذري لمؤشر الكتابة في الخاص: تحديث سجل المحادثة لم يعد يمسح عنصر النقاط الثلاث، وتبقى النقاط في نهاية سجل الرسائل عند إعادة تحميله أو إضافة رسالة/وسائط.
+- الإبقاء على النقاط الثلاث المتحركة فقط دون عبارة «جاري الكتابة».
+
 ## 46.93.63
 - Rebuilt the private typing indicator at its source: the three animated dots now live inside the private message flow, with no text label.
 - Kept the existing authenticated Socket.IO typing relay and removed the previous detached indicator layout.
