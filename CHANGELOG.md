@@ -1,3 +1,9 @@
+## 46.93.69 — Root fix for private typing lifecycle
+- Removed the composer blur handler that immediately sent `typing:false` when the sender switched tabs or moved focus to the other account.
+- Removed the duplicate client-side expiry timer; the server's existing 3000 ms expiry is now the sole authority for typing-state timeout.
+- Explicitly stop typing only when the composer is emptied, a message is sent, or the private conversation is closed/minimized; disconnect cleanup remains server-side.
+- Added regression verification for blur behavior and the single server-owned timer.
+
 ## 46.93.66
 - Root fix for private typing display: move the three-dot indicator into its own fixed flex row between the message scroller and the minimize button, so history rendering and message insertion cannot remove or bury it.
 - Restore the minimize button to the right side in RTL using physical auto-margin alignment; no text label is shown.
