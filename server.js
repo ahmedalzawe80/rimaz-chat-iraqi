@@ -1912,11 +1912,11 @@ io.on('connection',socket=>{
       socket.data.privateTypingTimer=null;
       socket.data.privateTypingTo='';
       const recipient=previous||requested;
-      if(recipient&&keyName(recipient)!==keyName(user.name))emitToUser(recipient,'private-typing',{from:user.name,typing:false});
+      if(recipient)emitToUser(recipient,'private-typing',{from:user.name,typing:false});
       return;
     }
     const recipient=accountKey(requested);
-    if(!recipient||keyName(requested)!==keyName(recipient)||keyName(recipient)===keyName(user.name))return;
+    if(!recipient||keyName(requested)!==keyName(recipient))return;
     if(globalBanned(user.name,socketClientIp(socket))||(!getUser(recipient)&&!getGuest(recipient))||!hasConnectedSessionForUser(recipient))return;
     if(profile(recipient).privateOpen===false&&!canMessageClosedPrivate(user))return;
     const ignored=(db.ignored?.[keyName(recipient)]||[]).some(name=>keyName(name)===keyName(user.name));
