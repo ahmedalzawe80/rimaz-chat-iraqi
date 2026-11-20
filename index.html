@@ -1777,18 +1777,6 @@ window.addEventListener('beforeunload',()=>socket?.disconnect());
 // the user explicitly presses دخول to create a new authenticated session.
 login();
 </script>
-<style id="rimaz-private-half-screen-final">
-/* Private chat is a top-docked half-screen panel; the rest of the room stays visible. */
-#layer>.privateOverlay{position:absolute!important;left:0!important;right:0!important;top:0!important;bottom:auto!important;width:100%!important;height:52%!important;max-height:52%!important;min-height:0!important;margin:0!important;display:flex!important;flex-direction:column!important;z-index:40!important;box-sizing:border-box!important;border:1px solid #444!important;box-shadow:0 8px 24px #0004!important;background:#fff!important;}
-.privateHead .privateStatus.statusOpen{background:#58bf61!important}.privateHead .privateStatus.statusClosed{background:#df5555!important}.privateHead .privateStatus.statusOffline{background:#999!important}
-.privateHeadActions .blue{background:#287eae!important;color:#fff!important;}
-#layer>.privateOverlay .privateBody{position:relative!important;flex:1 1 auto!important;min-height:0!important;overflow:auto!important;padding:3px 5px 24px!important;box-sizing:border-box!important;}
-.privateMinimize{position:absolute!important;top:46px!important;right:5px!important;z-index:45!important;display:block!important;height:22px!important;padding:0 8px!important;margin:0!important;background:#333!important;color:#fff!important;border:0!important;border-radius:4px!important;font-size:10px!important;}
-#layer>.privateOverlay .privateComposer{position:relative!important;left:auto!important;right:auto!important;bottom:auto!important;flex:0 0 39px!important;height:39px!important;min-height:39px!important;padding:3px!important;box-sizing:border-box!important;background:#fff!important;}
-@media(max-width:650px){#layer>.privateOverlay{width:100%!important;height:52%!important;max-height:52%!important;top:0!important;bottom:auto!important;} .privateHeadName b{font-size:12px!important;} .privateHeadActions button{width:30px!important;height:30px!important;}}
-</style>
-
-
 <style id="rimaz-final-avatar-admin-unified-v3">
 /* Unified list-avatar size: public chat, presence, rooms, wall, online members and private contacts. */
 .msg .avatar{width:54px!important;height:54px!important;object-fit:cover!important;}
@@ -2189,34 +2177,17 @@ login();
 .member .memberLikes{grid-column:5!important;grid-row:1!important;min-width:0!important;padding:0 2px!important;text-align:center!important;font-size:9px!important;}
 </style>
 
-<style id="rimaz-private-half-overlay-final">
-/* Private chat occupies only the upper half, leaving the public room and its composer usable below. */
+<style id="rimaz-private-overlay-layout">
+/* Private chat panel: message area, minimize row, and composer occupy separate flex rows. */
 #layer>.privateOverlay{position:absolute!important;left:0!important;right:0!important;top:0!important;bottom:auto!important;width:100%!important;height:50%!important;min-height:0!important;max-height:50%!important;margin:0!important;box-sizing:border-box!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;z-index:50!important;background:#fff!important;}
 #layer .privateOverlay .privateHeadActions{direction:rtl!important;display:flex!important;flex-direction:row!important;align-items:center!important;gap:4px!important;white-space:nowrap!important;}
 #layer .privateOverlay .privateHeadActions .privateClose{order:0!important;background:#df5555!important;color:#fff!important;font-size:25px!important;font-weight:900!important;width:30px!important;height:30px!important;line-height:1!important;border:0!important;border-radius:4px!important;}
 #layer .privateOverlay .privateHeadActions .blue{order:1!important;}
 #layer .privateOverlay .privateHeadActions .privateLike{order:2!important;}
-#layer>.privateOverlay .privateBody{flex:1 1 auto!important;min-height:0!important;overflow:auto!important;}
-#layer>.privateOverlay .privateComposer{flex:0 0 39px!important;height:39px!important;min-height:39px!important;}
-#layer>.privateOverlay .privateMinimize{top:auto!important;right:5px!important;bottom:43px!important;z-index:55!important;}
+#layer>.privateOverlay .privateBody{position:relative!important;flex:1 1 auto!important;min-height:0!important;overflow:auto!important;padding:3px 5px 3px!important;box-sizing:border-box!important;}
+#layer>.privateOverlay .privateMinimize{position:relative!important;top:auto!important;right:auto!important;bottom:auto!important;z-index:1!important;align-self:flex-end!important;display:block!important;flex:0 0 22px!important;height:22px!important;min-height:22px!important;margin:0 5px 2px 0!important;padding:0 8px!important;background:#333!important;color:#fff!important;border:0!important;border-radius:4px!important;font-size:10px!important;line-height:22px!important;}
+#layer>.privateOverlay .privateComposer{position:relative!important;left:auto!important;right:auto!important;bottom:auto!important;flex:0 0 39px!important;height:39px!important;min-height:39px!important;padding:3px!important;box-sizing:border-box!important;background:#fff!important;}
 @media(max-width:650px){#layer>.privateOverlay{top:0!important;bottom:auto!important;width:100%!important;height:50%!important;max-height:50%!important;}#layer .privateOverlay .privateHeadActions{gap:3px!important;}#layer .privateOverlay .privateHeadActions button{width:28px!important;height:29px!important;}}
-
-/* Private contacts: photo, badge, and name/likes grouped on the left; delete stays at far right. */
-
-
-
-
-
-
-
-
-@media(max-width:600px){}
-
-/* Private contacts: hide legacy likes and heart only. */
-.privateListOverlay .privateInlineLikes{display:none!important}
-/* Rimaz minimal fix: compact only the private-chat delete control; preserve all layout dimensions. */
-
-
 </style>
 
 

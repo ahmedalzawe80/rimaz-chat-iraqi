@@ -1,3 +1,6 @@
+## 46.93.65
+- Fixed private typing-indicator visibility by moving the minimize-chat control into its own in-flow row below the message viewport. The three-dot indicator can no longer be covered by the minimize button.
+
 ## 46.93.64
 - إصلاح جذري لمؤشر الكتابة في الخاص: تحديث سجل المحادثة لم يعد يمسح عنصر النقاط الثلاث، وتبقى النقاط في نهاية سجل الرسائل عند إعادة تحميله أو إضافة رسالة/وسائط.
 - الإبقاء على النقاط الثلاث المتحركة فقط دون عبارة «جاري الكتابة».
