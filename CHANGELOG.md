@@ -1,3 +1,8 @@
+## v46.93.73 — Admin navigation usability correction
+- Fixed root navigation behavior: accordion groups are mutually exclusive and selected tab scrolls into view.
+- Responsive admin panel width, separate navigation/content scrolling, and larger touch targets.
+- No permission or API behavior changed.
+
 ## v46.93.72 — Repair malformed style-block boundaries
 - Corrected two missing `</style>` boundaries that caused later named style blocks to be parsed as text inside preceding blocks.
 - Restored the intended independent blocks for `rimaz-latest-fixes` and `rimaz-exact-two-layout-fixes`; declaration order and CSS content are preserved.
