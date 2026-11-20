@@ -592,3 +592,10 @@
 - Removed the previous private-overlay layout patch and replaced it with one authoritative layout definition.
 - Replaced the client typing lifecycle with one state transition function; the indicator contains only three animated dots, no text label.
 - Restored the minimize-conversation button to the right side in RTL layout.
+## 46.93.68 — Private typing indicator rebuild
+- Rebuilt the private typing indicator as a dedicated sibling row outside the message-history container, so history replacement cannot remove it.
+- Replaced hidden-attribute/CSS visibility toggling with one explicit `is-typing` state class; removed the conflicting forced-display behavior.
+- Canonicalized the active private peer name from the member API before matching incoming typing events.
+- Synchronized client and server typing-expiry windows to 3000 ms.
+- Kept the minimize action in its existing right-side RTL position and retained dots only.
+

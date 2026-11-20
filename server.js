@@ -1929,7 +1929,7 @@ io.on('connection',socket=>{
       socket.data.privateTypingTimer=null;
       socket.data.privateTypingTo='';
       emitToUser(recipient,'private-typing',{from:user.name,typing:false});
-    },2200);
+    },3000);
     socket.data.privateTypingTimer.unref?.();
     emitToUser(recipient,'private-typing',{from:user.name,typing:true});
   });
