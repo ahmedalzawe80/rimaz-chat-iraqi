@@ -586,3 +586,9 @@
 - Preserved the exact three-dot typing animation and its right-side placement from the supplied video.
 - Made the adjacent Arabic “جاري الكتابة” label explicitly visible without changing the dot animation, timing, size, or chat layout.
 - No unrelated features or member-list/flag styling changed.
+
+## v46.93.67 — Rebuilt private typing indicator structure
+- Rebuilt the private conversation body as a dedicated message scroller plus a persistent typing-indicator row; history refreshes and message/media insertion now target only the message scroller.
+- Removed the previous private-overlay layout patch and replaced it with one authoritative layout definition.
+- Replaced the client typing lifecycle with one state transition function; the indicator contains only three animated dots, no text label.
+- Restored the minimize-conversation button to the right side in RTL layout.
