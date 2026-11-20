@@ -956,7 +956,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.44 package version is current', pkg.version === '46.93.65'],
+    ['v46.93.44 package version is current', pkg.version === '46.93.66'],
     ['no dangling async-only lines remain in the browser entry script', !/^\s*async\s*$/m.test(html)],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
@@ -1127,7 +1127,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.44 package version',pkgNow.version==='46.93.65'],
+  ['v46.93.44 package version',pkgNow.version==='46.93.66'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
@@ -1369,7 +1369,7 @@ try {
   const html=fs.readFileSync(mainPath,'utf8');
   const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   const checks=[
-    ['v46.93.53 package version is current',pkgNow.version==='46.93.65'],
+    ['v46.93.53 package version is current',pkgNow.version==='46.93.66'],
   ['private text is nested under sender identity, not avatar row',html.includes('pmsgTitle') && html.includes('pmsgIdentity') && /<div class=\"pmsgIdentity\"><div class=\"pmsgTitle\"[\s\S]*?<div class=\"pmsgText\">/.test(html)],
   ['wall post shortcut resolver does not mutate composer and postWall does not call expansion mutator',html.includes('async function wallTextForSend(input)') && /async function postWall\(\)\{[^}]*wallTextForSend\(input\)[^}]*\}/.test(html) && !/async function postWall\(\)\{[^}]*expandChatShortcut\(input,true\)[^}]*\}/.test(html)],
     ['private video obtains a short-lived authorized stream URL instead of buffering the full file into a Blob',html.includes("fetch('/api/private/media-ticket'")&&html.includes("if(type==='video')")&&html.includes('src=\"${esc(streamUrl)}\"')],
@@ -1389,7 +1389,7 @@ try {
   const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   const route=source.slice(source.indexOf("app.post('/api/media'"),source.indexOf('function normalizeChatFilterText'));
   const checks=[
-    ['v46.93.44 package version is current (private-media regression suite)',pkgNow.version==='46.93.65'],
+    ['v46.93.44 package version is current (private-media regression suite)',pkgNow.version==='46.93.66'],
     ['private media verifies an active recipient account and fans out to all its active sessions',route.includes('hasConnectedSessionForUser(to)')&&route.includes("emitToUser(to,'private-media',m)")&&!route.includes('targetSocket[0]')],
     ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',m)")&&source.includes("emitToUser(to,'private-media',m)")],
     ['QuickTime MOV uploads have a safe extension and require a valid ISO-BMFF signature',source.includes("'video/quicktime':'.mov'")&&source.includes("['video/mp4','video/quicktime'].includes(mime) && actual==='mp4'")],
@@ -1473,12 +1473,13 @@ try {
     ['numeric member search caps duplicate matches at three without limiting name search',html.includes('const targets=new Set(matches.slice(0,3))')&&html.includes('targets.has(x)?')],
     ['member serial separates Arabic digits and hash into ordered RTL inline elements without changing the flag container',html.includes('<bdi dir="rtl"><span class="memberNumberDigits">')&&html.includes('<span class="memberNumberHash">#</span></bdi>')&&html.includes('formatMemberNumber(x.memberNumber).replace(/#$/')&&html.includes('.memberNumber bdi{display:inline-flex!important;flex-direction:row!important')&&html.includes('direction:rtl!important;unicode-bidi:isolate!important')&&html.includes('align-items:flex-end!important;justify-content:flex-start!important')],
   ['member search changes only the input text direction and left alignment',html.includes('id=\"memberSearch\" dir=\"ltr\"')&&html.includes('text-align:left')],
-  ['private typing indicator is three animated dots inside the private message flow with no text label',html.includes('id="privateTypingIndicator" class="privateTypingIndicator" hidden')&&html.includes('class="privateTypingDots"')&&html.includes('width:5px;height:5px')&&!html.includes('privateTypingLabel')&&!html.includes('جاري الكتابة')&&html.includes('function showPrivateTyping(d){')&&html.includes('body.appendChild(el)')],
+  ['private typing indicator is three animated dots in its own visible row with no text label',html.includes('id="privateTypingIndicator" class="privateTypingIndicator" hidden')&&html.includes('class="privateTypingDots"')&&html.includes('width:5px;height:5px')&&!html.includes('privateTypingLabel')&&!html.includes('جاري الكتابة')&&html.includes('function showPrivateTyping(d){')&&html.includes('el.hidden=d?.typing!==true;')],
   ['private typing indicator has a client and server relay with authenticated recipient checks and cleanup',html.includes("socket.on('private-typing',showPrivateTyping)")&&html.includes("socket.emit('private-typing',{to:privateTo,typing:true})")&&fs.readFileSync(server,'utf8').includes("socket.on('private-typing',d=>{")&&fs.readFileSync(server,'utf8').includes("emitToUser(targetName,'private-typing',{from:u.name,typing:true})")&&fs.readFileSync(server,'utf8').includes("socket.data.privateTypingTo")],
   ['incoming private text and media immediately hide the remote typing indicator',html.includes("if(!mine){const typingIndicator=document.getElementById('privateTypingIndicator');if(typingIndicator)typingIndicator.hidden=true;}")&&html.includes('privateTypingTimer=setTimeout(stopPrivateTyping,2500)')&&html.includes('width:5px;height:5px')&&html.includes("const targets=new Set(matches.slice(0,3))")],
   ['admin and rank like grants persist amount and sender in recipient notifications',fs.readFileSync(server,'utf8').includes("notify(n,{type:'like-received',from:req.user.name,text:likeText,amount,likes})")&&fs.readFileSync(server,'utf8').includes("notify(n,{type:'like-received',from:actor.name,text:likeText,amount,likes:target.likes})")],
-  ['private typing indicator has a dedicated visible area above the in-flow minimize row',html.includes('id="privateTypingIndicator" class="privateTypingIndicator" hidden')&&html.includes('privateMinimize{position:relative!important')&&html.includes('align-self:flex-end!important')&&html.includes('flex:0 0 22px!important')&&!html.includes('privateMinimize{position:absolute')&&!html.includes('privateMinimize{top:auto!important;right:5px!important;bottom:43px!important')],
-  ['private history refresh preserves the typing indicator node instead of deleting it',html.includes("b.querySelectorAll('.pmsg').forEach(node=>node.remove())")&&!html.includes("b.innerHTML=''")&&html.includes("const typingIndicator=body.querySelector('#privateTypingIndicator');if(typingIndicator)body.appendChild(typingIndicator);")&&html.includes("const typingIndicator=b.querySelector('#privateTypingIndicator');if(typingIndicator)b.appendChild(typingIndicator);")],
+  ['private typing indicator is a dedicated sibling row between the message scroller and minimize button',html.includes('id="privateBody" class="privateBody"></div><div id="privateTypingIndicator" class="privateTypingIndicator" hidden')&&html.includes('flex:0 0 18px;width:100%;height:18px')&&!html.includes('body.appendChild(el)')&&!html.includes('body.appendChild(typingIndicator)')],
+  ['private minimize button remains right-aligned in RTL without covering the typing row',html.includes('privateMinimize{position:relative!important')&&html.includes('margin:0 5px 2px auto!important')&&html.includes('width:max-content!important')&&!html.includes('align-self:flex-end!important')],
+  ['private history refresh only replaces message nodes and cannot delete the sibling typing indicator',html.includes("b.querySelectorAll('.pmsg').forEach(node=>node.remove())")&&!html.includes("b.innerHTML=''")&&!html.includes("body.appendChild(typingIndicator)")&&!html.includes("b.appendChild(typingIndicator)")&&html.includes('id="privateBody" class="privateBody"></div><div id="privateTypingIndicator"')],
   ['browser entry files remain synchronized',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(publicPath,'utf8')]
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);

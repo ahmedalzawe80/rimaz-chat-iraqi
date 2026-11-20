@@ -1,3 +1,7 @@
+## 46.93.66
+- Root fix for private typing display: move the three-dot indicator into its own fixed flex row between the message scroller and the minimize button, so history rendering and message insertion cannot remove or bury it.
+- Restore the minimize button to the right side in RTL using physical auto-margin alignment; no text label is shown.
+
 ## 46.93.65
 - Fixed private typing-indicator visibility by moving the minimize-chat control into its own in-flow row below the message viewport. The three-dot indicator can no longer be covered by the minimize button.
 
