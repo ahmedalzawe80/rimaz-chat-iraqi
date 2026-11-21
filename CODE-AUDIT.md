@@ -82,3 +82,20 @@ Added `video/quicktime` as a supported upload MIME type with `.mov` storage exte
 
 ### Retention model
 Private conversations/media remain intentionally transient. `save()` explicitly excludes `privateMessages`, startup purges private-media storage, and disconnect cleanup removes the transient conversation after the reconnect grace. This release preserves that policy; it does not claim private messages survive a server restart.
+
+## v46.93.69 deep archive cleanup pass (2026-11-21)
+
+### Safe duplicate-file removal
+
+The archive contained duplicate copies at the repository root of static assets that are served and loaded exclusively from `public/`: `gifts-pack.json`, `smileys-pack.json`, `vip-gifts-pack.json`, `rimaz-default-avatar.png`, `rimaz-hero.jpg`, `google1a84d9d1dec7b85d.html`, `robots.txt`, and `sitemap.xml`. Their paired root/public files were byte-identical. The server loads the packed JSON files from `public/` and serves static content from `public/`; the root copies were removed from this release to reduce package size and duplicate storage. Both HTML entry copies remain because the server supports root/public index candidates and regression checks verify synchronization.
+
+### Validation
+
+- `node --check server.js`: passed.
+- `node --check verify.js`: passed.
+- `node verify.js`: passed all local static and archive checks after removal.
+- No persistent database or upload data was included in or modified by this cleanup.
+
+### Limits of this pass
+
+This is a conservative one-pass cleanup, not a claim that every unused client-side function was safely identified. The browser app is a large inline-script monolith; deleting functions solely by textual search risks removing dynamically referenced handlers. No live hosting, load test, or device test was available.
