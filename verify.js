@@ -725,7 +725,7 @@ try {
     ['v46.69 database backup is protected and excludes active sessions',src.includes("app.get('/api/admin/backup/database',requireAuth")&&src.includes('database:{...db,sessions:{}}')&&src.includes("app.get('/api/admin/login-history',requireAuth")],
     ['v46.69 delegated health diagnostics report database and uploads sizes without destructive actions',src.includes("app.get('/api/admin/health',requireAuth")&&src.includes('const uploads=walk(UP_DIR)')&&src.includes('heapUsed:memory.heapUsed')],
     ['v46.69 VIP grants support bounded durations and explicit revocation',src.includes('days<1||days>365')&&src.includes("app.post('/api/admin/vip/:name/revoke',requireAuth")&&src.includes('delete p.vipGrantedAt')],
-    ['v46.69 owner admin UI includes settings, login history export and database backup',html.includes('adminTabGroups()')&&html.includes("'site'")&&html.includes('saveSiteSettings()')&&html.includes('exportLoginHistory()')&&html.includes('downloadDatabaseBackup()')&&html.includes('loadPublicSiteSettings()')],
+    ['v46.69 owner admin UI includes settings, login history export and database backup',html.includes("adminTab('site')")&&html.includes('saveSiteSettings()')&&html.includes('exportLoginHistory()')&&html.includes('downloadDatabaseBackup()')&&html.includes('loadPublicSiteSettings()')],
   ];
   for(const [label,ok] of checks) ok?pass(label):fail(label);
   if(html===fs.readFileSync(publicPath,'utf8'))pass('v46.69 browser entry files remain identical');else fail('v46.69 browser entry files remain identical');
@@ -943,7 +943,7 @@ try {
  const checks=[
   ['health_view is a distinct permission in the server catalogue',src.includes("health_view:'مراقبة صحة الخادم واستهلاك الذاكرة'")],
   ['health API allows only owner, site_admin or health_view',src.includes("!hasPermission(req.user,'health_view')&&!hasPermission(req.user,'site_admin')")],
-  ['health tab is shown only for owner or explicit health_view permission',html.includes("if(key==='health'&&!(me?.owner||hasClientPermission('health_view')))return '';")&&html.includes("health:hasClientPermission('health_view')")&&html.includes("health:can('health_view')")],
+  ['health tab is shown only for owner or explicit health_view permission',html.includes("(me?.owner||hasClientPermission('health_view'))?`<button onclick=\"adminTab('health')\">🩺 صحة الخادم</button>`:''")&&html.includes("health:hasClientPermission('health_view')")&&html.includes("health:can('health_view')")],
   ['health monitor displays RSS, heap, external and Buffer metrics',html.includes('RAM الفعلية (RSS)')&&html.includes('Heap المستخدم')&&html.includes('ذاكرة خارج Heap')&&html.includes('Buffers')],
   ['health monitor permission is grouped in rank editor',html.includes("'stats_view','health_view','chat_filter_manage'")],
   ['health permission is removed from automatic full-admin grants and requires opt-in',src.includes('healthViewPermissionMigrationVersion||0)<2')&&src.includes("filter(permission=>permission!=='health_view')")&&src.includes("filter(key=>key!=='health_view')")&&src.includes('db.healthViewPermissionMigrationVersion=2')],
@@ -957,10 +957,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.44 package version is current', pkg.version === '46.93.73'],
-  ['admin panel uses grouped navigation while retaining all 26 tab destinations', (()=>{const nav=htmlText.slice(htmlText.indexOf('function adminTabGroups()'),htmlText.indexOf('function activateAdminTab(t)'));const ids=['overview','users','likes','move','statuses','membertools','rooms','moderation','messages','announcements','welcome','wall','filter','shortcuts','smileys','gifts','chatbanners','roles','rankpermissions','subscriptions','ads','controlcenter','stats','health','audit','site'];return ids.every(id=>nav.includes("'"+id+"'"))&&nav.includes('data-admin-group')})()],
-  ['admin tab filtering hides empty groups and expands the selected group', htmlText.includes('function activateAdminTab(t)') && htmlText.includes('group.style.display=any?') && htmlText.includes('group.open=active')],
-  ['admin navigation groups are mutually exclusive and admin mobile controls have 44px touch targets', htmlText.includes('group.open=active') && htmlText.includes('rimaz-admin-navigation-root-layout-v2') && htmlText.includes('min-height:44px!important')],
+    ['v46.93.44 package version is current', pkg.version === '46.93.69'],
     ['no dangling async-only lines remain in the browser entry script', !/^\s*async\s*$/m.test(html)],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
@@ -971,7 +968,7 @@ try {
     ['video-call module is enforced on call offer and answer', serverText.includes("socket.on('call-offer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))") && serverText.includes("socket.on('call-answer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))return")],
     ['gift module is enforced on send, upload, and catalogue deletion', serverText.includes("app.post('/api/admin/gift',(req,res)=>{requireAuth(req,res,()=>{if(!siteModuleEnabled('gifts'))") && serverText.includes("app.post('/api/admin/gifts/catalog/upload',requireAuth,uploadSmallImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!siteModuleEnabled('gifts'))") && serverText.includes("app.post('/api/admin/gifts/catalog/delete',requireAuth,(req,res)=>{if(!siteModuleEnabled('gifts'))")],
     ['admin UI exposes all five module switches and saves them', ['moduleWall','modulePrivateChat','moduleVoiceRooms','moduleVideoCalls','moduleGifts'].every(id=>htmlText.includes(id)) && htmlText.includes('saveSiteSettings()') && htmlText.includes('إدارة الإضافات والوحدات المدمجة')],
-    ['mobile admin navigation has larger touch targets and bounded sticky scrolling', htmlText.includes('position:sticky;top:0;z-index:5;max-height:34vh;overflow-y:auto') && htmlText.includes('min-height:34px') && htmlText.includes('.adminTabGroup>summary')],
+    ['mobile admin navigation has larger touch targets and bounded sticky scrolling', htmlText.includes('position:sticky;top:0;z-index:5;max-height:32vh;overflow-y:auto') && htmlText.includes('min-height:34px')],
     ['module flags are included in public settings and server health diagnostics', serverText.includes('modules:{...(s.modules||{})}') && serverText.includes('modules:{...DEFAULT_SITE_MODULES,...(db.siteSettings?.modules||{})}')],
     ['external executable plugin loading is intentionally not introduced', !serverText.includes('eval(') && !serverText.includes('new Function(')],
   ];
@@ -1127,11 +1124,11 @@ try {
   ['ad campaign management validates image and URL and supports scheduling',src.includes("app.post('/api/admin/ads'")&&src.includes('endsAt<=startsAt')&&src.includes("/^https?:\\/\\//i.test(url)")&&src.includes("app.get('/api/public/ads'")],
   ['control center has independent permission-gated read/write routes',src.includes("app.get('/api/admin/control-center'")&&src.includes("app.put('/api/admin/control-center'")&&src.includes("hasPermission(req.user,'control_center_manage')")],
   ['new administration capabilities appear in rank permission editor',html.includes("'ads_manage'")&&html.includes("'subscriptions_manage'")&&html.includes("'control_center_manage'")],
-  ['new admin tabs are visible only when their matching permissions are granted',html.includes('function adminTabGroups()')&&html.includes("subscriptions:can('subscriptions_manage')")&&html.includes("ads:can('ads_manage')")&&html.includes("controlcenter:can('control_center_manage')")&&html.includes("subscriptions:hasClientPermission('subscriptions_manage')")],
+  ['new admin tabs are visible only when their matching permissions are granted',html.includes("adminTab('ads')")&&html.includes("adminTab('subscriptions')")&&html.includes("adminTab('controlcenter')")&&html.includes("subscriptions:hasClientPermission('subscriptions_manage')")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.44 package version',pkgNow.version==='46.93.73'],
+  ['v46.93.44 package version',pkgNow.version==='46.93.69'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
   ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
@@ -1373,7 +1370,7 @@ try {
   const html=fs.readFileSync(mainPath,'utf8');
   const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   const checks=[
-    ['v46.93.53 package version is current',pkgNow.version==='46.93.73'],
+    ['v46.93.53 package version is current',pkgNow.version==='46.93.69'],
   ['private text is nested under sender identity, not avatar row',html.includes('pmsgTitle') && html.includes('pmsgIdentity') && /<div class=\"pmsgIdentity\"><div class=\"pmsgTitle\"[\s\S]*?<div class=\"pmsgText\">/.test(html)],
   ['wall post shortcut resolver does not mutate composer and postWall does not call expansion mutator',html.includes('async function wallTextForSend(input)') && /async function postWall\(\)\{[^}]*wallTextForSend\(input\)[^}]*\}/.test(html) && !/async function postWall\(\)\{[^}]*expandChatShortcut\(input,true\)[^}]*\}/.test(html)],
     ['private video obtains a short-lived authorized stream URL instead of buffering the full file into a Blob',html.includes("fetch('/api/private/media-ticket'")&&html.includes("if(type==='video')")&&html.includes('src=\"${esc(streamUrl)}\"')],
@@ -1393,7 +1390,7 @@ try {
   const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   const route=source.slice(source.indexOf("app.post('/api/media'"),source.indexOf('function normalizeChatFilterText'));
   const checks=[
-    ['v46.93.44 package version is current (private-media regression suite)',pkgNow.version==='46.93.73'],
+    ['v46.93.44 package version is current (private-media regression suite)',pkgNow.version==='46.93.69'],
     ['private media verifies an active recipient account and fans out to all its active sessions',route.includes('hasConnectedSessionForUser(to)')&&route.includes("emitToUser(to,'private-media',m)")&&!route.includes('targetSocket[0]')],
     ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',m)")&&source.includes("emitToUser(to,'private-media',m)")],
     ['QuickTime MOV uploads have a safe extension and require a valid ISO-BMFF signature',source.includes("'video/quicktime':'.mov'")&&source.includes("['video/mp4','video/quicktime'].includes(mime) && actual==='mp4'")],
@@ -1489,29 +1486,3 @@ try {
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('v46.93.55 member-number regression checks',error.message); }
-
-// v46.93.71: member-profile admin actions share one permission/action catalog.
-try {
-  const html=fs.readFileSync(mainPath,'utf8');
-  const helperStart=html.indexOf('function memberAdminActionCatalog(n){');
-  const helperEnd=html.indexOf('\nfunction memberAdminMenu(n){',helperStart);
-  const helperSource=helperStart>=0&&helperEnd>helperStart?html.slice(helperStart,helperEnd):'';
-  const context={jsq:n=>JSON.stringify(String(n)),modUser(){},adminDeleteAvatar(){},showMemberIp(){},adminDeleteWallUser(){},resetLikes(){},grantVip(){},adminChangeColor(){}};
-  if(helperSource)vm.runInNewContext(helperSource,context);
-  const catalog=helperSource?context.memberAdminActionCatalog('TestMember'):[];
-  const primary=catalog.filter(x=>x.group==='primary');
-  const secondary=catalog.filter(x=>x.group==='secondary');
-  const muteActions=catalog.filter(x=>x.permission==='mute_room'&&x.handler.includes("modUser('mute'"));
-  const checks=[
-    ['member profile action catalog is shared by the chat profile and admin member menu',html.includes('const actionCatalog=memberAdminActionCatalog(name)')&&html.includes('const actions=memberAdminActionCatalog(n).map(a=>[a.permission,')],
-    ['member profile action catalog contains no duplicate mute action',muteActions.length===1],
-    ['room ban and room unban both exist and are gated by ban_room',catalog.some(x=>x.permission==='ban_room'&&x.handler.includes("modUser('ban'"))&&catalog.some(x=>x.permission==='ban_room'&&x.handler.includes("modUser('unban'"))],
-    ['wall-post deletion uses its dedicated wall_delete_user permission in both admin-profile paths',html.includes("{permission:'wall_delete_user',group:'primary'")&&!html.includes("['panel_access','حذف رسائل الحائط")],
-    ['IP-disclosure action label accurately matches showMemberIp',catalog.some(x=>x.permission==='member_ip'&&x.label==='عرض IP 🔎'&&x.handler.includes('showMemberIp'))&&!html.includes('كشف نكات')],
-    ['profile admin action catalog retains the distinct kick and global-ban actions',catalog.some(x=>x.permission==='kick_room'&&x.handler.includes("modUser('kick'"))&&catalog.some(x=>x.permission==='global_ban'&&x.handler.includes("modUser('global-ban'"))],
-    ['obsolete alternate profile-admin implementation is removed',!html.includes('openMemberProfileAdminReference')&&!html.includes('memberProfileAdminReference')],
-    ['shared profile-admin catalog groups primary and secondary controls',primary.length>=7&&secondary.length>=4],
-    ['classic member room-transfer controls are hidden without room_move permission',html.includes("${can('room_move')?`<div class=\"memberClassicGroup\">")&&html.includes("moveClassicMember(${jsq(n)})")]
-  ];
-  for(const [label,ok] of checks)ok?pass(label):fail(label);
-} catch(error) { fail('v46.93.71 member-profile admin action regression checks',error.message); }

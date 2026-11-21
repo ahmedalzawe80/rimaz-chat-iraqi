@@ -1,6 +1,6 @@
 {
   "name": "rimaz-chat-iraqi",
-  "version": "46.93.73",
+  "version": "46.93.69",
   "private": true,
   "main": "server.js",
   "scripts": {
