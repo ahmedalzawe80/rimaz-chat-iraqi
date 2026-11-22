@@ -1,5 +1,5 @@
 
-name: Unzip Project Upload
+name: Clean Replace Project Upload
 
 on:
   workflow_dispatch:
@@ -8,26 +8,93 @@ permissions:
   contents: write
 
 jobs:
-  unzip:
+  replace-project:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Unzip uploaded project
+      - name: Extract and validate ZIP
+        shell: bash
         run: |
+          set -euo pipefail
+
           if [ ! -f upload-project.zip ]; then
-            echo "upload-project.zip not found"
+            echo "ERROR: upload-project.zip not found"
             exit 1
           fi
-          unzip -o upload-project.zip -d extracted
-          rsync -a extracted/ ./ --exclude=.git --exclude=upload-project.zip
-          rm -rf extracted upload-project.zip
 
-      - name: Commit extracted files
+          STAGING="$RUNNER_TEMP/rimaz-upload"
+          mkdir -p "$STAGING"
+          unzip -q upload-project.zip -d "$STAGING"
+
+          SOURCE=""
+
+          if [ -f "$STAGING/package.json" ] && [ -f "$STAGING/server.js" ]; then
+            SOURCE="$STAGING"
+          else
+            while IFS= read -r file; do
+              dir="$(dirname "$file")"
+              if [ -f "$dir/server.js" ]; then
+                if [ -n "$SOURCE" ]; then
+                  echo "ERROR: More than one project root found"
+                  exit 1
+                fi
+                SOURCE="$dir"
+              fi
+            done < <(find "$STAGING" -type f -name package.json)
+          fi
+
+          if [ -z "$SOURCE" ]; then
+            echo "ERROR: Project root not found"
+            exit 1
+          fi
+
+          echo "Project validated successfully"
+
+      - name: Clean and replace old files
+        shell: bash
         run: |
+          set -euo pipefail
+
+          STAGING="$RUNNER_TEMP/rimaz-upload"
+          SOURCE=""
+
+          if [ -f "$STAGING/package.json" ] && [ -f "$STAGING/server.js" ]; then
+            SOURCE="$STAGING"
+          else
+            while IFS= read -r file; do
+              dir="$(dirname "$file")"
+              if [ -f "$dir/server.js" ]; then
+                SOURCE="$dir"
+                break
+              fi
+            done < <(find "$STAGING" -type f -name package.json)
+          fi
+
+          rsync -a --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='data.json' \
+            --exclude='google1a84d9d1dec7b85d.html' \
+            "$SOURCE/" ./
+
+          rm -f upload-project.zip
+
+      - name: Commit clean project
+        shell: bash
+        run: |
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add -A
-          git diff --cached --quiet || git commit -m "Upload and extract project ZIP"
-          git push
+
+          if ! git diff --cached --quiet; then
+            git commit -m "Clean replace project from ZIP"
+            git push
+          else
+            echo "No changes to commit"
+          fi
