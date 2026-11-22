@@ -20,37 +20,42 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ ! -f upload-project.zip ]; then
-            echo "ERROR: upload-project.zip not found"
+          ARCHIVE="rimaz-final-deep-audit-46.93.71.zip"
+          STAGING="$RUNNER_TEMP/rimaz-upload"
+
+          if [ ! -f "$ARCHIVE" ]; then
+            echo "ERROR: $ARCHIVE not found"
             exit 1
           fi
 
-          STAGING="$RUNNER_TEMP/rimaz-upload"
+          unzip -tq "$ARCHIVE"
+
           mkdir -p "$STAGING"
-          unzip -q upload-project.zip -d "$STAGING"
+          unzip -q "$ARCHIVE" -d "$STAGING"
 
           SOURCE=""
+          MATCHES=0
 
           if [ -f "$STAGING/package.json" ] && [ -f "$STAGING/server.js" ]; then
             SOURCE="$STAGING"
+            MATCHES=1
           else
             while IFS= read -r file; do
               dir="$(dirname "$file")"
+
               if [ -f "$dir/server.js" ]; then
-                if [ -n "$SOURCE" ]; then
-                  echo "ERROR: More than one project root found"
-                  exit 1
-                fi
                 SOURCE="$dir"
+                MATCHES=$((MATCHES + 1))
               fi
             done < <(find "$STAGING" -type f -name package.json)
           fi
 
-          if [ -z "$SOURCE" ]; then
-            echo "ERROR: Project root not found"
+          if [ "$MATCHES" -ne 1 ]; then
+            echo "ERROR: Expected exactly one valid project root"
             exit 1
           fi
 
+          echo "PROJECT_SOURCE=$SOURCE" >> "$GITHUB_ENV"
           echo "Project validated successfully"
 
       - name: Clean and replace old files
@@ -58,19 +63,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          STAGING="$RUNNER_TEMP/rimaz-upload"
-          SOURCE=""
-
-          if [ -f "$STAGING/package.json" ] && [ -f "$STAGING/server.js" ]; then
-            SOURCE="$STAGING"
-          else
-            while IFS= read -r file; do
-              dir="$(dirname "$file")"
-              if [ -f "$dir/server.js" ]; then
-                SOURCE="$dir"
-                break
-              fi
-            done < <(find "$STAGING" -type f -name package.json)
+          if [ ! -f "$PROJECT_SOURCE/package.json" ] || [ ! -f "$PROJECT_SOURCE/server.js" ]; then
+            echo "ERROR: Project validation failed"
+            exit 1
           fi
 
           rsync -a --delete \
@@ -78,9 +73,10 @@ jobs:
             --exclude='.github' \
             --exclude='data.json' \
             --exclude='google1a84d9d1dec7b85d.html' \
-            "$SOURCE/" ./
+            --exclude='rimaz-final-deep-audit-46.93.71.zip' \
+            "$PROJECT_SOURCE/" ./
 
-          rm -f upload-project.zip
+          echo "Project files replaced successfully"
 
       - name: Commit clean project
         shell: bash
@@ -93,7 +89,7 @@ jobs:
           git add -A
 
           if ! git diff --cached --quiet; then
-            git commit -m "Clean replace project from ZIP"
+            git commit -m "Clean replace project from audited ZIP"
             git push
           else
             echo "No changes to commit"
