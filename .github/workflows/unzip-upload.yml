@@ -20,7 +20,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          ARCHIVE="rimaz-final-deep-audit-46.93.71.zip"
+          ARCHIVE="rimaz-final-deep-audit-46.93.72.zip"
           STAGING="$RUNNER_TEMP/rimaz-upload"
 
           if [ ! -f "$ARCHIVE" ]; then
@@ -73,7 +73,7 @@ jobs:
             --exclude='.github' \
             --exclude='data.json' \
             --exclude='google1a84d9d1dec7b85d.html' \
-            --exclude='rimaz-final-deep-audit-46.93.71.zip' \
+            --exclude='rimaz-final-deep-audit-46.93.72.zip' \
             "$PROJECT_SOURCE/" ./
 
           echo "Project files replaced successfully"
