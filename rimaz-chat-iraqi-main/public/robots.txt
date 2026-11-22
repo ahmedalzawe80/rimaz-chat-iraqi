@@ -1,7 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /api/
-Disallow: /socket.io/
-Disallow: /private-media/
-
-Sitemap: https://noble-horizon-5826.de.deplexo.com/sitemap.xml

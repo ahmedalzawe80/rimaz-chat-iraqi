@@ -99,3 +99,12 @@ The archive contained duplicate copies at the repository root of static assets t
 ### Limits of this pass
 
 This is a conservative one-pass cleanup, not a claim that every unused client-side function was safely identified. The browser app is a large inline-script monolith; deleting functions solely by textual search risks removing dynamically referenced handlers. No live hosting, load test, or device test was available.
+
+
+## v46.93.71 unused-wrapper cleanup (2026-11-22)
+
+- Static repository search found `saveNewShortcut` only at its declaration; no markup, handler, server code, or test referenced it. It only forwarded to the already-used `saveShortcut()` function.
+- Removed this wrapper from both identical browser entry files.
+- No feature logic or persistence code was changed.
+- Added a regression check and bumped the package version.
+- Validation: syntax and full `verify.js` suite.

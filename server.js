@@ -15,35 +15,23 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// All supplied smiley images are bundled into one JSON asset file.
-// The browser still uses normal /smileys/<file> URLs, served from this packed asset.
-const SMILEY_PACK_FILE = path.join(__dirname, 'public', 'smileys-pack.json');
-let SMILEY_PACK = {};
-try { SMILEY_PACK = JSON.parse(fs.readFileSync(SMILEY_PACK_FILE, 'utf8')); }
-catch (error) { console.error('Could not load bundled smiley pack:', error.message); }
-// All built-in animated gifts are bundled in one JSON asset, like the smiley pack.
-const GIFT_PACK_FILE = path.join(__dirname, 'public', 'gifts-pack.json');
-let GIFT_PACK = {};
-try { GIFT_PACK = JSON.parse(fs.readFileSync(GIFT_PACK_FILE, 'utf8')); }
-catch (error) { console.error('Could not load bundled gift pack:', error.message); }
-const VIP_GIFT_PACK_FILE = path.join(__dirname, 'public', 'vip-gifts-pack.json');
-let VIP_GIFT_PACK = {};
-try { VIP_GIFT_PACK = JSON.parse(fs.readFileSync(VIP_GIFT_PACK_FILE, 'utf8')); }
-catch (error) { console.error('Could not load bundled VIP gift pack:', error.message); }
-// Decode bundled image payloads once into Buffers. This releases the much larger
-// Base64 strings from the V8 heap and avoids allocating a new Buffer on every request.
-function decodePackedAssets(pack) {
-  for (const item of Object.values(pack)) {
-    if (item && typeof item.data === 'string') item.data = Buffer.from(item.data, 'base64');
-  }
+// Built-in media assets are individual files, not Base64 JSON packs.
+// This keeps startup from parsing/duplicating ~20 MB of image payloads in RAM.
+const BUILTIN_ASSET_DIRS = {
+  smileys: path.join(__dirname, 'public', 'smileys'),
+  gifts: path.join(__dirname, 'public', 'gifts'),
+  vipGifts: path.join(__dirname, 'public', 'vip-gifts')
+};
+function listBuiltinAssets(directory, pattern) {
+  try { return fs.readdirSync(directory).filter(file => pattern.test(file)).sort(); }
+  catch (error) { console.error(`Could not list built-in assets in ${directory}:`, error.message); return []; }
 }
-decodePackedAssets(SMILEY_PACK);
-decodePackedAssets(GIFT_PACK);
-decodePackedAssets(VIP_GIFT_PACK);
-const BUILTIN_SMILEYS = Object.fromEntries(
-  Object.keys(SMILEY_PACK).filter(file => /^smiley-\d+\.(?:gif|png|jpe?g|webp)$/i.test(file)).sort()
-    .map(file => [file, '/smileys/' + file])
-);
+const BUILTIN_SMILEY_FILES = listBuiltinAssets(BUILTIN_ASSET_DIRS.smileys, /^smiley-\d+\.(?:gif|png|jpe?g|webp)$/i);
+const BUILTIN_GIFT_FILES = listBuiltinAssets(BUILTIN_ASSET_DIRS.gifts, /^[a-z0-9_-]+\.(?:gif|png|jpe?g|webp)$/i);
+const BUILTIN_VIP_GIFT_FILES = listBuiltinAssets(BUILTIN_ASSET_DIRS.vipGifts, /^vip-[a-z0-9_-]+\.gif$/i);
+const BUILTIN_SMILEYS = Object.fromEntries(BUILTIN_SMILEY_FILES.map(file => [file, '/smileys/' + file]));
+// Redirect historical filenames whose extension did not match the actual image signature.
+const SMILEY_FILE_ALIASES = Object.freeze({'smiley-125.png':'smiley-125.gif','smiley-190.jpeg':'smiley-190.jpg','smiley-230.jpeg':'smiley-230.jpg','smiley-218.jpeg':'smiley-218.jpg','smiley-236.jpeg':'smiley-236.jpg'});
 // The exact mobile emoji set requested for the refreshed gallery.
 const ALL_MOBILE_EMOJIS = [
   "😂","🫦","👄","🖕","🤝","👌","🫵","🤌","😠","😡","☹️","😓","😲","😮","😳","🥺","🥹","😢","🫣","🥶","🥰","🤧","🤮","😮‍💨","☺️","😁","😭","😆","🤐","🙄","🤤","🙊","🙉","🙈"
@@ -104,24 +92,13 @@ app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.s
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(UP_DIR, { maxAge: '7d' }));
-// Serve individual smiley URLs from the single bundled JSON file (no loose image files).
-app.get('/smileys/:file', (req,res)=>{
-  const item=SMILEY_PACK[String(req.params.file||'')];
-  if(!item || !/^smiley-\d+\.(?:gif|png|jpe?g|webp)$/i.test(String(req.params.file||''))) return res.sendStatus(404);
-  res.setHeader('Content-Type', item.type || 'application/octet-stream');
-  res.setHeader('Cache-Control','public, max-age=31536000, immutable');
-  res.send(item.data);
-});
-// Serve each built-in gift from the single gifts-pack.json file; no gifts folder upload is needed.
-app.get('/gifts/:file', (req,res)=>{
-  const file=String(req.params.file||'');
-  const item=GIFT_PACK[file];
-  if(!item || !/^[a-z0-9_-]+\.(?:gif|png|jpe?g|webp)$/i.test(file)) return res.sendStatus(404);
-  res.setHeader('Content-Type', item.type || 'application/octet-stream');
-  res.setHeader('Cache-Control','public, max-age=31536000, immutable');
-  res.send(item.data);
-});
-app.get('/vip-gifts/:file',(req,res)=>{const file=String(req.params.file||'');const item=VIP_GIFT_PACK[file];if(!item||!/^vip-[a-z0-9_-]+\.gif$/i.test(file))return res.sendStatus(404);res.setHeader('Content-Type',item.type||'image/gif');res.setHeader('Cache-Control','public,max-age=31536000,immutable');res.send(item.data);});
+app.get('/smileys/:file', (req,res)=>{const target=SMILEY_FILE_ALIASES[String(req.params.file||'')];if(target)return res.redirect(301,'/smileys/'+target);return res.sendStatus(404);});
+// Serve bundled image directories directly from disk; Express streams the files
+// without keeping all gift/smiley bytes resident in the Node process heap.
+for (const [url, directory] of Object.entries(BUILTIN_ASSET_DIRS)) {
+  const mount = url === 'vipGifts' ? '/vip-gifts' : '/' + url;
+  app.use(mount, express.static(directory, { maxAge: '1y', immutable: true, fallthrough: true }));
+}
 // Keep crawler directives and the sitemap on the same authoritative origin as
 // the canonical URL. API, socket transport and private media are intentionally
 // excluded; the public homepage and public uploads remain crawlable.
@@ -306,13 +283,13 @@ function save(){
 let giftCatalogMigrationChanged=false;
 if(db.giftCatalogV4Initialized!==true){
   giftCatalogMigrationChanged=true;
-  db.giftCatalog=Object.entries(GIFT_PACK).map(([file,item],i)=>({id:'gift-pack-'+String(i+1).padStart(3,'0'),name:'هدية',icon:'🎁',image:'/gifts/'+file,price:0,builtin:true,packVersion:5}));
+  db.giftCatalog=BUILTIN_GIFT_FILES.map((file,i)=>({id:'gift-pack-'+String(i+1).padStart(3,'0'),name:'هدية',icon:'🎁',image:'/gifts/'+file,price:0,builtin:true,packVersion:5}));
   db.giftCatalogV4Initialized=true;
   db.giftCatalogV5Initialized=true;
 }
 if(db.giftCatalogV5Initialized!==true){
   giftCatalogMigrationChanged=true;
-  db.giftCatalog=Object.entries(GIFT_PACK).map(([file,item],i)=>({id:'gift-pack-'+String(i+1).padStart(3,'0'),name:'هدية',icon:'🎁',image:'/gifts/'+file,price:0,builtin:true,packVersion:5}));
+  db.giftCatalog=BUILTIN_GIFT_FILES.map((file,i)=>({id:'gift-pack-'+String(i+1).padStart(3,'0'),name:'هدية',icon:'🎁',image:'/gifts/'+file,price:0,builtin:true,packVersion:5}));
   db.giftCatalogV5Initialized=true;
 }
 // v46.83.0: replace the legacy VIP gift catalogue with the exact latest user-supplied asset.
@@ -1977,7 +1954,7 @@ app.use((err,req,res,next)=>{
     return res.status(tooLarge?413:400).json({error:tooLarge?'حجم الملف أكبر من الحد المسموح':'تعذر استقبال الملف؛ تحقق من الملف وحاول مجدداً'});
   }
   if(err && /نوع الملف غير مسموح|اختر صورة بصيغة مدعومة/.test(String(err.message||'')))return res.status(415).json({error:err.message});
-  console.error('Unhandled request error:',err);
+  console.error(`Unhandled request error on ${req.method} ${req.path}:`, err && err.stack ? err.stack : err);
   return res.status(500).json({error:'حدث خطأ غير متوقع في الخادم'});
 });
 app.get(/.*/,(req,res)=>sendSeoIndex(req,res));

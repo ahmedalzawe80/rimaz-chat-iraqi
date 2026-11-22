@@ -1,3 +1,8 @@
+## v46.93.71 (2026-11-22)
+
+- Removed the unused `saveNewShortcut` wrapper from both synchronized browser entry files. The validated `saveShortcut` workflow remains unchanged.
+- Added regression coverage for the wrapper removal and bumped the package version.
+
 ## 46.93.69 — Root fix for private typing lifecycle
 - Removed the composer blur handler that immediately sent `typing:false` when the sender switched tabs or moved focus to the other account.
 - Removed the duplicate client-side expiry timer; the server's existing 3000 ms expiry is now the sole authority for typing-state timeout.
@@ -390,7 +395,15 @@
 - ترحيل بيانات المناصب والمنح القديمة مرة واحدة ثم حذف مخازنها القديمة.
 - تحويل صلاحيات الغرف وأدوات الدردشة الشاملة القديمة إلى مفاتيح منفصلة قابلة للتحكم.
 - تغطية كل مفاتيح الصلاحيات النشطة في محرر الرتب.
-\n\n## v46.80.5 — Root login layout correction and audit\n\n- Fixed the actual username selector: it now targets the input inside the dynamically generated credential form.\n- Username width and left alignment now match the password field's 55% grid track.\n- Kept mobile button sizing responsive in the final login layout rules.\n- Added `CODE-AUDIT.md` documenting CSS cascade findings and safe-cleanup boundaries.\n
+
+
+## v46.80.5 — Root login layout correction and audit
+
+- Fixed the actual username selector: it now targets the input inside the dynamically generated credential form.
+- Username width and left alignment now match the password field's 55% grid track.
+- Kept mobile button sizing responsive in the final login layout rules.
+- Added `CODE-AUDIT.md` documenting CSS cascade findings and safe-cleanup boundaries.
+
 
 ## v46.80.6 — توحيد المسافة والمحاذاة بين الصورة والرتبة والاسم
 
@@ -605,3 +618,10 @@
 - Synchronized client and server typing-expiry windows to 3000 ms.
 - Kept the minimize action in its existing right-side RTL position and retained dots only.
 
+
+## 46.93.70 — Low-memory media serving and clearer request errors
+- Converted bundled smileys, gifts, and VIP gift images from Base64 JSON packs into individual static disk assets. Startup no longer parses or decodes the full media catalog into process memory; Express serves images directly from disk with immutable cache headers.
+- Corrected five smiley filenames to match their actual image signatures and retained permanent redirects for legacy filenames stored in existing smiley catalogs.
+- Added request method/path and stack trace to unhandled request error logs (query strings are excluded so media ticket tokens are not logged).
+- Updated regression checks to validate image signatures on disk, media-serving behavior, and package version.
+- Historical Deplexo log error `ReferenceError: ticket is not defined` was already fixed in the private media ticket route in an earlier release; this version keeps that fix and adds more diagnostic logging.

@@ -25,22 +25,19 @@ try {
   const firstUse = source.indexOf("app.disable('x-powered-by');");
   if (appInit >= 0 && serverInit > appInit && ioInit > serverInit && firstUse > ioInit) pass('Express, HTTP, and Socket.IO are initialized before first use');
   else fail('server bootstrap initialization order');
-  const packPath = path.join(root, 'public', 'smileys-pack.json');
-  const pack = JSON.parse(fs.readFileSync(packPath, 'utf8'));
-  const names = Object.keys(pack).filter(name => /^smiley-\d+\.(?:gif|png|jpe?g|webp)$/i.test(name));
+  const smileyDir = path.join(root, 'public', 'smileys');
+  const names = fs.readdirSync(smileyDir).filter(name => /^smiley-\d+\.(?:gif|png|jpe?g|webp)$/i.test(name));
   const valid = names.length === 238 && names.every(name => {
-    const item = pack[name];
-    let bytes;
-    try { bytes = Buffer.from(item.data, 'base64'); } catch { return false; }
-    if (!bytes.length || !item.type) return false;
-    if (bytes.subarray(0, 6).toString() === 'GIF87a' || bytes.subarray(0, 6).toString() === 'GIF89a') return item.type === 'image/gif';
-    if (bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) return item.type === 'image/png';
-    if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return item.type === 'image/jpeg';
-    if (bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP') return item.type === 'image/webp';
+    const bytes = fs.readFileSync(path.join(smileyDir, name));
+    if (!bytes.length) return false;
+    if (/\.gif$/i.test(name)) return ['GIF87a','GIF89a'].includes(bytes.subarray(0,6).toString());
+    if (/\.png$/i.test(name)) return bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+    if (/\.jpe?g$/i.test(name)) return bytes[0]===255 && bytes[1]===216 && bytes[2]===255;
+    if (/\.webp$/i.test(name)) return bytes.subarray(0,4).toString()==='RIFF' && bytes.subarray(8,12).toString()==='WEBP';
     return false;
   });
-  if (valid) pass('all 238 packed smileys have valid base64 and matching MIME signatures');
-  else fail('packed smiley asset integrity or MIME signature');
+  if (valid) pass('all 238 smileys are disk assets with valid image signatures');
+  else fail('smiley asset integrity or image signature');
 } catch (error) { fail('startup and smiley-pack regression checks', error.message); }
 
 const mainPath = path.join(root, 'index.html');
@@ -85,6 +82,7 @@ try {
     ['shortcut edit loads the selected record and preserves its stable ID on save', html.includes('function editChatShortcut(id)') && html.includes('window.editingShortcutId=String(item.id)') && html.includes('String(x.id)===editingId?{...x,title,text}:x')],
     ['shortcut editing can be cancelled without changing saved data', html.includes('function cancelShortcutEdit()') && html.includes("window.editingShortcutId='';adminTab('shortcuts')")],
     ['shortcut create and update share one validated persistence workflow', html.includes('async function saveShortcut()') && html.includes('await saveChatTools(updated,d.customSmileys||[])') && html.includes('duplicate shortcut') === false && html.includes('اسم الاختصار مستخدم مسبقاً')],
+    ['unused saveNewShortcut wrapper removed from both synchronized browser files', !html.includes('saveNewShortcut') && fs.readFileSync(path.join(root, 'public/index.html'), 'utf8').includes('async function saveShortcut()') && !fs.readFileSync(path.join(root, 'public/index.html'), 'utf8').includes('saveNewShortcut')],
     ['shortcut editor has one canonical full-width grid and multiline RTL textarea', html.includes('.shortcutEditorGrid{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;width:100%;min-width:0;box-sizing:border-box}') && html.includes('.shortcutEditorGrid>*{grid-column:1;display:block;width:100%;min-width:0;max-width:100%;box-sizing:border-box}') && html.includes('direction:rtl;text-align:right;unicode-bidi:plaintext') && html.includes('.shortcutSavedRow{grid-template-columns:minmax(0,1fr) auto;') && html.includes('shortcutSavedText')],
     ['admin three-column grid excludes shortcut editor instead of overriding it', html.includes('.adminPanel .adminGrid:not(.shortcutEditorGrid){grid-template-columns:repeat(3,minmax(0,1fr))}') && !html.includes('rimaz-shortcut-editor-and-arabic-message-fix')],
     ['shortcut editor height is fixed and independent of mobile viewport or keyboard resizing', html.includes('height:160px;min-height:160px;max-height:160px') && !html.includes('window.innerHeight||600)*0.52')],
@@ -95,7 +93,9 @@ try {
     ['presence visibility is viewer-aware and ghost is invisible to others', source.includes('function canSeePresence(viewer,target,context=null)') && source.includes('if(target.ghost)return false')],
     ['hidden presence is visible only to staff and self', source.includes("if(target.hidden)return !!viewer&&(isOwner(viewer)||hasPermission(viewer,'presence_hidden_view'))")],
     ['live presence state is emitted individually per viewer', source.includes("const context=buildPresenceContext()") && source.includes("so.emit('live-state',{online:getOnlineUsers(viewer,context),rooms:visibleRooms(viewer,context)})")],
-    ['packed image assets are decoded once and reused as Buffers', source.includes('function decodePackedAssets(pack)') && source.includes('decodePackedAssets(SMILEY_PACK)') && source.includes('res.send(item.data);') && !source.includes("res.send(Buffer.from(item.data,'base64'))")],
+    ['built-in media are served as disk files without Base64 packs loaded into memory', source.includes("express.static(directory, { maxAge: '1y', immutable: true, fallthrough: true })") && !source.includes('decodePackedAssets') && !source.includes('SMILEY_PACK') && !source.includes('GIFT_PACK')],
+    ['legacy smiley URLs redirect after correcting asset file extensions', source.includes('SMILEY_FILE_ALIASES') && source.includes("res.redirect(301,'/smileys/'+target)")],
+    ['unhandled errors log the HTTP method, safe request path, and stack trace', source.includes('Unhandled request error on ${req.method} ${req.path}:') && source.includes('err.stack ? err.stack : err')],
     ['presence broadcasts reuse indexed session and socket lookups', source.includes('function buildPresenceContext()') && source.includes('sessionsBySid') && source.includes('sessionsByAccount') && source.includes('socketsBySid')],
     ['member directory omits accounts hidden from the current viewer', source.includes('if(hasInvisibleActiveSession(name,req.user,presence))continue')],
     ['hidden join/leave notices are staff-only and ghost emits no presence notices', source.includes("presenceVisibility:u.hidden?'staff':'public'") && source.includes('function emitPresenceToRoom(room,notice)')],
@@ -915,20 +915,19 @@ try {
 try {
   const html = fs.readFileSync(mainPath, 'utf8');
   const serverText = fs.readFileSync(server, 'utf8');
-  const giftPackPath = path.join(root, 'public', 'gifts-pack.json');
-  const giftPack = JSON.parse(fs.readFileSync(giftPackPath, 'utf8'));
-  const giftFiles = Object.keys(giftPack);
+  const giftDir = path.join(root, 'public', 'gifts');
+  const giftFiles = fs.readdirSync(giftDir).filter(x => /^[a-z0-9_-]+\.(?:gif|png|jpe?g|webp)$/i.test(x));
   const checks = [
-    ['v46.81 ships all 115 supplied gift images in one packed catalogue', giftFiles.length === 115],
-    ['v46.81 packed gift assets match their declared image MIME signatures', giftFiles.every(x => { const b=Buffer.from(giftPack[x].data,'base64'),t=giftPack[x].type; return t==='image/gif'?b.subarray(0,6).toString('ascii').startsWith('GIF8'):t==='image/png'?b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):t==='image/jpeg'?b[0]===255&&b[1]===216&&b[2]===255:t==='image/webp'?b.subarray(0,4).toString('ascii')==='RIFF'&&b.subarray(8,12).toString('ascii')==='WEBP':false; })],
+    ['v46.81 ships all 115 supplied gift images as individual disk assets', giftFiles.length === 115],
+    ['gift disk assets match their image signatures', giftFiles.every(x => { const b=fs.readFileSync(path.join(giftDir,x)); return /\.gif$/i.test(x)?b.subarray(0,6).toString('ascii').startsWith('GIF8'):/\.png$/i.test(x)?b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):/\.jpe?g$/i.test(x)?b[0]===255&&b[1]===216&&b[2]===255:/\.webp$/i.test(x)?b.subarray(0,4).toString('ascii')==='RIFF'&&b.subarray(8,12).toString('ascii')==='WEBP':false; })],
     ['v46.67 replaces old built-in gift arrays with server-managed catalogue', html.includes('const RIMAZ_GIFTS=[];const RIMAZ_EXTRA_GIFTS=[];const RIMAZ_NEW_GIFTS=[];') && html.includes('function giftCatalogAll(extra=[])')],
     ['v46.67 admin panel supports GIF upload and catalogue deletion', html.includes('uploadGiftToCatalog()') && html.includes('/api/admin/gifts/catalog/upload') && html.includes('deleteCatalogGift(${jsq(g.id)})')],
-    ['v46.67 built-in gifts are served from a single packed JSON file', serverText.includes('GIFT_PACK_FILE') && serverText.includes("app.get('/gifts/:file'") && !fs.existsSync(path.join(root,'public','gifts'))],
+    ['built-in gifts and smileys are streamed from disk and no packed JSON remains', serverText.includes('BUILTIN_GIFT_FILES') && serverText.includes('BUILTIN_SMILEY_FILES') && fs.existsSync(path.join(root,'public','gifts')) && !fs.existsSync(path.join(root,'public','gifts-pack.json'))],
     ['v46.67 server accepts only animated GIF gift uploads and validates frame count', serverText.includes("req.file.mimetype!=='image/gif'") && serverText.includes('gifFrames<2')],
     ['v46.67 sent gifts resolve image path from trusted server catalogue', serverText.includes("find(x=>String(x.id||'')===giftId)") && serverText.includes('giftImage')],
     ['v46.67 gift receipt animation renders the GIF image', html.includes('function showGiftAnimation(') && html.includes('giftArtLarge') && html.includes('d.giftImage||\'\'')],
     ['v46.81 manual gift uploads send the active session token', html.includes("fetch('/api/admin/gifts/catalog/upload',{method:'POST',headers:{'x-session':sid},body:form})")],
-    ['v46.81 VIP gift pack is served independently and has an authenticated manual upload/delete UI', serverText.includes("app.get('/vip-gifts/:file'") && html.includes('uploadVipGiftToCatalog()') && html.includes('deleteVipCatalogGift(') && html.includes("category:'vip'")],
+    ['v46.81 VIP gift pack is served independently and has an authenticated manual upload/delete UI', serverText.includes("'/vip-gifts'") && html.includes('uploadVipGiftToCatalog()') && html.includes('deleteVipCatalogGift(') && html.includes("category:'vip'")],
     ['v46.81 one-time migration replaces old catalogues with supplied standard and VIP packs', serverText.includes('db.giftCatalogV4Initialized!==true') && serverText.includes('db.giftCatalogV4Initialized=true') && serverText.includes('db.vipGiftCatalog=')],
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
@@ -957,7 +956,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.44 package version is current', pkg.version === '46.93.69'],
+    ['v46.93.71 package version is current', pkg.version === '46.93.71'],
     ['no dangling async-only lines remain in the browser entry script', !/^\s*async\s*$/m.test(html)],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
@@ -1128,9 +1127,9 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.44 package version',pkgNow.version==='46.93.69'],
+  ['v46.93.71 package version',pkgNow.version==='46.93.71'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
-  ['v46.82 standard gifts have unnumbered visible labels',Object.values(JSON.parse(fs.readFileSync(path.join(root,'public','gifts-pack.json'),'utf8'))).every(g=>g.name==='هدية')],
+  ['v46.82 standard gift catalogue keeps the generic unnumbered label',src.includes("name:'هدية'")],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],
   ['v46.83 member-card and admin gift send paths preserve gift category',html.includes("jsq(g.category||'gift')")&&html.includes("g.category||'gift')")&&html.includes("category:g.category||'gift'")],
@@ -1141,7 +1140,7 @@ try {
   ['v46.88 default avatar image is protected from cropping while custom avatar fallback remains intact', html.includes('img[src*="rimaz-default-avatar.png"]{object-fit:contain!important') && html.includes('return custom||DEFAULT_AVATAR_URL')],
   ['v46.93.19 default profile avatar uses its square intrinsic ratio with no side gutters and leaves custom avatars unchanged', html.includes('#layer .profileOverlay .profilePhoto[src*="rimaz-default-avatar.png"]{width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;aspect-ratio:1/1!important;object-fit:cover!important;object-position:center center!important;padding:0!important;box-sizing:border-box!important;}') && html.includes('return custom||DEFAULT_AVATAR_URL') && !html.includes('profilePhoto[src*="rimaz-default-avatar.png"]{object-fit:contain')],
   ['v46.84 VIP badge uses the supplied VIP artwork instead of the legacy crown-and-text badge',html.includes('class=\"vipRankArt\" src=\"/vip-gifts/vip-special.gif\"')&&!html.includes('class=\"vipCrown\" aria-hidden=\"true\">👑</span><b>VIP</b>')],
-  ['v46.83 VIP packed asset matches its declared GIF signature',(()=>{const pack=JSON.parse(fs.readFileSync(path.join(root,'public/vip-gifts-pack.json'),'utf8'));const item=pack['vip-special.gif'];return !!item&&item.type==='image/gif'&&Buffer.from(item.data,'base64').subarray(0,6).toString('ascii').startsWith('GIF8')})()],
+  ['v46.83 VIP gift disk asset has a valid GIF signature',(()=>{const file=path.join(root,'public/vip-gifts','vip-special.gif');return fs.existsSync(file)&&fs.readFileSync(file).subarray(0,6).toString('ascii').startsWith('GIF8')})()],
   ['v46.83 server validates gift IDs against the selected standard or VIP catalogue',src.includes("const sourceCatalog=category==='vip'?(db.vipGiftCatalog||[]):(db.giftCatalog||[])")],
   ['v46.84 member badge frames are removed across online, private, chat, wall and profile surfaces',html.includes('rimaz-v46-84-flat-badges-everywhere')&&html.includes('.memberBadge,.memberBadges .memberBadge')&&html.includes('.wallPost .memberBadge')&&html.includes('border:0!important')],
 
@@ -1370,7 +1369,7 @@ try {
   const html=fs.readFileSync(mainPath,'utf8');
   const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   const checks=[
-    ['v46.93.53 package version is current',pkgNow.version==='46.93.69'],
+    ['v46.93.71 package version is current',pkgNow.version==='46.93.71'],
   ['private text is nested under sender identity, not avatar row',html.includes('pmsgTitle') && html.includes('pmsgIdentity') && /<div class=\"pmsgIdentity\"><div class=\"pmsgTitle\"[\s\S]*?<div class=\"pmsgText\">/.test(html)],
   ['wall post shortcut resolver does not mutate composer and postWall does not call expansion mutator',html.includes('async function wallTextForSend(input)') && /async function postWall\(\)\{[^}]*wallTextForSend\(input\)[^}]*\}/.test(html) && !/async function postWall\(\)\{[^}]*expandChatShortcut\(input,true\)[^}]*\}/.test(html)],
     ['private video obtains a short-lived authorized stream URL instead of buffering the full file into a Blob',html.includes("fetch('/api/private/media-ticket'")&&html.includes("if(type==='video')")&&html.includes('src=\"${esc(streamUrl)}\"')],
@@ -1390,7 +1389,7 @@ try {
   const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   const route=source.slice(source.indexOf("app.post('/api/media'"),source.indexOf('function normalizeChatFilterText'));
   const checks=[
-    ['v46.93.44 package version is current (private-media regression suite)',pkgNow.version==='46.93.69'],
+    ['v46.93.71 package version is current (private-media regression suite)',pkgNow.version==='46.93.71'],
     ['private media verifies an active recipient account and fans out to all its active sessions',route.includes('hasConnectedSessionForUser(to)')&&route.includes("emitToUser(to,'private-media',m)")&&!route.includes('targetSocket[0]')],
     ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',m)")&&source.includes("emitToUser(to,'private-media',m)")],
     ['QuickTime MOV uploads have a safe extension and require a valid ISO-BMFF signature',source.includes("'video/quicktime':'.mov'")&&source.includes("['video/mp4','video/quicktime'].includes(mime) && actual==='mp4'")],
