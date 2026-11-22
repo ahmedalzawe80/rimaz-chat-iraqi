@@ -532,6 +532,7 @@ function scheduleSessionDisconnectCleanup(sid,user){
       if(current.type==='guest'){if(previousGuest!==undefined)db.guests[current.name]=previousGuest;if(previousProfile!==undefined)db.profiles[current.name]=previousProfile;if(previousWallReadAt!==undefined)db.wallReadAt[guestKey]=previousWallReadAt;}
       if(hadWelcome)welcomeSentSessions.add(sid);return;
     }
+    clearSessionTransientState(sid);
     emitState();
   },SESSION_DISCONNECT_GRACE_MS);
   timer.unref?.();sessionDisconnectTimers.set(sid,timer);
@@ -853,6 +854,7 @@ function buildPresenceContext(){
   const activeEntries = [];
   const sessionsBySid = new Map();
   const sessionsByAccount = new Map();
+  const activeByRoom = new Map();
   for (const [sid,active] of socketUsers) {
     const so = active?.socketId ? io.sockets.sockets.get(active.socketId) : null;
     const user = sessions.get(sid);
@@ -860,13 +862,15 @@ function buildPresenceContext(){
     socketsBySid.set(sid,so);
     activeEntries.push([sid,user]);
     sessionsBySid.set(sid,user);
+    const roomKey=String(active.room||user.room||'');
+    if(roomKey){let roomEntries=activeByRoom.get(roomKey);if(!roomEntries)activeByRoom.set(roomKey,roomEntries=[]);roomEntries.push([sid,user]);}
     const accountKey = keyName(user.name);
     let group = sessionsByAccount.get(accountKey);
     if (!group) sessionsByAccount.set(accountKey, group = []);
     group.push(user);
   }
   activeEntries.sort((a,b)=>Number(socketUsers.get(b[0])?.joinedAt||0)-Number(socketUsers.get(a[0])?.joinedAt||0));
-  return { socketsBySid, activeEntries, sessionsBySid, sessionsByAccount };
+  return { socketsBySid, activeEntries, sessionsBySid, sessionsByAccount, activeByRoom };
 }
 function canSeePresence(viewer,target,context=null){
   if(!target)return false;
@@ -933,9 +937,8 @@ function getOnlineUsers(viewer=null,context=null){
 function onlineInRoom(room,viewer=null,context=null){
   context=context||buildPresenceContext();
   const seen=new Set();
-  for(const [sid,user] of context.activeEntries){
-    const active=socketUsers.get(sid);
-    if(active?.room!==room||!canSeePresence(viewer,user,context))continue;
+  for(const [,user] of (context.activeByRoom?.get(String(room))||[])){
+    if(!canSeePresence(viewer,user,context))continue;
     const account=keyName(user.name);if(account)seen.add(account);
   }
   return seen.size;
@@ -1046,13 +1049,26 @@ const uploadSmallImage = multer({storage:uploadStorage,limits:{fileSize:1024*102
   const allowed=['image/gif','image/png','image/jpeg','image/webp'].includes(String(file.mimetype||'').toLowerCase());
   cb(allowed?null:new Error('اختر صورة بصيغة مدعومة'),allowed);
 }});
-// Database restore uploads are kept in memory only, capped tightly, and never
-// written into the public uploads directory.
-const restoreUpload = multer({storage:multer.memoryStorage(),limits:{fileSize:20*1024*1024,files:1,fields:0}});
-const pendingDatabaseRestores = new Map();
-function validateDatabaseRestoreFile(buffer){
-  if(!Buffer.isBuffer(buffer)||!buffer.length||buffer.length>20*1024*1024)throw new Error('حجم ملف النسخة غير صالح');
-  let parsed;try{parsed=JSON.parse(buffer.toString('utf8'));}catch(_){throw new Error('ملف النسخة ليس JSON صالحاً');}
+// Restore files are staged on the private persistent volume, never in public uploads
+// and never in Multer memory storage. Pending previews retain only a path and metadata.
+const RESTORE_TMP_DIR=path.join(DATA_DIR,'.restore-tmp');
+try{
+  fs.mkdirSync(RESTORE_TMP_DIR,{recursive:true,mode:0o700});
+  try{fs.chmodSync(RESTORE_TMP_DIR,0o700);}catch(_){}
+  // Preview tokens are process-local. Any staged file left by a prior crashed process
+  // is therefore orphaned and safe to remove at startup.
+  for(const name of fs.readdirSync(RESTORE_TMP_DIR)){
+    const orphan=path.join(RESTORE_TMP_DIR,name);
+    try{if(fs.statSync(orphan).isFile())fs.unlinkSync(orphan);}catch(_){}
+  }
+}catch(error){console.error('Could not initialize private restore staging directory:',error.message);throw error;}
+const restoreUpload=multer({storage:multer.diskStorage({destination:RESTORE_TMP_DIR,filename:(req,file,cb)=>cb(null,`restore-${process.pid}-${crypto.randomBytes(16).toString('hex')}.json`)}),limits:{fileSize:20*1024*1024,files:1,fields:0}});
+const pendingDatabaseRestores=new Map();
+const MAX_PENDING_DATABASE_RESTORES=2;
+function validateDatabaseRestoreFile(source){
+  const raw=Buffer.isBuffer(source)?source.toString('utf8'):typeof source==='string'?source:'';
+  if(!raw||Buffer.byteLength(raw,'utf8')>20*1024*1024)throw new Error('حجم ملف النسخة غير صالح');
+  let parsed;try{parsed=JSON.parse(raw);}catch(_){throw new Error('ملف النسخة ليس JSON صالحاً');}
   if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)||!['rimaz-database-backup','rimaz-full-backup'].includes(parsed.format)||parsed.version!==1||!parsed.database||typeof parsed.database!=='object'||Array.isArray(parsed.database))throw new Error('صيغة النسخة غير مدعومة أو تالفة');
   const template=defaults(),incoming=parsed.database,clean={};
   for(const [key,defaultValue] of Object.entries(template)){
@@ -1065,17 +1081,28 @@ function validateDatabaseRestoreFile(buffer){
   }
   if(!clean.users||!clean.guests||!Array.isArray(clean.rooms)||!Array.isArray(clean.messages))throw new Error('النسخة لا تحتوي البنية الأساسية لقاعدة بيانات ريماز');
   if(Object.keys(clean.users).length>100000||Object.keys(clean.guests).length>100000||clean.rooms.length>10000||clean.messages.length>2000000)throw new Error('حجم البيانات داخل النسخة يتجاوز الحدود الآمنة');
-  return {parsed,clean,summary:{members:Object.keys(clean.users).length,guests:Object.keys(clean.guests).length,rooms:clean.rooms.length,messages:clean.messages.length,wall:Array.isArray(clean.wall)?clean.wall.length:0,createdAt:parsed.createdAt||null,appVersion:parsed.appVersion||'غير معروف'}};
+  return {clean,summary:{members:Object.keys(clean.users).length,guests:Object.keys(clean.guests).length,rooms:clean.rooms.length,messages:clean.messages.length,wall:Array.isArray(clean.wall)?clean.wall.length:0,createdAt:parsed.createdAt||null,appVersion:parsed.appVersion||'غير معروف'}};
 }
 function restoreContainsOwner(candidate,ownerName){
- const entries=[...Object.entries(candidate.users||{}),...Object.entries(candidate.guests||{})];
+ const users=candidate.users||{},guests=candidate.guests||{};
  const configured=String(process.env.OWNER_NAME||'').trim();
- if(configured)return entries.some(([name])=>keyName(name)===keyName(configured));
+ if(configured){const wanted=keyName(configured);return Object.keys(users).some(name=>keyName(name)===wanted)||Object.keys(guests).some(name=>keyName(name)===wanted);}
  const wanted=keyName(ownerName);
- if(wanted&&wanted!=='owner'&&entries.some(([name])=>keyName(name)===wanted&&String((candidate.users||{})[name]?.role||(candidate.guests||{})[name]?.role||'')==='owner'))return true;
- return entries.some(([name,account])=>keyName(name)==='owner'||String(account?.role||'')==='owner');
+ if(wanted&&wanted!=='owner'){
+  for(const [name,account] of Object.entries(users))if(keyName(name)===wanted&&String(account?.role||'')==='owner')return true;
+  for(const [name,account] of Object.entries(guests))if(keyName(name)===wanted&&String(account?.role||'')==='owner')return true;
+ }
+ for(const [name,account] of Object.entries(users))if(keyName(name)==='owner'||String(account?.role||'')==='owner')return true;
+ for(const [name,account] of Object.entries(guests))if(keyName(name)==='owner'||String(account?.role||'')==='owner')return true;
+ return false;
 }
-function purgeExpiredDatabaseRestores(){const now=Date.now();for(const [token,item] of pendingDatabaseRestores)if(item.expiresAt<=now)pendingDatabaseRestores.delete(token);}
+function discardDatabaseRestorePreview(token,item=pendingDatabaseRestores.get(token)){
+ pendingDatabaseRestores.delete(token);
+ if(item?.filePath){try{fs.unlinkSync(item.filePath);}catch(error){if(error.code!=='ENOENT')console.warn('Restore preview file cleanup failed:',error.message);}}
+}
+function purgeExpiredDatabaseRestores(){const now=Date.now();for(const [token,item] of pendingDatabaseRestores)if(item.expiresAt<=now)discardDatabaseRestorePreview(token,item);}
+const databaseRestoreCleanupTimer=setInterval(purgeExpiredDatabaseRestores,30*1000);
+databaseRestoreCleanupTimer.unref?.();
 
 function removeUploadedFile(file){if(file?.path){try{fs.unlinkSync(file.path)}catch(e){if(e.code!=='ENOENT')console.warn('Upload cleanup failed:',e.message)}}}
 
@@ -1189,6 +1216,7 @@ app.post('/api/logout',requireAuth,(req,res)=>{
   if(u?.type==='guest'){delete db.guests[u.name];delete db.profiles[u.name];delete db.wallReadAt[guestWallReadKey];}
   sessions.delete(sid);welcomeSentSessions.delete(sid);delete db.sessions[sid];
   try{save()}catch(e){if(previousMessages!==undefined)db.messages=previousMessages;if(u){sessions.set(sid,u);db.sessions[sid]=u;if(u.type==='guest'){if(previousGuest!==undefined)db.guests[u.name]=previousGuest;if(previousProfile!==undefined)db.profiles[u.name]=previousProfile;if(previousGuestWallReadAt!==undefined)db.wallReadAt[guestWallReadKey]=previousGuestWallReadAt;}if(hadWelcome)welcomeSentSessions.add(sid);}console.error('Logout persistence failed:',e.message);return res.status(500).json({error:'تعذر حفظ تسجيل الخروج، حاول مرة أخرى'});}
+  clearSessionTransientState(sid);
   for(const so of [...io.sockets.sockets.values()])if(so.data?.sid===sid)so.disconnect(true);
   if(name)schedulePrivateConversationCleanup(name);
   res.json({ok:true});
@@ -1615,16 +1643,20 @@ app.post('/api/admin/restore/database/preview',requireAuth,(req,res)=>{
  restoreUpload.single('backup')(req,res,error=>{
   if(error)return res.status(400).json({error:error.code==='LIMIT_FILE_SIZE'?'حجم ملف النسخة أكبر من 20MB':(error.message||'تعذر قراءة ملف النسخة')});
   if(!req.file)return res.status(400).json({error:'اختر ملف نسخة JSON أولاً'});
+  const uploadedFile=req.file;
   try{
+   try{fs.chmodSync(uploadedFile.path,0o600);}catch(_){}
    purgeExpiredDatabaseRestores();
-   const checked=validateDatabaseRestoreFile(req.file.buffer);
+   const checked=validateDatabaseRestoreFile(fs.readFileSync(uploadedFile.path,'utf8'));
    const protectedOwnerName=process.env.OWNER_NAME||'owner';if(!restoreContainsOwner(checked.clean,protectedOwnerName))throw new Error('النسخة لا تحتوي حساب صاحب الموقع؛ رُفضت لحماية إمكانية الدخول للإدارة');
-   for(const [oldToken,oldPreview] of pendingDatabaseRestores)if(oldPreview.owner===keyName(req.user.name))pendingDatabaseRestores.delete(oldToken);
+   for(const [oldToken,oldPreview] of pendingDatabaseRestores)if(oldPreview.owner===keyName(req.user.name))discardDatabaseRestorePreview(oldToken,oldPreview);
+   if(pendingDatabaseRestores.size>=MAX_PENDING_DATABASE_RESTORES)throw new Error('توجد معاينات استعادة أخرى قيد الانتظار؛ أكمل إحداها أو انتظر انتهاء صلاحيتها');
    const token=crypto.randomBytes(32).toString('hex');
-   pendingDatabaseRestores.set(token,{database:checked.clean,summary:checked.summary,owner:keyName(req.user.name),expiresAt:Date.now()+5*60*1000});
+   pendingDatabaseRestores.set(token,{filePath:uploadedFile.path,summary:checked.summary,owner:keyName(req.user.name),expiresAt:Date.now()+5*60*1000});
+   uploadedFile.path='';
    res.set('Cache-Control','no-store');
    res.json({ok:true,token,expiresInSeconds:300,summary:checked.summary,warning:'سيتم استبدال بيانات قاعدة البيانات الحالية. الجلسات النشطة والرسائل الخاصة المؤقتة لن تُستعاد.'});
-  }catch(e){res.status(400).json({error:e.message||'ملف النسخة غير صالح'});}
+  }catch(e){removeUploadedFile(uploadedFile);res.status(400).json({error:e.message||'ملف النسخة غير صالح'});}
  });
 });
 app.post('/api/admin/restore/database/confirm',requireAuth,(req,res)=>{
@@ -1637,16 +1669,20 @@ app.post('/api/admin/restore/database/confirm',requireAuth,(req,res)=>{
  const previous=db;
  let recoveryFile='';
  try{
+  const checked=validateDatabaseRestoreFile(fs.readFileSync(pending.filePath,'utf8'));
+  const protectedOwnerName=process.env.OWNER_NAME||'owner';if(!restoreContainsOwner(checked.clean,protectedOwnerName))throw new Error('النسخة لا تحتوي حساب صاحب الموقع؛ رُفضت لحماية إمكانية الدخول للإدارة');
   if(fs.existsSync(DB_FILE)){recoveryFile=DB_FILE+'.pre-restore-'+Date.now()+'.json';fs.copyFileSync(DB_FILE,recoveryFile,fs.constants.COPYFILE_EXCL);}
-  db=pending.database;
+  db=checked.clean;
   db.sessions={};db.privateMessages=[];
-  save();
-  pendingDatabaseRestores.delete(token);
-  try{io.disconnectSockets(true);}catch(e){console.warn('Could not disconnect restored sessions:',e.message);}
   db.adminAuditLogs=Array.isArray(db.adminAuditLogs)?db.adminAuditLogs:[];
   db.adminAuditLogs.unshift({id:crypto.randomUUID(),at:Date.now(),actor:String(req.user.name||'المالك').slice(0,32),method:'POST',path:'/api/admin/restore/database/confirm',status:200});
   db.adminAuditLogs=db.adminAuditLogs.slice(0,500);
   save();
+  discardDatabaseRestorePreview(token,pending);
+  for(const timer of sessionDisconnectTimers.values())clearTimeout(timer);
+  sessionDisconnectTimers.clear();
+  botMessageWindows.clear();callSignalWindows.clear();voiceSignalWindows.clear();welcomeSentSessions.clear();
+  try{io.disconnectSockets(true);}catch(e){console.warn('Could not disconnect restored sessions:',e.message);}
   res.json({ok:true,message:'تمت استعادة قاعدة البيانات. تم إنهاء الجلسات النشطة.',recoveryFile:path.basename(recoveryFile||DB_FILE)});
  }catch(e){
   db=previous;
@@ -1789,6 +1825,21 @@ app.post('/api/media',requireAuth,upload.single('file'),validateUploadedContent(
 function normalizeChatFilterText(value){return String(value||'').normalize('NFKC').toLocaleLowerCase('ar').replace(/[\u064B-\u065F\u0670\u0640\u200B-\u200F\uFEFF]/g,'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/[\s\u00A0]+/g,' ').trim();}
 function blockedChatTerm(text){const f=db.chatFilter||{};if(f.enabled!==true)return '';const normalized=normalizeChatFilterText(text);return (Array.isArray(f.words)?f.words:[]).find(w=>{const term=normalizeChatFilterText(w);return term&&normalized.includes(term)})||'';}
 const botMessageWindows=new Map();
+function clearSessionTransientState(sid){
+  if(!sid)return;
+  botMessageWindows.delete(sid);
+  callSignalWindows.delete(sid);
+  voiceSignalWindows.delete(sid);
+  welcomeSentSessions.delete(sid);
+}
+function pruneOrphanedSessionState(){
+  for(const sid of botMessageWindows.keys())if(!sessions.has(sid)||(!socketUsers.has(sid)&&!sessionDisconnectTimers.has(sid)))botMessageWindows.delete(sid);
+  for(const sid of callSignalWindows.keys())if(!socketUsers.has(sid))callSignalWindows.delete(sid);
+  for(const sid of voiceSignalWindows.keys())if(!socketUsers.has(sid))voiceSignalWindows.delete(sid);
+  for(const sid of welcomeSentSessions)if(!sessions.has(sid))welcomeSentSessions.delete(sid);
+}
+const sessionTransientCleanupTimer=setInterval(pruneOrphanedSessionState,5*60*1000);
+sessionTransientCleanupTimer.unref?.();
 function emitRoomBotMessage(room,text){const message={id:crypto.randomUUID(),room,from:'رماز بوت',displayName:'🤖 رماز بوت',type:'text',text:String(text||'').slice(0,1000),at:Date.now(),role:'bot',bot:true};try{addMessage(message);io.to(room).emit('message',message);}catch(error){console.warn('Chat bot response failed:',error.message);}}
 function processBuiltInBotCommand(socket,user,room,text){
  const settings=normalizedBotSettings(db.botSettings),raw=String(text||'').trim();if(!/^[!/]/.test(raw))return false;

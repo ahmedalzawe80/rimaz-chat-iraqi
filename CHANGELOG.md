@@ -1,3 +1,11 @@
+## v46.93.72 (2026-11-22)
+
+- Fixed transient anti-spam state lifecycle: per-session message windows are removed only after the reconnect grace period ends and the session removal is durably saved; orphaned transient entries are also swept periodically.
+- Reworked database restore staging from Multer memory storage to a private, permission-restricted disk staging directory. Pending previews retain only a path and metadata, are capped at two, are revalidated at confirmation, and are deleted on confirmation or periodic expiry. Orphaned staging files are removed on process startup because preview tokens are process-local.
+- Made database restore commit transactional at the application level: audit metadata is included in the replacement snapshot and persisted before pending files are removed or active sockets are disconnected.
+- Added a per-room active-session index to each presence snapshot, avoiding a full active-session scan for every room count while preserving viewer-specific hidden/ghost visibility checks.
+- Added regression checks for resource lifecycle, private restore staging, bounded previews, and room-presence indexing. No chat features or user data schema were removed.
+
 ## v46.93.71 (2026-11-22)
 
 - Removed the unused `saveNewShortcut` wrapper from both synchronized browser entry files. The validated `saveShortcut` workflow remains unchanged.

@@ -108,3 +108,18 @@ This is a conservative one-pass cleanup, not a claim that every unused client-si
 - No feature logic or persistence code was changed.
 - Added a regression check and bumped the package version.
 - Validation: syntax and full `verify.js` suite.
+## v46.93.72 — resource lifecycle and restore-memory repair (2026-11-22)
+
+### Confirmed defects addressed
+- The per-session anti-spam window map was not cleared when a disconnected session completed its reconnect grace period. It is now cleared after the durable session deletion succeeds; a periodic orphan sweep also removes state when a session has no live socket and no pending reconnect timer. Logout and successful restore clear the same transient state.
+- Database restore used in-memory multipart storage and retained a parsed database object in a pending-preview map for five minutes. Restore uploads now stage on a private directory under the persistent data directory, use restrictive directory/file permissions, keep only path/summary/token metadata in memory, cap pending previews at two, revalidate on confirmation, and delete staged files on confirmation/expiry. Startup removes stale staged files because their process-local tokens cannot survive restart.
+- Room presence counts previously scanned all active sessions once per room per viewer. Presence snapshots now include an `activeByRoom` index and room counts inspect only the target room's sessions while retaining viewer-specific visibility checks.
+
+### Deliberate non-changes
+- No database migration, schema change, feature removal, upload deletion, or user-data cleanup was made.
+- The JSON persistence implementation was not replaced: the live database size reported by the owner was approximately 0.71 MB, so a storage migration is not justified by the available measurements.
+- Session records are not purged indiscriminately at startup because existing session tokens may still be used for legitimate reconnects; doing so would log users out without evidence that those sessions are invalid.
+
+### Verification boundary
+- 446 local regression checks pass, including runtime fixtures for restore validation and transient session cleanup. `server.js` and `verify.js` pass Node syntax checks.
+- Live Deplexo memory pressure, multi-user concurrency, and actual restore on the production persistent volume remain untested. The repair candidate must not be treated as production-verified until those tests are performed on a staging deployment with a backup.

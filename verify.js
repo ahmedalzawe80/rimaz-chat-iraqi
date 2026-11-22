@@ -956,7 +956,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const checks = [
-    ['v46.93.71 package version is current', pkg.version === '46.93.71'],
+    ['v46.93.72 package version is current', pkg.version === '46.93.72'],
     ['no dangling async-only lines remain in the browser entry script', !/^\s*async\s*$/m.test(html)],
     ['v46.93.23 name background is applied only to intrinsic name text, not the full message header', html.includes('background:transparent;--rimaz-name-highlight:') && html.includes('#msgs .msg .msghead .rimazIdentityName{display:inline-block!important;flex:0 0 auto!important;width:max-content!important') && html.includes('background:var(--rimaz-name-highlight,transparent)!important')],
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
@@ -1004,30 +1004,61 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const checks = [
     ['restore preview and confirm routes support delegated site_admin while preserving owner in backup', serverText.includes("app.post('/api/admin/restore/database/preview',requireAuth") && serverText.includes("app.post('/api/admin/restore/database/confirm',requireAuth") && (serverText.match(/hasPermission\(req\.user,'site_admin'\)/g)||[]).length>=2 && serverText.includes("protectedOwnerName=process.env.OWNER_NAME||\'owner\'")],
-    ['restore upload is memory-only and capped at 20MB', serverText.includes('multer.memoryStorage()') && serverText.includes('fileSize:20*1024*1024')],
+    ['restore upload is disk-backed in a private staging directory and capped at 20MB', serverText.includes('multer.diskStorage({destination:RESTORE_TMP_DIR') && serverText.includes('mode:0o700') && serverText.includes('fileSize:20*1024*1024') && !serverText.includes('multer.memoryStorage()')],
+    ['pending restore previews retain only staged-file metadata, not a parsed database object', serverText.includes('filePath:uploadedFile.path,summary:checked.summary') && !serverText.includes('pendingDatabaseRestores.set(token,{database:checked.clean') && serverText.includes('MAX_PENDING_DATABASE_RESTORES=2')],
+    ['expired restore previews delete their staged files on a recurring unref timer', serverText.includes('function discardDatabaseRestorePreview') && serverText.includes('fs.unlinkSync(item.filePath)') && serverText.includes('setInterval(purgeExpiredDatabaseRestores,30*1000)') && serverText.includes('databaseRestoreCleanupTimer.unref?.()')],
     ['restore accepts only known versioned Rimaz JSON formats and validates schema', serverText.includes("['rimaz-database-backup','rimaz-full-backup']") && serverText.includes('function validateDatabaseRestoreFile') && serverText.includes('النسخة لا تحتوي البنية الأساسية لقاعدة بيانات ريماز') && serverText.includes('function restoreContainsOwner') && serverText.includes('النسخة لا تحتوي حساب صاحب الموقع')],
     ['restore preview uses a short-lived random token bound to the requesting admin', serverText.includes('crypto.randomBytes(32).toString(\'hex\')') && serverText.includes('expiresAt:Date.now()+5*60*1000') && serverText.includes('pending.owner!==keyName(req.user.name)')],
-    ['restore confirmation requires exact Arabic phrase and creates recovery copy before atomic save', serverText.includes("confirmation!=='استعادة ريماز'") && serverText.includes(".pre-restore-") && serverText.includes('db=pending.database') && serverText.includes('db=previous')],
+    ['restore confirmation revalidates the staged file and commits the audited replacement before disconnecting sessions', serverText.includes("confirmation!=='استعادة ريماز'") && serverText.includes(".pre-restore-") && serverText.includes("validateDatabaseRestoreFile(fs.readFileSync(pending.filePath,'utf8'))") && serverText.includes('db=checked.clean') && serverText.includes('db=previous')],
     ['restore clears sessions and disconnects active sockets', serverText.includes('db.sessions={};db.privateMessages=[];') && serverText.includes('io.disconnectSockets(true)')],
     ['admin UI previews counts and requires typed confirmation before restore', htmlText.includes('previewDatabaseRestore()') && htmlText.includes('confirmDatabaseRestore()') && htmlText.includes('استعادة ريماز') && htmlText.includes('accept=".json,application/json"')],
     ['browser entry files remain identical after restore UI update', fs.readFileSync(mainPath,'utf8')===fs.readFileSync(publicPath,'utf8')]
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
-  const helperStart=serverText.indexOf('function validateDatabaseRestoreFile(buffer){');
-  const helperEnd=serverText.indexOf('function purgeExpiredDatabaseRestores()',helperStart);
+  const helperStart=serverText.indexOf('function validateDatabaseRestoreFile(source){');
+  const helperEnd=serverText.indexOf('function restoreContainsOwner(',helperStart);
   let runtimeRestoreChecks=false;
   try{
     const helperSource=serverText.slice(helperStart,helperEnd);
     const defaultsFixture=()=>({users:{},guests:{},sessions:{old:'session'},messages:[],wall:[],wallEnabled:true,notifications:{},announcements:[],adminAuditLogs:[],loginHistory:[],ownerSetupCompleted:false,giftCatalogV3Initialized:false,smileysSeedVersion:0,smileysSeeded:false,rankDefinitions:[],siteSettings:{},chatFilter:{},welcomeMessages:[],profiles:{},lastLike:{},accountPermissions:{},rankAudit:[],giftCatalog:[],chatShortcuts:[],customSmileys:[],rooms:[],roomBans:{},roomMutes:{},roomKicks:{},globalBans:{},globalIpBans:{},wallLikes:{},wallComments:{},privateMessages:[{text:'ephemeral'}],privateHidden:{},privateRead:{},ignored:{}});
     const validate=vm.runInNewContext(helperSource+';validateDatabaseRestoreFile;',{Buffer,defaults:defaultsFixture});
     const database=defaultsFixture();database.users={Ali:{role:'owner'}};database.guests={Guest:{}};database.rooms=[{id:'public'}];database.messages=[{text:'hello'}];database.sessions={secret:'must-not-restore'};database.privateMessages=[{text:'not-persisted'}];
-    const valid=validate(Buffer.from(JSON.stringify({format:'rimaz-database-backup',version:1,createdAt:'2026-01-01T00:00:00Z',appVersion:'test',database})));
+    const validJson=JSON.stringify({format:'rimaz-database-backup',version:1,createdAt:'2026-01-01T00:00:00Z',appVersion:'test',database});
+    const valid=validate(Buffer.from(validJson));
+    const validString=validate(validJson);
     const badFormat=(()=>{try{validate(Buffer.from(JSON.stringify({format:'unknown',version:1,database})));return false;}catch(_){return true;}})();
     const badSchema=(()=>{try{validate(Buffer.from(JSON.stringify({format:'rimaz-database-backup',version:1,database:{users:[],guests:{},rooms:[],messages:[]}})));return false;}catch(_){return true;}})();
-    runtimeRestoreChecks=valid.summary.members===1&&valid.summary.guests===1&&valid.summary.rooms===1&&valid.summary.messages===1&&Object.keys(valid.clean.sessions).length===0&&valid.clean.privateMessages.length===0&&badFormat&&badSchema;
+    runtimeRestoreChecks=valid.summary.members===1&&valid.summary.guests===1&&valid.summary.rooms===1&&valid.summary.messages===1&&Object.keys(valid.clean.sessions).length===0&&valid.clean.privateMessages.length===0&&validString.summary.members===1&&badFormat&&badSchema;
   }catch(_){runtimeRestoreChecks=false;}
   runtimeRestoreChecks?pass('restore validator runtime fixtures accept valid backup, clear sessions, and reject bad format/schema'):fail('restore validator runtime fixtures');
 } catch (error) { fail('v46.71.0 database restore checks', error.message); }
+
+// v46.93.72: bound transient session state, disk-stage restore previews, and index room presence.
+try {
+  const serverText = fs.readFileSync(server, 'utf8');
+  const checks = [
+    ['anti-spam state is deleted when a disconnected session is finally removed', serverText.includes('clearSessionTransientState(sid);') && serverText.includes('botMessageWindows.delete(sid)')],
+    ['orphaned transient session maps are periodically pruned without interrupting reconnect grace', serverText.includes('function pruneOrphanedSessionState()') && serverText.includes('setInterval(pruneOrphanedSessionState,5*60*1000)') && serverText.includes('if(!sessions.has(sid)||(!socketUsers.has(sid)&&!sessionDisconnectTimers.has(sid)))botMessageWindows.delete(sid)')],
+    ['logout and successful database restore clear transient session state', serverText.includes('clearSessionTransientState(sid);\n  for(const so') && serverText.includes('botMessageWindows.clear();callSignalWindows.clear();voiceSignalWindows.clear();welcomeSentSessions.clear()')],
+    ['presence context indexes active sessions by room and room counts use that index', serverText.includes('const activeByRoom = new Map()') && serverText.includes('activeByRoom.set(roomKey,roomEntries=[])') && serverText.includes('context.activeByRoom?.get(String(room))')],
+    ['restore confirmation is transactional before active sockets are disconnected', serverText.indexOf('db.adminAuditLogs.unshift',serverText.indexOf("app.post('/api/admin/restore/database/confirm'")) < serverText.indexOf('save();',serverText.indexOf("app.post('/api/admin/restore/database/confirm'")) && serverText.indexOf('save();',serverText.indexOf("app.post('/api/admin/restore/database/confirm'")) < serverText.indexOf('io.disconnectSockets(true)',serverText.indexOf("app.post('/api/admin/restore/database/confirm'"))]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+  let transientRuntime=false;
+  try{
+    const helperStart=serverText.indexOf('function clearSessionTransientState(sid){');
+    const helperEnd=serverText.indexOf('const sessionTransientCleanupTimer=',helperStart);
+    const helperSource=serverText.slice(helperStart,helperEnd);
+    const botMessageWindows=new Map([['gone',{}],['live',{}]]),callSignalWindows=new Map([['gone',{}]]),voiceSignalWindows=new Map([['gone',{}]]),welcomeSentSessions=new Set(['gone','live']),sessions=new Map([['gone',{}],['live',{}]]),socketUsers=new Map([['live',{}]]),sessionDisconnectTimers=new Map([['gone',{}]]);
+    const helpers=vm.runInNewContext(helperSource+';({clearSessionTransientState,pruneOrphanedSessionState})',{botMessageWindows,callSignalWindows,voiceSignalWindows,welcomeSentSessions,sessions,socketUsers,sessionDisconnectTimers});
+    helpers.clearSessionTransientState('gone');
+    const cleared=!botMessageWindows.has('gone')&&!callSignalWindows.has('gone')&&!voiceSignalWindows.has('gone')&&!welcomeSentSessions.has('gone');
+    botMessageWindows.set('orphan',{});sessions.set('orphan',{});
+    helpers.pruneOrphanedSessionState();
+    transientRuntime=cleared&&!botMessageWindows.has('orphan')&&botMessageWindows.has('live')&&welcomeSentSessions.has('live');
+  }catch(_){transientRuntime=false;}
+  transientRuntime?pass('session transient cleanup runtime fixture preserves live/grace sessions and removes expired/orphaned state'):fail('session transient cleanup runtime fixture');
+} catch (error) { fail('v46.93.72 resource lifecycle checks', error.message); }
 
 
 try {
@@ -1127,7 +1158,7 @@ try {
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
   ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
-  ['v46.93.71 package version',pkgNow.version==='46.93.71'],
+  ['v46.93.72 package version',pkgNow.version==='46.93.72'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
   ['v46.82 standard gift catalogue keeps the generic unnumbered label',src.includes("name:'هدية'")],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
@@ -1369,7 +1400,7 @@ try {
   const html=fs.readFileSync(mainPath,'utf8');
   const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   const checks=[
-    ['v46.93.71 package version is current',pkgNow.version==='46.93.71'],
+    ['v46.93.72 package version is current',pkgNow.version==='46.93.72'],
   ['private text is nested under sender identity, not avatar row',html.includes('pmsgTitle') && html.includes('pmsgIdentity') && /<div class=\"pmsgIdentity\"><div class=\"pmsgTitle\"[\s\S]*?<div class=\"pmsgText\">/.test(html)],
   ['wall post shortcut resolver does not mutate composer and postWall does not call expansion mutator',html.includes('async function wallTextForSend(input)') && /async function postWall\(\)\{[^}]*wallTextForSend\(input\)[^}]*\}/.test(html) && !/async function postWall\(\)\{[^}]*expandChatShortcut\(input,true\)[^}]*\}/.test(html)],
     ['private video obtains a short-lived authorized stream URL instead of buffering the full file into a Blob',html.includes("fetch('/api/private/media-ticket'")&&html.includes("if(type==='video')")&&html.includes('src=\"${esc(streamUrl)}\"')],
@@ -1389,7 +1420,7 @@ try {
   const pkgNow=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   const route=source.slice(source.indexOf("app.post('/api/media'"),source.indexOf('function normalizeChatFilterText'));
   const checks=[
-    ['v46.93.71 package version is current (private-media regression suite)',pkgNow.version==='46.93.71'],
+    ['v46.93.72 package version is current (private-media regression suite)',pkgNow.version==='46.93.72'],
     ['private media verifies an active recipient account and fans out to all its active sessions',route.includes('hasConnectedSessionForUser(to)')&&route.includes("emitToUser(to,'private-media',m)")&&!route.includes('targetSocket[0]')],
     ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',m)")&&source.includes("emitToUser(to,'private-media',m)")],
     ['QuickTime MOV uploads have a safe extension and require a valid ISO-BMFF signature',source.includes("'video/quicktime':'.mov'")&&source.includes("['video/mp4','video/quicktime'].includes(mime) && actual==='mp4'")],
