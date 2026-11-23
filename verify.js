@@ -602,6 +602,8 @@ try {
     ['only strictly higher ranked targets are protected', source.includes('targetLevel>actorLevel')],
     ['legacy member-action VIP and gift handlers reject badge replacement on ranked accounts', source.includes("if(action==='grant-vip')") && source.includes("if(action==='gift')") && (source.match(/denyBadgeForRank\(n,p,res\)/g)||[]).length >= 4],
     ['ordinary members/guests and the site owner are excluded from the new rank comparison', source.includes('if(!actor||isOwner(actor)||!targetName||isOwnerName(targetName))return false')],
+    ['permission_manage does not bypass hierarchy for ordinary moderation or profile actions', !source.includes("if(hasPermission(actor,'permission_manage'))return false;")],
+    ['delegated permission editing is the only explicit higher-rank exception and cannot grant permissions the actor lacks', source.includes('permission_manage is an explicit delegated exception here') && source.includes('requested.some(p=>!own.has(p))')],
     ['rank guard returns the requested Arabic permission message', source.includes('صلاحية هذه الرتبة أعلى منك') && source.includes('HIGHER_RANK_PROTECTED')],
     ['central member actions enforce hierarchy before moderation and global bans', source.includes("app.post('/api/admin/member-action'") && source.includes('denyHigherRankTarget(actor,n,res)')],
     ['room ban/mute helper enforces hierarchy server-side', source.includes('function roomAction(type,req,res)') && source.includes('denyHigherRankTarget(req.user,name,res)')],
@@ -620,7 +622,8 @@ try {
     ['highest admin can act on lower admin tier', simulate({name:'admin-full'}, 'admin-shield') === false],
     ['equal ranks can act on each other', simulate({name:'super-white'}, 'super-white') === false],
     ['ordinary member target is not added to rank protection', simulate({name:'super-red'}, 'ordinary-member') === false],
-    ['site owner remains outside the new rank guard', simulate({name:'super-red',owner:true}, 'admin-full') === false]
+    ['site owner remains outside the new rank guard', simulate({name:'super-red',owner:true}, 'admin-full') === false],
+    ['delegated permission manager cannot bypass higher-rank protection for moderation', simulate({name:'super-red',fullAdmin:true}, 'admin-shield') === true]
   ];
   for (const [label, ok] of scenarios) ok ? pass(label) : fail(label);
 } catch (error) { fail('rank hierarchy regression checks', error.message); }
