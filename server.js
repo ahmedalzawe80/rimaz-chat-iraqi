@@ -1426,7 +1426,7 @@ app.get('/api/private/contacts',requireAuth,(req,res)=>{
   res.set('Cache-Control','no-store');res.json(rows);
 });
 app.get('/api/notifications',requireAuth,(req,res)=>{const started=Number(req.user.created)||0;res.set('Cache-Control','no-store');res.json((db.notifications[accountKey(req.user.name)]||db.notifications[req.user.name]||[]).filter(x=>Number(x.at||0)>=started).slice(0,50));});
-app.post('/api/notifications/read',requireAuth,(req,res)=>{db.notifications[accountKey(req.user.name)]=[];save();res.json({ok:true});});
+app.post('/api/notifications/read',requireAuth,(req,res)=>{const key=accountKey(req.user.name),had=Object.prototype.hasOwnProperty.call(db.notifications,key),previous=db.notifications[key];db.notifications[key]=[];try{save();}catch(error){if(had)db.notifications[key]=previous;else delete db.notifications[key];return res.status(500).json({error:'تعذر حفظ حالة الإشعارات'});}res.json({ok:true});});
 
 app.post('/api/message',requireAuth,(req,res)=>{
   const u=req.user, room=String(req.body.room||'public'), text=String(req.body.text||'').trim().slice(0,2000);
@@ -1932,12 +1932,14 @@ app.delete('/api/admin/room/:id/image',requireAdmin,clearRoomImage);
 app.post('/api/admin/room/:id/image/delete',requireAdmin,clearRoomImage);
 app.patch('/api/admin/room/:id',requireAdmin,(req,res)=>{const r=db.rooms.find(x=>x.id===req.params.id);if(!r)return res.status(404).json({error:'الغرفة غير موجودة'});const previous={...r};if(req.body.name!==undefined){const name=cleanName(req.body.name).slice(0,40);if(name.length<2)return res.status(400).json({error:'اسم الغرفة لازم يكون حرفين على الأقل'});if(db.rooms.some(item=>item.id!==r.id&&keyName(item.name)===keyName(name)))return res.status(409).json({error:'اسم الغرفة مستخدم بالفعل'});r.name=name;}if(req.body.desc!==undefined)r.desc=String(req.body.desc).trim().slice(0,160);if(req.body.capacity!==undefined)r.capacity=Math.max(2,Math.min(200,Number(req.body.capacity)||r.capacity));if(req.body.mics!==undefined&&r.kind==='voice')r.mics=Math.max(1,Math.min(20,Number(req.body.mics)||r.mics));try{save()}catch(error){Object.keys(r).forEach(key=>delete r[key]);Object.assign(r,previous);console.error('Room update save failed:',error);return res.status(500).json({error:'تعذر حفظ تعديلات الغرفة'})}emitState();return res.json({ok:true,room:r});});
 app.delete('/api/admin/room/:id',requireAdmin,(req,res)=>{if(['public','voice'].includes(req.params.id))return res.status(400).json({error:'الغرفة الأساسية محمية ولا تحذف'});const index=db.rooms.findIndex(r=>r.id===req.params.id);if(index<0)return res.status(404).json({error:'الغرفة غير موجودة'});const [removed]=db.rooms.splice(index,1),oldBans=db.roomBans[req.params.id],oldMutes=db.roomMutes[req.params.id];delete db.roomBans[req.params.id];delete db.roomMutes[req.params.id];try{save()}catch(error){db.rooms.splice(index,0,removed);if(oldBans!==undefined)db.roomBans[req.params.id]=oldBans;if(oldMutes!==undefined)db.roomMutes[req.params.id]=oldMutes;console.error('Room deletion save failed:',error);return res.status(500).json({error:'تعذر حفظ حذف الغرفة'})}clearDeletedRoomRuntime(req.params.id);emitState();return res.json({ok:true});});
-app.post('/api/admin/unmute',(req,res,next)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'mute_room'))return res.status(403).json({error:'ما عندك صلاحية رفع الكتم'});const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});if(denyHigherRankTarget(req.user,name,res))return;db.roomMutes[room]=(db.roomMutes[room]||[]).filter(x=>keyName(x)!==name);save();res.json({ok:true});});});
+app.post('/api/admin/unmute',(req,res,next)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'mute_room'))return res.status(403).json({error:'ما عندك صلاحية رفع الكتم'});const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});if(denyHigherRankTarget(req.user,name,res))return;const had=Object.prototype.hasOwnProperty.call(db.roomMutes,room),previous=db.roomMutes[room];db.roomMutes[room]=(previous||[]).filter(x=>keyName(x)!==name);try{save();}catch(error){if(had)db.roomMutes[room]=previous;else delete db.roomMutes[room];return res.status(500).json({error:'تعذر حفظ رفع الكتم'});}res.json({ok:true});});});
 function roomAction(type,req,res){
   const room=String(req.body.room||'public'),name=keyName(req.body.name);
   if(!name)return res.status(400).json({error:'الاسم مطلوب'});
   if((isOwnerName(name)||isOwner({name,role:(getUser(name)||getGuest(name)||{}).role}))&&!isOwner(req.user)){notifyOwnerProtectedAttempt(req.user,type==='roomBans'?'حظرك في الغرفة':'كتمك في الغرفة');return res.status(403).json({error:'حساب صاحب الموقع محمي ولا يحق للإداري اتخاذ إجراء عليه'});}
   if(denyHigherRankTarget(req.user,name,res))return;
+  const hadRoom=Object.prototype.hasOwnProperty.call(db[type],room);
+  const previousRoom=Array.isArray(db[type][room])?db[type][room].slice():db[type][room];
   db[type][room]=db[type][room]||[];
   if(type==='roomMutes'){
     if(!db[type][room].includes(name))db[type][room].push(name);
@@ -1945,7 +1947,7 @@ function roomAction(type,req,res){
     db[type][room]=db[type][room].filter(x=>typeof x==='string'?x!==name:keyName(x?.name)!==name);
     db[type][room].push({name,until:Date.now()+15*60*1000});
   }else db[type][room]=db[type][room].filter(x=>x!==name);
-  save();
+  try{save();}catch(error){if(hadRoom)db[type][room]=previousRoom;else delete db[type][room];console.error('Room moderation save failed:',error.message);return res.status(500).json({error:'تعذر حفظ إجراء الغرفة'});}
   for(const [sid,u] of socketUsers){
     if(keyName(u.name)!==name||u.room!==room)continue;
     const s=io.sockets.sockets.get(sid);
@@ -1964,9 +1966,9 @@ app.post('/api/admin/profile/status',requireAdmin,(req,res)=>{const name=account
 
 app.post('/api/admin/mute',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'mute_room'))return res.status(403).json({error:'ما عندك صلاحية الكتم'});roomAction('roomMutes',req,res);});});
 app.post('/api/admin/ban',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'ban_room'))return res.status(403).json({error:'ما عندك صلاحية الحظر'});roomAction('roomBans',req,res);});});
-app.post('/api/admin/unban',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'ban_room'))return res.status(403).json({error:'ما عندك صلاحية رفع الحظر'});const room=String(req.body.room||'public'),name=keyName(req.body.name);if(denyHigherRankTarget(req.user,name,res))return;db.roomBans[room]=(db.roomBans[room]||[]).filter(x=>typeof x==='string'?x!==name:keyName(x?.name)!==name);save();res.json({ok:true});});});
+app.post('/api/admin/unban',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'ban_room'))return res.status(403).json({error:'ما عندك صلاحية رفع الحظر'});const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});if(denyHigherRankTarget(req.user,name,res))return;const had=Object.prototype.hasOwnProperty.call(db.roomBans,room),previous=db.roomBans[room];db.roomBans[room]=(previous||[]).filter(x=>typeof x==='string'?x!==name:keyName(x?.name)!==name);try{save();}catch(error){if(had)db.roomBans[room]=previous;else delete db.roomBans[room];return res.status(500).json({error:'تعذر حفظ رفع الحظر'});}res.json({ok:true});});});
 
-app.post('/api/ignore',requireAuth,(req,res)=>{const n=cleanName(req.body.name);if(!n||keyName(n)===keyName(req.user.name))return res.status(400).json({error:'اسم غير صحيح'});db.ignored=db.ignored||{};const me=keyName(req.user.name),other=keyName(n);db.ignored[me]=Array.isArray(db.ignored[me])?db.ignored[me]:[];const i=db.ignored[me].findIndex(x=>keyName(x)===other);if(i>=0)db.ignored[me].splice(i,1);else db.ignored[me].push(other);save();res.json({ok:true,ignored:i<0});});
+app.post('/api/ignore',requireAuth,(req,res)=>{const n=cleanName(req.body.name);if(!n||keyName(n)===keyName(req.user.name))return res.status(400).json({error:'اسم غير صحيح'});const me=keyName(req.user.name),other=keyName(n),previous=db.ignored,next={...(db.ignored||{})},list=Array.isArray(next[me])?next[me].slice():[],i=list.findIndex(x=>keyName(x)===other);if(i>=0)list.splice(i,1);else list.push(other);next[me]=list;db.ignored=next;try{save();}catch(error){if(previous===undefined)delete db.ignored;else db.ignored=previous;return res.status(500).json({error:'تعذر حفظ قائمة التجاهل'});}res.json({ok:true,ignored:i<0});});
 app.post('/api/profile',requireAuth,(req,res)=>{
   const u=req.user,p=profile(u.name);
   if(req.body.displayName!==undefined){
