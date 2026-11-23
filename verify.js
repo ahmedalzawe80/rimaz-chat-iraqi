@@ -1528,7 +1528,7 @@ try {
   let tokenSequence=0;
   const context={privateMediaPlaybackTickets:new Map(),crypto:{randomBytes:()=>({toString:()=>('token-'+String(++tokenSequence))})}};
   vm.createContext(context);
-  vm.runInContext(helper+'\\nglobalThis.issueTicket=createPrivateMediaPlaybackTicket;',context);
+  vm.runInContext(helper+';globalThis.issueTicket=createPrivateMediaPlaybackTicket;',context);
   const first=context.issueTicket('video-a.mp4','member-a',1000);
   const reused=context.issueTicket('video-a.mp4','member-a',2000);
   let accountLimitPassed=true;
