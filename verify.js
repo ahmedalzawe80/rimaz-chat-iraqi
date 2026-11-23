@@ -379,7 +379,7 @@ try {
   const chatBannerDeleteStart=source.indexOf("app.delete('/api/admin/chat-banners/:rank'");
   const chatBannerDelete=source.slice(chatBannerDeleteStart,source.indexOf("app.put('/api/admin/member-decoration'",chatBannerDeleteStart));
   const helper=source.slice(source.indexOf('function removePublicUploadIfUnreferenced('),source.indexOf('\n}',source.indexOf('function removePublicUploadIfUnreferenced('))+2);
-  const ok=missing.length===0&&chatBannerDelete.includes('removePublicUploadIfUnreferenced(previous.url)')&&helper.includes("url.startsWith('/uploads/')")&&helper.includes('containsStoredUrl(db,value)')&&helper.includes('path.basename');
+  const ok=missing.length===0&&chatBannerDelete.includes('removePublicUploadIfUnreferenced(previous.url)')&&helper.includes("value.startsWith('/uploads/')")&&helper.includes('containsStoredUrl(db,value)')&&helper.includes('path.basename');
   if(ok)pass('media replacement/deletion uses reference-aware upload cleanup and protects shared files');
   else fail('reference-aware upload cleanup',JSON.stringify({missing,helper}));
 } catch(error) { fail('reference-aware upload cleanup checks',error.message); }
