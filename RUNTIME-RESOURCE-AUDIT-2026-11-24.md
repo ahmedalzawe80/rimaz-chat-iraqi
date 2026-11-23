@@ -31,7 +31,17 @@ The change:
 
 ## Regression coverage
 
-The branch adds dynamic tests for ticket reuse, expiry, per-account and global caps, startup session reconnect preservation, batch cleanup, and rollback/retry on save failure.
+The branch adds dynamic tests for ticket reuse, expiry, per-account and global caps, startup session reconnect preservation, batch cleanup, rollback/retry on save failure, room-state release, peer notifications, empty-map removal, and room deletion ordering. The latest CI run passed 460 checks with zero failures.
+
+### 3. Room-scoped voice state was not consistently released on every removal path
+
+The in-memory room membership and voice maps were cleaned in the normal leave/disconnect paths, but several administrative removal paths and room deletion did not share the same cleanup logic. This could leave stale room membership, speaker entries, and authorized voice-negotiation pairs after a user was kicked/banned or a room was deleted.
+
+The change:
+- Introduces one room-runtime cleanup routine used by room moves, explicit leave, disconnect, global kick/ban, member-card kick/ban, room ban, and admin kick.
+- Removes the session from room membership and speaker maps, clears its active voice-negotiation pairs, notifies remaining peers, and deletes empty room buckets.
+- On room deletion, evicts connected members and clears all room-scoped maps only after the database save succeeds.
+- Synchronizes the active room value on both socket and session records for room-ban/admin-kick paths.
 
 ## Not established
 
