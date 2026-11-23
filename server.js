@@ -1634,6 +1634,7 @@ app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{
   }
   const p=profile(n),previousProfile=JSON.parse(JSON.stringify(p));
   const previousRankAudit=db.rankAudit,previousNotifications=db.notifications?.[n]?JSON.parse(JSON.stringify(db.notifications[n])):undefined;
+  db.rankAudit=Array.isArray(db.rankAudit)?db.rankAudit.slice():[];
   const grantedAt=Date.now();
   delete p.rankPreviousRole;
   if(definition){p.gifts=[];delete p.vipUntil;}
@@ -1777,8 +1778,8 @@ app.put('/api/admin/permissions',requireAuth,(req,res)=>{
  const definition=rankDefinition(rank);if(!definition)return res.status(404).json({error:'تعريف الرتبة غير موجود'});
  const requested=Array.isArray(req.body.permissions)?req.body.permissions:[];if(requested.some(p=>!Object.hasOwn(PERMISSION_CATALOG,p)))return res.status(400).json({error:'توجد صلاحية غير معروفة'});
  if(!isOwner(req.user)){const own=effectivePermissionsForUser(req.user);if(requested.some(p=>!own.has(p)))return res.status(403).json({error:'لا يمكنك منح صلاحيات أعلى من صلاحياتك الحالية'});}
- const previous=[...(definition.permissions||[])];definition.permissions=[...new Set(requested)];definition.updatedAt=Date.now();
- try{save()}catch(error){definition.permissions=previous;console.error('Rank permission save failed:',error.message);return res.status(500).json({error:'تعذر حفظ صلاحيات الرتبة؛ لم يتم تطبيق التغيير'});}
+ const previous=[...(definition.permissions||[])],previousUpdatedAt=definition.updatedAt,hadUpdatedAt=Object.prototype.hasOwnProperty.call(definition,'updatedAt');definition.permissions=[...new Set(requested)];definition.updatedAt=Date.now();
+ try{save()}catch(error){definition.permissions=previous;if(hadUpdatedAt)definition.updatedAt=previousUpdatedAt;else delete definition.updatedAt;console.error('Rank permission save failed:',error.message);return res.status(500).json({error:'تعذر حفظ صلاحيات الرتبة؛ لم يتم تطبيق التغيير'});}
  io.emit('permissions-updated',{rank});res.json({ok:true,rank,permissions:definition.permissions});
 });
 app.get('/api/admin/account-permissions/:name',requireAuth,(req,res)=>{
@@ -1792,12 +1793,12 @@ app.get('/api/admin/account-permissions/:name',requireAuth,(req,res)=>{
 app.put('/api/admin/account-permissions/:name',requireAuth,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الأعضاء'});
  const n=accountKey(req.params.name);/* permission_manage is an explicit delegated exception here; requested grants are still capped to the actor's own permissions. */const target=getUser(n);if(!target)return res.status(404).json({error:'الحساب المسجل غير موجود'});if(isOwnerName(n))return res.status(403).json({error:'حساب صاحب الموقع محمي'});
- db.accountPermissions=db.accountPermissions||{};const key=keyName(n);
- if(req.body?.inherit===true){const previous=db.accountPermissions[key];delete db.accountPermissions[key];try{save()}catch(error){if(previous!==undefined)db.accountPermissions[key]=previous;return res.status(500).json({error:'تعذر إرجاع صلاحيات الرتبة'});}io.emit('permissions-updated',{name:n});return res.json({ok:true,name:n,customized:false,permissions:[...(rankDefinition(profile(n).rank)?.permissions||[])]});}
+ const previousMap=db.accountPermissions,key=keyName(n),nextMap={...(db.accountPermissions||{})};
+ if(req.body?.inherit===true){delete nextMap[key];db.accountPermissions=nextMap;try{save();}catch(error){if(previousMap===undefined)delete db.accountPermissions;else db.accountPermissions=previousMap;return res.status(500).json({error:'تعذر إرجاع صلاحيات الرتبة'});}io.emit('permissions-updated',{name:n});return res.json({ok:true,name:n,customized:false,permissions:[...(rankDefinition(profile(n).rank)?.permissions||[])]});}
  const requested=Array.isArray(req.body?.permissions)?req.body.permissions:[];if(requested.some(p=>!Object.hasOwn(PERMISSION_CATALOG,p)))return res.status(400).json({error:'توجد صلاحية غير معروفة'});
  if(!isOwner(req.user)){const own=effectivePermissionsForUser(req.user);if(requested.some(p=>!own.has(p)))return res.status(403).json({error:'لا يمكنك منح صلاحيات أعلى من صلاحياتك الحالية'});}
- const previous=db.accountPermissions[key];db.accountPermissions[key]=[...new Set(requested)];
- try{save()}catch(error){if(previous===undefined)delete db.accountPermissions[key];else db.accountPermissions[key]=previous;return res.status(500).json({error:'تعذر حفظ صلاحيات العضو'});}
+ nextMap[key]=[...new Set(requested)];db.accountPermissions=nextMap;
+ try{save();}catch(error){if(previousMap===undefined)delete db.accountPermissions;else db.accountPermissions=previousMap;return res.status(500).json({error:'تعذر حفظ صلاحيات العضو'});}
  io.emit('permissions-updated',{name:n});res.json({ok:true,name:n,customized:true,permissions:db.accountPermissions[key]});
 });
 app.get('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))return res.status(403).json({error:'ما عندك صلاحية عرض أو تعديل رسائل الترحيب'});res.json({messages:db.welcomeMessages||[]});});
