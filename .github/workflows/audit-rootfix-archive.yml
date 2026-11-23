@@ -28,15 +28,18 @@ jobs:
         shell: bash
         run: |
           python3 - <<'PY'
-          import os, zipfile
+          import os, re, stat, zipfile
           archive = 'rimaz-final-deep-audit-46.93.72.zip'
           target = os.path.join(os.environ['RUNNER_TEMP'], 'rimaz-rootfix')
           with zipfile.ZipFile(archive) as z:
               names = z.namelist()
               for name in names:
                   normalized = name.replace('\\\\', '/')
-                  if normalized.startswith('/') or any(part == '..' for part in normalized.split('/')):
+                  if normalized.startswith('/') or re.match(r'^[A-Za-z]:', normalized) or any(part in ('.', '..') for part in normalized.split('/')):
                       raise SystemExit(f'Unsafe archive path: {name}')
+                  mode = (z.getinfo(name).external_attr >> 16) & 0o170000
+                  if mode == stat.S_IFLNK:
+                      raise SystemExit(f'Archive symlink is not allowed: {name}')
               candidates = []
               for name in names:
                   if name.endswith('/package.json') or name == 'package.json':

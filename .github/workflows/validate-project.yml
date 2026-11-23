@@ -10,6 +10,12 @@ on:
       - 'index.html'
       - 'public/**'
       - 'package.json'
+      - 'README.md'
+      - '.gitignore'
+      - '.dockerignore'
+      - 'Dockerfile'
+      - 'CHANGELOG.md'
+      - 'DEPLOYMENT-46.93.72.md'
       - '.github/workflows/**'
       - 'rimaz-final-deep-audit-46.93.72.zip'
 
