@@ -1,6 +1,9 @@
 name: Validate Rimaz Project
 
 on:
+  push:
+    branches:
+      - maintenance/repository-cleanup-2026-11-24
   pull_request:
     branches:
       - main
