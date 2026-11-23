@@ -384,6 +384,34 @@ try {
   else fail('reference-aware upload cleanup',JSON.stringify({missing,helper}));
 } catch(error) { fail('reference-aware upload cleanup checks',error.message); }
 
+
+// Authentication sessions and notification/ban expiry helpers must roll back when storage fails.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const sessionFn=source.match(/function makeSession\(name,type,visibility=\{\}\)\{[\s\S]*?\n\}/)?.[0];
+  const notifyFn=source.match(/function notify\(name,item\)\{[\s\S]*?\n\}/)?.[0];
+  const roomFn=source.match(/function roomBanned\(name,room\)\{[\s\S]*?\n\}/)?.[0];
+  const globalFn=source.match(/function globalBanStatus\(name,ip,now=Date\.now\(\)\)\{[\s\S]*?\n\}/)?.[0];
+  if(!sessionFn||!notifyFn||!roomFn||!globalFn)throw new Error('transaction helper source missing');
+  let cleanupScheduled=false;
+  const sessionContext={sessions:new Map(),db:{sessions:{}},crypto:{randomBytes:()=>({toString:()=> 'sid-1'})},Date,getMemberNumber:()=>7,cancelPrivateConversationCleanup:()=>{},schedulePrivateConversationCleanup:()=>{cleanupScheduled=true;},save:()=>{throw new Error('disk failure');}};
+  vm.createContext(sessionContext);vm.runInContext(sessionFn+';globalThis.run=makeSession;',sessionContext);
+  let sessionThrew=false;try{sessionContext.run('member','member');}catch{sessionThrew=true;}
+  const sessionRollback=sessionThrew&&sessionContext.sessions.size===0&&!Object.hasOwn(sessionContext.db.sessions,'sid-1')&&cleanupScheduled;
+  const notifications={member:[{id:'old'}]},previousNotifications=notifications.member;
+  const notifyContext={db:{notifications},accountKey:x=>x,crypto:{randomUUID:()=> 'new'},Date,save:()=>{throw new Error('disk failure');},console:{error:()=>{}}};
+  vm.createContext(notifyContext);vm.runInContext(notifyFn+';globalThis.run=notify;',notifyContext);
+  const notifyRollback=notifyContext.run('member',{text:'new'})===false&&notifyContext.db.notifications.member===previousNotifications;
+  const roomList=[{name:'member',until:1}],roomContext={db:{roomBans:{public:roomList}},Date:{now:()=>100},keyName:x=>x,save:()=>{throw new Error('disk failure');},console:{error:()=>{}}};
+  vm.createContext(roomContext);vm.runInContext(roomFn+';globalThis.run=roomBanned;',roomContext);
+  const roomRollback=roomContext.run('member','public')===false&&roomContext.db.roomBans.public===roomList;
+  const nameBan={until:1},ipBan={until:1},globalContext={db:{globalBans:{member:nameBan},globalIpBans:{'1.2.3.4':ipBan}},keyName:x=>x,normalizeIp:x=>x,save:()=>{throw new Error('disk failure');},console:{error:()=>{}}};
+  vm.createContext(globalContext);vm.runInContext(globalFn+';globalThis.run=globalBanStatus;',globalContext);
+  const globalRollback=globalContext.run('member','1.2.3.4',100)===null&&globalContext.db.globalBans.member===nameBan&&globalContext.db.globalIpBans['1.2.3.4']===ipBan;
+  if(sessionRollback&&notifyRollback&&roomRollback&&globalRollback)pass('session creation, notification writes, and expired room/global ban cleanup restore prior state on save failure');
+  else fail('auth/notification/ban rollback fixture',JSON.stringify({sessionRollback,notifyRollback,roomRollback,globalRollback}));
+} catch(error) { fail('auth/notification/ban transaction checks',error.message); }
+
 // Announcement publication/deletion must persist before emitting, and roll back on disk failure.
 try {
   const source=fs.readFileSync(server,'utf8');
