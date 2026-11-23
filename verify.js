@@ -1663,7 +1663,7 @@ try {
 try {
   const source=fs.readFileSync(server,'utf8');
   const start=source.indexOf('function cleanupExpiredPublicContent(now=Date.now()){');
-  const end=source.indexOf('\\ncleanupExpiredPublicContent();',start);
+  const end=source.indexOf('cleanupExpiredPublicContent();',start);
   if(start<0||end<0)throw new Error('public retention function was not found');
   const fn=source.slice(start,end);
   const oldMessage={id:'old-message',room:'public',at:1,type:'text',media:{url:'/uploads/old-message.mp4'}};
@@ -1694,7 +1694,7 @@ try {
 try {
   const source=fs.readFileSync(server,'utf8');
   const start=source.indexOf('function cleanupExpiredPublicContent(now=Date.now()){');
-  const end=source.indexOf('\\ncleanupExpiredPublicContent();',start);
+  const end=source.indexOf('cleanupExpiredPublicContent();',start);
   const fn=source.slice(start,end);
   const oldMessage={id:'old-message',room:'public',at:1,type:'text',media:{url:'/uploads/old-message.mp4'}};
   const oldPost={id:'old-post',at:1,media:{url:'/uploads/old-wall.mp4'}};
