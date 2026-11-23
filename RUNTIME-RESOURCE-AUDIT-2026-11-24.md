@@ -31,7 +31,7 @@ The change:
 
 ## Regression coverage
 
-The branch adds dynamic tests for ticket reuse, expiry, per-account and global caps, startup session reconnect preservation, batch cleanup, rollback/retry on save failure, room-state release, peer notifications, empty-map removal, and room deletion ordering. The latest CI run passed 460 checks with zero failures.
+The branch adds dynamic tests for ticket reuse, expiry, per-account and global caps, startup session reconnect preservation, batch cleanup, rollback/retry on save failure, transactional 24-hour retention rollback, room-state release, peer notifications, empty-map removal, and room deletion ordering. The latest CI run passed 460 checks with zero failures.
 
 ### 3. Room-scoped voice state was not consistently released on every removal path
 
@@ -42,6 +42,16 @@ The change:
 - Removes the session from room membership and speaker maps, clears its active voice-negotiation pairs, notifies remaining peers, and deletes empty room buckets.
 - On room deletion, evicts connected members and clears all room-scoped maps only after the database save succeeds.
 - Synchronizes the active room value on both socket and session records for room-ban/admin-kick paths.
+
+### 4. Public 24-hour retention cleanup was not transactional
+
+The retention routine removed expired messages and wall posts from memory, emitted deletion events, and unlinked media files before attempting the database save. If the save failed, the durable database could still reference media files that had already been deleted, while the in-memory database had already discarded the content.
+
+The change:
+- Snapshots the affected message, wall, likes, and comments collections.
+- Attempts the durable save before broadcasting deletion events or unlinking expired media.
+- On save failure, restores the prior collections and keeps the media files and client-visible state intact.
+- Only after a successful save does it emit deletion events and remove media that is no longer referenced.
 
 ## Not established
 
