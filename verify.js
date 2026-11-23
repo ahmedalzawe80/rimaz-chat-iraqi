@@ -1600,3 +1600,52 @@ try {
   if(ok)pass('startup orphaned-session cleanup rolls back atomically and retries after a save failure');
   else fail('startup orphaned-session rollback',JSON.stringify({session:!!sessions.get('guest-session'),dbSession:!!db.sessions['guest-session'],guest:!!db.guests['rollback-guest'],profile:!!db.profiles['rollback-guest'],wallReadAt:db.wallReadAt,callbacks:callbacks.map(x=>x.ms)}));
 } catch(error) { fail('startup orphaned-session rollback',error.message); }
+
+
+// Runtime room-state cleanup must remove empty room buckets and all voice negotiation state
+// whenever a session leaves, is kicked/banned, moves rooms, or disconnects.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function removeSessionFromRoomRuntime(sid,room){');
+  const end=source.indexOf('\nfunction callPairKey',start);
+  if(start<0||end<0)throw new Error('room runtime cleanup helper was not found');
+  const helper=source.slice(start,end);
+  const roomSockets=new Map([['voice-room',new Set(['leaving','peer'])],['empty-room',new Set(['leaving'])]]);
+  const voiceSpeakers=new Map([['voice-room',new Map([['leaving',{sid:'leaving'}],['peer',{sid:'peer'}]])],['empty-room',new Map([['leaving',{sid:'leaving'}]])]]);
+  const activeVoicePairs=new Map([
+    ['voice-room::leaving::peer',{room:'voice-room',a:'leaving',b:'peer'}],
+    ['empty-room::leaving::other',{room:'empty-room',a:'leaving',b:'other'}]
+  ]);
+  const peerEvents=[],voiceStates=[];
+  const context={roomSockets,voiceSpeakers,activeVoicePairs,
+    clearVoicePairsForSession:(room,sid)=>{for(const [key,state] of activeVoicePairs)if(state.room===room&&(state.a===sid||state.b===sid))activeVoicePairs.delete(key);},
+    socketBySession:sid=>({emit:(event,payload)=>peerEvents.push({sid,event,payload})}),
+    emitVoiceState:room=>voiceStates.push(room)
+  };
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.removeRoomState=removeSessionFromRoomRuntime;',context);
+  context.removeRoomState('leaving','voice-room');
+  const retained=roomSockets.get('voice-room')?.has('peer')&&voiceSpeakers.get('voice-room')?.has('peer');
+  const pairCleared=!([...activeVoicePairs.values()].some(x=>x.room==='voice-room'&&(x.a==='leaving'||x.b==='leaving')));
+  const peerNotified=peerEvents.some(x=>x.sid==='peer'&&x.event==='voice-peer-left'&&x.payload.sid==='leaving');
+  context.removeRoomState('leaving','empty-room');
+  const emptyBucketsRemoved=!roomSockets.has('empty-room')&&!voiceSpeakers.has('empty-room');
+  const emptyPairCleared=!([...activeVoicePairs.values()].some(x=>x.room==='empty-room'&&x.a==='leaving'));
+  const ok=retained&&pairCleared&&peerNotified&&emptyBucketsRemoved&&emptyPairCleared&&voiceStates.includes('voice-room')&&voiceStates.includes('empty-room');
+  if(ok)pass('room runtime cleanup removes departed speakers and voice pairs, notifies peers, and deletes empty room buckets');
+  else fail('room runtime cleanup',JSON.stringify({retained,pairCleared,peerNotified,emptyBucketsRemoved,emptyPairCleared,voiceStates,peerEvents,remainingPairs:[...activeVoicePairs.values()]}));
+} catch(error) { fail('room runtime cleanup',error.message); }
+
+// All server-side removal paths must use the same room cleanup routine.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const checks=[
+    ['global kick/ban clears room runtime state',source.includes("so.leave(oldRoom);removeSessionFromRoomRuntime(sid2,oldRoom)")],
+    ['member-card kick/ban clears room runtime state',source.includes("so?.leave(room);removeSessionFromRoomRuntime(sid2,room)")],
+    ['room ban clears runtime state and active room metadata',source.includes("s?.leave(room); removeSessionFromRoomRuntime(sid,room);if(s?.data?.user)s.data.user.room='';")],
+    ['admin kick clears runtime state and active room metadata',source.includes("so?.leave(room);removeSessionFromRoomRuntime(sid2,room);if(so?.data?.user)so.data.user.room='';")],
+    ['room move and replacement clear prior room runtime state',source.includes("removeSessionFromRoomRuntime(sid,previousRoom)")],
+    ['explicit leave and disconnect clear room runtime state',source.includes("socket.leave(room);removeSessionFromRoomRuntime(sid,room)")&&source.includes("removeSessionFromRoomRuntime(sid,room);\n    }")],
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('room cleanup call-site regression',error.message); }
