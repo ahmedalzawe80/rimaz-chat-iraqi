@@ -1,0 +1,37 @@
+name: Validate Rimaz Project
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'server.js'
+      - 'verify.js'
+      - 'index.html'
+      - 'public/**'
+      - 'package.json'
+      - '.github/workflows/**'
+      - 'rimaz-final-deep-audit-46.93.72.zip'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check server.js
+          node --check verify.js
+
+      - name: Run project regression tests
+        run: npm test
