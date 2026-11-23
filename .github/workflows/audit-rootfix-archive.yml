@@ -5,7 +5,7 @@ on:
     branches:
       - safety/validate-and-backup-before-sync
     paths:
-      - 'rimaz-chat-iraqi-v46.93.73-rootfix.zip'
+      - 'rimaz-final-deep-audit-46.93.72.zip'
       - '.github/workflows/audit-rootfix-archive.yml'
 
 permissions:
@@ -29,7 +29,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import os, zipfile
-          archive = 'rimaz-chat-iraqi-v46.93.73-rootfix.zip'
+          archive = 'rimaz-final-deep-audit-46.93.72.zip'
           target = os.path.join(os.environ['RUNNER_TEMP'], 'rimaz-rootfix')
           with zipfile.ZipFile(archive) as z:
               names = z.namelist()
