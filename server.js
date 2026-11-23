@@ -990,7 +990,23 @@ function permissionForAdminPath(req){
  if(p==='/api/admin/grant-like')return 'grant_likes';
  return 'panel_access';
 }
-function requireAdmin(req,res,next){ requireAuth(req,res,()=>{const permission=permissionForAdminPath(req);if(!hasPermission(req.user,permission))return res.status(403).json({error:'ما عندك صلاحية لهذا القسم أو الإجراء'});const write=['POST','PUT','PATCH','DELETE'].includes(req.method);if(write){res.on('finish',()=>{if(res.statusCode<200||res.statusCode>=300)return;try{db.adminAuditLogs=db.adminAuditLogs||[];const body=req.body&&typeof req.body==='object'?req.body:{};const target=String(body.name||body.target||body.member||'').slice(0,40);const action=String(body.action||body.operation||body.rank||body.planId||body.title||'').slice(0,80);db.adminAuditLogs.unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),at:Date.now(),actor:String(req.user?.name||'إدارة').slice(0,32),method:req.method,path:String(req.path||'').slice(0,120),status:res.statusCode,target,action,details:[target&&('العضو: '+target),action&&('التفصيل: '+action)].filter(Boolean).join(' · ')});db.adminAuditLogs=db.adminAuditLogs.slice(0,500);save();}catch(e){console.error('Admin audit log save failed:',e.message)}});}return next();}); }
+function requireAdmin(req,res,next){
+  requireAuth(req,res,()=>{
+    const permission=permissionForAdminPath(req);
+    if(!hasPermission(req.user,permission))return res.status(403).json({error:'ما عندك صلاحية لهذا القسم أو الإجراء'});
+    const write=['POST','PUT','PATCH','DELETE'].includes(req.method);
+    if(write)res.on('finish',()=>{
+      if(res.statusCode<200||res.statusCode>=300)return;
+      const previous=db.adminAuditLogs;
+      const body=req.body&&typeof req.body==='object'?req.body:{};
+      const target=String(body.name||body.target||body.member||'').slice(0,40);
+      const action=String(body.action||body.operation||body.rank||body.planId||body.title||'').slice(0,80);
+      db.adminAuditLogs=[{id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),at:Date.now(),actor:String(req.user?.name||'إدارة').slice(0,32),method:req.method,path:String(req.path||'').slice(0,120),status:res.statusCode,target,action,details:[target&&('العضو: '+target),action&&('التفصيل: '+action)].filter(Boolean).join(' · ')},...(Array.isArray(previous)?previous:[])].slice(0,500);
+      try{save();}catch(error){if(previous===undefined)delete db.adminAuditLogs;else db.adminAuditLogs=previous;console.error('Admin audit log save failed:',error.message);}
+    });
+    return next();
+  });
+}
 // Presence visibility is enforced per viewer on the server. A ghost is visible only
 // to its own session; hidden accounts are visible to staff ranks and their own session.
 // A short-lived context avoids repeatedly scanning all sessions and sockets while
