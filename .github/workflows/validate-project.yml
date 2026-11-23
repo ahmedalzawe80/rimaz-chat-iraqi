@@ -1,6 +1,9 @@
 name: Validate Rimaz Project
 
 on:
+  push:
+    branches:
+      - fix/bound-private-media-ticket-cache
   pull_request:
     branches:
       - main
