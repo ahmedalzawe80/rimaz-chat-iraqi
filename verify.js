@@ -275,7 +275,7 @@ try {
   const block=source.slice(start,end);
   const makeContext=(failSave=false)=>{
     const events=[],item={id:'a1',duration:'15m',at:1,text:'hello'};
-    const db={announcements:[item],messages:[{id:'old'}]};
+    const db={announcements:[item],messages:[{id:'a1-message',announcementId:'a1'}]};
     const context={db,Date,Set,Map,Object,Number,String,Math,ANNOUNCEMENT_INTERVAL_MS:900000,
       announcementMessage:(x,at,id)=>({id,announcementId:x.id,type:'announcement',at,text:x.text}),
       io:{emit:(...args)=>events.push(['emit',...args])},
