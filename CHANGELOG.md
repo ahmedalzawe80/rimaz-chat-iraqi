@@ -1,5 +1,7 @@
 ## Repository maintenance — 2026-11-24 (no application version change)
 
+- The guarded ZIP sync explicitly preserves the public Google verification file even if an incoming archive omits it; regression checks verify the root/public verification copies remain present and identical.
+
 - Removed the incomplete nested `rimaz-chat-iraqi-main/` directory after verifying it contained only duplicate placeholder/verification files and no application source.
 - Added root `.gitignore` rules for local dependencies, runtime directories, temporary files, logs, and recovery copies. The intentional root `data.json` warning placeholder remains tracked.
 - Added a repository README documenting local validation, persistent storage, deployment configuration, and the boundary between Git snapshots and production-volume backups.

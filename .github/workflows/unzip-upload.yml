@@ -127,7 +127,7 @@ jobs:
           install -m 0644 "$PROJECT_SOURCE/package.json" ./package.json
           install -m 0644 "$PROJECT_SOURCE/verify.js" ./verify.js
           mkdir -p ./public
-          rsync -a --delete "$PROJECT_SOURCE/public/" ./public/
+          rsync -a --delete --exclude='/google1a84d9d1dec7b85d.html' "$PROJECT_SOURCE/public/" ./public/
 
       - name: Verify synchronized repository
         shell: bash
