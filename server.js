@@ -2113,7 +2113,7 @@ function clearSessionTransientState(sid){
 }
 function pruneOrphanedSessionState(){
   for(const sid of botMessageWindows.keys())if(!sessions.has(sid)||(!socketUsers.has(sid)&&!sessionDisconnectTimers.has(sid)))botMessageWindows.delete(sid);
-  for(const sid of privateMessageWindows.keys())if(!socketUsers.has(sid))privateMessageWindows.delete(sid);
+  for(const sid of privateMessageWindows.keys())if(!sessions.has(sid)||(!socketUsers.has(sid)&&!sessionDisconnectTimers.has(sid)))privateMessageWindows.delete(sid);
   for(const sid of callSignalWindows.keys())if(!socketUsers.has(sid))callSignalWindows.delete(sid);
   for(const sid of voiceSignalWindows.keys())if(!socketUsers.has(sid))voiceSignalWindows.delete(sid);
   for(const sid of welcomeSentSessions)if(!sessions.has(sid))welcomeSentSessions.delete(sid);
