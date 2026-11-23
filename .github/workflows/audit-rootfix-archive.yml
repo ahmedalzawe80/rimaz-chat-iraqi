@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - safety/validate-and-backup-before-sync
+      - maintenance/repository-cleanup-2026-11-24
     paths:
       - 'rimaz-final-deep-audit-46.93.72.zip'
       - '.github/workflows/audit-rootfix-archive.yml'
