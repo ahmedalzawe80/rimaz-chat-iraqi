@@ -266,6 +266,27 @@ try {
 } catch (error) { fail('server-rendered SEO description integration', error.message); }
 
 
+
+// Admin member changes must not leave memory ahead of durable storage after a failed save.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const messageStart=source.indexOf("app.delete('/api/admin/message/:id'");
+  const profileStart=source.indexOf("app.patch('/api/admin/profile/:name'");
+  const statsStart=source.indexOf("app.patch('/api/admin/member-stats/:name'");
+  const avatarStart=source.indexOf("app.delete('/api/admin/avatar/:name'");
+  const message=source.slice(messageStart,source.indexOf("\napp.patch",messageStart));
+  const profile=source.slice(profileStart,statsStart);
+  const stats=source.slice(statsStart,avatarStart);
+  const avatar=source.slice(avatarStart,source.indexOf("\napp.post('/api/admin/rank'",avatarStart));
+  const checks=[
+    ['admin message deletion restores the original message collection when save fails and emits only after commit',message.includes('previousMessages=db.messages')&&message.includes('catch(error){db.messages=previousMessages')&&message.indexOf('try{save();}')<message.indexOf("io.emit('message-deleted'")],
+    ['admin profile updates validate all fields before mutation and restore the full profile on save failure',profile.includes('const updates={}')&&profile.indexOf('for(const [field,label]')<profile.indexOf('Object.assign(p,updates)')&&profile.includes('for(const key of Object.keys(p))delete p[key];Object.assign(p,previous)')],
+    ['admin likes and points changes restore the prior value on save failure and emit only after commit',stats.includes('const previous=target[field];target[field]=value')&&stats.includes('catch(error){target[field]=previous')&&stats.indexOf('try{save();}')<stats.indexOf("io.emit('likes-changed'")],
+    ['admin avatar deletion saves the profile first and removes only an unreferenced upload after commit',avatar.indexOf('try{save();}')>=0&&avatar.indexOf('try{save();}')<avatar.indexOf('removePublicUploadIfUnreferenced(previous)')&&avatar.includes('catch(error){p.avatar=previous')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('admin member mutation transaction checks',error.message); }
+
 // Announcement publication/deletion must persist before emitting, and roll back on disk failure.
 try {
   const source=fs.readFileSync(server,'utf8');
