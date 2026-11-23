@@ -357,6 +357,30 @@ try {
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('member-card moderation transaction checks',error.message); }
 
+
+// Upload replacement/deletion must not unlink a file while another database record still references it.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const routes=[
+    ["app.delete('/api/admin/avatar/:name'", "app.post('/api/admin/rank'"],
+    ["app.delete('/api/admin/rank-art/:id'", "// Chat/rank banners"],
+    ["app.post('/api/admin/chat-banners/:rank'", "app.put('/api/admin/member-decoration'"],
+    ["app.delete('/api/admin/ads/:id'", "app.get('/api/public/ads'"],
+    ["app.post('/api/admin/room/:id/image'", "app.post('/api/rooms/:id/image'"],
+    ["app.post('/api/rooms/:id/image'", "function clearRoomImage"],
+    ["function clearRoomImage", "app.delete('/api/admin/room/:id/image'"],
+    ["app.post('/api/profile/avatar'", "app.delete('/api/profile/avatar'"],
+    ["app.delete('/api/profile/avatar'", "// Personal banners"],
+    ["app.post('/api/profile/banner'", "app.delete('/api/profile/banner'"],
+    ["app.delete('/api/profile/banner'", "app.post('/api/media'"]
+  ];
+  const missing=routes.filter(([start,end])=>{const a=source.indexOf(start),b=source.indexOf(end,a);return a<0||b<0||!source.slice(a,b).includes('removePublicUploadIfUnreferenced(');});
+  const helper=source.slice(source.indexOf('function removePublicUploadIfUnreferenced('),source.indexOf('\n}',source.indexOf('function removePublicUploadIfUnreferenced('))+2);
+  const ok=missing.length===0&&helper.includes("url.startsWith('/uploads/')")&&helper.includes('containsStoredUrl(db,url)')&&helper.includes('path.basename');
+  if(ok)pass('media replacement/deletion uses reference-aware upload cleanup and protects shared files');
+  else fail('reference-aware upload cleanup',JSON.stringify({missing,helper}));
+} catch(error) { fail('reference-aware upload cleanup checks',error.message); }
+
 // Announcement publication/deletion must persist before emitting, and roll back on disk failure.
 try {
   const source=fs.readFileSync(server,'utf8');
