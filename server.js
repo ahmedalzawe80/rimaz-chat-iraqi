@@ -857,7 +857,7 @@ for(const r of db.rankDefinitions){r.permissions=normalizePermissionList(r.permi
 const validBuiltInRanks=new Set(RANK_PERMISSION_PROFILES);const rankCountBeforePrune=db.rankDefinitions.length;db.rankDefinitions=db.rankDefinitions.filter(r=>validBuiltInRanks.has(r.id));if(db.rankDefinitions.length!==rankCountBeforePrune)for(const p of Object.values(db.profiles||{})){if(p?.rank&&p.rank!=='none'&&!validBuiltInRanks.has(p.rank)){p.rank='none';delete p.rankUntil;delete p.rankPreviousRole;delete p.rankDurationDays;}}
 function rankDefinition(id){const rank=String(id||'');if(!RANK_PERMISSION_PROFILES.includes(rank))return null;return (db.rankDefinitions||[]).find(r=>String(r.id)===rank)||null;}
 function coreRankLevelForName(name){const canonical=accountKey(name)||cleanName(name);if(!canonical||isOwnerName(canonical))return null;const p=profile(canonical),rank=String(p?.rank||'');return Object.hasOwn(CORE_RANK_LEVELS,rank)&&(!p.rankUntil||Number(p.rankUntil)>Date.now())?CORE_RANK_LEVELS[rank]:null;}
-function higherRankTargetError(actor,targetName){if(!actor||isOwner(actor)||!targetName||isOwnerName(targetName))return false;if(hasPermission(actor,'permission_manage'))return false;const actorLevel=coreRankLevelForName(actor.name),targetLevel=coreRankLevelForName(targetName);return actorLevel!==null&&targetLevel!==null&&targetLevel>actorLevel;}
+function higherRankTargetError(actor,targetName){if(!actor||isOwner(actor)||!targetName||isOwnerName(targetName))return false;const actorLevel=coreRankLevelForName(actor.name),targetLevel=coreRankLevelForName(targetName);return actorLevel!==null&&targetLevel!==null&&targetLevel>actorLevel;}
 function denyHigherRankTarget(actor,targetName,res){if(!higherRankTargetError(actor,targetName))return false;res.status(403).json({error:'صلاحية هذه الرتبة أعلى منك',code:'HIGHER_RANK_PROTECTED'});return true;}
 function effectivePermissionsForUser(user){
  if(!user)return new Set();
@@ -1749,7 +1749,7 @@ app.get('/api/admin/account-permissions/:name',requireAuth,(req,res)=>{
 });
 app.put('/api/admin/account-permissions/:name',requireAuth,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الأعضاء'});
- const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return;const target=getUser(n);if(!target)return res.status(404).json({error:'الحساب المسجل غير موجود'});if(isOwnerName(n))return res.status(403).json({error:'حساب صاحب الموقع محمي'});
+ const n=accountKey(req.params.name);/* permission_manage is an explicit delegated exception here; requested grants are still capped to the actor's own permissions. */const target=getUser(n);if(!target)return res.status(404).json({error:'الحساب المسجل غير موجود'});if(isOwnerName(n))return res.status(403).json({error:'حساب صاحب الموقع محمي'});
  db.accountPermissions=db.accountPermissions||{};const key=keyName(n);
  if(req.body?.inherit===true){const previous=db.accountPermissions[key];delete db.accountPermissions[key];try{save()}catch(error){if(previous!==undefined)db.accountPermissions[key]=previous;return res.status(500).json({error:'تعذر إرجاع صلاحيات الرتبة'});}io.emit('permissions-updated',{name:n});return res.json({ok:true,name:n,customized:false,permissions:[...(rankDefinition(profile(n).rank)?.permissions||[])]});}
  const requested=Array.isArray(req.body?.permissions)?req.body.permissions:[];if(requested.some(p=>!Object.hasOwn(PERMISSION_CATALOG,p)))return res.status(400).json({error:'توجد صلاحية غير معروفة'});
