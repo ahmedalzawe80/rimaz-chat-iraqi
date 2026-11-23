@@ -6,8 +6,13 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: rimaz-clean-replace
+  cancel-in-progress: false
+
 jobs:
   replace-project:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
