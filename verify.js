@@ -1404,7 +1404,7 @@ try {
   ['private text is nested under sender identity, not avatar row',html.includes('pmsgTitle') && html.includes('pmsgIdentity') && /<div class=\"pmsgIdentity\"><div class=\"pmsgTitle\"[\s\S]*?<div class=\"pmsgText\">/.test(html)],
   ['wall post shortcut resolver does not mutate composer and postWall does not call expansion mutator',html.includes('async function wallTextForSend(input)') && /async function postWall\(\)\{[^}]*wallTextForSend\(input\)[^}]*\}/.test(html) && !/async function postWall\(\)\{[^}]*expandChatShortcut\(input,true\)[^}]*\}/.test(html)],
     ['private video obtains a short-lived authorized stream URL instead of buffering the full file into a Blob',html.includes("fetch('/api/private/media-ticket'")&&html.includes("if(type==='video')")&&html.includes('src=\"${esc(streamUrl)}\"')],
-    ['private playback tickets are random, expire, and are bound to the requesting account and exact filename',source.includes('privateMediaPlaybackTickets = new Map()')&&source.includes('crypto.randomBytes(32).toString(\'hex\')')&&source.includes('expiresAt:now+15*60*1000')&&source.includes('account:keyName(req.user.name)')],
+    ['private playback tickets are random, expire, and are bound to the requesting account and exact filename',source.includes('privateMediaPlaybackTickets = new Map()')&&source.includes('crypto.randomBytes(32).toString(\'hex\')')&&source.includes('expiresAt:now+15*60*1000')&&source.includes('createPrivateMediaPlaybackTicket(filename,keyName(req.user.name),now)')&&source.includes('MAX_PRIVATE_MEDIA_TICKETS=4096')&&source.includes('MAX_PRIVATE_MEDIA_TICKETS_PER_ACCOUNT=32')],
     ['stream endpoint rechecks participant authorization and serves byte ranges without exposing the private media directory',source.includes("app.get('/api/private/media-stream/:filename'")&&source.includes("'Accept-Ranges':'bytes'")&&source.includes('keyName(message.from)===ticket.account||keyName(message.to)===ticket.account')],
     ['private and wall inline media share the same 320px width and 210px height limits',html.includes('width:min(100%,320px)!important;max-width:320px!important;max-height:210px!important')&&html.includes('@media(max-width:600px){.privateInlineMedia,.wallInlineMedia{width:min(100%,320px)!important;max-width:320px!important;max-height:210px!important}}')],
     ['private media is structurally nested below sender identity, not below the full avatar row',html.includes('</div><div class=\"privateMediaArea\" id=\"${placeholderId}\">')&&html.includes('.pmsgIdentity>.privateMediaArea{margin-top:2px!important;margin-left:0!important;}')],
@@ -1516,3 +1516,32 @@ try {
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('v46.93.55 member-number regression checks',error.message); }
+
+
+// v46.93.73 candidate: private playback ticket storage must have hard global and per-account bounds.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('const MAX_PRIVATE_MEDIA_TICKETS=4096;');
+  const end=source.indexOf('const privateMediaPlaybackTicketCleanup=',start);
+  if(start<0||end<0)throw new Error('bounded ticket helper was not found');
+  const helper=source.slice(start,end);
+  let tokenSequence=0;
+  const context={privateMediaPlaybackTickets:new Map(),crypto:{randomBytes:()=>({toString:()=>('token-'+String(++tokenSequence))})}};
+  vm.createContext(context);
+  vm.runInContext(helper+'\\nglobalThis.issueTicket=createPrivateMediaPlaybackTicket;',context);
+  const first=context.issueTicket('video-a.mp4','member-a',1000);
+  const reused=context.issueTicket('video-a.mp4','member-a',2000);
+  let accountLimitPassed=true;
+  for(let i=1;i<32;i++)if(context.issueTicket('video-'+i+'.mp4','member-a',2000).error)accountLimitPassed=false;
+  const accountLimit=context.issueTicket('video-over-limit.mp4','member-a',2000);
+  let globalLimitPassed=true;
+  for(let i=0;i<MAX_PRIVATE_MEDIA_TICKETS_PLACEHOLDER;i++){}
+  const globalMap=context.privateMediaPlaybackTickets;
+  let fillIndex=0;
+  while(globalMap.size<4096){const result=context.issueTicket('asset-'+fillIndex+'.mp4','account-'+fillIndex,2000);if(result.error){globalLimitPassed=false;break;}fillIndex++;}
+  const globalLimit=context.issueTicket('last.mp4','another-account',2000);
+  const afterExpiry=context.issueTicket('fresh.mp4','member-a',1000+15*60*1000+1);
+  const ok=!!first.token&&reused.token===first.token&&reused.reused===true&&accountLimitPassed&&accountLimit.error==='account-limit'&&globalLimitPassed&&globalLimit.error==='global-limit'&&afterExpiry.token&&globalMap.size===1;
+  if(ok)pass('private playback ticket cache reuses valid tokens, expires stale entries, and enforces 32/account + 4096/global caps');
+  else fail('private playback ticket cache bounds',JSON.stringify({first:!!first.token,reused:reused.token===first.token,accountLimitPassed,accountLimit:accountLimit.error,globalLimitPassed,globalLimit:globalLimit.error,afterExpiry:!!afterExpiry.token,size:globalMap.size}));
+} catch(error) { fail('private playback ticket cache bounds',error.message); }

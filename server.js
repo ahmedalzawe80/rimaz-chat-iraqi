@@ -488,7 +488,25 @@ const publicRetentionTimer=setInterval(()=>cleanupExpiredPublicContent(),5*60*10
 publicRetentionTimer.unref?.();
 
 const sessions = new Map(); // sid -> {name,type,created}
-const privateMediaPlaybackTickets = new Map(); // short-lived, account-bound stream tickets
+const privateMediaPlaybackTickets = new Map(); // bounded, short-lived, account-bound stream tickets
+const MAX_PRIVATE_MEDIA_TICKETS=4096;
+const MAX_PRIVATE_MEDIA_TICKETS_PER_ACCOUNT=32;
+function createPrivateMediaPlaybackTicket(filename,account,now=Date.now()){
+  let accountTicketCount=0;
+  for(const [token,ticket] of privateMediaPlaybackTickets){
+    if(ticket.expiresAt<=now){privateMediaPlaybackTickets.delete(token);continue;}
+    if(ticket.account===account){
+      accountTicketCount++;
+      if(ticket.filename===filename)return {token,ticket,reused:true};
+    }
+  }
+  if(accountTicketCount>=MAX_PRIVATE_MEDIA_TICKETS_PER_ACCOUNT)return {error:'account-limit'};
+  if(privateMediaPlaybackTickets.size>=MAX_PRIVATE_MEDIA_TICKETS)return {error:'global-limit'};
+  const token=crypto.randomBytes(32).toString('hex');
+  const ticket={filename,account,expiresAt:now+15*60*1000};
+  privateMediaPlaybackTickets.set(token,ticket);
+  return {token,ticket,reused:false};
+}
 const privateMediaPlaybackTicketCleanup=setInterval(()=>{const now=Date.now();for(const [token,ticket] of privateMediaPlaybackTickets){if(ticket.expiresAt<=now)privateMediaPlaybackTickets.delete(token);}},5*60*1000);
 privateMediaPlaybackTicketCleanup.unref?.();
 for (const [sid,s] of Object.entries(db.sessions||{})) sessions.set(sid,s);
@@ -639,11 +657,11 @@ app.post('/api/private/media-ticket',requireAuth,(req,res)=>{
   const file=path.resolve(PRIVATE_MEDIA_DIR,filename);
   if(!file.startsWith(path.resolve(PRIVATE_MEDIA_DIR)+path.sep)||!fs.existsSync(file))return res.status(404).json({error:'الوسائط غير موجودة'});
   const now=Date.now();
-  for(const [token,ticket] of privateMediaPlaybackTickets){if(ticket.expiresAt<=now)privateMediaPlaybackTickets.delete(token);}
-  const token=crypto.randomBytes(32).toString('hex');
-  privateMediaPlaybackTickets.set(token,{filename,account:keyName(req.user.name),expiresAt:now+15*60*1000});
+  const issued=createPrivateMediaPlaybackTicket(filename,keyName(req.user.name),now);
+  if(issued.error==='account-limit')return res.status(429).json({error:'وصلت إلى الحد المؤقت لروابط تشغيل الوسائط؛ أغلق فيديو قديماً أو انتظر انتهاء صلاحيته'});
+  if(issued.error==='global-limit')return res.status(503).json({error:'خدمة تشغيل الوسائط مشغولة حالياً؛ حاول بعد قليل'});
   res.set('Cache-Control','no-store');
-  res.json({url:'/api/private/media-stream/'+encodeURIComponent(filename)+'?ticket='+token});
+  res.json({url:'/api/private/media-stream/'+encodeURIComponent(filename)+'?ticket='+issued.token});
 });
 app.get('/api/private/media-stream/:filename',(req,res)=>{
   if(!siteModuleEnabled('privateChat'))return res.status(403).json({error:'المحادثات الخاصة متوقفة من إدارة الموقع'});
