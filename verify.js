@@ -898,7 +898,7 @@ try {
  if(!src.includes('if(Array.isArray(accountSet))return new Set(accountSet.filter(p=>Object.hasOwn(PERMISSION_CATALOG,p)))'))throw new Error('per-account exact permission set missing');
  if(!ui.includes('هذا التخصيص يستبدل صلاحيات الرتبة لهذا الحساب وحده'))throw new Error('per-account exact override is not explained in the UI');
  if(!ui.includes('resetAccountPermissions'))throw new Error('reset-to-rank control missing');
- if(!src.includes("db.accountPermissions[key]=[...new Set(requested)]"))throw new Error('member permissions are not saved as an exact replacement');
+ if(!src.includes("nextMap[key]=[...new Set(requested)];db.accountPermissions=nextMap"))throw new Error('member permissions are not saved as an exact replacement');
  if(src.includes("if(p==='/api/admin/role')return 'role_assign'")||src.includes("role_assign:'تغيير المناصب الإدارية'"))throw new Error('obsolete generic role assignment still exists');
  pass('v46.74 seven-rank-only model and exact account-level permission overrides');
 } catch(error) { fail('v46.74 permission architecture regression',error.message); }
