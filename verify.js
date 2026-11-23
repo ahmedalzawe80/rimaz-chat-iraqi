@@ -1534,7 +1534,7 @@ try {
     ['the incomplete nested project duplicate is removed', !fs.existsSync(nestedLegacy)],
     ['Docker build exclusions no longer reference the deleted nested project', !dockerIgnore.includes('rimaz-chat-iraqi-main/')],
     ['manual source replacement requires explicit confirmation on main', syncWorkflow.includes('confirm_main_replacement') && syncWorkflow.includes("github.ref == 'refs/heads/main' && inputs.confirm_main_replacement == true")],
-    ['manual source sync is scoped to app files and public assets, not the repository root', syncWorkflow.includes('install -m 0644 "$PROJECT_SOURCE/server.js" ./server.js') && syncWorkflow.includes('rsync -a --delete "$PROJECT_SOURCE/public/" ./public/') && !syncWorkflow.includes('rsync -a --delete "$PROJECT_SOURCE/" ./')],
+    ['manual source sync is scoped to app files and public assets, not the repository root', syncWorkflow.includes('install -m 0644 "$PROJECT_SOURCE/server.js" ./server.js') && syncWorkflow.includes("rsync -a --delete --exclude='/google1a84d9d1dec7b85d.html' \"$PROJECT_SOURCE/public/\" ./public/") && !syncWorkflow.includes('rsync -a --delete "$PROJECT_SOURCE/" ./')],
     ['manual source sync checks archive version and validates symlink-free safe paths', syncWorkflow.includes('ARCHIVE_VERSION') && syncWorkflow.includes('stat.S_IFLNK') && syncWorkflow.includes('Unsafe archive path')],
     ['archive audit rejects traversal paths and symlinks before extraction', archiveWorkflow.includes('stat.S_IFLNK') && archiveWorkflow.includes("part in ('.', '..')")]
   ];
