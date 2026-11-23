@@ -545,6 +545,21 @@ function removeSessionFromRoomRuntime(sid,room){
   clearVoicePairsForSession(room,sid);
   emitVoiceState(room);
 }
+function clearDeletedRoomRuntime(room){
+  const members=[...(roomSockets.get(room)||[])];
+  for(const sid of members){
+    const socket=socketBySession(sid);
+    socket?.leave(room);
+    if(socket?.data?.user)socket.data.user.room='';
+    const active=socketUsers.get(sid);
+    if(active)active.room='';
+    removeSessionFromRoomRuntime(sid,room);
+    socket?.emit('kicked',{room,deleted:true});
+  }
+  roomSockets.delete(room);
+  voiceSpeakers.delete(room);
+  for(const [key,state] of activeVoicePairs)if(state.room===room)activeVoicePairs.delete(key);
+}
 const sessionDisconnectTimers = new Map();
 const privateDisconnectTimers = new Map();
 const SESSION_DISCONNECT_GRACE_MS=60000;
@@ -1821,7 +1836,7 @@ app.delete('/api/admin/room/:id/image',requireAdmin,clearRoomImage);
 // POST fallback for hosting/proxies that block DELETE requests.
 app.post('/api/admin/room/:id/image/delete',requireAdmin,clearRoomImage);
 app.patch('/api/admin/room/:id',requireAdmin,(req,res)=>{const r=db.rooms.find(x=>x.id===req.params.id);if(!r)return res.status(404).json({error:'الغرفة غير موجودة'});const previous={...r};if(req.body.name!==undefined){const name=cleanName(req.body.name).slice(0,40);if(name.length<2)return res.status(400).json({error:'اسم الغرفة لازم يكون حرفين على الأقل'});if(db.rooms.some(item=>item.id!==r.id&&keyName(item.name)===keyName(name)))return res.status(409).json({error:'اسم الغرفة مستخدم بالفعل'});r.name=name;}if(req.body.desc!==undefined)r.desc=String(req.body.desc).trim().slice(0,160);if(req.body.capacity!==undefined)r.capacity=Math.max(2,Math.min(200,Number(req.body.capacity)||r.capacity));if(req.body.mics!==undefined&&r.kind==='voice')r.mics=Math.max(1,Math.min(20,Number(req.body.mics)||r.mics));try{save()}catch(error){Object.keys(r).forEach(key=>delete r[key]);Object.assign(r,previous);console.error('Room update save failed:',error);return res.status(500).json({error:'تعذر حفظ تعديلات الغرفة'})}emitState();return res.json({ok:true,room:r});});
-app.delete('/api/admin/room/:id',requireAdmin,(req,res)=>{if(['public','voice'].includes(req.params.id))return res.status(400).json({error:'الغرفة الأساسية محمية ولا تحذف'});const index=db.rooms.findIndex(r=>r.id===req.params.id);if(index<0)return res.status(404).json({error:'الغرفة غير موجودة'});const [removed]=db.rooms.splice(index,1),oldBans=db.roomBans[req.params.id],oldMutes=db.roomMutes[req.params.id];delete db.roomBans[req.params.id];delete db.roomMutes[req.params.id];try{save()}catch(error){db.rooms.splice(index,0,removed);if(oldBans!==undefined)db.roomBans[req.params.id]=oldBans;if(oldMutes!==undefined)db.roomMutes[req.params.id]=oldMutes;console.error('Room deletion save failed:',error);return res.status(500).json({error:'تعذر حفظ حذف الغرفة'})}emitState();return res.json({ok:true});});
+app.delete('/api/admin/room/:id',requireAdmin,(req,res)=>{if(['public','voice'].includes(req.params.id))return res.status(400).json({error:'الغرفة الأساسية محمية ولا تحذف'});const index=db.rooms.findIndex(r=>r.id===req.params.id);if(index<0)return res.status(404).json({error:'الغرفة غير موجودة'});const [removed]=db.rooms.splice(index,1),oldBans=db.roomBans[req.params.id],oldMutes=db.roomMutes[req.params.id];delete db.roomBans[req.params.id];delete db.roomMutes[req.params.id];try{save()}catch(error){db.rooms.splice(index,0,removed);if(oldBans!==undefined)db.roomBans[req.params.id]=oldBans;if(oldMutes!==undefined)db.roomMutes[req.params.id]=oldMutes;console.error('Room deletion save failed:',error);return res.status(500).json({error:'تعذر حفظ حذف الغرفة'})}clearDeletedRoomRuntime(req.params.id);emitState();return res.json({ok:true});});
 app.post('/api/admin/unmute',(req,res,next)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'mute_room'))return res.status(403).json({error:'ما عندك صلاحية رفع الكتم'});const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});if(denyHigherRankTarget(req.user,name,res))return;db.roomMutes[room]=(db.roomMutes[room]||[]).filter(x=>keyName(x)!==name);save();res.json({ok:true});});});
 function roomAction(type,req,res){
   const room=String(req.body.room||'public'),name=keyName(req.body.name);

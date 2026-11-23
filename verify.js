@@ -1607,7 +1607,7 @@ try {
 try {
   const source=fs.readFileSync(server,'utf8');
   const start=source.indexOf('function removeSessionFromRoomRuntime(sid,room){');
-  const end=source.indexOf('\nfunction callPairKey',start);
+  const end=source.indexOf('\nconst sessionDisconnectTimers',start);
   if(start<0||end<0)throw new Error('room runtime cleanup helper was not found');
   const helper=source.slice(start,end);
   const roomSockets=new Map([['voice-room',new Set(['leaving','peer'])],['empty-room',new Set(['leaving'])]]);
@@ -1649,3 +1649,37 @@ try {
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('room cleanup call-site regression',error.message); }
+
+
+// Deleting a room must evict its live sockets and release all room-scoped runtime state.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function clearDeletedRoomRuntime(room){');
+  const end=source.indexOf('\nconst sessionDisconnectTimers',start);
+  if(start<0||end<0)throw new Error('deleted-room cleanup helper was not found');
+  const helper=source.slice(start,end);
+  const roomSockets=new Map([['deleted-room',new Set(['sid-a','sid-b'])]]);
+  const socketUsers=new Map([['sid-a',{room:'deleted-room'}],['sid-b',{room:'deleted-room'}]]);
+  const voiceSpeakers=new Map([['deleted-room',new Map([['sid-a',{sid:'sid-a'}]])]]);
+  const activeVoicePairs=new Map([['pair',{room:'deleted-room',a:'sid-a',b:'sid-b'}]]);
+  const events=[],left=[];
+  const sockets=new Map(['sid-a','sid-b'].map(sid=>[sid,{data:{user:{room:'deleted-room'}},leave:room=>left.push([sid,room]),emit:(event,payload)=>events.push([sid,event,payload])}]));
+  const context={roomSockets,socketUsers,voiceSpeakers,activeVoicePairs,
+    socketBySession:sid=>sockets.get(sid),
+    removeSessionFromRoomRuntime:(sid,room)=>{roomSockets.get(room)?.delete(sid);voiceSpeakers.get(room)?.delete(sid);for(const [key,state] of activeVoicePairs)if(state.room===room&&(state.a===sid||state.b===sid))activeVoicePairs.delete(key);},
+  };
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.clearDeleted=clearDeletedRoomRuntime;',context);
+  context.clearDeleted('deleted-room');
+  const ok=left.length===2&&left.every(x=>x[1]==='deleted-room')&&[...sockets.values()].every(s=>s.data.user.room==='')&&[...socketUsers.values()].every(s=>s.room==='')&&!roomSockets.has('deleted-room')&&!voiceSpeakers.has('deleted-room')&&activeVoicePairs.size===0&&events.filter(x=>x[1]==='kicked'&&x[2].deleted===true).length===2;
+  if(ok)pass('deleting a room evicts connected members and clears room sockets, speakers, and voice negotiations');
+  else fail('deleted-room runtime cleanup',JSON.stringify({left,roomSockets:[...roomSockets.keys()],voiceSpeakers:[...voiceSpeakers.keys()],socketRooms:[...socketUsers.values()].map(x=>x.room),pairs:activeVoicePairs.size,events}));
+} catch(error) { fail('deleted-room runtime cleanup',error.message); }
+
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const route=source.split('\n').find(line=>line.startsWith("app.delete('/api/admin/room/:id'"));
+  const ok=!!route&&route.includes('clearDeletedRoomRuntime(req.params.id)')&&route.indexOf('clearDeletedRoomRuntime(req.params.id)')>route.indexOf('try{save()}catch');
+  if(ok)pass('room deletion invokes runtime cleanup only after the database save succeeds');
+  else fail('room deletion cleanup ordering');
+} catch(error) { fail('room deletion cleanup ordering',error.message); }
