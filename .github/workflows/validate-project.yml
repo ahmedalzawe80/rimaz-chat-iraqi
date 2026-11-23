@@ -13,6 +13,11 @@ on:
       - 'index.html'
       - 'public/**'
       - 'package.json'
+      - 'package-lock.json'
+      - 'npm-shrinkwrap.json'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.gitignore'
       - '.github/workflows/**'
       - 'rimaz-final-deep-audit-46.93.72.zip'
 
