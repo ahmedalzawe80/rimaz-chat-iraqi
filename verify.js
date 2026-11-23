@@ -287,6 +287,30 @@ try {
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('admin member mutation transaction checks',error.message); }
 
+
+// Room moderation, ignore lists, and notification-read state must roll back on failed persistence.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const roomStart=source.indexOf('function roomAction(type,req,res){');
+  const roomEnd=source.indexOf("\napp.post('/api/admin/kick'",roomStart);
+  const room=source.slice(roomStart,roomEnd);
+  const unmuteStart=source.indexOf("app.post('/api/admin/unmute'");
+  const unmute=source.slice(unmuteStart,source.indexOf("\nfunction roomAction",unmuteStart));
+  const unbanStart=source.indexOf("app.post('/api/admin/unban'");
+  const unban=source.slice(unbanStart,source.indexOf("\n\napp.post('/api/ignore'",unbanStart));
+  const ignoreStart=source.indexOf("app.post('/api/ignore'");
+  const ignore=source.slice(ignoreStart,source.indexOf("\napp.post('/api/profile'",ignoreStart));
+  const notifyStart=source.indexOf("app.post('/api/notifications/read'");
+  const notify=source.slice(notifyStart,source.indexOf("\n\napp.post('/api/message'",notifyStart));
+  const checks=[
+    ['room mute/ban operations restore their original per-room lists if saving fails before disconnecting members',room.includes('previousRoom=Array.isArray(db[type][room])?db[type][room].slice():db[type][room]')&&room.includes('catch(error){if(hadRoom)db[type][room]=previousRoom;else delete db[type][room]')&&room.indexOf('try{save();}')<room.indexOf('for(const [sid,u] of socketUsers)')],
+    ['unmute and unban preserve the previous list when durable save fails',unmute.includes('catch(error){if(had)db.roomMutes[room]=previous')&&unban.includes('catch(error){if(had)db.roomBans[room]=previous')],
+    ['ignore-list toggles replace a copied map and restore the original map on save failure',ignore.includes('previous=db.ignored,next={...(db.ignored||{})')&&ignore.includes('catch(error){if(previous===undefined)delete db.ignored;else db.ignored=previous')],
+    ['notification read-all restores the previous unread list if save fails',notify.includes('had=Object.prototype.hasOwnProperty.call(db.notifications,key),previous=db.notifications[key]')&&notify.includes('catch(error){if(had)db.notifications[key]=previous;else delete db.notifications[key]')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('room moderation and chat state transaction checks',error.message); }
+
 // Announcement publication/deletion must persist before emitting, and roll back on disk failure.
 try {
   const source=fs.readFileSync(server,'utf8');
