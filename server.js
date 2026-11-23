@@ -731,14 +731,18 @@ function level(l){ l=Number(l)||0; return l>=500?3:l>=400?2:1; }
 function canNotice(u){ return !!u&&(isFullPermissionAdmin(u)||userLikes(u)>=NOTICE_LIKES_REQUIRED); }
 function canMedia(u){ return !!u&&(isFullPermissionAdmin(u)||userLikes(u)>=PRIVATE_MEDIA_LIKES_REQUIRED); }
 function canRaiseRoomMic(u){ return !!u&&(isFullPermissionAdmin(u)||userLikes(u)>=ROOM_MIC_LIKES_REQUIRED); }
-function vipActive(name){ const p=profile(name); if(p.vipUntil&&p.vipUntil>Date.now()) return true; if(p.vipUntil){delete p.vipUntil; save();} return false; }
+function vipActive(name){const p=profile(name);if(p.vipUntil&&Number(p.vipUntil)>Date.now())return true;if(p.vipUntil){const previous=p.vipUntil;delete p.vipUntil;try{save();}catch(error){p.vipUntil=previous;console.error('Expired VIP cleanup save failed:',error.message);}}return false;}
 function defaultStatus(name){ return getGuest(name) ? '(غير مسجل)' : '(عضو جديد)'; }
 function profile(name){
   if (!db.profiles[name]) db.profiles[name]={displayName:cleanName(name),avatar:'',status:defaultStatus(name),bio:'عضو في دردشة ريماز عراقية',nameColor:'#222222',fontColor:'#222222',bgColor:'#ffffff',privateOpen:true,notificationsOpen:true};
   const p=db.profiles[name];
   if(!p.displayName) p.displayName=cleanName(name);
   // Expire temporary visual ranks before projecting their assigned rank artwork/banner.
-  if(p.rankUntil && Number(p.rankUntil)<=Date.now()) { p.rank='none'; delete p.rankUntil; delete p.rankPreviousRole; delete p.rankDurationDays; save(); }
+  if(p.rankUntil && Number(p.rankUntil)<=Date.now()) {
+    const previous={rank:p.rank,rankUntil:p.rankUntil,rankPreviousRole:p.rankPreviousRole,rankDurationDays:p.rankDurationDays};
+    p.rank='none';delete p.rankUntil;delete p.rankPreviousRole;delete p.rankDurationDays;
+    try{save();}catch(error){for(const key of ['rank','rankUntil','rankPreviousRole','rankDurationDays'])if(previous[key]!==undefined)p[key]=previous[key];else delete p[key];console.error('Expired rank cleanup save failed:',error.message);}
+  }
   const visualRank=rankDefinition(p.rank);
   p.rankArt=visualRank?.artUrl||'';
   p.rankBanner=visualRank?.bannerUrl||'';
@@ -761,7 +765,10 @@ function sessionUser(sid){ const s=sessions.get(sid); if(!s)return null; const r
 function makeSession(name,type,visibility={}){
   cancelPrivateConversationCleanup(name);
   const sid=crypto.randomBytes(24).toString('hex');
-  const s={name,type,memberNumber:getMemberNumber(name,type),created:Date.now(),hidden:!!visibility.hidden,ghost:!!visibility.ghost}; sessions.set(sid,s); db.sessions[sid]=s; save(); return sid;
+  const s={name,type,memberNumber:getMemberNumber(name,type),created:Date.now(),hidden:!!visibility.hidden,ghost:!!visibility.ghost};
+  sessions.set(sid,s);db.sessions[sid]=s;
+  try{save();}catch(error){sessions.delete(sid);delete db.sessions[sid];schedulePrivateConversationCleanup(name);console.error('Session creation save failed:',error.message);throw error;}
+  return sid;
 }
 function requireAuth(req,res,next){
   const u=sessionUser(req.get('x-session')); if(!u)return res.status(401).json({error:'يجب تسجيل الدخول'}); req.user=u; next();
@@ -1090,31 +1097,29 @@ function emitPresenceToRoom(room,notice){
 }
 function roomBanned(name,room){
   const list=Array.isArray(db.roomBans[room])?db.roomBans[room]:[];
-  const n=keyName(name), now=Date.now(); let changed=false;
-  const active=list.filter(item=>{
-    if(typeof item==='string') return keyName(item)===n;
-    if(item&&item.name){ if(item.until && Number(item.until)<=now){changed=true;return false;} return keyName(item.name)===n; }
-    return false;
-  });
-  if(changed){db.roomBans[room]=list.filter(item=>!(item&&item.until&&Number(item.until)<=now));save();}
+  const n=keyName(name),now=Date.now();let changed=false;
+  const active=list.filter(item=>{if(typeof item==='string')return keyName(item)===n;if(item&&item.name){if(item.until&&Number(item.until)<=now){changed=true;return false;}return keyName(item.name)===n;}return false;});
+  if(changed){const previous=db.roomBans[room];db.roomBans[room]=list.filter(item=>!(item&&item.until&&Number(item.until)<=now));try{save();}catch(error){db.roomBans[room]=previous;console.error('Expired room-ban cleanup save failed:',error.message);}}
   return active.some(item=>typeof item==='string'?keyName(item)===n:(item&&keyName(item.name)===n));
 }
 function roomMuted(name,room){ return Array.isArray(db.roomMutes[room]) && db.roomMutes[room].includes(keyName(name)); }
 function normalizeIp(value){ let ip=String(value||'').trim(); if(ip.includes(','))ip=ip.split(',')[0].trim(); if(ip.startsWith('::ffff:'))ip=ip.slice(7); if(ip.startsWith('[')&&ip.includes(']'))ip=ip.slice(1,ip.indexOf(']')); if(/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(ip))ip=ip.replace(/:\d+$/,''); return ip.toLowerCase(); }
 function requestClientIp(req){ return normalizeIp(req.get('cf-connecting-ip')||req.get('x-real-ip')||req.ip||req.socket?.remoteAddress||''); }
 function recordLoginEvent(req,name,type,mode='normal'){
+  const previous=db.loginHistory;
   try{const rawIp=requestClientIp(req);let ip=rawIp;if(/^\d{1,3}(?:\.\d{1,3}){3}$/.test(rawIp))ip=rawIp.split('.').slice(0,3).join('.')+'.0';else if(rawIp.includes(':'))ip=rawIp.split(':').slice(0,4).join(':')+'::';
-    db.loginHistory=Array.isArray(db.loginHistory)?db.loginHistory:[];db.loginHistory.unshift({id:crypto.randomUUID(),at:Date.now(),name:String(name||'').slice(0,32),type:String(type||'member'),mode:String(mode||'normal'),ip,agent:String(req.get('user-agent')||'').slice(0,180)});db.loginHistory=db.loginHistory.slice(0,1000);save();
-  }catch(error){console.error('Login history save failed:',error.message)}
+    db.loginHistory=[{id:crypto.randomUUID(),at:Date.now(),name:String(name||'').slice(0,32),type:String(type||'member'),mode:String(mode||'normal'),ip,agent:String(req.get('user-agent')||'').slice(0,180)},...(Array.isArray(previous)?previous:[])].slice(0,1000);save();
+  }catch(error){if(previous===undefined)delete db.loginHistory;else db.loginHistory=previous;console.error('Login history save failed:',error.message);}
 }
 function socketClientIp(socket){ const h=socket.handshake?.headers||{}; return normalizeIp(h['cf-connecting-ip']||h['x-real-ip']||socket.handshake?.address||''); }
 function globalBanStatus(name,ip,now=Date.now()){
-  const n=keyName(name); let until=0,changed=false;
+  const n=keyName(name);let until=0,changed=false;
+  const expiredNames=[],expiredIps=[];
   const nameBan=(db.globalBans||{})[n];
-  if(nameBan){const expiry=Number(nameBan.until)||0;if(expiry>now)until=Math.max(until,expiry);else{delete db.globalBans[n];changed=true;}}
+  if(nameBan){const expiry=Number(nameBan.until)||0;if(expiry>now)until=Math.max(until,expiry);else{expiredNames.push([n,nameBan]);delete db.globalBans[n];changed=true;}}
   const ipKey=normalizeIp(ip),ipBan=ipKey?(db.globalIpBans||{})[ipKey]:null;
-  if(ipBan){const expiry=Number(ipBan.until)||0;if(expiry>now)until=Math.max(until,expiry);else{delete db.globalIpBans[ipKey];changed=true;}}
-  if(changed)save();
+  if(ipBan){const expiry=Number(ipBan.until)||0;if(expiry>now)until=Math.max(until,expiry);else{expiredIps.push([ipKey,ipBan]);delete db.globalIpBans[ipKey];changed=true;}}
+  if(changed){try{save();}catch(error){for(const [key,value] of expiredNames)db.globalBans[key]=value;for(const [key,value] of expiredIps)db.globalIpBans[key]=value;console.error('Expired global-ban cleanup save failed:',error.message);}}
   if(!until)return null;
   const remainingMs=Math.max(0,until-now),totalSeconds=Math.ceil(remainingMs/1000),minutes=Math.floor(totalSeconds/60),seconds=totalSeconds%60;
   const remainingText=minutes?`${minutes} دقيقة و${seconds} ثانية`:`${seconds} ثانية`;
@@ -1141,9 +1146,10 @@ function addMessage(m){
   scheduleMessageSave();
 }
 function notify(name,item){
-  name=accountKey(name); if(!db.notifications[name])db.notifications[name]=[];
-  db.notifications[name].unshift({...item,id:crypto.randomUUID(),at:Date.now()});
-  db.notifications[name]=db.notifications[name].slice(0,100); save();
+  name=accountKey(name);
+  const previous=db.notifications[name],had=Object.prototype.hasOwnProperty.call(db.notifications,name);
+  db.notifications[name]=[{...item,id:crypto.randomUUID(),at:Date.now()},...(Array.isArray(previous)?previous:[])].slice(0,100);
+  try{save();return true;}catch(error){if(had)db.notifications[name]=previous;else delete db.notifications[name];console.error('Notification save failed:',error.message);return false;}
 }
 function protectedOwnerAccountName(){
   const member=Object.entries(db.users||{}).find(([,u])=>String(u?.role||'')==='owner');
