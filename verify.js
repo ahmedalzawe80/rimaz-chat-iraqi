@@ -469,6 +469,29 @@ try {
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('private chat read/hide and rank transaction checks',error.message); }
 
+
+// All member-targeting admin endpoints must respect hierarchy; VIP/status writes roll back.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const ipStart=source.indexOf("app.get('/api/admin/member-ip/:name'");
+  const artStart=source.indexOf("app.get('/api/admin/rank-art'");
+  const decorStart=source.indexOf("app.put('/api/admin/member-decoration'");
+  const botStart=source.indexOf("app.get('/api/admin/bots'");
+  const vipStart=source.indexOf("app.post('/api/admin/gift-vip'");
+  const revokeStart=source.indexOf("app.post('/api/admin/vip/:name/revoke'");
+  const moveStart=source.indexOf("app.post('/api/admin/move-member'");
+  const statusStart=source.indexOf("app.post('/api/admin/profile/status'");
+  const muteStart=source.indexOf("app.post('/api/admin/mute'");
+  const ip=source.slice(ipStart,artStart),decor=source.slice(decorStart,botStart),vip=source.slice(vipStart,revokeStart),revoke=source.slice(revokeStart,moveStart),status=source.slice(statusStart,muteStart);
+  const checks=[
+    ['member IP disclosure blocks lower-ranked staff from inspecting higher-ranked accounts',ip.includes('if(denyHigherRankTarget(req.user,n,res))return')],
+    ['per-member decoration changes enforce higher-rank protection',decor.includes('if(denyHigherRankTarget(req.user,n,res))return')],
+    ['direct VIP grant/revoke restore the previous profile when persistence fails',vip.includes('catch(error){if(hadProfile){for(const key of Object.keys(p))delete p[key];Object.assign(p,previous);}else delete db.profiles[n]')&&revoke.includes('catch(error){if(hadProfile){for(const key of Object.keys(p))delete p[key];Object.assign(p,previous);}else delete db.profiles[n]')],
+    ['admin profile-status updates restore the prior profile when save fails',status.includes('const hadProfile=Object.prototype.hasOwnProperty.call(db.profiles,name)')&&status.includes('catch(error){if(hadProfile){for(const key of Object.keys(p))delete p[key];Object.assign(p,previous);}else delete db.profiles[name]')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('member-target hierarchy and VIP transaction checks',error.message); }
+
 // Announcement publication/deletion must persist before emitting, and roll back on disk failure.
 try {
   const source=fs.readFileSync(server,'utf8');
