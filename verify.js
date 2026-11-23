@@ -450,6 +450,25 @@ try {
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('subscription and ad transaction checks',error.message); }
 
+
+// Private chat read cursors and hide lists must be durable, bounded, and rollback-safe.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const readStart=source.indexOf("app.post('/api/private/read'");
+  const readAllStart=source.indexOf("app.post('/api/private/read-all'");
+  const hideStart=source.indexOf("app.post('/api/private/hide'");
+  const contactsStart=source.indexOf("app.get('/api/private/contacts'");
+  const read=source.slice(readStart,readAllStart),readAll=source.slice(readAllStart,hideStart),hide=source.slice(hideStart,contactsStart);
+  const checks=[
+    ['private read cursor writes are persisted and restore the prior cursor map on failure',read.includes('previous=db.privateRead,next={...(db.privateRead||{})')&&read.includes('catch(error){if(previous===undefined)delete db.privateRead;else db.privateRead=previous')&&read.includes('.slice(0,500)')],
+    ['private read-all persists a bounded 500-contact cursor map and rolls back on failure',readAll.includes('Object.fromEntries(Object.entries(mine).sort')&&readAll.includes('.slice(0,500)')&&readAll.includes('catch(error){if(previous===undefined)delete db.privateRead;else db.privateRead=previous')],
+    ['private hide clones nested state before mutation and restores whole roots if save fails',hide.includes('previousHidden=db.privateHidden,previousRead=db.privateRead')&&hide.includes('hiddenRoot[me]=hiddenList')&&hide.includes('if(previousHidden===undefined)delete db.privateHidden;else db.privateHidden=previousHidden')&&hide.includes('if(previousRead===undefined)delete db.privateRead;else db.privateRead=previousRead')],
+    ['private hide caps stored contacts and deletes media only after successful persistence',hide.includes('hiddenList.length>=500')&&hide.indexOf('try{save();}')<hide.indexOf('fs.unlinkSync(path.join(PRIVATE_MEDIA_DIR,filename))')],
+    ['rank assignment clones audit history before mutation and rank permission rollback restores updatedAt',source.includes('db.rankAudit=Array.isArray(db.rankAudit)?db.rankAudit.slice():[]')&&source.includes('if(hadUpdatedAt)definition.updatedAt=previousUpdatedAt;else delete definition.updatedAt')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('private chat read/hide and rank transaction checks',error.message); }
+
 // Announcement publication/deletion must persist before emitting, and roll back on disk failure.
 try {
   const source=fs.readFileSync(server,'utf8');
