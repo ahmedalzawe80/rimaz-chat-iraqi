@@ -377,7 +377,7 @@ try {
   ];
   const missing=routes.filter(([start,end])=>{const a=source.indexOf(start),b=source.indexOf(end,a);return a<0||b<0||!source.slice(a,b).includes('removePublicUploadIfUnreferenced(');});
   const chatBannerDeleteStart=source.indexOf("app.delete('/api/admin/chat-banners/:rank'");
-  const chatBannerDelete=source.slice(chatBannerDeleteStart,source.indexOf("\n\napp.put('/api/admin/member-decoration'",chatBannerDeleteStart));
+  const chatBannerDelete=source.slice(chatBannerDeleteStart,source.indexOf("app.put('/api/admin/member-decoration'",chatBannerDeleteStart));
   const helper=source.slice(source.indexOf('function removePublicUploadIfUnreferenced('),source.indexOf('\n}',source.indexOf('function removePublicUploadIfUnreferenced('))+2);
   const ok=missing.length===0&&chatBannerDelete.includes('removePublicUploadIfUnreferenced(previous.url)')&&helper.includes("url.startsWith('/uploads/')")&&helper.includes('containsStoredUrl(db,value)')&&helper.includes('path.basename');
   if(ok)pass('media replacement/deletion uses reference-aware upload cleanup and protects shared files');
@@ -836,7 +836,7 @@ try {
   const src=fs.readFileSync(server,'utf8');
   const html=fs.readFileSync(mainPath,'utf8');
   const checks=[
-    ['v46.69 stores bounded login history without raw full IP addresses',src.includes('loginHistory=db.loginHistory.slice(0,1000)')&&src.includes("split('.').slice(0,3).join('.')+'.0'")&&src.includes("recordLoginEvent(req,real,'member','normal')")],
+    ['v46.69 stores bounded login history without raw full IP addresses',src.includes('db.loginHistory=[{id:crypto.randomUUID()')&&src.includes('].slice(0,1000)')&&src.includes("split('.').slice(0,3).join('.')+'.0'")&&src.includes("recordLoginEvent(req,real,'member','normal')")],
     ['v46.69 site settings are owner/delegated-site-admin protected and registration/guest gates are server-enforced',src.includes("app.put('/api/admin/site-settings',requireAuth")&&src.includes("hasPermission(req.user,'site_admin')")&&src.includes('db.siteSettings?.allowRegistration===false')&&src.includes('db.siteSettings?.allowGuests===false')],
     ['v46.69 database backup is protected and excludes active sessions',src.includes("app.get('/api/admin/backup/database',requireAuth")&&src.includes('database:{...db,sessions:{}}')&&src.includes("app.get('/api/admin/login-history',requireAuth")],
     ['v46.69 delegated health diagnostics report database and uploads sizes without destructive actions',src.includes("app.get('/api/admin/health',requireAuth")&&src.includes('const uploads=walk(UP_DIR)')&&src.includes('heapUsed:memory.heapUsed')],
