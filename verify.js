@@ -412,6 +412,20 @@ try {
   else fail('auth/notification/ban rollback fixture',JSON.stringify({sessionRollback,notifyRollback,roomRollback,globalRollback}));
 } catch(error) { fail('auth/notification/ban transaction checks',error.message); }
 
+
+// Central admin route permissions and audit history must remain fail-closed and rollback-safe.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const mapping=source.match(/function permissionForAdminPath\(req\)\{[\s\S]*?\n\}/)?.[0]||'';
+  const guard=source.match(/function requireAdmin\(req,res,next\)\{[\s\S]*?\n\}/)?.[0]||'';
+  const checks=[
+    ['admin route permission map separates message deletion, announcement deletion, profile, avatar, and room operations',mapping.includes("if(p.startsWith('/api/admin/message/'))return 'messages_delete'")&&mapping.includes("if(p.startsWith('/api/admin/announcement/'))return 'announcement_delete'")&&mapping.includes("if(p.startsWith('/api/admin/profile/'))return 'profile_edit'")&&mapping.includes("if(p.startsWith('/api/admin/avatar/'))return 'avatar_delete'")&&mapping.includes("return 'room_delete'")&&mapping.includes("return 'room_lock'")],
+    ['admin guard rejects missing route permission before calling the handler',guard.includes("if(!hasPermission(req.user,permission))return res.status(403)")&&guard.includes('return next();')],
+    ['admin audit entries are appended immutably and restored when the audit save fails',guard.includes('const previous=db.adminAuditLogs')&&guard.includes('db.adminAuditLogs=[{id:Date.now()')&&guard.includes("catch(error){if(previous===undefined)delete db.adminAuditLogs;else db.adminAuditLogs=previous")]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('admin route permission and audit tests',error.message); }
+
 // Announcement publication/deletion must persist before emitting, and roll back on disk failure.
 try {
   const source=fs.readFileSync(server,'utf8');
