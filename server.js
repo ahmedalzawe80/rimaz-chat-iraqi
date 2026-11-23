@@ -754,12 +754,12 @@ function profile(name){
   return p;
 }
 // Migrate the old automatic status to the new type-specific default, while keeping custom statuses.
-let statusMigrated=false;
+let statusMigrated=false;const migratedProfileStatuses=[];
 for (const name of Object.keys(db.profiles||{})) {
   const p=db.profiles[name];
-  if(p && (!p.status || p.status==='متصل الآن' || p.status==='زائر جديد' || p.status==='غير مسجل' || p.status==='عضو جديد')) { const next=defaultStatus(name); if(p.status!==next){p.status=next; statusMigrated=true;} }
+  if(p && (!p.status || p.status==='متصل الآن' || p.status==='زائر جديد' || p.status==='غير مسجل' || p.status==='عضو جديد')) { const next=defaultStatus(name); if(p.status!==next){migratedProfileStatuses.push([p,p.status]);p.status=next;statusMigrated=true;} }
 }
-if(statusMigrated) save();
+if(statusMigrated){try{save();}catch(error){for(const [p,previous] of migratedProfileStatuses){if(previous===undefined)delete p.status;else p.status=previous;}console.error('Profile status migration save failed:',error.message);}}
 function displayName(name){ return profile(name).displayName || cleanName(name); }
 function sessionUser(sid){ const s=sessions.get(sid); if(!s)return null; const role=roleOf(s); return {...s, memberNumber:getMemberNumber(s.name,s.type), role, owner:isOwner(s), admin:isAdmin(s), fullAdmin:isFullPermissionAdmin(s), staff:isStaff(s), myPermissions:Object.keys(PERMISSION_CATALOG).filter(permission=>hasPermission(s,permission)), panelAccess:isOwner(s)||hasPermission(s,'panel_access')||hasPermission(s,'health_view'), vip:vipActive(s.name), likes:isOwner(s)?999999:userLikes(s)}; }
 function makeSession(name,type,visibility={}){
@@ -1392,7 +1392,7 @@ app.get('/api/public-online',(req,res)=>{ const users=getOnlineUsers().map(u=>({
 app.get('/api/state',requireAuth,(req,res)=>{
   const u=req.user;
   // A guest starts each fresh app entry with the default status; registered members keep their saved status.
-  if(u.type==='guest' && req.query.entry==='1'){ const p=profile(u.name); p.status='(غير مسجل)'; save(); }
+  if(u.type==='guest' && req.query.entry==='1'){const p=profile(u.name),previous=p.status;p.status='(غير مسجل)';try{save();}catch(error){p.status=previous;console.error('Guest entry status save failed:',error.message);}}
   const likes=userLikes(u); const rooms=visibleRooms(u);
   res.json({user:{...u,likes,level:level(likes),admin:isAdmin(u),owner:isOwner(u),staff:isStaff(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name),notice:canNotice(u),media:canMedia(u)}, rooms, online:getOnlineUsers(u).map(x=>({name:x.name,type:x.type,likes:x.likes,level:x.level,profile:x.profile,online:true,role:x.role||roleOf(x),admin:isAdmin(x),vip:vipActive(x.name)}))});
 });
