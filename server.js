@@ -1316,9 +1316,19 @@ app.post('/api/register',(req,res)=>{
     if(p.length<12)return res.status(400).json({error:'كلمة مرور المالك يجب أن تكون 12 حرفاً على الأقل'});
   } else if(p.length<3) return res.status(400).json({error:'كلمة المرور 3 أحرف على الأقل'});
   if(nameTaken(n)&&!ownerRequested)return res.status(409).json({error:'هذا الاسم موجود'});
-  db.users[n]={hash:bcrypt.hashSync(p,12),likes:keyName(n)==='admin'?999999:0,created:Date.now()}; allocateMemberNumber(n,'member',db.users[n]);
-  if(ownerRequested){ db.ownerSetupCompleted=true; }
-  profile(n); const sid=makeSession(n,'member'); save(); recordLoginEvent(req,n,'member','register'); res.json({sid,user:sessionUser(sid)});
+  const hadUser=Object.prototype.hasOwnProperty.call(db.users,n),previousUser=db.users[n],hadProfile=Object.prototype.hasOwnProperty.call(db.profiles||{},n),previousProfile=db.profiles?.[n],previousMemberNumbers=db.memberNumbers?{...db.memberNumbers}:undefined,previousNextMemberNumber=db.nextMemberNumber,hadOwnerSetup=Object.prototype.hasOwnProperty.call(db,'ownerSetupCompleted'),previousOwnerSetup=db.ownerSetupCompleted;
+  db.users[n]={hash:bcrypt.hashSync(p,12),likes:keyName(n)==='admin'?999999:0,created:Date.now()};allocateMemberNumber(n,'member',db.users[n]);
+  if(ownerRequested)db.ownerSetupCompleted=true;
+  try{profile(n);const sid=makeSession(n,'member');recordLoginEvent(req,n,'member','register');return res.json({sid,user:sessionUser(sid)});}
+  catch(error){
+    if(hadUser)db.users[n]=previousUser;else delete db.users[n];
+    if(hadProfile)db.profiles[n]=previousProfile;else if(db.profiles)delete db.profiles[n];
+    if(previousMemberNumbers===undefined)delete db.memberNumbers;else db.memberNumbers=previousMemberNumbers;
+    if(previousNextMemberNumber===undefined)delete db.nextMemberNumber;else db.nextMemberNumber=previousNextMemberNumber;
+    if(hadOwnerSetup)db.ownerSetupCompleted=previousOwnerSetup;else delete db.ownerSetupCompleted;
+    console.error('Registration transaction failed:',error.message);
+    return res.status(500).json({error:'تعذر إنشاء الحساب وحفظه'});
+  }
 });
 app.post('/api/login',(req,res)=>{
   const n=cleanName(req.body.name), p=String(req.body.password||'');
@@ -1346,7 +1356,17 @@ app.post('/api/guest',(req,res)=>{
   const n=cleanName(req.body.name); if(!n)return res.status(400).json({error:'اكتب اسم الزائر'});
   if(globalBanResponse(res,n,requestClientIp(req)))return;
   if(nameTaken(n))return res.status(409).json({error:'هذا الاسم موجود'});
-  db.guests[n]={likes:0,created:Date.now()}; allocateMemberNumber(n,'guest',db.guests[n]); const gp=profile(n); gp.status='(غير مسجل)'; const sid=makeSession(n,'guest'); save(); recordLoginEvent(req,n,'guest','guest'); res.json({sid,user:sessionUser(sid)});
+  const hadGuest=Object.prototype.hasOwnProperty.call(db.guests,n),previousGuest=db.guests[n],hadProfile=Object.prototype.hasOwnProperty.call(db.profiles||{},n),previousProfile=db.profiles?.[n],previousMemberNumbers=db.memberNumbers?{...db.memberNumbers}:undefined,previousNextMemberNumber=db.nextMemberNumber;
+  db.guests[n]={likes:0,created:Date.now()};allocateMemberNumber(n,'guest',db.guests[n]);
+  try{const gp=profile(n);gp.status='(غير مسجل)';const sid=makeSession(n,'guest');recordLoginEvent(req,n,'guest','guest');return res.json({sid,user:sessionUser(sid)});}
+  catch(error){
+    if(hadGuest)db.guests[n]=previousGuest;else delete db.guests[n];
+    if(hadProfile)db.profiles[n]=previousProfile;else if(db.profiles)delete db.profiles[n];
+    if(previousMemberNumbers===undefined)delete db.memberNumbers;else db.memberNumbers=previousMemberNumbers;
+    if(previousNextMemberNumber===undefined)delete db.nextMemberNumber;else db.nextMemberNumber=previousNextMemberNumber;
+    console.error('Guest creation transaction failed:',error.message);
+    return res.status(500).json({error:'تعذر إنشاء دخول الزائر وحفظه'});
+  }
 });
 app.post('/api/logout',requireAuth,(req,res)=>{
   const sid=req.get('x-session'),u=sessions.get(sid),name=u?.name||req.user?.name;
