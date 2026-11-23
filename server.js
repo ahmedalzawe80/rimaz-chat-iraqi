@@ -1513,10 +1513,64 @@ app.post('/api/admin/broadcast',requireAdmin,(req,res)=>{
   res.json({ok:true,announcement:item});
 });
 app.delete('/api/admin/announcement/:id',requireAdmin,(req,res)=>{const id=String(req.params.id);const existed=(db.announcements||[]).some(x=>String(x.id)===id);let removed;try{removed=removeAnnouncement(id);}catch(error){console.error('Announcement deletion transaction failed:',error.message);return res.status(500).json({error:'تعذر حفظ حذف الإعلان'});}res.json({ok:true,removedMessages:removed.length,existed});});
-app.delete('/api/admin/message/:id',requireAdmin,(req,res)=>{const id=req.params.id;db.messages=db.messages.filter(x=>x.id!==id);save();io.emit('message-deleted',{id});res.json({ok:true});});
-app.patch('/api/admin/profile/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);const protectedTarget=getUser(n)||getGuest(n);if((isOwnerName(n)||isOwner({name:n,role:protectedTarget?.role}))&&!isOwner(req.user)){const action=req.body?.displayName!==undefined?'تغيير زخرفة اسمك':(req.body?.nameColor!==undefined||req.body?.fontColor!==undefined||req.body?.bgColor!==undefined?'تغيير ألوان ملفك':'تعديل ملفك');notifyOwnerProtectedAttempt(req.user,action);return res.status(403).json({error:'ملف صاحب الموقع محمي من الإداريين'});}if(denyHigherRankTarget(req.user,n,res))return;if(!getUser(n)&&!getGuest(n))return res.status(404).json({error:'العضو غير موجود'});const p=profile(n);if(req.body.displayName!==undefined){const dn=cleanName(req.body.displayName);if(!dn)return res.status(400).json({error:'الزخرفة لا يمكن أن تكون فارغة'});p.displayName=dn;}if(req.body.nameColor!==undefined){const c=String(req.body.nameColor||'');if(!/^#[0-9a-fA-F]{6}$/.test(c))return res.status(400).json({error:'لون الاسم غير صحيح'});p.nameColor=c;}if(req.body.fontColor!==undefined){const c=String(req.body.fontColor||'');if(!/^#[0-9a-fA-F]{6}$/.test(c))return res.status(400).json({error:'لون الخط غير صحيح'});p.fontColor=c;}if(req.body.bgColor!==undefined){const c=String(req.body.bgColor||'');if(!/^#[0-9a-fA-F]{6}$/.test(c))return res.status(400).json({error:'لون الخلفية غير صحيح'});p.bgColor=c;}save();io.emit('profile-changed',{name:n,profile:p,displayName:p.displayName||cleanName(n)});res.json({ok:true,profile:p,displayName:p.displayName||cleanName(n)});});
-app.patch('/api/admin/member-stats/:name',requireAuth,(req,res)=>{const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return;const field=String(req.body.field||''),value=Number(req.body.value);const user=getUser(n),guest=getGuest(n),target=user||guest;if(!target)return res.status(404).json({error:'العضو غير موجود'});if(isOwner({name:n,role:target.role})&&!(isOwner(req.user)&&keyName(req.user.name)===keyName(n)))return res.status(403).json({error:'حساب صاحب الموقع محمي من تعديل البيانات'});if(!Number.isInteger(value)||value<0||value>1000000)return res.status(400).json({error:'القيمة يجب أن تكون عدداً صحيحاً بين 0 و1000000'});if(field==='likes'){if(!hasPermission(req.user,'grant_likes'))return res.status(403).json({error:'ما عندك صلاحية تعديل اللايكات'});target.likes=value;save();io.emit('likes-changed',{name:n,likes:value,level:level(value)});emitState();return res.json({ok:true,field,likes:value});}if(field==='points'){if(!hasPermission(req.user,'panel_access'))return res.status(403).json({error:'ما عندك صلاحية تعديل النقاط'});target.points=value;save();io.emit('member-stats-changed',{name:n,points:value});emitState();return res.json({ok:true,field,points:value});}return res.status(400).json({error:'نوع القيمة غير معروف'});});
-app.delete('/api/admin/avatar/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);const target=getUser(n)||getGuest(n);const ownerNames=new Set(['owner',keyName(process.env.OWNER_NAME||'owner')]);if((ownerNames.has(keyName(n))||isOwnerName(n)||isOwner({name:n,role:target?.role}))&&!isOwner(req.user)){notifyOwnerProtectedAttempt(req.user,'حذف صورتك الشخصية');return res.status(403).json({error:'صورة صاحب الموقع محمية من الإداريين'});}if(denyHigherRankTarget(req.user,n,res))return;if(!getUser(n)&&!getGuest(n))return res.status(404).json({error:'العضو غير موجود'});const p=profile(n);if(p.avatar&&p.avatar.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(p.avatar)))}catch{}}p.avatar='';save();io.emit('profile-changed',{name:n,profile:p});res.json({ok:true});});
+app.delete('/api/admin/message/:id',requireAdmin,(req,res)=>{
+  const id=req.params.id,previousMessages=db.messages;
+  db.messages=(db.messages||[]).filter(x=>x.id!==id);
+  try{save();}catch(error){db.messages=previousMessages;console.error('Admin message deletion save failed:',error.message);return res.status(500).json({error:'تعذر حفظ حذف الرسالة'});}
+  io.emit('message-deleted',{id});res.json({ok:true});
+});
+app.patch('/api/admin/profile/:name',requireAdmin,(req,res)=>{
+  const n=accountKey(req.params.name),protectedTarget=getUser(n)||getGuest(n);
+  if((isOwnerName(n)||isOwner({name:n,role:protectedTarget?.role}))&&!isOwner(req.user)){
+    const action=req.body?.displayName!==undefined?'تغيير زخرفة اسمك':(req.body?.nameColor!==undefined||req.body?.fontColor!==undefined||req.body?.bgColor!==undefined?'تغيير ألوان ملفك':'تعديل ملفك');
+    notifyOwnerProtectedAttempt(req.user,action);return res.status(403).json({error:'ملف صاحب الموقع محمي من الإداريين'});
+  }
+  if(denyHigherRankTarget(req.user,n,res))return;
+  if(!getUser(n)&&!getGuest(n))return res.status(404).json({error:'العضو غير موجود'});
+  const updates={};
+  if(req.body.displayName!==undefined){const dn=cleanName(req.body.displayName);if(!dn)return res.status(400).json({error:'الزخرفة لا يمكن أن تكون فارغة'});updates.displayName=dn;}
+  for(const [field,label] of [['nameColor','لون الاسم'],['fontColor','لون الخط'],['bgColor','لون الخلفية']]){
+    if(req.body[field]===undefined)continue;
+    const color=String(req.body[field]||'');
+    if(!/^#[0-9a-fA-F]{6}$/.test(color))return res.status(400).json({error:label+' غير صحيح'});
+    updates[field]=color;
+  }
+  const p=profile(n),previous={...p};
+  Object.assign(p,updates);
+  try{save();}catch(error){
+    for(const key of Object.keys(p))delete p[key];Object.assign(p,previous);
+    console.error('Admin profile update save failed:',error.message);
+    return res.status(500).json({error:'تعذر حفظ تعديلات الملف الشخصي'});
+  }
+  io.emit('profile-changed',{name:n,profile:p,displayName:p.displayName||cleanName(n)});
+  res.json({ok:true,profile:p,displayName:p.displayName||cleanName(n)});
+});
+app.patch('/api/admin/member-stats/:name',requireAuth,(req,res)=>{
+  const n=accountKey(req.params.name);
+  if(denyHigherRankTarget(req.user,n,res))return;
+  const field=String(req.body.field||''),value=Number(req.body.value),user=getUser(n),guest=getGuest(n),target=user||guest;
+  if(!target)return res.status(404).json({error:'العضو غير موجود'});
+  if(isOwner({name:n,role:target.role})&&!(isOwner(req.user)&&keyName(req.user.name)===keyName(n)))return res.status(403).json({error:'حساب صاحب الموقع محمي من تعديل البيانات'});
+  if(!Number.isInteger(value)||value<0||value>1000000)return res.status(400).json({error:'القيمة يجب أن تكون عدداً صحيحاً بين 0 و1000000'});
+  if(field!=='likes'&&field!=='points')return res.status(400).json({error:'نوع القيمة غير معروف'});
+  if(field==='likes'&&!hasPermission(req.user,'grant_likes'))return res.status(403).json({error:'ما عندك صلاحية تعديل اللايكات'});
+  if(field==='points'&&!hasPermission(req.user,'panel_access'))return res.status(403).json({error:'ما عندك صلاحية تعديل النقاط'});
+  const previous=target[field];target[field]=value;
+  try{save();}catch(error){target[field]=previous;console.error('Member stats save failed:',error.message);return res.status(500).json({error:'تعذر حفظ بيانات العضو'});}
+  if(field==='likes')io.emit('likes-changed',{name:n,likes:value,level:level(value)});
+  else io.emit('member-stats-changed',{name:n,points:value});
+  emitState();return res.json({ok:true,field,[field]:value});
+});
+app.delete('/api/admin/avatar/:name',requireAdmin,(req,res)=>{
+  const n=accountKey(req.params.name),target=getUser(n)||getGuest(n),ownerNames=new Set(['owner',keyName(process.env.OWNER_NAME||'owner')]);
+  if((ownerNames.has(keyName(n))||isOwnerName(n)||isOwner({name:n,role:target?.role}))&&!isOwner(req.user)){notifyOwnerProtectedAttempt(req.user,'حذف صورتك الشخصية');return res.status(403).json({error:'صورة صاحب الموقع محمية من الإداريين'});}
+  if(denyHigherRankTarget(req.user,n,res))return;
+  if(!target)return res.status(404).json({error:'العضو غير موجود'});
+  const p=profile(n),previous=p.avatar||'';p.avatar='';
+  try{save();}catch(error){p.avatar=previous;console.error('Admin avatar deletion save failed:',error.message);return res.status(500).json({error:'تعذر حفظ حذف الصورة'});}
+  if(previous.startsWith('/uploads/'))removePublicUploadIfUnreferenced(previous);
+  io.emit('profile-changed',{name:n,profile:p});res.json({ok:true});
+});
 app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{
   const actor=req.user,n=accountKey(cleanName(req.body.name)),rank=String(req.body.rank||'');
   if(!hasPermission(actor,'rank_assign'))return res.status(403).json({error:'ما عندك صلاحية منح الرتب'});
