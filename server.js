@@ -382,44 +382,69 @@ function roomHistoryWithAnnouncements(roomId,viewer,createdAt=0){
 function publishAnnouncement(item){
   if(!item||!item.id)return [];
   const at=Date.now();
+  const previousMessages=db.messages;
+  const previousLastPublishedAt=item.lastPublishedAt;
+  const hadLastPublishedAt=Object.prototype.hasOwnProperty.call(item,'lastPublishedAt');
+  const previousNextScheduledAt=item.nextScheduledAt;
+  const hadNextScheduledAt=Object.prototype.hasOwnProperty.call(item,'nextScheduledAt');
   if(item.duration==='permanent'){item.lastPublishedAt=at;delete item.nextScheduledAt;}
-  // Announcements are site-wide notices, not room chat messages. Keep one
-  // canonical record and broadcast it to every connected session, including
-  // users who deliberately left a room or are browsing another room.
   const message=announcementMessage(item,at,String(at));
   db.messages=[...(db.messages||[]),message].slice(-1000);
+  try{save();}catch(error){
+    if(previousMessages===undefined)delete db.messages;else db.messages=previousMessages;
+    if(hadLastPublishedAt)item.lastPublishedAt=previousLastPublishedAt;else delete item.lastPublishedAt;
+    if(hadNextScheduledAt)item.nextScheduledAt=previousNextScheduledAt;else delete item.nextScheduledAt;
+    throw error;
+  }
+  // Announcements are site-wide; broadcast only after durable commit.
   io.emit('message',message);
-  try{save()}catch(error){console.error('Announcement publish save failed:',error.message);}
   return [message];
 }
 const permanentAnnouncementTimers=new Map();
+const announcementExpiryTimers=new Map();
 function removeAnnouncement(itemId){
   const id=String(itemId);
-  const timer=permanentAnnouncementTimers.get(id);if(timer)clearTimeout(timer);permanentAnnouncementTimers.delete(id);
-  db.announcements=(db.announcements||[]).filter(a=>String(a.id)!==id);
+  const previousAnnouncements=db.announcements;
+  const previousMessages=db.messages;
   const removed=(db.messages||[]).filter(m=>String(m.announcementId||'')===id||String(m.id||'').startsWith(id+'-'));
+  db.announcements=(db.announcements||[]).filter(a=>String(a.id)!==id);
   db.messages=(db.messages||[]).filter(m=>String(m.announcementId||'')!==id&&!String(m.id||'').startsWith(id+'-'));
+  try{save();}catch(error){
+    if(previousAnnouncements===undefined)delete db.announcements;else db.announcements=previousAnnouncements;
+    if(previousMessages===undefined)delete db.messages;else db.messages=previousMessages;
+    throw error;
+  }
+  const expiryTimer=announcementExpiryTimers.get(id);if(expiryTimer)clearTimeout(expiryTimer);announcementExpiryTimers.delete(id);
+  const permanentTimer=permanentAnnouncementTimers.get(id);if(permanentTimer)clearTimeout(permanentTimer);permanentAnnouncementTimers.delete(id);
   for(const message of removed)io.emit('message-deleted',{id:message.id});
-  try{save()}catch(error){console.error('Announcement cleanup save failed:',error.message);}
   scheduleAllPermanentAnnouncements();
   return removed;
 }
-function scheduleAnnouncementExpiry(item){
+function scheduleAnnouncementExpiry(item,retryDelay=null){
   if(!item||!['5m','15m'].includes(item.duration)||!item.id)return;
-  const delay=Math.max(0,Number(item.at||Date.now())+ANNOUNCEMENT_INTERVAL_MS-Date.now());
-  setTimeout(()=>removeAnnouncement(item.id),delay).unref?.();
+  const id=String(item.id),oldTimer=announcementExpiryTimers.get(id);if(oldTimer)clearTimeout(oldTimer);
+  const due=retryDelay===null?Number(item.at||Date.now())+ANNOUNCEMENT_INTERVAL_MS:Date.now()+Math.max(1000,Number(retryDelay)||60000);
+  const timer=setTimeout(()=>{
+    announcementExpiryTimers.delete(id);
+    try{removeAnnouncement(id);}catch(error){
+      console.error('Timed announcement expiry save failed; retrying:',error.message);
+      const current=(db.announcements||[]).find(a=>String(a.id)===id);
+      if(current)scheduleAnnouncementExpiry(current,60000);
+    }
+  },Math.max(0,due-Date.now()));
+  timer.unref?.();announcementExpiryTimers.set(id,timer);
 }
-function schedulePermanentAnnouncement(item){
+function schedulePermanentAnnouncement(item,retryDelay=null){
   if(!item||item.duration!=='permanent'||!item.id)return;
   const id=String(item.id),oldTimer=permanentAnnouncementTimers.get(id);if(oldTimer)clearTimeout(oldTimer);
   const now=Date.now();
-  const due=Number(item.lastPublishedAt||0)>0?Number(item.lastPublishedAt)+ANNOUNCEMENT_INTERVAL_MS:Math.max(now,Number(item.nextScheduledAt||now));
+  const due=retryDelay!==null?now+Math.max(1000,Number(retryDelay)||60000):(Number(item.lastPublishedAt||0)>0?Number(item.lastPublishedAt)+ANNOUNCEMENT_INTERVAL_MS:Math.max(now,Number(item.nextScheduledAt||now)));
   const timer=setTimeout(()=>{
     permanentAnnouncementTimers.delete(id);
     const current=(db.announcements||[]).find(a=>String(a.id)===id&&a.duration==='permanent');
     if(!current)return;
-    publishAnnouncement(current);
-    schedulePermanentAnnouncement(current);
+    try{publishAnnouncement(current);schedulePermanentAnnouncement(current);}
+    catch(error){console.error('Permanent announcement publish failed; retrying:',error.message);schedulePermanentAnnouncement(current,60000);}
   },Math.max(0,due-now));
   timer.unref?.();permanentAnnouncementTimers.set(id,timer);
 }
@@ -1476,15 +1501,18 @@ app.post('/api/admin/broadcast',requireAdmin,(req,res)=>{
     :{id:crypto.randomUUID(),title,text:text.slice(0,2000),from:'الإدارة',displayName:'الإدارة',role:'member',at:Date.now(),duration,profile:{}};
   const previousAnnouncements=db.announcements,previousMessages=db.messages;
   db.announcements=[...(db.announcements||[]),item].slice(-100).reverse();
-  try{save()}catch(e){if(previousAnnouncements===undefined)delete db.announcements;else db.announcements=previousAnnouncements;if(previousMessages===undefined)delete db.messages;else db.messages=previousMessages;console.error('Announcement save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الإعلان'});}
-  // Both announcement types publish immediately. Temporary contest/advert
-  // notices expire after 15 minutes; administrative notices repeat 15 minutes
-  // after their actual publication time until explicitly deleted.
-  publishAnnouncement(item);
+  // Commit the announcement record, publication message, and repeat timestamp together.
+  try{const published=publishAnnouncement(item);if(!published.length)throw new Error('Announcement was not published');}
+  catch(error){
+    if(previousAnnouncements===undefined)delete db.announcements;else db.announcements=previousAnnouncements;
+    if(previousMessages===undefined)delete db.messages;else db.messages=previousMessages;
+    console.error('Announcement publication transaction failed:',error.message);
+    return res.status(500).json({error:'تعذر حفظ الإعلان ونشره'});
+  }
   if(temporary)scheduleAnnouncementExpiry(item);else schedulePermanentAnnouncement(item);
   res.json({ok:true,announcement:item});
 });
-app.delete('/api/admin/announcement/:id',requireAdmin,(req,res)=>{const id=String(req.params.id);const existed=(db.announcements||[]).some(x=>String(x.id)===id);const removed=removeAnnouncement(id);res.json({ok:true,removedMessages:removed.length,existed});});
+app.delete('/api/admin/announcement/:id',requireAdmin,(req,res)=>{const id=String(req.params.id);const existed=(db.announcements||[]).some(x=>String(x.id)===id);let removed;try{removed=removeAnnouncement(id);}catch(error){console.error('Announcement deletion transaction failed:',error.message);return res.status(500).json({error:'تعذر حفظ حذف الإعلان'});}res.json({ok:true,removedMessages:removed.length,existed});});
 app.delete('/api/admin/message/:id',requireAdmin,(req,res)=>{const id=req.params.id;db.messages=db.messages.filter(x=>x.id!==id);save();io.emit('message-deleted',{id});res.json({ok:true});});
 app.patch('/api/admin/profile/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);const protectedTarget=getUser(n)||getGuest(n);if((isOwnerName(n)||isOwner({name:n,role:protectedTarget?.role}))&&!isOwner(req.user)){const action=req.body?.displayName!==undefined?'تغيير زخرفة اسمك':(req.body?.nameColor!==undefined||req.body?.fontColor!==undefined||req.body?.bgColor!==undefined?'تغيير ألوان ملفك':'تعديل ملفك');notifyOwnerProtectedAttempt(req.user,action);return res.status(403).json({error:'ملف صاحب الموقع محمي من الإداريين'});}if(denyHigherRankTarget(req.user,n,res))return;if(!getUser(n)&&!getGuest(n))return res.status(404).json({error:'العضو غير موجود'});const p=profile(n);if(req.body.displayName!==undefined){const dn=cleanName(req.body.displayName);if(!dn)return res.status(400).json({error:'الزخرفة لا يمكن أن تكون فارغة'});p.displayName=dn;}if(req.body.nameColor!==undefined){const c=String(req.body.nameColor||'');if(!/^#[0-9a-fA-F]{6}$/.test(c))return res.status(400).json({error:'لون الاسم غير صحيح'});p.nameColor=c;}if(req.body.fontColor!==undefined){const c=String(req.body.fontColor||'');if(!/^#[0-9a-fA-F]{6}$/.test(c))return res.status(400).json({error:'لون الخط غير صحيح'});p.fontColor=c;}if(req.body.bgColor!==undefined){const c=String(req.body.bgColor||'');if(!/^#[0-9a-fA-F]{6}$/.test(c))return res.status(400).json({error:'لون الخلفية غير صحيح'});p.bgColor=c;}save();io.emit('profile-changed',{name:n,profile:p,displayName:p.displayName||cleanName(n)});res.json({ok:true,profile:p,displayName:p.displayName||cleanName(n)});});
 app.patch('/api/admin/member-stats/:name',requireAuth,(req,res)=>{const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return;const field=String(req.body.field||''),value=Number(req.body.value);const user=getUser(n),guest=getGuest(n),target=user||guest;if(!target)return res.status(404).json({error:'العضو غير موجود'});if(isOwner({name:n,role:target.role})&&!(isOwner(req.user)&&keyName(req.user.name)===keyName(n)))return res.status(403).json({error:'حساب صاحب الموقع محمي من تعديل البيانات'});if(!Number.isInteger(value)||value<0||value>1000000)return res.status(400).json({error:'القيمة يجب أن تكون عدداً صحيحاً بين 0 و1000000'});if(field==='likes'){if(!hasPermission(req.user,'grant_likes'))return res.status(403).json({error:'ما عندك صلاحية تعديل اللايكات'});target.likes=value;save();io.emit('likes-changed',{name:n,likes:value,level:level(value)});emitState();return res.json({ok:true,field,likes:value});}if(field==='points'){if(!hasPermission(req.user,'panel_access'))return res.status(403).json({error:'ما عندك صلاحية تعديل النقاط'});target.points=value;save();io.emit('member-stats-changed',{name:n,points:value});emitState();return res.json({ok:true,field,points:value});}return res.status(400).json({error:'نوع القيمة غير معروف'});});
