@@ -49,7 +49,7 @@ jobs:
               root = candidates[0]
               z.extractall(target)
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
-              out.write('root=' + root + '\\n')
+              out.write('root=' + root + chr(10))
           print(f'Validated one project root: {root or "."}')
           print(f'Archive entries: {len(names)}')
           PY
