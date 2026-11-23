@@ -338,7 +338,7 @@ try {
   const publish = source.match(/function publishAnnouncement\([\s\S]*?\n}/);
   if (publish && source.includes("room:'__broadcast__'") && publish[0].includes("io.emit('message',message)") && !publish[0].includes('io.to(')) pass('announcements are broadcast once to all connected users regardless of room');
   else fail('announcements reach users outside rooms without duplicate room fan-out');
-  if (source.includes('publishAnnouncement(item);\n  if(temporary)scheduleAnnouncementExpiry(item);else schedulePermanentAnnouncement(item);')) pass('both temporary and administrative announcements publish immediately on save');
+  if (source.includes('try{const published=publishAnnouncement(item);if(!published.length)throw new Error')) pass('both temporary and administrative announcements publish immediately after durable commit');
   else fail('both announcement types publish immediately on creation');
   if (html.includes("socket.on('message',m=>{if(m?.type==='announcement'||m.room===currentRoom)addMessage(m)})") && !html.includes("m.role==='owner'?'صاحب الموقع'")) pass('clients display global announcements and omit redundant owner/admin role text');
   else fail('client global announcement display and concise author identity');
@@ -578,8 +578,10 @@ try {
 // across rooms if the database write fails.
 try {
   const source = fs.readFileSync(server, 'utf8');
-  const route = source.match(/app\\.post\\('\\/api\\/admin\\/broadcast',[\\s\\S]*?\\n\\}\\);/);
-  if (route && route[0].includes('previousAnnouncements') && route[0].includes('previousMessages') && route[0].includes('publishAnnouncement(item)') && route[0].includes('Announcement publication transaction failed') && route[0].includes('scheduleAnnouncementExpiry(item)') && route[0].includes('schedulePermanentAnnouncement(item)') && source.includes("const ANNOUNCEMENT_INTERVAL_MS=15*60*1000") && source.includes("room:'__broadcast__'") && source.includes("io.emit('message',message)") && source.includes('function roomHistoryWithAnnouncements(roomId,viewer,createdAt=0)') && source.includes('roomHistoryWithAnnouncements(room,u,Number(u.created)||0)') && source.includes("title:item.title||'إعلان إداري'")) pass('site-wide announcement publication commits its record, message and schedule metadata before broadcasting');
+  const routeStart=source.indexOf("app.post('/api/admin/broadcast'");
+  const routeEnd=source.indexOf("\n});",routeStart);
+  const route=routeStart>=0&&routeEnd>=0?source.slice(routeStart,routeEnd+4):'';
+  if (route && route.includes('previousAnnouncements') && route.includes('previousMessages') && route.includes('publishAnnouncement(item)') && route.includes('Announcement publication transaction failed') && route.includes('scheduleAnnouncementExpiry(item)') && route.includes('schedulePermanentAnnouncement(item)') && source.includes("const ANNOUNCEMENT_INTERVAL_MS=15*60*1000") && source.includes("room:'__broadcast__'") && source.includes("io.emit('message',message)") && source.includes('function roomHistoryWithAnnouncements(roomId,viewer,createdAt=0)') && source.includes('roomHistoryWithAnnouncements(room,u,Number(u.created)||0)') && source.includes("title:item.title||'إعلان إداري'")) pass('site-wide announcement publication commits its record, message and schedule metadata before broadcasting');
   else fail('site-wide announcement delivery is persisted atomically and timed correctly');
 } catch(error){fail('unified permission persistence checks',error.message)}
 
