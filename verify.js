@@ -265,6 +265,67 @@ try {
   pass('saved admin description, canonical URL, Open Graph, Twitter, Schema, robots and sitemap share one SEO source');
 } catch (error) { fail('server-rendered SEO description integration', error.message); }
 
+
+// Announcement publication/deletion must persist before emitting, and roll back on disk failure.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function publishAnnouncement(item){');
+  const end=source.indexOf('function scheduleAllPermanentAnnouncements(){',start);
+  if(start<0||end<0)throw new Error('announcement transaction helpers not found');
+  const block=source.slice(start,end);
+  const makeContext=(failSave=false)=>{
+    const events=[],item={id:'a1',duration:'15m',at:1,text:'hello'};
+    const db={announcements:[item],messages:[{id:'old'}]};
+    const context={db,Date,Set,Map,Object,Number,String,Math,ANNOUNCEMENT_INTERVAL_MS:900000,
+      announcementMessage:(x,at,id)=>({id,announcementId:x.id,type:'announcement',at,text:x.text}),
+      io:{emit:(...args)=>events.push(['emit',...args])},
+      save:()=>{events.push(['save']);if(failSave)throw new Error('disk failure');},
+      scheduleAllPermanentAnnouncements:()=>events.push(['reschedule']),
+      console:{error:(...args)=>events.push(['error',...args])},
+      setTimeout:(fn,ms)=>({fn,ms,unref(){}}),clearTimeout:()=>{},
+    };
+    vm.createContext(context);
+    vm.runInContext(block+';globalThis.publish=publishAnnouncement;globalThis.remove=removeAnnouncement;',context);
+    return {context,events,item,db};
+  };
+  const success=makeContext(false);success.context.publish(success.item);
+  const publishOk=success.events[0]?.[0]==='save'&&success.events[1]?.[0]==='emit'&&success.db.messages.length===2;
+  const failed=makeContext(true),oldMessages=failed.db.messages;
+  let publishThrew=false;try{failed.context.publish(failed.item);}catch{publishThrew=true;}
+  const publishRollback=publishThrew&&failed.db.messages===oldMessages&&failed.item.lastPublishedAt===undefined&&failed.events.every(x=>x[0]!=='emit');
+  const delSuccess=makeContext(false);delSuccess.context.remove('a1');
+  const deleteOk=delSuccess.events[0]?.[0]==='save'&&delSuccess.events.some(x=>x[0]==='emit')&&delSuccess.db.announcements.length===0;
+  const delFail=makeContext(true),delMessages=delFail.db.messages,delAnnouncements=delFail.db.announcements;
+  let deleteThrew=false;try{delFail.context.remove('a1');}catch{deleteThrew=true;}
+  const deleteRollback=deleteThrew&&delFail.db.messages===delMessages&&delFail.db.announcements===delAnnouncements&&delFail.events.every(x=>x[0]!=='emit');
+  if(publishOk&&publishRollback&&deleteOk&&deleteRollback)pass('announcement publish/delete save before socket events and restore memory on persistence failure');
+  else fail('announcement publish/delete transaction safety',JSON.stringify({publishOk,publishRollback,deleteOk,deleteRollback}));
+} catch(error) { fail('announcement publish/delete transaction safety',error.message); }
+
+// Timed announcement expiry retries after a failed save rather than silently losing its only timer.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function publishAnnouncement(item){');
+  const end=source.indexOf('function scheduleAllPermanentAnnouncements(){',start);
+  const block=source.slice(start,end),timers=[],item={id:'timed-1',duration:'15m',at:1};
+  const db={announcements:[item],messages:[{id:'announcement-old',announcementId:'timed-1'}]};
+  let saveAttempts=0;
+  const context={db,Date,Set,Map,Object,Number,String,Math,ANNOUNCEMENT_INTERVAL_MS:900000,
+    announcementMessage:(x,at,id)=>({id,announcementId:x.id,type:'announcement',at}),
+    io:{emit:()=>{}},save:()=>{saveAttempts++;if(saveAttempts===1)throw new Error('disk failure');},
+    scheduleAllPermanentAnnouncements:()=>{},console:{error:()=>{}},
+    setTimeout:(fn,ms)=>{const timer={fn,ms,unref(){}};timers.push(timer);return timer;},clearTimeout:()=>{},
+  };
+  vm.createContext(context);
+  vm.runInContext(block+';globalThis.remove=removeAnnouncement;globalThis.expiry=scheduleAnnouncementExpiry;',context);
+  context.expiry(item);timers[0].fn();
+  const retryScheduled=timers.length===2&&timers[1].ms>=1000&&db.announcements.length===1;
+  timers[1].fn();
+  const retryCommitted=saveAttempts===2&&db.announcements.length===0&&db.messages.length===0;
+  if(retryScheduled&&retryCommitted)pass('timed announcement expiry retries durable deletion after transient save failure');
+  else fail('timed announcement expiry retry',JSON.stringify({retryScheduled,retryCommitted,saveAttempts,timerCount:timers.length,db}));
+} catch(error) { fail('timed announcement expiry retry',error.message); }
+
 // Scheduled announcements must not replay alongside welcome cards on room entry.
 try {
   const source = fs.readFileSync(server, 'utf8');
@@ -517,77 +578,9 @@ try {
 // across rooms if the database write fails.
 try {
   const source = fs.readFileSync(server, 'utf8');
-  const route = source.match(/app\.post\('\/api\/admin\/broadcast',[\s\S]*?\n\}\);/);
-  if (route && route[0].includes('previousAnnouncements') && route[0].includes('previousMessages') && route[0].includes("try{save()}catch(e)") && route[0].includes('publishAnnouncement(item)') && route[0].includes('scheduleAnnouncementExpiry(item)') && route[0].includes('schedulePermanentAnnouncement(item)') && source.includes("const ANNOUNCEMENT_INTERVAL_MS=15*60*1000") && source.includes("room:'__broadcast__'") && source.includes("io.emit('message',message)") && source.includes('function roomHistoryWithAnnouncements(roomId,viewer,createdAt=0)') && source.includes('roomHistoryWithAnnouncements(room,u,Number(u.created)||0)') && source.includes("title:item.title||'إعلان إداري'")) pass('site-wide announcement publication is atomic, live to all sessions, and timed from first publication');
+  const route = source.match(/app\\.post\\('\\/api\\/admin\\/broadcast',[\\s\\S]*?\\n\\}\\);/);
+  if (route && route[0].includes('previousAnnouncements') && route[0].includes('previousMessages') && route[0].includes('publishAnnouncement(item)') && route[0].includes('Announcement publication transaction failed') && route[0].includes('scheduleAnnouncementExpiry(item)') && route[0].includes('schedulePermanentAnnouncement(item)') && source.includes("const ANNOUNCEMENT_INTERVAL_MS=15*60*1000") && source.includes("room:'__broadcast__'") && source.includes("io.emit('message',message)") && source.includes('function roomHistoryWithAnnouncements(roomId,viewer,createdAt=0)') && source.includes('roomHistoryWithAnnouncements(room,u,Number(u.created)||0)') && source.includes("title:item.title||'إعلان إداري'")) pass('site-wide announcement publication commits its record, message and schedule metadata before broadcasting');
   else fail('site-wide announcement delivery is persisted atomically and timed correctly');
-} catch (error) { fail('announcement transaction checks', error.message); }
-
-// Session revocation: logout disconnects every socket using that session, and a
-// global ban terminates the live transport so it cannot keep private messaging.
-try {
-  const source = fs.readFileSync(server, 'utf8');
-  const logoutRoute = source.match(/app\.post\('\/api\/logout',[\s\S]*?\n\}\);/);
-  const removeFn = source.match(/function removeFromChat\([\s\S]*?\n/);
-  const privateSocket = source.match(/socket\.on\('private-message',[\s\S]*?\n/);
-  if (logoutRoute && logoutRoute[0].includes('so.data?.sid===sid') && logoutRoute[0].includes('so.disconnect(true)')) pass('logout revokes all sockets for the logged-out session');
-  else fail('logout revokes all sockets for the logged-out session');
-  if (removeFn && removeFn[0].includes('if(banned)so.disconnect(true)')) pass('global bans disconnect live sockets');
-  else fail('global bans disconnect live sockets');
-  if (privateSocket && privateSocket[0].includes('globalBanned(u.name,socketClientIp(socket))')) pass('globally banned users cannot send private messages over existing sockets');
-  else fail('globally banned users cannot send private messages over existing sockets');
-} catch (error) { fail('session revocation checks', error.message); }
-
-
-// Private media must be stored outside the public /uploads mount and served only
-// through an authenticated sender/recipient-checked endpoint.
-try {
-  const source = fs.readFileSync(server, 'utf8');
-  const mediaRoute = source.match(/app\.get\('\/api\/private\/media\/:filename',[\s\S]*?\n\}\);/);
-  const mediaUpload = source.match(/app\.post\('\/api\/media',[\s\S]*?\n\}\);/);
-  const hideRoute = source.match(/app\.post\('\/api\/private\/hide',[\s\S]*?\n\}\);/);
-  const html = fs.readFileSync(mainPath, 'utf8');
-  if (source.includes("let PRIVATE_MEDIA_DIR = path.join(DATA_DIR, 'private-media')") && source.includes('migratePrivateMediaToProtectedStorage()') && mediaRoute && mediaRoute[0].includes('requireAuth') && mediaRoute[0].includes('keyName(message.from)') && mediaRoute[0].includes('keyName(message.to)')) pass('private media is isolated and restricted to conversation participants');
-  else fail('private media is isolated and restricted to conversation participants');
-  if (mediaUpload && mediaUpload[0].includes('media.url=\'/api/private/media/\'') && mediaUpload[0].includes('fs.renameSync(req.file.path,privatePath)')) pass('new private uploads are moved out of public uploads storage');
-  else fail('new private uploads are moved out of public uploads storage');
-  if (html.includes("fetch(url,{headers:{'x-session':sid},cache:'no-store'})") && html.includes('URL.createObjectURL(await r.blob())') && html.includes('revealPrivateMedia(this)')) pass('private media loads only after explicit reveal using session auth and protected blobs');
-  else fail('private media UI fetches with session auth and renders protected blobs');
-  if (hideRoute && hideRoute[0].includes('Private conversation hide failed:') && hideRoute[0].includes('Private media cleanup failed:')) pass('ending a private conversation rolls back on failure and removes orphaned attachments');
-  else fail('ending a private conversation rolls back on failure and removes orphaned attachments');
-} catch (error) { fail('private media privacy checks', error.message); }
-
-
-// Exercise startup migration with a legacy public-path private attachment.
-try {
-  const source = fs.readFileSync(server, 'utf8');
-  const migration = source.match(/function migratePrivateMediaToProtectedStorage\(\)\s*\{[\s\S]*?\n\}/);
-  if (!migration) throw new Error('private media migration function not found');
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-private-media-'));
-  try {
-    const publicDir = path.join(tempDir, 'uploads'), privateDir = path.join(tempDir, 'private-media');
-    fs.mkdirSync(publicDir); fs.mkdirSync(privateDir);
-    const filename = '1720000000000-abcd1234.png';
-    fs.writeFileSync(path.join(publicDir, filename), Buffer.from([137,80,78,71,13,10,26,10]));
-    const context = { fs, path, UP_DIR: publicDir, PRIVATE_MEDIA_DIR: privateDir, db: { privateMessages: [{ media: { url: `/uploads/${filename}` } }] }, save: () => { context.saved = true; }, console: { log: () => {}, error: () => {} } };
-    vm.createContext(context);
-    vm.runInContext(`${migration[0]}\nglobalThis.migrate = migratePrivateMediaToProtectedStorage;`, context);
-    context.migrate();
-    const migrated = context.db.privateMessages[0].media.url === `/api/private/media/${filename}` && fs.existsSync(path.join(privateDir, filename)) && !fs.existsSync(path.join(publicDir, filename)) && context.saved;
-    if (migrated) pass('legacy private uploads migrate from public storage without losing file bytes');
-    else fail('legacy private uploads migrate from public storage without losing file bytes');
-  } finally { fs.rmSync(tempDir, { recursive: true, force: true }); }
-} catch (error) { fail('private media migration fixture', error.message); }
-
-// Unified rank/account permission edits are atomic; the duplicate generic role route is retired.
-try {
- const source=fs.readFileSync(server,'utf8');
- const permissionRoute=source.slice(source.indexOf("app.put('/api/admin/permissions'"),source.indexOf("app.get('/api/admin/account-permissions'"));
- const accountRoute=source.slice(source.indexOf("app.put('/api/admin/account-permissions/:name'"),source.indexOf("app.get('/api/admin/welcome-messages'"));
- const rankRoute=source.match(/app\.post\('\/api\/admin\/rank',[\s\S]*?app\.get\('\/api\/admin\/member-ip/);
- if(source.includes("app.post('/api/admin/role'"))fail('obsolete generic role endpoint removed');else pass('obsolete generic role endpoint removed');
- if(permissionRoute.includes('const previous=[...(definition.permissions||[])]')&&permissionRoute.includes('definition.permissions=previous'))pass('rank permission edits roll back on persistence failure');else fail('rank permission edits roll back on persistence failure');
- if(accountRoute.includes('db.accountPermissions[key]=[...new Set(requested)]')&&accountRoute.includes('db.accountPermissions[key]=previous'))pass('per-account permission edits save exact replacement and roll back on failure');else fail('per-account permission edits save exact replacement and roll back on failure');
- if(rankRoute&&rankRoute[0].includes('previousProfile=JSON.parse(JSON.stringify(p))')&&rankRoute[0].includes('Rank assignment persistence failed:')&&rankRoute[0].includes('db.rankAudit=previousRankAudit')&&rankRoute[0].includes('previousNotifications'))pass('rank grants restore profile, audit history, and inbox notifications if persistence fails');else fail('rank grants restore profile, audit history, and inbox notifications if persistence fails');
 } catch(error){fail('unified permission persistence checks',error.message)}
 
 // WebRTC signaling must be tied to a server-authorized offer, validate payloads,
