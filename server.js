@@ -555,6 +555,58 @@ function scheduleSessionDisconnectCleanup(sid,user){
   },SESSION_DISCONNECT_GRACE_MS);
   timer.unref?.();sessionDisconnectTimers.set(sid,timer);
 }
+const startupSessionDatabase=db;
+const startupSessionEntries=[...sessions.entries()];
+function cleanupOrphanedStartupSessions(){
+  if(db!==startupSessionDatabase)return;
+  const candidates=startupSessionEntries.filter(([sid,user])=>sessions.get(sid)===user&&!socketUsers.has(sid)&&!sessionDisconnectTimers.has(sid));
+  if(!candidates.length)return;
+  const removedSessions=[];
+  const guestSnapshots=new Map();
+  for(const [sid,user] of candidates){
+    const hadDbSession=Object.prototype.hasOwnProperty.call(db.sessions||{},sid);
+    const dbSession=db.sessions?.[sid];
+    sessions.delete(sid);
+    if(db.sessions)delete db.sessions[sid];
+    removedSessions.push({sid,user,hadDbSession,dbSession});
+    if(user.type==='guest'&&!hasConnectedSessionForUser(user.name)&&!guestSnapshots.has(user.name)){
+      const name=user.name,guestKey=keyName(name);
+      guestSnapshots.set(name,{
+        guestHad:Object.prototype.hasOwnProperty.call(db.guests||{},name),
+        guest:db.guests?.[name],
+        profileHad:Object.prototype.hasOwnProperty.call(db.profiles||{},name),
+        profile:db.profiles?.[name],
+        wallReadHad:Object.prototype.hasOwnProperty.call(db.wallReadAt||{},guestKey),
+        wallRead:db.wallReadAt?.[guestKey]
+      });
+      if(db.guests)delete db.guests[name];
+      if(db.profiles)delete db.profiles[name];
+      if(db.wallReadAt)delete db.wallReadAt[guestKey];
+    }
+  }
+  try{save();}catch(error){
+    for(const item of removedSessions){
+      sessions.set(item.sid,item.user);
+      if(item.hadDbSession){db.sessions=db.sessions||{};db.sessions[item.sid]=item.dbSession;}
+    }
+    for(const [name,snapshot] of guestSnapshots){
+      if(snapshot.guestHad){db.guests=db.guests||{};db.guests[name]=snapshot.guest;}
+      if(snapshot.profileHad){db.profiles=db.profiles||{};db.profiles[name]=snapshot.profile;}
+      const guestKey=keyName(name);
+      if(snapshot.wallReadHad){db.wallReadAt=db.wallReadAt||{};db.wallReadAt[guestKey]=snapshot.wallRead;}
+    }
+    console.error('Startup disconnected-session cleanup failed:',error.message);
+    const retry=setTimeout(cleanupOrphanedStartupSessions,30000);
+    retry.unref?.();
+    return;
+  }
+  for(const {sid} of removedSessions)clearSessionTransientState(sid);
+  console.log('Startup cleanup removed '+removedSessions.length+' orphaned session(s) after reconnect grace.');
+  emitState();
+}
+const startupSessionCleanupTimer=setTimeout(cleanupOrphanedStartupSessions,SESSION_DISCONNECT_GRACE_MS);
+startupSessionCleanupTimer.unref?.();
+
 function clearPrivateConversationForUser(name){
   const userKey=keyName(name);if(!userKey||hasConnectedSessionForUser(name))return;
   const removed=(db.privateMessages||[]).filter(message=>keyName(message.from)===userKey||keyName(message.to)===userKey);

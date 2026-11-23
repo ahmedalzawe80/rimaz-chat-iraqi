@@ -1544,3 +1544,59 @@ try {
   if(ok)pass('private playback ticket cache reuses valid tokens, expires stale entries, and enforces 32/account + 4096/global caps');
   else fail('private playback ticket cache bounds',JSON.stringify({first:!!first.token,reused:reused.token===first.token,accountLimitPassed,accountLimit:accountLimit.error,globalLimitPassed,globalLimit:globalLimit.error,afterExpiry:!!afterExpiry.token,size:globalMap.size}));
 } catch(error) { fail('private playback ticket cache bounds',error.message); }
+
+
+// Startup recovery: persisted sessions from a prior process receive the reconnect grace,
+// then are removed in one durable batch unless a socket reconnects or a disconnect timer owns them.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('const startupSessionDatabase=db;');
+  const end=source.indexOf('function clearPrivateConversationForUser(name){',start);
+  if(start<0||end<0)throw new Error('startup session cleanup block was not found');
+  const block=source.slice(start,end);
+  const stale={name:'stale-guest',type:'guest'};
+  const active={name:'active-member',type:'member'};
+  const pending={name:'pending-member',type:'member'};
+  const sessions=new Map([['stale',stale],['active',active],['pending',pending]]);
+  const db={sessions:{stale,active,pending},guests:{'stale-guest':{name:'stale-guest'}},profiles:{'stale-guest':{status:'guest'}},wallReadAt:{'stale-guest':7}};
+  const socketUsers=new Map([['active',{name:'active-member'}]]);
+  const sessionDisconnectTimers=new Map([['pending',{}]]);
+  const callbacks=[],cleared=[];
+  let saves=0,emits=0;
+  const context={db,sessions,socketUsers,sessionDisconnectTimers,SESSION_DISCONNECT_GRACE_MS:60000,
+    hasConnectedSessionForUser:name=>[...socketUsers.values()].some(x=>x.name===name),
+    save:()=>{saves++;},clearSessionTransientState:sid=>cleared.push(sid),emitState:()=>{emits++;},
+    keyName:x=>String(x||'').toLowerCase(),console:{log(){},error(){}},
+    setTimeout:(fn,ms)=>{callbacks.push({fn,ms});return {unref(){}};}
+  };
+  vm.createContext(context);
+  vm.runInContext(block+';globalThis.runStartupCleanup=cleanupOrphanedStartupSessions;',context);
+  const grace=callbacks[0]?.ms===60000;
+  callbacks[0]?.fn();
+  const ok=grace&&!sessions.has('stale')&&sessions.has('active')&&sessions.has('pending')&&!Object.hasOwn(db.sessions,'stale')&&Object.hasOwn(db.sessions,'active')&&Object.hasOwn(db.sessions,'pending')&&!db.guests['stale-guest']&&!db.profiles['stale-guest']&&!Object.hasOwn(db.wallReadAt,'stale-guest')&&saves===1&&emits===1&&cleared.length===1&&cleared[0]==='stale';
+  if(ok)pass('startup removes orphaned persisted sessions after 60s in one save while preserving reconnected and already-disconnecting sessions');
+  else fail('startup orphaned-session cleanup',JSON.stringify({grace,sessionKeys:[...sessions.keys()],dbSessionKeys:Object.keys(db.sessions),guest:!!db.guests['stale-guest'],wallReadAt:db.wallReadAt,saves,emits,cleared}));
+} catch(error) { fail('startup orphaned-session cleanup',error.message); }
+
+// A failed batch save must restore session and guest state and schedule a bounded retry.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('const startupSessionDatabase=db;');
+  const end=source.indexOf('function clearPrivateConversationForUser(name){',start);
+  const block=source.slice(start,end);
+  const guest={name:'rollback-guest',type:'guest'};
+  const sessions=new Map([['guest-session',guest]]);
+  const db={sessions:{'guest-session':guest},guests:{'rollback-guest':{name:'rollback-guest'}},profiles:{'rollback-guest':{status:'guest'}},wallReadAt:{'rollback-guest':3}};
+  const callbacks=[];
+  const context={db,sessions,socketUsers:new Map(),sessionDisconnectTimers:new Map(),SESSION_DISCONNECT_GRACE_MS:60000,
+    hasConnectedSessionForUser:()=>false,save:()=>{throw new Error('simulated disk failure');},
+    clearSessionTransientState:()=>{},emitState:()=>{},keyName:x=>String(x||'').toLowerCase(),
+    console:{log(){},error(){}},setTimeout:(fn,ms)=>{callbacks.push({fn,ms});return {unref(){}};}
+  };
+  vm.createContext(context);
+  vm.runInContext(block+';globalThis.runStartupCleanup=cleanupOrphanedStartupSessions;',context);
+  callbacks[0]?.fn();
+  const ok=sessions.get('guest-session')===guest&&db.sessions['guest-session']===guest&&!!db.guests['rollback-guest']&&!!db.profiles['rollback-guest']&&db.wallReadAt['rollback-guest']===3&&callbacks.length===2&&callbacks[1].ms===30000;
+  if(ok)pass('startup orphaned-session cleanup rolls back atomically and retries after a save failure');
+  else fail('startup orphaned-session rollback',JSON.stringify({session:!!sessions.get('guest-session'),dbSession:!!db.sessions['guest-session'],guest:!!db.guests['rollback-guest'],profile:!!db.profiles['rollback-guest'],wallReadAt:db.wallReadAt,callbacks:callbacks.map(x=>x.ms)}));
+} catch(error) { fail('startup orphaned-session rollback',error.message); }
