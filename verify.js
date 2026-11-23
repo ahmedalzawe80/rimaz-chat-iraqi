@@ -311,6 +311,29 @@ try {
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('room moderation and chat state transaction checks',error.message); }
 
+
+// Likes, gifts, profile settings, and wall administration commit before notifying clients.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const likeStart=source.indexOf("app.post('/api/like'");
+  const grantStart=source.indexOf("app.post('/api/admin/grant-like'");
+  const resetStart=source.indexOf("app.post('/api/admin/reset-likes'");
+  const giftStart=source.indexOf("app.post('/api/admin/gift'");
+  const giftDeleteStart=source.indexOf("app.post('/api/admin/gift/delete'");
+  const wallStart=source.indexOf("app.post('/api/admin/wall/control'");
+  const profileStart=source.indexOf("app.post('/api/profile',requireAuth");
+  const avatarStart=source.indexOf("app.post('/api/profile/avatar'");
+  const like=source.slice(likeStart,grantStart),grant=source.slice(grantStart,resetStart),reset=source.slice(resetStart,giftStart),gift=source.slice(giftStart,giftDeleteStart),giftDelete=source.slice(giftDeleteStart,source.indexOf('\nfunction countGifImageFrames',giftDeleteStart)),wall=source.slice(wallStart,source.indexOf("\napp.post('/api/notify'",wallStart)),profile=source.slice(profileStart,avatarStart);
+  const checks=[
+    ['member likes restore both the count and rate-limit timestamp when saving fails',like.includes('previousLastLike=last,previousLikes=')&&like.includes("console.error('Like save failed:'")&&like.indexOf('try{save();}')<like.indexOf('io.emit(\'likes-changed\'')],
+    ['admin like grants and resets restore the previous count when saving fails',grant.includes('catch(error){target.likes=previous')&&reset.includes('catch(error){target.likes=previous')],
+    ['sending and deleting gifts restore the prior gift/VIP state when saving fails',gift.includes('previousGifts=p.gifts')&&gift.includes("console.error('Admin gift send save failed:'")&&giftDelete.includes('catch(saveError){p.gifts=previousGifts')],
+    ['wall stop/restart/clear/delete restore previous state when saving fails',wall.includes('db.wallEnabled=previous')&&wall.includes('db.wall=previous')&&wall.includes('تعذر حفظ حالة الحائط')],
+    ['member profile settings validate before mutation and restore the profile on save failure',profile.includes('const u=req.user,p=profile(u.name),updates={}')&&profile.indexOf('const previous={...p};Object.assign(p,updates)')>profile.indexOf('if(req.body.displayName!==undefined)')&&profile.includes('catch(error){for(const key of Object.keys(p))delete p[key];Object.assign(p,previous)')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('likes gifts profile and wall transaction checks',error.message); }
+
 // Announcement publication/deletion must persist before emitting, and roll back on disk failure.
 try {
   const source=fs.readFileSync(server,'utf8');
