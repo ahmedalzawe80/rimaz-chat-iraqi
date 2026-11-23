@@ -11,7 +11,7 @@ data.json
 data/
 uploads/
 private-media/
-restore-temp/
+.restore-tmp/
 *.tmp
 *.corrupt-*
 *.pre-restore-*
