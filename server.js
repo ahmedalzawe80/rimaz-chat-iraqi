@@ -677,32 +677,44 @@ const startupSessionCleanupTimer=setTimeout(cleanupOrphanedStartupSessions,SESSI
 startupSessionCleanupTimer.unref?.();
 
 function clearPrivateConversationForUser(name){
-  const userKey=keyName(name);if(!userKey||hasConnectedSessionForUser(name))return;
+  const userKey=keyName(name);if(!userKey||hasConnectedSessionForUser(name))return true;
   const removed=(db.privateMessages||[]).filter(message=>keyName(message.from)===userKey||keyName(message.to)===userKey);
-  if(!removed.length)return;
-  db.privateMessages=(db.privateMessages||[]).filter(message=>keyName(message.from)!==userKey&&keyName(message.to)!==userKey);
+  if(!removed.length)return true;
+  const previousMessages=db.privateMessages,previousRead=db.privateRead,previousHidden=db.privateHidden,previousNotifications=db.notifications;
   const peers=new Set();
-  for(const message of removed){
-    const peer=keyName(message.from)===userKey?message.to:message.from;if(peer)peers.add(peer);
-    const url=String(message?.media?.url||'');const prefix='/api/private/media/';
-    if(url.startsWith(prefix)){const filename=url.slice(prefix.length);if(/^[a-zA-Z0-9._-]{1,180}$/.test(filename)){const stillUsed=db.privateMessages.some(item=>item?.media?.url===url);if(!stillUsed){try{fs.unlinkSync(path.join(PRIVATE_MEDIA_DIR,filename));}catch(error){if(error.code!=='ENOENT')console.warn('Private media cleanup failed:',error.message);}}}}
-  }
+  for(const message of removed){const peer=keyName(message.from)===userKey?keyName(message.to):keyName(message.from);if(peer)peers.add(peer);}
+  const nextMessages=(db.privateMessages||[]).filter(message=>keyName(message.from)!==userKey&&keyName(message.to)!==userKey);
+  const readRoot={...(db.privateRead||{})},hiddenRoot={...(db.privateHidden||{})},notificationRoot={...(db.notifications||{})};
   for(const peer of peers){
-    if(db.privateRead?.[userKey])delete db.privateRead[userKey][keyName(peer)];
-    if(db.privateRead?.[keyName(peer)])delete db.privateRead[keyName(peer)][userKey];
-    if(db.privateHidden?.[userKey])db.privateHidden[userKey]=db.privateHidden[userKey].filter(item=>keyName(item)!==keyName(peer));
-    if(db.privateHidden?.[keyName(peer)])db.privateHidden[keyName(peer)]=db.privateHidden[keyName(peer)].filter(item=>keyName(item)!==userKey);
-    emitToUser(peer,'private-conversation-ended',{with:name});
+    if(readRoot[userKey]){readRoot[userKey]={...readRoot[userKey]};delete readRoot[userKey][peer];}
+    if(readRoot[peer]){readRoot[peer]={...readRoot[peer]};delete readRoot[peer][userKey];}
+    if(hiddenRoot[userKey])hiddenRoot[userKey]=hiddenRoot[userKey].filter(item=>keyName(item)!==peer);
+    if(hiddenRoot[peer])hiddenRoot[peer]=hiddenRoot[peer].filter(item=>keyName(item)!==userKey);
   }
-  for(const [owner,items] of Object.entries(db.notifications||{})){
-    if(Array.isArray(items))db.notifications[owner]=items.filter(item=>!(String(item?.type||'').startsWith('private')&&(keyName(item.from)===userKey||peers.has(keyName(item.from)))));
+  for(const [owner,items] of Object.entries(notificationRoot))if(Array.isArray(items))notificationRoot[owner]=items.filter(item=>!(String(item?.type||'').startsWith('private')&&(keyName(item.from)===userKey||peers.has(keyName(item.from)))));
+  db.privateMessages=nextMessages;db.privateRead=readRoot;db.privateHidden=hiddenRoot;db.notifications=notificationRoot;
+  try{save();}catch(error){
+    if(previousMessages===undefined)delete db.privateMessages;else db.privateMessages=previousMessages;
+    if(previousRead===undefined)delete db.privateRead;else db.privateRead=previousRead;
+    if(previousHidden===undefined)delete db.privateHidden;else db.privateHidden=previousHidden;
+    if(previousNotifications===undefined)delete db.notifications;else db.notifications=previousNotifications;
+    console.error('Transient private conversation cleanup save failed; retrying:',error.message);
+    return false;
   }
-  try{save();}catch(error){console.error('Transient private conversation cleanup save failed:',error.message);}
+  for(const message of removed){
+    const url=String(message?.media?.url||''),prefix='/api/private/media/';
+    if(!url.startsWith(prefix))continue;
+    const filename=url.slice(prefix.length);
+    if(!/^[a-zA-Z0-9._-]{1,180}$/.test(filename))continue;
+    if(!nextMessages.some(item=>item?.media?.url===url)){try{fs.unlinkSync(path.join(PRIVATE_MEDIA_DIR,filename));}catch(error){if(error.code!=='ENOENT')console.warn('Private media cleanup failed:',error.message);}}
+  }
+  for(const peer of peers)emitToUser(peer,'private-conversation-ended',{with:name});
+  return true;
 }
 function schedulePrivateConversationCleanup(name,delay=PRIVATE_DISCONNECT_GRACE_MS){
   const key=keyName(name);if(!key||hasConnectedSessionForUser(name))return;
   const old=privateDisconnectTimers.get(key);if(old)clearTimeout(old);
-  const timer=setTimeout(()=>{privateDisconnectTimers.delete(key);clearPrivateConversationForUser(name);},delay);
+  const timer=setTimeout(()=>{privateDisconnectTimers.delete(key);if(!clearPrivateConversationForUser(name)&&!hasConnectedSessionForUser(name))schedulePrivateConversationCleanup(name,60000);},delay);
   timer.unref?.();privateDisconnectTimers.set(key,timer);
 }
 function cancelPrivateConversationCleanup(name){const key=keyName(name),timer=privateDisconnectTimers.get(key);if(timer){clearTimeout(timer);privateDisconnectTimers.delete(key);}}
