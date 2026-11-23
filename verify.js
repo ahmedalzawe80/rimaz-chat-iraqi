@@ -366,6 +366,7 @@ try {
     ["app.delete('/api/admin/rank-art/:id'", "// Chat/rank banners"],
     ["app.post('/api/admin/chat-banners/:rank'", "app.put('/api/admin/member-decoration'"],
     ["app.delete('/api/admin/ads/:id'", "app.get('/api/public/ads'"],
+    ["app.post('/api/admin/gifts/catalog/delete'", "app.post('/api/admin/gift-vip'"],
     ["app.post('/api/admin/room/:id/image'", "app.post('/api/rooms/:id/image'"],
     ["app.post('/api/rooms/:id/image'", "function clearRoomImage"],
     ["function clearRoomImage", "app.delete('/api/admin/room/:id/image'"],
@@ -375,8 +376,10 @@ try {
     ["app.delete('/api/profile/banner'", "app.post('/api/media'"]
   ];
   const missing=routes.filter(([start,end])=>{const a=source.indexOf(start),b=source.indexOf(end,a);return a<0||b<0||!source.slice(a,b).includes('removePublicUploadIfUnreferenced(');});
+  const chatBannerDeleteStart=source.indexOf("app.delete('/api/admin/chat-banners/:rank'");
+  const chatBannerDelete=source.slice(chatBannerDeleteStart,source.indexOf("\n\napp.put('/api/admin/member-decoration'",chatBannerDeleteStart));
   const helper=source.slice(source.indexOf('function removePublicUploadIfUnreferenced('),source.indexOf('\n}',source.indexOf('function removePublicUploadIfUnreferenced('))+2);
-  const ok=missing.length===0&&helper.includes("url.startsWith('/uploads/')")&&helper.includes('containsStoredUrl(db,url)')&&helper.includes('path.basename');
+  const ok=missing.length===0&&chatBannerDelete.includes('removePublicUploadIfUnreferenced(previous.url)')&&helper.includes("url.startsWith('/uploads/')")&&helper.includes('containsStoredUrl(db,value)')&&helper.includes('path.basename');
   if(ok)pass('media replacement/deletion uses reference-aware upload cleanup and protects shared files');
   else fail('reference-aware upload cleanup',JSON.stringify({missing,helper}));
 } catch(error) { fail('reference-aware upload cleanup checks',error.message); }
