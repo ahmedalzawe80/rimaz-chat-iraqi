@@ -11,7 +11,7 @@ This review inspected the checked-in server.js and its resource lifecycles. It d
 The authenticated media-ticket route created a new random 15-minute ticket for every valid request. Expired entries were swept every five minutes and during requests, but there was no global or per-account maximum. Repeated requests could therefore grow the in-memory Map for the ticket lifetime.
 
 The change:
-- Reuses an unexpired ticket for the same account and exact filename.
+- Reuses an unexpired ticket for the same account and exact filename, refreshing its 15-minute idle expiry.
 - Limits each account to 32 active tickets.
 - Limits the process-wide cache to 4,096 active tickets.
 - Returns HTTP 429 for the per-account limit and HTTP 503 for global capacity.

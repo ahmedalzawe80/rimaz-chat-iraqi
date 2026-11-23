@@ -497,7 +497,7 @@ function createPrivateMediaPlaybackTicket(filename,account,now=Date.now()){
     if(ticket.expiresAt<=now){privateMediaPlaybackTickets.delete(token);continue;}
     if(ticket.account===account){
       accountTicketCount++;
-      if(ticket.filename===filename)return {token,ticket,reused:true};
+      if(ticket.filename===filename){ticket.expiresAt=now+15*60*1000;return {token,ticket,reused:true};}
     }
   }
   if(accountTicketCount>=MAX_PRIVATE_MEDIA_TICKETS_PER_ACCOUNT)return {error:'account-limit'};

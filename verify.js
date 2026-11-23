@@ -1540,7 +1540,7 @@ try {
   while(globalMap.size<4096){const result=context.issueTicket('asset-'+fillIndex+'.mp4','account-'+fillIndex,2000);if(result.error){globalLimitPassed=false;break;}fillIndex++;}
   const globalLimit=context.issueTicket('last.mp4','another-account',2000);
   const afterExpiry=context.issueTicket('fresh.mp4','member-a',1000000);
-  const ok=!!first.token&&reused.token===first.token&&reused.reused===true&&accountLimitPassed&&accountLimit.error==='account-limit'&&globalLimitPassed&&globalLimit.error==='global-limit'&&afterExpiry.token&&globalMap.size===1;
+  const ok=!!first.token&&reused.token===first.token&&reused.reused===true&&reused.ticket.expiresAt===902000&&accountLimitPassed&&accountLimit.error==='account-limit'&&globalLimitPassed&&globalLimit.error==='global-limit'&&afterExpiry.token&&globalMap.size===1;
   if(ok)pass('private playback ticket cache reuses valid tokens, expires stale entries, and enforces 32/account + 4096/global caps');
   else fail('private playback ticket cache bounds',JSON.stringify({first:!!first.token,reused:reused.token===first.token,accountLimitPassed,accountLimit:accountLimit.error,globalLimitPassed,globalLimit:globalLimit.error,afterExpiry:!!afterExpiry.token,size:globalMap.size}));
 } catch(error) { fail('private playback ticket cache bounds',error.message); }
