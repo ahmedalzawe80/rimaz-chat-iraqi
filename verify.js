@@ -426,6 +426,30 @@ try {
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('admin route permission and audit tests',error.message); }
 
+
+// Subscription, ad-campaign, and site-module administration must commit as one state change.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const auditFn=source.match(/function subscriptionAudit\([\s\S]*?\n\}/)?.[0]||'';
+  const plansStart=source.indexOf("app.post('/api/admin/subscriptions/plans'");
+  const deletePlanStart=source.indexOf("app.delete('/api/admin/subscriptions/plans/:id'");
+  const assignStart=source.indexOf("app.post('/api/admin/subscriptions/assign'");
+  const cancelStart=source.indexOf("app.post('/api/admin/subscriptions/cancel'");
+  const adsStart=source.indexOf("app.post('/api/admin/ads'");
+  const adsPatchStart=source.indexOf("app.patch('/api/admin/ads/:id'");
+  const adsDeleteStart=source.indexOf("app.delete('/api/admin/ads/:id'");
+  const controlStart=source.indexOf("app.put('/api/admin/control-center'");
+  const plans=source.slice(plansStart,deletePlanStart),deletePlan=source.slice(deletePlanStart,assignStart),assign=source.slice(assignStart,cancelStart),cancel=source.slice(cancelStart,adsStart),adsCreate=source.slice(adsStart,adsPatchStart),adsPatch=source.slice(adsPatchStart,adsDeleteStart),adsDelete=source.slice(adsDeleteStart,source.indexOf("\napp.get('/api/public/ads'",adsDeleteStart)),control=source.slice(controlStart,source.indexOf("\n\n// Existing site settings",controlStart));
+  const checks=[
+    ['subscription audit entries are immutable so failed business writes can restore the prior audit history',auditFn.includes('const previous=db.adminAuditLogs')&&auditFn.includes('db.adminAuditLogs=[{id:crypto.randomUUID()')&&auditFn.includes('...(Array.isArray(previous)?previous:[])')],
+    ['subscription plan create/delete restore both plans and audit logs on failed save',plans.includes('previousPlans=db.subscriptionPlans,previousAudit=db.adminAuditLogs')&&plans.includes('db.subscriptionPlans=previousPlans')&&deletePlan.includes('db.subscriptionPlans=previousPlans')&&deletePlan.includes('db.adminAuditLogs=previousAudit')],
+    ['subscription assign/cancel restore subscriptions, member profile and audit history',assign.includes('previousSubscriptions=db.subscriptions,previousAudit=db.adminAuditLogs')&&assign.includes('profileSnapshot=originalProfile?{...originalProfile}:null')&&assign.includes('db.subscriptions=previousSubscriptions')&&cancel.includes('db.subscriptions=previousSubscriptions')&&cancel.includes('db.adminAuditLogs=previousAudit')],
+    ['ad create/update/delete restore campaign and audit state on failed save',adsCreate.includes('previousCampaigns=db.adCampaigns,previousAudit=db.adminAuditLogs')&&adsCreate.includes('db.adCampaigns=previousCampaigns')&&adsPatch.includes('db.adCampaigns=previousCampaigns')&&adsDelete.includes('db.adCampaigns=previousCampaigns')&&adsDelete.includes('db.adminAuditLogs=previousAudit')],
+    ['control-center module changes restore the previous settings and audit state on failed save',control.includes('previousSettings=db.siteSettings,previousAudit=db.adminAuditLogs')&&control.includes('db.siteSettings=previousSettings')&&control.includes('db.adminAuditLogs=previousAudit')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('subscription and ad transaction checks',error.message); }
+
 // Announcement publication/deletion must persist before emitting, and roll back on disk failure.
 try {
   const source=fs.readFileSync(server,'utf8');
