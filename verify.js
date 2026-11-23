@@ -430,7 +430,7 @@ try {
 // Subscription, ad-campaign, and site-module administration must commit as one state change.
 try {
   const source=fs.readFileSync(server,'utf8');
-  const auditFn=source.match(/function subscriptionAudit\([\s\S]*?\n\}/)?.[0]||'';
+  const auditStart=source.indexOf('function subscriptionAudit('),auditEnd=source.indexOf("\napp.get('/api/admin/subscriptions'",auditStart),auditFn=source.slice(auditStart,auditEnd);
   const plansStart=source.indexOf("app.post('/api/admin/subscriptions/plans'");
   const deletePlanStart=source.indexOf("app.delete('/api/admin/subscriptions/plans/:id'");
   const assignStart=source.indexOf("app.post('/api/admin/subscriptions/assign'");
