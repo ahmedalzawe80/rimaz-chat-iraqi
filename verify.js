@@ -334,6 +334,29 @@ try {
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('likes gifts profile and wall transaction checks',error.message); }
 
+
+// Member-card moderation actions persist bans, mutes, likes, VIP and gifts before side effects.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf("app.post('/api/admin/member-action'");
+  const end=source.indexOf("\napp.post('/api/admin/broadcast'",start);
+  const route=source.slice(start,end);
+  const globalBan=route.slice(route.indexOf("if(action==='global-ban')"),route.indexOf("\n  const target="));
+  const grant=route.slice(route.indexOf("if(action==='grant-like')"),route.indexOf("if(action==='reset-likes')"));
+  const reset=route.slice(route.indexOf("if(action==='reset-likes')"),route.indexOf("if(action==='grant-vip')"));
+  const vip=route.slice(route.indexOf("if(action==='grant-vip')"),route.indexOf("if(action==='gift')"));
+  const gift=route.slice(route.indexOf("if(action==='gift')"),route.indexOf("if(action==='kick')"));
+  const ban=route.slice(route.indexOf("if(action==='ban')"),route.indexOf("if(action==='mute')"));
+  const mute=route.slice(route.indexOf("if(action==='mute')"));
+  const checks=[
+    ['global ban restores both name/IP ban maps and notifies only after save',globalBan.includes('previousGlobalBans=db.globalBans,previousGlobalIpBans=db.globalIpBans')&&globalBan.includes('catch(error){if(previousGlobalBans===undefined)delete db.globalBans')&&globalBan.indexOf('try{save();}')<globalBan.indexOf("emitToUser(n,'admin-action-notice'")],
+    ['member-card like and reset actions restore the old count after failed save',grant.includes('catch(error){target.likes=previous')&&reset.includes('catch(error){target.likes=previous')],
+    ['member-card VIP and gift actions restore VIP and gift fields after failed save',vip.includes('hadGifts=Object.prototype.hasOwnProperty.call(p,\'gifts\')')&&vip.includes('catch(error){if(hadVipUntil)p.vipUntil=previousVipUntil')&&gift.includes('catch(error){if(hadVipUntil)p.vipUntil=previousVipUntil')],
+    ['member-card room ban/mute restore room lists and notify only after save',ban.includes('catch(error){if(hadRoom)db.roomBans[room]=previousRoom')&&ban.indexOf('try{save();}')<ban.indexOf("emitToUser(n,'admin-action-notice'")&&mute.includes('catch(error){if(hadRoom)db.roomMutes[room]=previousRoom')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('member-card moderation transaction checks',error.message); }
+
 // Announcement publication/deletion must persist before emitting, and roll back on disk failure.
 try {
   const source=fs.readFileSync(server,'utf8');
