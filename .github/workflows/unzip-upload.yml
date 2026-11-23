@@ -1,5 +1,4 @@
-
-name: Clean Replace Project Upload
+name: Validate and Clean Replace Project Upload
 
 on:
   workflow_dispatch:
@@ -14,6 +13,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Extract and validate ZIP
         shell: bash
@@ -29,7 +30,6 @@ jobs:
           fi
 
           unzip -tq "$ARCHIVE"
-
           mkdir -p "$STAGING"
           unzip -q "$ARCHIVE" -d "$STAGING"
 
@@ -40,33 +40,50 @@ jobs:
             SOURCE="$STAGING"
             MATCHES=1
           else
-            while IFS= read -r file; do
+            while IFS= read -r -d '' file; do
               dir="$(dirname "$file")"
-
               if [ -f "$dir/server.js" ]; then
                 SOURCE="$dir"
                 MATCHES=$((MATCHES + 1))
               fi
-            done < <(find "$STAGING" -type f -name package.json)
+            done < <(find "$STAGING" -type f -name package.json -print0)
           fi
 
           if [ "$MATCHES" -ne 1 ]; then
-            echo "ERROR: Expected exactly one valid project root"
+            echo "ERROR: Expected exactly one valid project root; found $MATCHES"
             exit 1
           fi
 
-          echo "PROJECT_SOURCE=$SOURCE" >> "$GITHUB_ENV"
-          echo "Project validated successfully"
+          test -f "$SOURCE/package.json"
+          test -f "$SOURCE/server.js"
+          test -f "$SOURCE/index.html"
+          test -f "$SOURCE/public/index.html"
+          test -f "$SOURCE/verify.js"
 
-      - name: Clean and replace old files
+          echo "PROJECT_SOURCE=$SOURCE" >> "$GITHUB_ENV"
+          echo "Project root validated: $SOURCE"
+
+      - name: Run source checks before changing repository
         shell: bash
         run: |
           set -euo pipefail
+          cd "$PROJECT_SOURCE"
+          node --check server.js
+          node --check verify.js
+          node verify.js
 
-          if [ ! -f "$PROJECT_SOURCE/package.json" ] || [ ! -f "$PROJECT_SOURCE/server.js" ]; then
-            echo "ERROR: Project validation failed"
-            exit 1
-          fi
+      - name: Create rollback branch before replacement
+        shell: bash
+        run: |
+          set -euo pipefail
+          BACKUP_BRANCH="backups/pre-zip-sync-${GITHUB_RUN_ID}"
+          git push origin "HEAD:refs/heads/$BACKUP_BRANCH"
+          echo "Rollback branch created: $BACKUP_BRANCH"
+
+      - name: Replace application source while preserving runtime data
+        shell: bash
+        run: |
+          set -euo pipefail
 
           rsync -a --delete \
             --exclude='.git' \
@@ -74,11 +91,21 @@ jobs:
             --exclude='data.json' \
             --exclude='google1a84d9d1dec7b85d.html' \
             --exclude='rimaz-final-deep-audit-46.93.72.zip' \
+            --exclude='node_modules/' \
+            --exclude='data/' \
+            --exclude='uploads/' \
+            --exclude='private-media/' \
             "$PROJECT_SOURCE/" ./
 
-          echo "Project files replaced successfully"
+      - name: Verify synchronized repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check server.js
+          node --check verify.js
+          node verify.js
 
-      - name: Commit clean project
+      - name: Commit validated replacement
         shell: bash
         run: |
           set -euo pipefail
@@ -87,10 +114,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add -A
-
           if ! git diff --cached --quiet; then
-            git commit -m "Clean replace project from audited ZIP"
-            git push
+            git commit -m "Validated clean replace from audited ZIP"
+            git push origin HEAD:main
           else
             echo "No changes to commit"
           fi
