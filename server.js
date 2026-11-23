@@ -459,6 +459,12 @@ function cleanupExpiredPublicContent(now=Date.now()){
   const cutoff=now-PUBLIC_RETENTION_MS;
   const expiredMessageIds=[];
   const expiredMedia=[];
+  const previousMessagesValue=db.messages;
+  const previousWallValue=db.wall;
+  const previousWallLikesValue=db.wallLikes;
+  const previousWallCommentsValue=db.wallComments;
+  const previousWallLikesSnapshot=previousWallLikesValue&&typeof previousWallLikesValue==='object'&&!Array.isArray(previousWallLikesValue)?{...previousWallLikesValue}:previousWallLikesValue;
+  const previousWallCommentsSnapshot=previousWallCommentsValue&&typeof previousWallCommentsValue==='object'&&!Array.isArray(previousWallCommentsValue)?{...previousWallCommentsValue}:previousWallCommentsValue;
   const previousMessages=db.messages||[];
   db.messages=previousMessages.filter(message=>{
     const old=message?.room==='public'&&Number(message.at||0)>0&&Number(message.at)<cutoff&&message.type!=='announcement';
@@ -476,10 +482,17 @@ function cleanupExpiredPublicContent(now=Date.now()){
     if(store&&typeof store==='object'&&!Array.isArray(store))for(const id of expiredWallIds)delete store[id];
   }
   if(expiredMessageIds.length||expiredWallIds.size){
+    try{save();}catch(error){
+      if(previousMessagesValue===undefined)delete db.messages;else db.messages=previousMessagesValue;
+      if(previousWallValue===undefined)delete db.wall;else db.wall=previousWallValue;
+      if(previousWallLikesValue===undefined)delete db.wallLikes;else db.wallLikes=previousWallLikesSnapshot;
+      if(previousWallCommentsValue===undefined)delete db.wallComments;else db.wallComments=previousWallCommentsSnapshot;
+      console.error('24-hour public retention save failed:',error.message);
+      return;
+    }
     for(const id of expiredMessageIds)io.emit('message-deleted',{id});
     io.emit('wall-retention-cleaned',{ids:[...expiredWallIds]});
     for(const url of new Set(expiredMedia))removePublicUploadIfUnreferenced(url);
-    try{save();}catch(error){console.error('24-hour public retention save failed:',error.message);}
     console.log(`24-hour cleanup removed ${expiredMessageIds.length} public message(s), ${expiredWallIds.size} wall post(s).`);
   }
 }

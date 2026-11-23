@@ -1657,6 +1657,62 @@ try {
   else fail('room deletion cleanup ordering');
 } catch(error) { fail('room deletion cleanup ordering',error.message); }
 
+
+  
+// Public-retention cleanup must commit database changes before emitting deletions or unlinking media.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function cleanupExpiredPublicContent(now=Date.now()){');
+  const end=source.indexOf('\\ncleanupExpiredPublicContent();',start);
+  if(start<0||end<0)throw new Error('public retention function was not found');
+  const fn=source.slice(start,end);
+  const oldMessage={id:'old-message',room:'public',at:1,type:'text',media:{url:'/uploads/old-message.mp4'}};
+  const announcement={id:'old-announcement',room:'public',at:1,type:'announcement'};
+  const recentMessage={id:'recent-message',room:'public',at:100000000-1000,type:'text'};
+  const oldPrivate={id:'old-private',room:'private',at:1,type:'text'};
+  const oldPost={id:'old-post',at:1,media:{url:'/uploads/old-wall.mp4'}};
+  const recentPost={id:'recent-post',at:100000000-1000};
+  const db={messages:[oldMessage,announcement,recentMessage,oldPrivate],wall:[oldPost,recentPost],wallLikes:{'old-post':['x'],'recent-post':['y']},wallComments:{'old-post':['z']}};
+  const events=[];
+  const context={db,PUBLIC_RETENTION_MS:86400000,io:{emit:(name,payload)=>events.push(['emit',name,payload])},
+    removePublicUploadIfUnreferenced:url=>events.push(['unlink',url]),
+    save:()=>{events.push(['save',db.messages.map(x=>x.id),db.wall.map(x=>x.id)]);},
+    console:{log:()=>events.push(['log']),error:()=>{}},Date,Set};
+  vm.createContext(context);
+  vm.runInContext(fn+';globalThis.runRetention=cleanupExpiredPublicContent;',context);
+  context.runRetention(100000000);
+  const savedFirst=events[0]?.[0]==='save';
+  const removedCorrectly=db.messages.length===3&&!db.messages.some(x=>x.id==='old-message')&&db.messages.some(x=>x.id==='old-announcement')&&db.messages.some(x=>x.id==='old-private')&&db.wall.length===1&&db.wall[0].id==='recent-post'&&!Object.hasOwn(db.wallLikes,'old-post')&&!Object.hasOwn(db.wallComments,'old-post');
+  const emittedAfterSave=events.filter(x=>x[0]==='emit').every(x=>events.indexOf(x)>0);
+  const filesRemovedAfterSave=events.filter(x=>x[0]==='unlink').length===2&&events.findIndex(x=>x[0]==='unlink')>0;
+  const ok=savedFirst&&removedCorrectly&&emittedAfterSave&&filesRemovedAfterSave;
+  if(ok)pass('public retention saves database removals before broadcasting deletions and unlinking expired media');
+  else fail('public retention save-before-delete',JSON.stringify({savedFirst,removedCorrectly,emittedAfterSave,filesRemovedAfterSave,events,db}));
+} catch(error) { fail('public retention save-before-delete',error.message); }
+
+// If the durable retention save fails, restore the exact previous collections and keep files/client state untouched.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function cleanupExpiredPublicContent(now=Date.now()){');
+  const end=source.indexOf('\\ncleanupExpiredPublicContent();',start);
+  const fn=source.slice(start,end);
+  const oldMessage={id:'old-message',room:'public',at:1,type:'text',media:{url:'/uploads/old-message.mp4'}};
+  const oldPost={id:'old-post',at:1,media:{url:'/uploads/old-wall.mp4'}};
+  const messages=[oldMessage],wall=[oldPost],wallLikes={'old-post':['x']},wallComments={'old-post':['y']};
+  const db={messages,wall,wallLikes,wallComments};
+  const events=[];
+  const context={db,PUBLIC_RETENTION_MS:86400000,io:{emit:(name,payload)=>events.push(['emit',name,payload])},
+    removePublicUploadIfUnreferenced:url=>events.push(['unlink',url]),
+    save:()=>{throw new Error('simulated disk failure');},
+    console:{log:()=>{},error:()=>events.push(['error'])},Date,Set};
+  vm.createContext(context);
+  vm.runInContext(fn+';globalThis.runRetention=cleanupExpiredPublicContent;',context);
+  context.runRetention(100000000);
+  const ok=db.messages===messages&&db.wall===wall&&db.wallLikes['old-post'][0]==='x'&&db.wallComments['old-post'][0]==='y'&&events.length===1&&events[0][0]==='error';
+  if(ok)pass('public retention rolls back memory and preserves media when the durable save fails');
+  else fail('public retention rollback',JSON.stringify({sameMessages:db.messages===messages,sameWall:db.wall===wall,likes:db.wallLikes,comments:db.wallComments,events}));
+} catch(error) { fail('public retention rollback',error.message); }
+
 // v46.93.55: permanent member/visitor numbers and number-first online-member search.
 try {
   const source=fs.readFileSync(server,'utf8');
