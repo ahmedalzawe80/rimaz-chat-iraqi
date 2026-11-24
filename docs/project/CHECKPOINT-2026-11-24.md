@@ -201,3 +201,13 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Workflow run `45362431893` completed successfully on that exact SHA: JavaScript syntax, project regression tests, and production Docker build all succeeded.
 - The next commit only updates checkpoint/handoff documentation; CI for that documentation-only SHA must be checked separately.
 - No live deployment, merge, restart, or production data modification.
+
+
+## Admin upload audit-trail consistency fix — 2026-11-24
+- A focused inventory of all 74 /api/admin route declarations found one route using the dedicated requirePermission('smileys_manage') guard instead of the central requireAdmin guard: POST /api/admin/chat-tools/smiley-upload.
+- Authentication and the smileys_manage permission were already enforced before multipart parsing; this was not an unauthenticated route. The inconsistency meant successful smiley uploads bypassed the central admin audit-log hook.
+- Added an explicit permissionForAdminPath mapping for this endpoint and routed it through requireAdmin, preserving the same permission and authorization-before-upload ordering while restoring central audit logging.
+- Added a regression assertion for the exact route, permission mapping, and central guard. Code/test tip: 15072ddf331f2a76ce4215cd50b8f8819d0aa45d.
+- Pull-request workflow run 45373425456 completed successfully on that exact SHA: syntax checks, npm test, and Docker build passed; 520 pass markers and 0 failure markers.
+- The remaining custom admin routes were inventoried and each includes authentication plus explicit permission/role checks; a full action-by-action parity proof remains ongoing.
+- No merge, PR closure, production deployment, restart, ZIP sync, or live data/volume modification was performed.
