@@ -104,3 +104,12 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Found that the answer handler trusted a pending pair without independently checking its 120-second offer age or confirming the caller socket still existed. The scheduled timeout is not a substitute for validating state at the authorization boundary.
 - Added answer-time expiry rejection and removal, timeout notifications, and orphaned-caller cleanup before accepting an answer.
 - Added regression coverage. Branch-only; CI/runtime execution not confirmed; no merge/deploy/production data changes.
+
+
+## Startup announcement cleanup persistence fix (2026-11-24)
+- Found a startup-only persistence bypass: after removing expired timed announcements, startup wrote the entire in-memory database with direct `fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2))` instead of the canonical `save()` routine.
+- This bypassed the atomic temp-file/rename contract and could persist `privateMessages` to disk, contrary to the memory-only private-message policy enforced by `save()`.
+- Replaced that direct write with `save()`, retaining the existing cleanup and error handling behavior while restoring atomic persistence and the private-message exclusion.
+- Added a regression check in `verify.js` that verifies the startup cleanup uses `save()`, does not write DB_FILE directly, and that the canonical save path excludes private messages and uses atomic rename.
+- Commits: `6849ebbb6a20b2f9eb116e08925302a05ceec9fe` (server), `8832cd3b6d9ce0509bf56c69d41dbe8debe535ca` (verify).
+- Branch-only change; test execution/CI not yet confirmed. No merge, deployment, sync, or production database access.
