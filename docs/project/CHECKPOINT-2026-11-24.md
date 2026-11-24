@@ -1,4 +1,6 @@
-# Rimaz — saved continuation checkpoint (2026-11-24)
+# Rimaz — historical continuation checkpoint (2026-11-24)
+
+> **Historical snapshot only.** This checkpoint records an earlier project state and contains superseded branch heads and verification counts. Use [CHECKPOINT-FINAL-2026-11-24.md](CHECKPOINT-FINAL-2026-11-24.md) and [the final release gate](../operations/FINAL-RELEASE-GATE.md) for current status. Do not treat the old SHA, CI, dependency, or remaining-work statements below as current.
 
 > **Current repository status (2026-11-24):** latest reviewed branch head before this checkpoint refresh is `f9c3872594fa7ff86208c4bc0c93c3a2e6e379d7`. PR #3 pull-request run `45354451886` completed successfully on that exact SHA: Node.js 24 selected from `.nvmrc`, JavaScript syntax checks passed, all 518 regression checks passed with 0 failures, and the production Docker build succeeded. The push-triggered run for the same SHA was still pending when checked. PR #3 remains open/draft against `safety/validate-and-backup-before-sync`. PR #2 remains open/draft at `61fa6489f75f9446313e7cf124bc486640a8e1b9`; all 11 of its changed paths also appear in PR #3, so it is redundant and must not be merged separately. `main` remains at `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`; the safety base remains at `08807d8be8393a7cf29309c670d7acfd59c5f78c`. No Deplexo deployment, ZIP synchronization, or live persistent-volume changes were performed.
 >
