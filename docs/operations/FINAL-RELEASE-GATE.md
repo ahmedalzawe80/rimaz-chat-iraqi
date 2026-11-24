@@ -9,20 +9,20 @@ This record distinguishes verified source/CI work from hosting operations that s
 ## Consolidated repository decision
 
 - PR #3 is the sole integrated review candidate.
-- PR #3 currently contains 33 changed paths. The 11 paths in PR #2 are all represented in PR #3; PR #2 has no unique files and must not be merged separately.
+- PR #3 currently contains 34 changed paths. The 11 paths in PR #2 are all represented in PR #3; PR #2 has no unique files and must not be merged separately.
 - The candidate retains runtime assets and workflow-referenced files in their required locations. Do not delete or rename media files merely because their bytes appear duplicated; generated IDs and stored references may depend on filenames.
 - PR #3 remains open, draft, unmerged, and targets `safety/validate-and-backup-before-sync`. It is not yet a production release.
 
-## Latest exact-head CI evidence
+## Latest verified CI evidence
 
-- PR #3 head: `7abc591fa7b370ea5a77088fe42e9239e0976474`.
+- Latest fully verified PR head: `7abc591fa7b370ea5a77088fe42e9239e0976474`.
 - GitHub Actions run: [45406653849](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45406653849).
-- Result: success on the exact head SHA.
+- Result: success on that exact head SHA.
 - The `validate` job completed successfully, including Node.js setup from `.nvmrc`, JavaScript syntax checks, project regression tests (`npm test`), and production Docker image build.
-- The connector exposes successful step conclusions for this run but not the test runner's pass-marker count. Do not copy a test count from an earlier commit and attribute it to this run.
-- Earlier exact-code validation on `c30b7b92093dbbf4162cb6f30573355ad20b0f1f`, run `45379916442`, reported 556 pass markers and zero failures. That count belongs to that earlier SHA only.
+- Subsequent commits `1cf3dadeddf0feb06e46ca318f9c97843ac2b203`, `481193ad8217aa9549b3528774bbd1bf8d2cd2a8`, `536c1f82ddd46d695e97b2d82c34954a21cc8554`, and the current release-gate refresh update documentation only. No PR workflow run was returned for the latest SHA when checked; do not claim these later documentation commits have passed CI until a run is confirmed.
+- The connector did not expose the test runner's numeric pass-marker count for run `45406653849`. The earlier report of 556 pass markers and zero failures belongs only to SHA `c30b7b92093dbbf4162cb6f30573355ad20b0f1f`, run `45379916442`.
 
-CI proves the tested source and container build passed. It does not prove Deplexo runtime health, load behavior, or backup restorability.
+CI proves only the tested source and container build passed. It does not prove Deplexo runtime health, load behavior, or backup restorability.
 
 ## Dependency reproducibility — release blocker
 
@@ -30,7 +30,7 @@ CI proves the tested source and container build passed. It does not prove Deplex
 - `package-lock.json` is absent.
 - The Dockerfile currently runs `npm install --omit=dev`, not `npm ci`.
 - Do not invent a lockfile or integrity hashes. Generate a real lockfile using Node.js 24 and the trusted npm registry, review the resolved dependency tree, then validate clean install, tests, and image build before adopting `npm ci`.
-- Until that work is completed, dependency resolution is not fully reproducible.
+- Until then, dependency resolution is not fully reproducible.
 
 ## Required staging and hosting checks
 
@@ -56,4 +56,4 @@ A Git rollback branch protects tracked source history only; it is not a backup o
 
 ## Completion definition
 
-Repository consolidation and source-level CI validation are recorded on the current candidate. The overall production release is **not complete** until dependency reproducibility, verified backup/restore, staging smoke tests, runtime evidence, final review, and explicit promotion approval are recorded.
+Repository consolidation and source-level CI validation are recorded on the candidate. The overall production release is **not complete** until dependency reproducibility, verified backup/restore, staging smoke tests, runtime evidence, fresh checks on the final head, final review, and explicit promotion approval are recorded.
