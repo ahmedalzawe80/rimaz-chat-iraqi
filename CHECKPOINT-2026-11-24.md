@@ -98,3 +98,9 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Added a 120-second TTL, periodic stale-pair pruning, an 8,192-pair process cap, and expiry/participant checks before answer and ICE relay.
 - Added regression coverage for expiry, capacity, pruning, and ICE participant authorization.
 - Branch-only changes; no CI/runtime test success asserted, no merge, deployment, or production data changes.
+
+
+## Private call answer expiry enforcement (2026-11-24)
+- Found that the answer handler trusted a pending pair without independently checking its 120-second offer age or confirming the caller socket still existed. The scheduled timeout is not a substitute for validating state at the authorization boundary.
+- Added answer-time expiry rejection and removal, timeout notifications, and orphaned-caller cleanup before accepting an answer.
+- Added regression coverage. Branch-only; CI/runtime execution not confirmed; no merge/deploy/production data changes.
