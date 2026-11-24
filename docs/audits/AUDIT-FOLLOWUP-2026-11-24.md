@@ -42,3 +42,18 @@ Read-only review of the working branch `safety/validate-and-backup-before-sync` 
 - No application runtime code was changed.
 - No merge to `main`, production restart, deployment, or ZIP sync was performed.
 - The manual ZIP workflow still contains `rsync -a --delete`; do not run it without reviewing the exact archive, runtime-data exclusions, and a verified restore procedure, followed by explicit user approval.
+
+
+## Subsequent follow-up — admin-data permission routing (2026-11-24)
+
+A later review of the current working branch found a shadowed permission rule in `permissionForAdminPath`: an early `/api/admin/data` condition always returned `panel_access`, making the later `ALL_PERMISSION_KEYS` rule unreachable. This contradicted the route's own permission-filtered payload and the existing regression-test intent.
+
+- Corrected the route mapping to return `ALL_PERMISSION_KEYS` directly before the other route mappings. The handler still filters every data group according to the caller's actual permissions; this does not grant additional capabilities to the caller.
+- Added a regression assertion that verifies the all-permissions mapping is reachable before the remaining route rules and that the shadowing conditional does not return.
+- Source fix commit: `9ec6ebbf71a2467aee67115a37e33cc9950c93df`.
+- Regression-test commit: `a7bfce38ebdbebf10495c1a063d89a0fbf15b578`.
+- Exact-source validation run [#704](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45469789989) succeeded: 603 checks, zero failures, locked dependency verification, JavaScript syntax, and production Docker build.
+- The post-validation archive job also succeeded: 394 files, 16,357,277 bytes, extracted-archive validation with 603 checks and zero failures, Docker build, and npm audit with 0 vulnerabilities.
+- Archive-only head after CI: `a49f10afcda33eac55ea974c60ee57e866f4e28c`.
+
+This follow-up changes the historical "read-only/no runtime changes" statement above only for the later commits listed here. It does not represent live-server or production verification. `main` remains unchanged, PR #3 remains draft/open/unmerged, and no Deplexo deployment, restart, ZIP sync, or live-data modification was performed.
