@@ -4,36 +4,42 @@
 **Release candidate:** `fix/bound-private-media-ticket-cache`  
 **Production branch:** `main`
 
-This record separates source-level and CI evidence from hosting operations that require staging access and explicit owner approval.
+This record separates verified source/archive work from hosting operations that require staging access and explicit owner approval.
 
 ## Consolidated repository decision
 
 - PR #3 is the sole integrated review candidate.
-- PR #3 contains 35 changed paths. All 11 paths in PR #2 are represented in PR #3; PR #2 has no unique paths and must not be merged separately.
-- The candidate retains runtime assets and workflow-referenced files in their required locations. Do not delete or rename media files merely because their bytes appear duplicated; generated IDs and stored references may depend on filenames.
-- The nested incomplete project copy was removed from the candidate after verifying it contained only a placeholder data file and duplicate Google verification file.
+- All 11 changed paths in PR #2 are represented in PR #3; PR #2 has no unique paths and must not be merged separately.
+- The candidate keeps runtime assets and workflow-referenced files in their required locations. Do not delete or rename media files merely because their bytes appear duplicated; generated IDs and stored references may depend on filenames.
+- The incomplete nested project copy was removed after verifying it contained only a placeholder data file and duplicate Google verification file.
 - PR #3 remains open, draft, unmerged, and targets `safety/validate-and-backup-before-sync`. It is not yet a production release.
 
-## Dependency reproducibility — completed in candidate
+## Dependency reproducibility
 
 - `package.json` requires Node.js `>=24 <25`; `.nvmrc` pins major version 24.
 - A genuine npm lockfile v3 was generated on Node.js 24 and committed in [`ed4ef756`](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/commit/ed4ef756a96351f6f368dba7295420cc0f6ebbd1).
 - The lockfile root package identity and dependency declarations match `package.json`; it records 96 package entries.
 - The production Dockerfile uses `npm ci --omit=dev`.
-- The one-time bootstrap workflow performed a clean `npm ci`, the regression suite, and a Docker build using the lockfile before committing the lockfile and Dockerfile change. That temporary workflow was then removed.
 - The permanent validation workflow requires `npm ci`, `npm ls --depth=0`, JavaScript syntax checks, `npm test`, and the production Docker build. It has no fallback to floating `npm install`.
-- README, contributor guidance, changelog, and repository structure documentation describe the deterministic install workflow.
+- Regression checks now assert lockfile identity/dependency consistency, Docker's locked production install, and the permanent CI install contract.
 
-## Exact-head CI evidence
+## Audited source archive and synchronization safety
 
-- Commit `086bbb09717a6d2c92009f4301528cf3f317f7b6` passed GitHub Actions run [45408438472](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45408438472).
-- Every step completed successfully: Node.js 24 setup, `npm ci`, `npm ls --depth=0`, JavaScript syntax checks, `npm test`, and production Docker image build.
-- Regression output contained 562 pass markers and zero failure markers.
-- The Docker build used `npm ci --omit=dev`, installed 95 production packages, and reported zero vulnerabilities in that build's npm audit output.
-- The latest full code run before this exact-head run, `45407944962`, also passed; its 562 pass markers belong to its own SHA only.
+- The archive audit found that the previously stored ZIP had a `package.json` different from the reviewed candidate. The audit failed closed; no ZIP synchronization or production operation was run.
+- Rebuilt `rimaz-final-deep-audit-46.93.72.zip` deterministically from the reviewed tracked candidate files. The new archive contains 394 tracked files and is 16,336,813 bytes.
+- The archive rebuild job tested both the candidate and the extracted archive as standalone projects. Each run completed `npm ci`, `npm ls --depth=0`, syntax checks, and `npm test` with 567 pass markers and zero failure markers, followed by a successful Docker build.
+- Both Docker builds installed the locked production dependency tree (95 packages); npm audit output reported zero vulnerabilities.
+- The archive audit now rejects unsafe paths, symlinks, duplicate file paths, excessive archive size/entries, and suspicious compression ratios. It requires exact parity for package manifest, lockfile, Dockerfile, server, browser entry, regression file, and the complete `public/` tree.
+- The manual source-sync workflow now refuses an archive that differs from current `main`; it validates locked install, dependency tree, regression suite, and Docker build before and after sync. It remains manual-only, requires explicit confirmation on `main`, and is not a Deplexo deployment command.
+
+## CI evidence
+
+- Exact candidate validation on commit `086bbb09717a6d2c92009f4301528cf3f317f7b6`, run [45408438472](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45408438472), passed `npm ci`, `npm ls`, syntax checks, 562 regression pass markers, and production Docker build.
+- The later archive rebuild run [45409544443](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45409544443) passed candidate and archive validation, each with 567 pass markers and zero failures, and built both Docker images.
 - Earlier validation on `c30b7b92093dbbf4162cb6f30573355ad20b0f1f`, run `45379916442`, reported 556 pass markers and zero failures. That count belongs only to that SHA.
+- A fresh permanent validation and archive-audit run on the final post-cleanup PR head is still required before merge.
 
-CI and container builds do not prove live Deplexo runtime health, load behavior, or backup restorability. Any later source or workflow change requires a fresh check on its exact head.
+CI and container builds do not prove live Deplexo runtime health, load behavior, or backup restorability.
 
 ## Required staging and hosting checks
 
@@ -54,4 +60,4 @@ Do not modify the live database, uploads, private media, or persistent volume du
 
 ## Completion definition
 
-Repository organization and deterministic dependency installation are implemented in the candidate. Production publication remains blocked until independent backup/restore, staging smoke tests, runtime evidence, final-head CI, and promotion checks are complete.
+Repository organization, deterministic dependency installation, archive parity, and source/build validation are implemented in the candidate. Production publication remains blocked until independent backup/restore, staging smoke tests, runtime evidence, final-head CI, and promotion checks are complete.
