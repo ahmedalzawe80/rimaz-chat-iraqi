@@ -2529,3 +2529,54 @@ try {
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('private-message rate-limit ordering regression checks',error.message); }
+
+// Private-media playback tickets must remain bounded, reusable, expiring, and account-bound.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const helperStart=source.indexOf('const privateMediaPlaybackTickets = new Map();');
+  const helperEnd=source.indexOf('for (const [sid,s] of Object.entries(db.sessions||{}))',helperStart);
+  if(helperStart<0||helperEnd<0)throw new Error('private-media ticket helper block not found');
+  const helper=source.slice(helperStart,helperEnd);
+  let randomCounter=0;
+  const context={Map,Date,crypto:{randomBytes:()=>Buffer.alloc(32,++randomCounter)},setInterval:()=>({unref(){}})};
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.issue=createPrivateMediaPlaybackTicket;globalThis.ticketMap=privateMediaPlaybackTickets;globalThis.accountLimit=MAX_PRIVATE_MEDIA_TICKETS_PER_ACCOUNT;globalThis.globalLimit=MAX_PRIVATE_MEDIA_TICKETS;',context);
+  const first=context.issue('clip-a.mp4','alice',1000);
+  const reused=context.issue('clip-a.mp4','alice',2000);
+  const separate=context.issue('clip-b.mp4','alice',2100);
+  const refreshed=first.ticket.expiresAt===2000+15*60*1000;
+  const reuseOk=first.token===reused.token&&reused.reused===true&&separate.token!==first.token&&separate.reused===false&&refreshed;
+  const accountContext={Map,Date,crypto:{randomBytes:()=>Buffer.alloc(32,++randomCounter)},setInterval:()=>({unref(){}})};
+  vm.createContext(accountContext);
+  vm.runInContext(helper+';globalThis.issue=createPrivateMediaPlaybackTicket;globalThis.ticketMap=privateMediaPlaybackTickets;',accountContext);
+  let accountResults;
+  for(let i=0;i<32;i++)accountResults=accountContext.issue('file-'+i+'.mp4','alice',3000);
+  const accountLimited=accountContext.issue('file-over.mp4','alice',3000);
+  const otherAccount=accountContext.issue('other.mp4','bob',3000);
+  const accountOk=accountContext.ticketMap.size===33&&accountLimited.error==='account-limit'&&!otherAccount.error;
+  const expiryContext={Map,Date,crypto:{randomBytes:()=>Buffer.alloc(32,++randomCounter)},setInterval:()=>({unref(){}})};
+  vm.createContext(expiryContext);
+  vm.runInContext(helper+';globalThis.issue=createPrivateMediaPlaybackTicket;globalThis.ticketMap=privateMediaPlaybackTickets;',expiryContext);
+  expiryContext.ticketMap.set('expired',{filename:'old.mp4',account:'alice',expiresAt:999});
+  const afterExpiry=expiryContext.issue('new.mp4','alice',1000);
+  const expiryOk=!expiryContext.ticketMap.has('expired')&&!afterExpiry.error&&expiryContext.ticketMap.size===1;
+  const globalContext={Map,Date,crypto:{randomBytes:()=>Buffer.alloc(32,++randomCounter)},setInterval:()=>({unref(){}})};
+  vm.createContext(globalContext);
+  vm.runInContext(helper+';globalThis.issue=createPrivateMediaPlaybackTicket;globalThis.ticketMap=privateMediaPlaybackTickets;',globalContext);
+  for(let i=0;i<4096;i++)globalContext.ticketMap.set('existing-'+i,{filename:'f-'+i,account:'user-'+i,expiresAt:999999});
+  const globalLimited=globalContext.issue('overflow.mp4','new-user',1000);
+  const routeStart=source.indexOf("app.get('/api/private/media-stream/:filename'");
+  const routeEnd=source.indexOf("\n});",routeStart);
+  const route=routeStart>=0&&routeEnd>routeStart?source.slice(routeStart,routeEnd):'';
+  const ticketDeclaration=route.indexOf('const ticket=privateMediaPlaybackTickets.get(token)');
+  const ticketUse=route.indexOf('ticket.expiresAt');
+  const routeOk=ticketDeclaration>=0&&ticketUse>ticketDeclaration&&route.includes('ticket.filename!==filename')&&route.includes('keyName(message.from)===ticket.account||keyName(message.to)===ticket.account');
+  const checks=[
+    ['private-media playback tickets reuse the same account/file token and refresh the 15-minute expiry',reuseOk],
+    ['private-media playback tickets enforce 32 active tickets per account without blocking another account',accountOk],
+    ['expired private-media tickets are pruned before issuing a replacement',expiryOk],
+    ['private-media playback ticket cache rejects entries beyond the 4096 global cap',globalLimited.error==='global-limit'&&globalContext.ticketMap.size===4096],
+    ['private-media stream route declares and validates the ticket before reading ticket fields and rechecks account ownership',routeOk]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('private-media playback ticket regression checks',error.message); }
