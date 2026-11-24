@@ -987,6 +987,7 @@ function permissionForAdminPath(req){
  if(p.startsWith('/api/admin/control-center'))return 'control_center_manage';
  if(p==='/api/admin/chat-filter')return 'chat_filter_manage';
  if(p==='/api/admin/profile/status')return 'member_status_manage';
+ if(p==='/api/admin/chat-tools/smiley-upload')return 'smileys_manage';
  if(p==='/api/admin/chat-tools')return req.method==='GET'?'shortcuts_manage':(req.body&&Array.isArray(req.body.smileys)&&req.body.smileys.length?'smileys_manage':'shortcuts_manage');
  if(p==='/api/admin/rank')return 'rank_assign';
  if(p==='/api/admin/permissions')return 'permission_manage';
@@ -1833,7 +1834,7 @@ app.put('/api/admin/account-permissions/:name',requireAuth,(req,res)=>{
 app.get('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))return res.status(403).json({error:'ما عندك صلاحية عرض أو تعديل رسائل الترحيب'});res.json({messages:db.welcomeMessages||[]});});
 app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))return res.status(403).json({error:'ما عندك صلاحية تعديل رسائل الترحيب'});try{const raw=Array.isArray(req.body?.messages)?req.body.messages:[];if(raw.length>12)return res.status(400).json({error:'الحد الأعلى 12 رسالة ترحيب'});const messages=[];for(const item of raw){const title=String(item?.title||'').trim().slice(0,80),text=String(item?.text||'').trim().slice(0,1200);if(!title&&!text)continue;if(!text)return res.status(400).json({error:'اكتب نص كل رسالة قبل الحفظ'});messages.push({id:String(item?.id||crypto.randomUUID()).slice(0,80),title:title||'الترحيب',text,enabled:item?.enabled!==false});}const previous=db.welcomeMessages;db.welcomeMessages=messages;try{save()}catch(saveError){db.welcomeMessages=previous;console.error('Welcome messages save failed:',saveError);return res.status(500).json({error:'تعذر حفظ الرسائل على التخزين. تحقق من صلاحية ومسار /data ثم أعد المحاولة.'});}return res.json({ok:true,messages});}catch(error){console.error('Welcome messages update failed:',error);return res.status(500).json({error:'حدث خطأ أثناء معالجة رسائل الترحيب'});}});
 app.get('/api/chat-tools',requireAuth,(req,res)=>res.json({shortcuts:(db.chatShortcuts||[]).map(x=>({id:x.id,title:x.title,text:x.text})),smileys:(db.customSmileys||[]).map(x=>({id:x.id,icon:x.icon,name:x.name,shortcut:x.shortcut||''})),gifts:hasPermission(req.user,'gifts')?(db.giftCatalog||[]):[],vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]}));
-app.post('/api/admin/chat-tools/smiley-upload',requirePermission('smileys_manage'),uploadSmallImage.single('file'),validateUploadedContent('image'),(req,res)=>{
+app.post('/api/admin/chat-tools/smiley-upload',requireAdmin,uploadSmallImage.single('file'),validateUploadedContent('image'),(req,res)=>{
   try{
     if(!req.file||!/^image\/(gif|png|jpeg|webp)$/i.test(req.file.mimetype)){removeUploadedFile(req.file);return res.status(400).json({error:'ارفع صورة GIF أو PNG أو JPG أو WEBP'});}
     if((db.customSmileys||[]).length>=450){removeUploadedFile(req.file);return res.status(400).json({error:'وصلت إلى الحد الأعلى 450 سميل'});}
