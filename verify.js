@@ -2623,3 +2623,43 @@ try {
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('private-media playback ticket regression checks',error.message); }
+
+ 
+// Database backups must serialize to a restrictive temporary file and stream from disk,
+// never build a database-sized JSON string or Buffer in the live request path.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const helperStart=source.indexOf('function createDatabaseBackupTempFile(snapshot,purpose){');
+  const helperEnd=source.indexOf('async function* fullBackupTarEntries(){',helperStart);
+  if(helperStart<0||helperEnd<0)throw new Error('database backup temporary-file helper not found');
+  const helper=source.slice(helperStart,helperEnd);
+  const tempDir=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-backup-stream-'));
+  try{
+    const context={fs,crypto,writeJsonSync,DB_FILE:path.join(tempDir,'rimaz.json')};
+    vm.createContext(context);
+    vm.runInContext(helper+';globalThis.createBackup=createDatabaseBackupTempFile;',context);
+    const snapshot={format:'rimaz-database-backup',database:{members:[{name:'أحمد',message:'💚🌹'.repeat(5000)}],sessions:{},privateMessages:[]}};
+    const file=context.createBackup(snapshot,'test');
+    const actual=fs.readFileSync(file,'utf8');
+    const expected=JSON.stringify(snapshot,null,2);
+    const mode=fs.statSync(file).mode&0o777;
+    const valid=actual===expected&&mode===0o600;
+    fs.unlinkSync(file);
+    const cycle={};cycle.self=cycle;
+    let rejected=false;
+    try{context.createBackup(cycle,'cycle');}catch(error){rejected=/circular/i.test(String(error.message));}
+    const clean=fs.readdirSync(tempDir).length===0;
+    if(valid)pass('database backup temp writer preserves pretty JSON byte-for-byte and creates mode-0600 disk files');else fail('database backup temp writer serialization or file permissions');
+    if(rejected&&clean)pass('database backup temp writer rejects circular data and removes partial files');else fail('database backup temp writer failure cleanup');
+  }finally{fs.rmSync(tempDir,{recursive:true,force:true});}
+  const fullStart=source.indexOf('async function* fullBackupTarEntries(){');
+  const fullEnd=source.indexOf('async function* fullBackupTar(){',fullStart);
+  const full=fullStart>=0&&fullEnd>fullStart?source.slice(fullStart,fullEnd):'';
+  const fullOk=full.includes("createDatabaseBackupTempFile(snapshot,'full-backup')")&&full.includes("yield {name:'database/rimaz-database.json',disk:databaseBackupFile")&&full.includes('finally{')&&full.includes('fs.unlinkSync(databaseBackupFile)')&&!full.includes('JSON.stringify(snapshot')&&!full.includes('Buffer.from(');
+  const databaseStart=source.indexOf("app.get('/api/admin/backup/database'");
+  const databaseEnd=source.indexOf("app.get('/api/admin/backup/full'",databaseStart);
+  const databaseRoute=databaseStart>=0&&databaseEnd>databaseStart?source.slice(databaseStart,databaseEnd):'';
+  const databaseOk=databaseRoute.includes("createDatabaseBackupTempFile(snapshot,'database-backup')")&&databaseRoute.includes('fs.createReadStream(backupFile)')&&databaseRoute.includes("stream.once('close',cleanup)")&&databaseRoute.includes("res.once('close'")&&!databaseRoute.includes('JSON.stringify(snapshot')&&!databaseRoute.includes('res.send(body)');
+  if(fullOk)pass('full tar backup streams the database temp file and removes it in generator finally');else fail('full tar backup must not materialize a full JSON string or Buffer');
+  if(databaseOk)pass('database-only backup streams the restrictive temp file and cleans it after completion or disconnect');else fail('database-only backup must stream and clean its temporary file');
+} catch(error) { fail('bounded-memory database backup regression checks',error.message); }
