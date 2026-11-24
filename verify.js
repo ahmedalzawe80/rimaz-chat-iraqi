@@ -642,7 +642,7 @@ try {
   const source = fs.readFileSync(server, 'utf8');
   const saveFn = source.match(/function save\(\)\s*\{[\s\S]*?\n\}/);
   const loadBlock = source.match(/let db;[\s\S]*?\nfor \(const \[k,v\] of Object\.entries\(defaults\(\)\)/);
-  if (saveFn && ['.tmp', "fs.openSync(tempFile, 'wx'", 'JSON.stringify(snapshot)', 'privateMessages: []', 'fs.renameSync(tempFile, DB_FILE)'].every(x => saveFn[0].includes(x)) && !saveFn[0].includes('fs.fsyncSync')) pass('database writes use compact atomic replacement and never persist private messages');
+  if (saveFn && ['.tmp', "fs.openSync(tempFile, 'wx'", 'JSON.stringify(snapshot)', 'privateMessages: []', 'fs.fsyncSync(fd)', 'fs.renameSync(tempFile, DB_FILE)'].every(x => saveFn[0].includes(x))) pass('database writes use fsynced atomic replacement and never persist private messages');
   else fail('database writes use compact atomic replacement and never persist private messages');
   if (loadBlock && loadBlock[0].includes("error.code === 'ENOENT'") && loadBlock[0].includes('fs.copyFileSync(DB_FILE, recoveryCopy') && loadBlock[0].includes('Refusing to start with an invalid database')) pass('corrupt database is preserved and startup fails closed');
   else fail('corrupt database is preserved and startup fails closed');
@@ -2169,3 +2169,60 @@ try {
 } catch (error) {
   fail('repository contributor guidance and file-format policies are present', error.message);
 }
+
+
+// Public room messages are not visible or acknowledged until their batched disk commit succeeds.
+(async()=>{
+  try {
+    const source=fs.readFileSync(server,'utf8');
+    const queue=source.match(/let messageSaveTimer=null;\nlet pendingMessageWrites=\[\];[\s\S]*?function addMessage\(m\)\{[\s\S]*?\n\}/);
+    if(!queue)throw new Error('message persistence queue not found');
+    const makeContext=(failures=0)=>{
+      const context={
+        db:{messages:[{id:'committed'}]},
+        failures,
+        timer:null,
+        save(){
+          if(this.failures>0){this.failures--;throw new Error('simulated disk failure');}
+          this.saved=this.db.messages.map(message=>message.id);
+        },
+        setTimeout(fn,delay){const timer={fn,delay,unref(){}};this.timer=timer;return timer;},
+        clearTimeout(timer){if(this.timer===timer)this.timer=null;}
+      };
+      vm.createContext(context);
+      vm.runInContext(queue[0]+'\nglobalThis.enqueue=addMessage;globalThis.state=()=>({pending:pendingMessageWrites.length,attempts:messageSaveAttempts});',context);
+      return context;
+    };
+    const ok=makeContext();
+    const committed=ok.enqueue({id:'new-message'});
+    const hiddenBeforeCommit=ok.db.messages.length===1&&ok.state().pending===1;
+    ok.timer.fn();
+    await committed;
+    const commitBeforeResolve=ok.db.messages.map(x=>x.id).join(',')==='committed,new-message'&&ok.saved.join(',')==='committed,new-message';
+
+    const retry=makeContext(1);
+    const retried=retry.enqueue({id:'retry-message'});
+    retry.timer.fn();
+    const rollbackOnFailure=retry.db.messages.length===1&&retry.state().pending===1&&retry.timer.delay===1000;
+    retry.timer.fn();
+    await retried;
+    const retryCommit=retry.db.messages.map(x=>x.id).join(',')==='committed,retry-message'&&retry.saved.join(',')==='committed,retry-message';
+
+    if(hiddenBeforeCommit&&commitBeforeResolve&&rollbackOnFailure&&retryCommit)
+      pass('chat message queue hides uncommitted messages, commits before resolving, and retries failed writes without memory leakage');
+    else fail('chat message queue commit/rollback fixture',JSON.stringify({hiddenBeforeCommit,commitBeforeResolve,rollbackOnFailure,retryCommit}));
+  } catch(error) { fail('chat message queue commit/rollback fixture',error.message); }
+})();
+
+// Both public transports must await durable persistence before acknowledging or broadcasting a message.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const http=source.match(/app\.post\('\/api\/message',[\s\S]*?\n\}\);/);
+  const socket=source.match(/socket\.on\('send-message',[\s\S]*?\n/);
+  const checks=[
+    ['HTTP room messages await the disk commit before broadcast and success response',!!http&&http[0].indexOf('await addMessage(m)')<http[0].indexOf("io.to(room).emit('message',m)")&&http[0].indexOf('await addMessage(m)')<http[0].indexOf('res.json({ok:true,message:m})')],
+    ['Socket.IO room messages await the disk commit before broadcast',!!socket&&socket[0].indexOf('await addMessage(m)')<socket[0].indexOf("io.to(room).emit('message',m)")],
+    ['room message enqueue does not expose pending writes through db.messages',source.includes('pendingMessageWrites.push({message:m,resolve,reject})')&&!source.includes('function addMessage(m){\n  db.messages.push(m)')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('chat durable-acknowledgement regression checks',error.message); }
