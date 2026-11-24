@@ -1,8 +1,8 @@
 # Rimaz — saved continuation checkpoint (2026-11-24)
 
-> **Current repository status (2026-11-24):** the repository-cleanup work is consolidated on branch `fix/bound-private-media-ticket-cache`. The last fully pull-request-validated SHA before this checkpoint update is `651f6d1617104028a7445644e7fcdbf7df1ec1e2`; PR #3 run `45354063735` completed successfully on that exact SHA, including syntax checks, all 518 regression checks (0 failures), and production Docker build. A push-triggered run for the same SHA was still queued when checked. PR #3 remains open/draft against `safety/validate-and-backup-before-sync`. PR #2 remains open/draft at `61fa6489f75f9446313e7cf124bc486640a8e1b9`; all 11 of its changed paths also appear in PR #3, so it is redundant and must not be merged separately. `main` remains at `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`; the safety base remains `08807d8be8393a7cf29309c670d7acfd59c5f78c`. No Deplexo deployment, ZIP synchronization, or live persistent-volume changes were performed.
+> **Current repository status (2026-11-24):** latest reviewed branch head before this checkpoint refresh is `f9c3872594fa7ff86208c4bc0c93c3a2e6e379d7`. PR #3 pull-request run `45354451886` completed successfully on that exact SHA: Node.js 24 selected from `.nvmrc`, JavaScript syntax checks passed, all 518 regression checks passed with 0 failures, and the production Docker build succeeded. The push-triggered run for the same SHA was still pending when checked. PR #3 remains open/draft against `safety/validate-and-backup-before-sync`. PR #2 remains open/draft at `61fa6489f75f9446313e7cf124bc486640a8e1b9`; all 11 of its changed paths also appear in PR #3, so it is redundant and must not be merged separately. `main` remains at `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`; the safety base remains at `08807d8be8393a7cf29309c670d7acfd59c5f78c`. No Deplexo deployment, ZIP synchronization, or live persistent-volume changes were performed.
 >
-> **Repository structure status:** 392 tracked files; root contains only three Markdown guides (`README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`), while project, audit, and operations documentation is categorized under `docs/`. Added `.nvmrc` as the single Node.js major-version source for local setup and CI. Five identical-content file pairs were reviewed: two synchronized root/public verification/HTML pairs and three named media pairs retained because asset filenames can affect generated IDs.
+> **Repository structure status:** 392 tracked files, with only three top-level directories (`.github/`, `docs/`, and `public/`). The root contains only three Markdown guides (`README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`); project, audit, and operations documentation is categorized under `docs/`. `.nvmrc` is the shared Node.js major-version source for local development, the main validation workflow, and archive validation. Five identical-content file pairs were reviewed: two synchronized root/public HTML and verification copies, plus three media filename pairs retained because asset filenames can affect generated IDs.
 >
 > **Outstanding:** no committed `package-lock.json`; dependency installation is therefore not fully reproducible. Staging smoke tests, independent backup/restore verification, and live Deplexo resource measurements remain unperformed. CI success is not proof of live production health.
 
@@ -15,7 +15,7 @@ Do NOT merge PRs, change main, deploy/restart Deplexo, run ZIP sync, or touch pr
 ## Repository state
 Repository: ahmedalzawe80/rimaz-chat-iraqi
 Application branch: fix/bound-private-media-ticket-cache
-Current PR #3 head at checkpoint baseline: 651f6d1617104028a7445644e7fcdbf7df1ec1e2
+Latest fully pull-request-validated code head at checkpoint baseline: f9c3872594fa7ff86208c4bc0c93c3a2e6e379d7
 PR #3: https://github.com/ahmedalzawe80/rimaz-chat-iraqi/pull/3 (open, draft, not merged)
 PR #2: https://github.com/ahmedalzawe80/rimaz-chat-iraqi/pull/2 (open, draft, not merged; head 61fa6489f75f9446313e7cf124bc486640a8e1b9; all 11 changed paths overlap PR #3)
 Working base: safety/validate-and-backup-before-sync
@@ -25,11 +25,11 @@ No production deployment or persistent-volume access was performed.
 
 ## Latest CI — current checkpoint baseline
 
-- PR #3 baseline SHA: `651f6d1617104028a7445644e7fcdbf7df1ec1e2`.
-- Pull-request run `45354063735` completed successfully on that exact SHA.
+- Latest reviewed code SHA: `f9c3872594fa7ff86208c4bc0c93c3a2e6e379d7`.
+- Pull-request run `45354451886` completed successfully on that exact SHA.
 - Job `validate` succeeded: Node.js was selected from `.nvmrc`; JavaScript syntax checks passed; `npm test` completed with 518 pass markers and 0 failure markers; production Docker build passed.
-- Push run `45354057468` for the same SHA was still queued at the time of this checkpoint. Do not confuse queued status with failure or success.
-- The validation workflow now uses immutable action commit pins, one Node version source, and concurrency cancellation for superseded runs.
+- Push run `45354446635` for the same SHA was pending at the time of this checkpoint. Do not treat a pending run as complete.
+- Both validation workflows now use immutable action commit pins and read the shared `.nvmrc` version. Main validation also cancels superseded runs.
 - This is CI/container evidence only, not staging or live-production verification.
 
 ## Work already in PR #2
