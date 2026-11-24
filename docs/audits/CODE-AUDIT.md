@@ -1,5 +1,7 @@
 # Rimaz Chat — v46.93.37 Code Audit
 
+> **Historical audit snapshot.** This describes an earlier application version and its original 446-check validation. It is not the current code inventory or current CI result. See [the current transaction-safety audit](TRANSACTION-SAFETY-AUDIT-2026-11-24.md), [runtime resource audit](RUNTIME-RESOURCE-AUDIT-2026-11-24.md), and [final release gate](../operations/FINAL-RELEASE-GATE.md).
+
 ## Scope
 
 Audited the v46.93.36 project source and made a focused corrective release for the live-presence model, room membership counts, private-chat unread state, wall unread state, country flags, and disconnect/reconnect lifecycle. The audit covered `server.js`, both browser entry files, database defaults, relevant HTTP endpoints, Socket.IO handlers, and the regression suite.
