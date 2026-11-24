@@ -129,3 +129,11 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Added regression checks in `verify.js` asserting the authentication and permission gates occur before the upload middleware for both routes.
 - Commits: `ddf33923379497f152bf5573c4b7bc2fcabc0e20` (server), `d623da1535a58e901786b07dfd110497c8ac326b` (verify).
 - Branch-only; no runtime test execution or CI success is claimed. No merge, deployment, or production access.
+
+
+## Additional upload gate coverage (2026-11-24)
+- Extended the same pre-upload authorization rule to public room-image changes and personal avatar uploads: room existence plus room-owner/site-owner/room-image permission are checked before Multer; avatar likes eligibility is checked before Multer.
+- Existing in-handler checks remain as defense in depth, preserving the original response behavior if state changes while a file is being processed.
+- Added regression assertions for both routes. Other upload routes were reviewed: rank artwork, chat banners, smileys, admin room images, restore preview, and personal banners already gate before their upload middleware; general chat media remains intentionally available to authenticated users.
+- Commits: `dd115f0b99d67247f4ad21c97ea0c05848204dfd` (server), `7dad203d2160577570622dcf269735efcdb38344` (verify).
+- Branch-only; no runtime test execution or CI success is claimed. No merge, deployment, or production access.
