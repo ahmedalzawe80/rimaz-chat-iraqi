@@ -16,6 +16,19 @@ const serverCheck = spawnSync(process.execPath, ['--check', server], { encoding:
 if (serverCheck.status === 0) pass('server.js syntax');
 else fail('server.js syntax', serverCheck.stderr || serverCheck.stdout);
 
+// Startup expiry cleanup must use the canonical atomic save path, which also keeps private DMs off disk.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const cleanupStart = source.indexOf('// Remove expired timed announcements after restarts;');
+  const cleanupEnd = source.indexOf('// Direct private conversations and the wall are separate', cleanupStart);
+  const cleanup = cleanupStart >= 0 && cleanupEnd > cleanupStart ? source.slice(cleanupStart, cleanupEnd) : '';
+  const saveStart = source.indexOf('function save(){');
+  const saveEnd = source.indexOf('// v46.82.0:', saveStart);
+  const saveBody = saveStart >= 0 && saveEnd > saveStart ? source.slice(saveStart, saveEnd) : '';
+  if (cleanup.includes('try{save()}') && !cleanup.includes('fs.writeFileSync(DB_FILE') && saveBody.includes('privateMessages: []') && saveBody.includes('fs.renameSync(tempFile, DB_FILE)')) pass('startup announcement cleanup uses atomic save and never persists private messages');
+  else fail('startup announcement cleanup must preserve atomic and private-message persistence contracts');
+} catch (error) { fail('startup announcement persistence regression check', error.message); }
+
 // Regression checks for the production startup bootstrap and packed smiley assets.
 try {
   const source = fs.readFileSync(server, 'utf8');
