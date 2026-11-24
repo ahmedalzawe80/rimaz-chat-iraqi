@@ -2180,12 +2180,13 @@ try {
     if(!queue)throw new Error('message persistence queue not found');
     const makeContext=(initialFailures=0)=>{
       let failuresLeft=initialFailures, activeTimer=null, saved=[];
-      const context={
+      let context;
+      context={
         db:{messages:[{id:'committed'}]},
         console:{error(){}},
         save(){
           if(failuresLeft>0){failuresLeft--;throw new Error('simulated disk failure');}
-          saved=this.db.messages.map(message=>message.id);
+          saved=context.db.messages.map(message=>message.id);
         },
         setTimeout(fn,delay){activeTimer={fn,delay,unref(){}};return activeTimer;},
         clearTimeout(timer){if(activeTimer===timer)activeTimer=null;}
