@@ -2328,3 +2328,19 @@ try {
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('HTTP and Socket.IO public message payload parity checks',error.message); }
+
+
+// Failed rank assignment must restore exact object/root existence, not leave migration-shaped defaults behind.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf("app.post('/api/admin/rank'");
+  const end=source.indexOf("app.get('/api/admin/member-ip/",start);
+  const route=start>=0&&end>start?source.slice(start,end):'';
+  const checks=[
+    ['rank assignment snapshots whether the target profile existed before mutation',route.includes('hadProfile=Object.prototype.hasOwnProperty.call(db.profiles||{},n)')],
+    ['rank assignment removes a profile created only by a failed transaction',route.includes('if(hadProfile)db.profiles[n]=previousProfile;else delete db.profiles[n];')],
+    ['rank assignment restores the original rank-audit root or removes the newly created root',route.includes("if(hadRankAudit)db.rankAudit=previousRankAudit;else delete db.rankAudit;")],
+    ['rank assignment restores notification root existence and the target inbox exactly',route.includes('hadNotificationsRoot=Object.prototype.hasOwnProperty.call(db,\'notifications\')')&&route.includes('if(hadNotificationsRoot){if(hadMemberNotifications)db.notifications[n]=previousNotifications;else delete db.notifications[n];}else delete db.notifications;')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('rank assignment exact rollback regression checks',error.message); }
