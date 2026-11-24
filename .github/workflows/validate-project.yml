@@ -65,7 +65,7 @@ jobs:
         run: docker build --pull -t rimaz-chat-iraqi:ci .
 
   refresh-release-archive:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/fix/bound-private-media-ticket-cache' && github.actor != 'github-actions[bot]'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/fix/bound-private-media-ticket-cache'
     needs: validate
     runs-on: ubuntu-latest
     permissions:
