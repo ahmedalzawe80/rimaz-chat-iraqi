@@ -15,6 +15,7 @@
 - Updated the route regression assertion to require the cancellable pipeline.
 - The database-only backup route already streams a restrictive temporary file and cleans it on stream close/error/response close.
 - **Validation status:** latest GitHub commit status query returned no status entries, and the connected workflow-run lookup only exposes PR-triggered runs (none returned for this push commit). Therefore the new tests, syntax check, Docker build, and archive refresh are **pending/unconfirmed**, not green. Recheck GitHub Actions for the exact latest branch head before relying on this change.
+- The tracked release ZIP still has blob SHA `96867de7440dd0ca946615975f382980a8a67724`, unchanged from the pre-follow-up candidate. Treat it as **stale** until the push workflow rebuilds it from the validated exact head and the extracted archive independently passes `npm test` and Docker validation.
 
 ## Remaining memory risks
 - Routine database save uses the bounded-memory `lib/json-writer.js`.
