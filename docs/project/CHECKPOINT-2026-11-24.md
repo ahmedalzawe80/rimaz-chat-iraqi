@@ -220,3 +220,5 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Latest code/test SHA: e501cc27925274e22cbaf6d2c9505d3b1e1a5c72. CI run/status was not yet visible when this checkpoint was written; do not claim this change is validated until a workflow completes successfully on this exact SHA.
 - Prior verified code/test SHA 15072ddf331f2a76ce4215cd50b8f8819d0aa45d passed run 45373425456 with 520 pass markers and 0 failures.
 - No merge, deployment, restart, ZIP sync, or live persistent-volume/data modification.
+
+- Validation update: workflow run 45373709187 completed successfully on exact code/test SHA e501cc27925274e22cbaf6d2c9505d3b1e1a5c72; 521 pass markers, 0 failure markers, syntax/regression checks and production Docker build succeeded. The log explicitly says live-server testing is still required.
