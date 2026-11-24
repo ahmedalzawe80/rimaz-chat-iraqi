@@ -436,6 +436,7 @@ try {
   const checks=[
     ['admin route permission map separates message deletion, announcement deletion, profile, avatar, and room operations',mapping.includes("if(p.startsWith('/api/admin/message/'))return 'messages_delete'")&&mapping.includes("if(p.startsWith('/api/admin/announcement/'))return 'announcement_delete'")&&mapping.includes("if(p.startsWith('/api/admin/profile/'))return 'profile_edit'")&&mapping.includes("if(p.startsWith('/api/admin/avatar/'))return 'avatar_delete'")&&mapping.includes("return 'room_delete'")&&mapping.includes("return 'room_lock'")],
     ['admin guard rejects missing route permission before calling the handler',guard.includes("if(!hasPermission(req.user,permission))return res.status(403)")&&guard.includes('return next();')],
+    ['smiley upload uses the central permission map and audited admin guard',mapping.includes("if(p==='/api/admin/chat-tools/smiley-upload')return 'smileys_manage'")&&source.includes("app.post('/api/admin/chat-tools/smiley-upload',requireAdmin,")&&!source.includes("app.post('/api/admin/chat-tools/smiley-upload',requirePermission(")],
     ['admin audit entries are appended immutably and restored when the audit save fails',guard.includes('const previous=db.adminAuditLogs')&&guard.includes('db.adminAuditLogs=[{id:Date.now()')&&guard.includes("catch(error){if(previous===undefined)delete db.adminAuditLogs;else db.adminAuditLogs=previous")]
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
