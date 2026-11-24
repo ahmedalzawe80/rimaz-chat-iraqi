@@ -2415,7 +2415,8 @@ try {
   const checks=[
     ['HTTP and Socket.IO public messages both include effective role metadata',http.includes('role:roleOf(u)')&&socket.includes('role:roleOf(u)')],
     ['HTTP and Socket.IO public messages both include effective VIP state',http.includes('vip:vipActive(u.name)')&&socket.includes('vip:vipActive(u.name)')],
-    ['both transports retain the same likes and profile metadata',http.includes('likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)')&&socket.includes('likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)')]
+    ['both transports retain the same likes and profile metadata',http.includes('likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)')&&socket.includes('likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)')],
+    ['HTTP and Socket.IO both identify ordinary public chat messages as text',http.includes("type:'text'")&&socket.includes("type:'text'")]
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('HTTP and Socket.IO public message payload parity checks',error.message); }
