@@ -56,3 +56,12 @@ The owner has requested publication after completion, but production promotion m
 ## Resume instructions
 
 Always inspect the current PR head and exact-head CI first. Keep work on `fix/bound-private-media-ticket-cache`. Do not claim production readiness from CI alone. Continue with backup/staging coordination; publish only after the release gates are actually complete.
+
+
+## Follow-up archive-audit hardening — 2026-11-24
+
+- Latest workflow hardening commit: [70884a8](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/commit/70884a8b0a800f686e94e7137b03d9eee09fee11).
+- Archive audit now runs ZIP CRC/integrity validation before extraction, then verifies the extracted project's locked dependency tree with `npm ls --depth=0`, repeats JavaScript syntax checks, and verifies root/public HTML parity before Docker build.
+- Exact-head validation run [45412772398](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45412772398) passed on this commit: 567 pass markers, zero failures, production Docker build successful, and npm audit output reported zero vulnerabilities.
+- Exact-head archive audit run [45412772526](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45412772526) passed on this commit: archive integrity/parity, 567 pass markers, zero failures, dependency-tree verification, and Docker build.
+- These are repository/CI checks only. They do not establish live Deplexo health or replace independent backup and staging restore tests.
