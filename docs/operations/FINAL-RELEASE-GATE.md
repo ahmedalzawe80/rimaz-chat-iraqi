@@ -179,3 +179,13 @@ Platform references: [Deplexo storage and filesystem](https://docs.deplexo.com/o
 - `GET /api/admin/backup/database` exports the sanitized database JSON only. The database restore preview/confirm routes accept that JSON format; they do not unpack the full `.tar.gz` or restore uploads/private-media. A full staging restore must therefore restore the database and media trees separately, preserving paths and filesystem ownership under `DATA_DIR=/data/rimaz`.
 - The current full-backup generator snapshots the in-memory database, then walks and streams media files. It does not establish one atomic lock across database changes and concurrent upload/delete operations. For a consistency-sensitive backup, use a quiet/maintenance window that prevents uploads and media deletion while exporting, or obtain an offline consistent volume snapshot through the hosting provider. Do not describe a downloaded archive alone as a verified backup.
 - Before staging restore, calculate and store an external SHA-256 for the downloaded archive. After extraction, verify the database format/owner record, file counts and hashes for uploads/private-media, then run application smoke tests against the isolated copy. Keep the original production volume untouched.
+
+## Current verified candidate — 2026-11-24 19:40 UTC
+
+- Source/documentation update: `ce7802f4d07d863c0b264c74d97af29b206081eb` refreshed the transaction-safety audit so it no longer repeats superseded lockfile and dependency-install findings.
+- [GitHub Actions run #707](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45472361362) completed successfully on that source/documentation candidate. Both `validate` and `refresh-release-archive` jobs succeeded.
+- The source job passed locked dependency installation, dependency-tree verification, JavaScript syntax checks, **603 regression checks with zero failures**, and the production Docker build.
+- The archive job rebuilt the tracked source archive, validated CRC/path/symlink/duplicate safety and tracked-file parity, extracted it into a clean directory, then passed locked installation, dependency-tree verification, syntax, **603 regression checks with zero failures**, HTML parity, Docker build, and npm audit (**0 vulnerabilities**).
+- Archive-only commit: `81d99d39b78044eed4ea8557240b51acc53173e6`. It changes only `rimaz-final-deep-audit-46.93.72.zip`; archive size is **16,359,464 bytes**.
+- Current PR #3 head is `81d99d39b78044eed4ea8557240b51acc53173e6`, still **Draft / Open / Unmerged**. `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
+- No deployment, restart, ZIP synchronization to production, or live-volume/data change has occurred. The operational release blockers below remain mandatory.
