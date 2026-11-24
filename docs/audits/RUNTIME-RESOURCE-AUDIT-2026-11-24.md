@@ -118,3 +118,19 @@ This correction reduces the transient allocation in routine save() calls. It doe
 4. The in-memory database itself remains resident by design; this writer only removes the additional full serialization string from routine saves.
 
 These are verified source-level allocation paths, not proof of the historical OOM cause. Do not lower the Node heap limit, reduce product functionality, or declare the 128 MB issue solved. Next code work should address backup/restore peak allocation while preserving exact archive contents, recovery guarantees, and restore safety; then validate under representative staging load and correlate with Deplexo exit/OOM evidence.
+
+
+## Restore recovery-buffer correction — 2026-11-24 20:42 UTC
+
+The database-restore confirmation path previously called readFileSync(DB_FILE), then copied that complete Buffer into a new recovery file. For a large live database this temporarily allocated another database-sized RAM buffer immediately before the replacement database was parsed and saved.
+
+The candidate now copies the live database directly from disk to the unique recovery path using copyFileSync with COPYFILE_EXCL. It explicitly restores restrictive 0600 permissions, opens the copied file read/write for fsync, and retains the existing directory fsync, recoveryReady gate, rollback behavior, and recovery-file retention after a successful restore. If any copy, permission, or sync step fails, the incomplete recovery file is removed and the restore is not allowed to proceed.
+
+The restore regression assertion now requires the disk-to-disk copy, exclusive destination creation, restrictive permissions, and fsync, and rejects the former whole-file recoveryData Buffer path.
+
+- Source/test candidate: a2a3c11274770af65de0810414a9e6a233474221.
+- [GitHub Actions run #45483322714](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45483322714) passed source and extracted-archive validation: **610 checks, zero failures** in each, both production Docker builds succeeded, and npm audit reported **0 vulnerabilities**.
+- Archive refresh verified **395 files**, **16,370,888 bytes**, CRC and exact tracked-file parity.
+- Archive-only commit: 9a27af2255adc56a61c580a5406ec49e4c18ae5f.
+
+This removes another full-database transient Buffer from restore confirmation. It does not remove the old database object retained for rollback, the new parsed restore object, the staged restore JSON text, or the remaining backup serialization allocations. The 128 MB provider issue therefore remains unproven at production level.
