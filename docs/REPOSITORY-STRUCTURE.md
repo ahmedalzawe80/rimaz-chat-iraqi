@@ -22,6 +22,7 @@ This guide explains why each top-level area exists and which files must remain i
 ├── .editorconfig
 ├── .gitattributes
 ├── .gitignore
+├── .nvmrc
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── Dockerfile
@@ -35,7 +36,7 @@ This guide explains why each top-level area exists and which files must remain i
 └── verify.js
 ```
 
-The last line is a category description, not a literal directory. The root also contains a small tracked data placeholder, the domain-verification file, Docker/Git configuration, and the audited ZIP required by the current workflows.
+The root also contains a small tracked data placeholder, the domain-verification file, Docker/Git configuration, a Node.js version pin, and the audited ZIP required by the current workflows.
 
 ## Root files that must not be moved casually
 
@@ -46,11 +47,16 @@ The last line is a category description, not a literal directory. The root also 
 | `index.html` | Main browser entry file and server SEO integration |
 | `Dockerfile` | Hosting and CI build from the repository root |
 | `verify.js` | Current npm test script runs this file |
+| `.nvmrc` | Canonical Node.js major version used by local nvm setup and CI |
 | `data.json` | Tracked warning placeholder retained for repository/workflow compatibility; it is not production data |
 | `google1a84d9d1dec7b85d.html` | Domain verification endpoint; keep it byte-identical to the copy under `public/` |
 | `rimaz-final-deep-audit-46.93.72.zip` | Exact input path for the archive audit and guarded manual synchronization workflows |
 
 `public/index.html` is a synchronized fallback copy of the root `index.html`. The regression suite checks that the two copies remain byte-identical.
+
+## Tooling consistency
+
+`.nvmrc` is the single Node.js major-version source for local development and GitHub Actions. `package.json` constrains supported runtime versions, while the Dockerfile uses the matching Node 24 base image. The validation workflow reads `.nvmrc` instead of duplicating a version literal and cancels superseded runs for the same branch or pull request.
 
 ## Runtime assets
 
