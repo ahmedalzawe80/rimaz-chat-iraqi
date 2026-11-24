@@ -4,17 +4,18 @@ on:
   push:
     branches:
       - fix/bound-private-media-ticket-cache
+    paths:
+      - .github/workflows/rebuild-release-archive-once.yml
 
 permissions:
   contents: write
 
 jobs:
   rebuild:
-    if: ${{ !contains(github.event.head_commit.message, 'refresh audited source archive') && !contains(github.event.head_commit.message, 'remove one-time archive builder') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout candidate branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: fix/bound-private-media-ticket-cache
           fetch-depth: 0
