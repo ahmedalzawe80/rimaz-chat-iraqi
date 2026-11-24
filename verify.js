@@ -758,12 +758,13 @@ try {
   for (const [label, ok] of scenarios) ok ? pass(label) : fail(label);
 } catch (error) { fail('rank hierarchy regression checks', error.message); }
 
-// Chat messages are persisted in a short batch rather than synchronously per message.
+// Chat messages are committed in a short batch before callers receive success or broadcast events.
 try {
   const source=fs.readFileSync(server,'utf8');
   const add=source.match(/function addMessage\(m\)\s*\{[\s\S]*?\n\}/);
-  const batch=source.match(/function scheduleMessageSave\(delay=350\)\s*\{[\s\S]*?\n\}/);
-  if(add&&batch&&!add[0].includes('save()')&&add[0].includes('scheduleMessageSave()')&&batch[0].includes('},delay)') && batch[0].includes('scheduleMessageSave(3000)')&&batch[0].includes('save()')&&source.includes('function gracefulShutdown(signal)')) pass('chat message writes are batched and flushed during graceful shutdown');
+  const batch=source.match(/function scheduleMessageSave\(delay=100\)\s*\{[\s\S]*?\n\}/);
+  const flush=source.match(/function flushMessageWrites\(\)\s*\{[\s\S]*?\n\}/);
+  if(add&&batch&&flush&&add[0].includes('pendingMessageWrites.push({message:m,resolve,reject})')&&batch[0].includes('flushMessageWrites()')&&flush[0].includes('save()')&&flush[0].includes('db.messages=previousMessages')&&flush[0].includes('entry.reject(error)')&&source.includes('function gracefulShutdown(signal)')) pass('chat message writes are batched, rollback-safe, retried, and flushed during graceful shutdown');
   else fail('chat message write batching and shutdown flush');
 } catch(error){fail('chat write batching checks',error.message);}
 
@@ -2058,7 +2059,7 @@ try {
   const fn=source.slice(start,end);
   const run=failSave=>{
     const events=[];
-    const context={messageSaveTimer:null,clearTimeout:()=>{},save:()=>{if(failSave)throw new Error('disk failure');},
+    const context={messageSaveTimer:null,pendingMessageWrites:[],flushMessageWrites:()=>true,clearTimeout:()=>{},save:()=>{if(failSave)throw new Error('disk failure');},
       console:{error:()=>{}},io:{close:callback=>{events.push('close');callback();}},
       process:{exit:code=>events.push(['exit',code])},setTimeout:()=>({unref(){}})};
     vm.createContext(context);vm.runInContext(fn+";gracefulShutdown('SIGTERM');",context);return events;
@@ -2177,37 +2178,36 @@ try {
     const source=fs.readFileSync(server,'utf8');
     const queue=source.match(/let messageSaveTimer=null;\nlet pendingMessageWrites=\[\];[\s\S]*?function addMessage\(m\)\{[\s\S]*?\n\}/);
     if(!queue)throw new Error('message persistence queue not found');
-    const makeContext=(failures=0)=>{
+    const makeContext=(initialFailures=0)=>{
+      let failuresLeft=initialFailures, activeTimer=null, saved=[];
       const context={
         db:{messages:[{id:'committed'}]},
-        failures,
-        timer:null,
         console:{error(){}},
         save(){
-          if(this.failures>0){this.failures--;throw new Error('simulated disk failure');}
-          this.saved=this.db.messages.map(message=>message.id);
+          if(failuresLeft>0){failuresLeft--;throw new Error('simulated disk failure');}
+          saved=this.db.messages.map(message=>message.id);
         },
-        setTimeout(fn,delay){const timer={fn,delay,unref(){}};this.timer=timer;return timer;},
-        clearTimeout(timer){if(this.timer===timer)this.timer=null;}
+        setTimeout(fn,delay){activeTimer={fn,delay,unref(){}};return activeTimer;},
+        clearTimeout(timer){if(activeTimer===timer)activeTimer=null;}
       };
       vm.createContext(context);
       vm.runInContext(queue[0]+'\nglobalThis.enqueue=addMessage;globalThis.state=()=>({pending:pendingMessageWrites.length,attempts:messageSaveAttempts});',context);
-      return context;
+      return {context,getTimer:()=>activeTimer,getSaved:()=>saved};
     };
     const ok=makeContext();
-    const committed=ok.enqueue({id:'new-message'});
-    const hiddenBeforeCommit=ok.db.messages.length===1&&ok.state().pending===1;
-    ok.timer.fn();
+    const committed=ok.context.enqueue({id:'new-message'});
+    const hiddenBeforeCommit=ok.context.db.messages.length===1&&ok.context.state().pending===1;
+    ok.getTimer().fn();
     await committed;
-    const commitBeforeResolve=ok.db.messages.map(x=>x.id).join(',')==='committed,new-message'&&ok.saved.join(',')==='committed,new-message';
+    const commitBeforeResolve=ok.context.db.messages.map(x=>x.id).join(',')==='committed,new-message'&&ok.getSaved().join(',')==='committed,new-message';
 
     const retry=makeContext(1);
-    const retried=retry.enqueue({id:'retry-message'});
-    retry.timer.fn();
-    const rollbackOnFailure=retry.db.messages.length===1&&retry.state().pending===1&&retry.timer.delay===1000;
-    retry.timer.fn();
+    const retried=retry.context.enqueue({id:'retry-message'});
+    retry.getTimer().fn();
+    const rollbackOnFailure=retry.context.db.messages.length===1&&retry.context.state().pending===1&&retry.getTimer().delay===1000;
+    retry.getTimer().fn();
     await retried;
-    const retryCommit=retry.db.messages.map(x=>x.id).join(',')==='committed,retry-message'&&retry.saved.join(',')==='committed,retry-message';
+    const retryCommit=retry.context.db.messages.map(x=>x.id).join(',')==='committed,retry-message'&&retry.getSaved().join(',')==='committed,retry-message';
 
     if(hiddenBeforeCommit&&commitBeforeResolve&&rollbackOnFailure&&retryCommit)
       pass('chat message queue hides uncommitted messages, commits before resolving, and retries failed writes without memory leakage');
