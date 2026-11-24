@@ -211,3 +211,12 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Pull-request workflow run 45373425456 completed successfully on that exact SHA: syntax checks, npm test, and Docker build passed; 520 pass markers and 0 failure markers.
 - The remaining custom admin routes were inventoried and each includes authentication plus explicit permission/role checks; a full action-by-action parity proof remains ongoing.
 - No merge, PR closure, production deployment, restart, ZIP sync, or live data/volume modification was performed.
+
+
+## Graceful-shutdown persistence failure reporting — 2026-11-24
+- Confirmed that gracefulShutdown logged a failed final atomic database save but still called process.exit(0), falsely reporting a clean shutdown when the final write failed.
+- Changed shutdown to exit 0 only after a successful final save; a failed final save now closes Socket.IO and exits with status 1 so the supervisor/host can detect an unsuccessful shutdown.
+- Added a regression fixture covering both successful and failed final-save exit statuses.
+- Latest code/test SHA: e501cc27925274e22cbaf6d2c9505d3b1e1a5c72. CI run/status was not yet visible when this checkpoint was written; do not claim this change is validated until a workflow completes successfully on this exact SHA.
+- Prior verified code/test SHA 15072ddf331f2a76ce4215cd50b8f8819d0aa45d passed run 45373425456 with 520 pass markers and 0 failures.
+- No merge, deployment, restart, ZIP sync, or live persistent-volume/data modification.
