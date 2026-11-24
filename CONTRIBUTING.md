@@ -4,7 +4,7 @@ This guide keeps repository changes reviewable and protects live user data.
 
 ## Runtime and dependencies
 
-- Use Node.js 24 LTS and npm, matching `package.json` and the production Docker image.
+- Use Node.js 24 LTS and npm, matching `package.json`, `.nvmrc`, and the production Docker image. Run `nvm use` from the repository root when using nvm.
 - The repository currently has no committed `package-lock.json`. Until a reviewed lockfile is added, use `npm install`; do not switch CI or deployment to `npm ci`.
 - Do not commit `node_modules/`, local environment files, credentials, database snapshots, uploads, private media, or hosting backups.
 
