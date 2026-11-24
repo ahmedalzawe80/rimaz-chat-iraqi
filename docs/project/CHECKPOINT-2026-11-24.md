@@ -280,3 +280,11 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Added regression assertions for each rollback boundary.
 - Exact code/test SHA `8c6134e2d320618f171b4120a3de9bf1c0913942` passed PR workflow run `45378519916`: 548 pass markers, 0 failure markers, syntax checks, full regression suite, and production Docker build passed.
 - No merge/deployment or production data/volume modification. Live/staging verification and backup/restore are still required before promotion.
+
+
+## Fail-closed startup migration persistence — 2026-11-24
+- A startup audit found four migration/cleanup paths that logged a failed save and continued booting with changed in-memory state: smiley gallery migration, welcome-message defaults, expired-announcement cleanup, and gift catalogue migration.
+- These paths now fail startup explicitly when their durable save fails. This prevents a later unrelated write from silently persisting a migration that never committed at startup.
+- Added four regression assertions covering each fail-closed path.
+- Exact head SHA `de1225f8d9b0ecfa25c8666a3c641aa87ba19714` passed PR workflow run `45379172304`: 552 pass markers, zero failure markers, JavaScript syntax, regression suite, and production Docker build all succeeded.
+- No merge, deployment/restart, ZIP sync, or live persistent-volume/data modification. Staging and verified backup/restore remain mandatory before promotion.
