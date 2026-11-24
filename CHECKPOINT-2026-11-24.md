@@ -8,7 +8,7 @@ Do NOT merge PRs, change main, deploy/restart Deplexo, run ZIP sync, or touch pr
 ## Repository state
 Repository: ahmedalzawe80/rimaz-chat-iraqi
 Application branch: fix/bound-private-media-ticket-cache
-Current PR #3 head: 0fb68b43b0872cb8b7646b9c3c5b18bd63283a72
+Current PR #3 head: 22546fac8d8eee45c4046f3963c9bc60c2378ab0
 PR #3: https://github.com/ahmedalzawe80/rimaz-chat-iraqi/pull/3 (open, draft, not merged)
 PR #2: https://github.com/ahmedalzawe80/rimaz-chat-iraqi/pull/2 (open, draft, not merged; head 86137b5de057d72e838dcf10241f6bb5a3d6178e)
 Working base: safety/validate-and-backup-before-sync
@@ -16,13 +16,8 @@ Last recorded production/base commit: 08807d8be8393a7cf29309c670d7acfd59c5f78c
 Deplexo service noble-horizon-5826: https://noble-horizon-5826.de.deplexo.com/
 No production deployment or persistent-volume access was performed.
 
-## Latest CI — currently RED, do not overlook
-Run: https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45286548489
-Head: 0fb68b43b0872cb8b7646b9c3c5b18bd63283a72
-Syntax checks passed. Regression suite failed exactly these checks:
-1. private chat module is enforced on history, contacts, media, and Socket.IO send
-2. session transient cleanup runtime fixture
-Docker build skipped because tests failed. Diagnose the actual implementation/test mismatch; do not weaken assertions merely to get green. Earlier green run 45286406940 at 477e839e predates latest changes and is not proof current head passes.
+## Latest CI — verification not yet reported for latest commit
+Latest diagnosis: the private-chat assertion was overly exact about listener text; corrected to reflect actual socket data declaration without removing enforcement checks. The transient cleanup fixture had a genuine test harness omission: it declared `privateMessageWindows` but failed to pass it into the VM context executing `clearSessionTransientState`, causing a runtime ReferenceError. Commit `84ce94e3ad51550dc70913bc4b3f482a542328d8` fixed assertion text and fixture map declaration; commit `22546fac8d8eee45c4046f3963c9bc60c2378ab0` subsequently added the missing VM-context binding. CI status and workflow-run retrieval for this latest SHA returned no records; success is not confirmed. Earlier green run 45286406940 predates these changes and is not proof current head passes.
 
 ## Work already in PR #2
 - Removed incomplete nested rimaz-chat-iraqi-main folder after verifying it was not canonical source.
@@ -77,3 +72,9 @@ Transaction audit (verify file exists on branch): https://github.com/ahmedalzawe
 8. Never merge/deploy without independent backup+restore, staging smoke tests, and explicit approval.
 
 Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ عالج فشل CI الحالي (فحص private chat module وفحص session transient cleanup)، ثم واصل تدقيق الصلاحيات والحفظ والاعتمادات، بدون دمج أو نشر."
+
+
+## Continuation progress (2026-11-24)
+- Latest repair commit: `22546fac8d8eee45c4046f3963c9bc60c2378ab0` (test fixture VM binding).
+- Latest CI lookup for this commit: no status records and no PR workflow runs returned by connector; CI remains unverified.
+- No merge, deployment, sync, or production data access occurred.
