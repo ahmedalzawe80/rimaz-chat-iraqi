@@ -2,6 +2,12 @@ name: Validate and Clean Replace Project Upload
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm_main_replacement:
+        description: "I reviewed the archive and approve replacing application files on main."
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: write
@@ -12,7 +18,7 @@ concurrency:
 
 jobs:
   replace-project:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.confirm_main_replacement == true
     runs-on: ubuntu-latest
 
     steps:
@@ -21,26 +27,47 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Extract and validate ZIP
+      - name: Validate ZIP integrity and safe paths
         shell: bash
         run: |
           set -euo pipefail
-
           ARCHIVE="rimaz-final-deep-audit-46.93.72.zip"
-          STAGING="$RUNNER_TEMP/rimaz-upload"
-
           if [ ! -f "$ARCHIVE" ]; then
             echo "ERROR: $ARCHIVE not found"
             exit 1
           fi
-
           unzip -tq "$ARCHIVE"
+          python3 - "$ARCHIVE" <<'PY'
+          import re, stat, sys, zipfile
+          archive = sys.argv[1]
+          seen = set()
+          with zipfile.ZipFile(archive) as z:
+              for item in z.infolist():
+                  name = item.filename.replace("\\", "/")
+                  parts = name.split("/")
+                  if name.startswith("/") or re.match(r"^[A-Za-z]:", name) or any(part in (".", "..") for part in parts):
+                      raise SystemExit(f"Unsafe archive path: {item.filename}")
+                  mode = (item.external_attr >> 16) & 0o170000
+                  if mode == stat.S_IFLNK:
+                      raise SystemExit(f"Archive symlink is not allowed: {item.filename}")
+                  if not item.is_dir():
+                      if name in seen:
+                          raise SystemExit(f"Duplicate archive file path: {name}")
+                      seen.add(name)
+          print(f"Archive paths validated: {len(seen)} files")
+          PY
+
+      - name: Extract and validate application root
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="rimaz-final-deep-audit-46.93.72.zip"
+          STAGING="$RUNNER_TEMP/rimaz-upload"
           mkdir -p "$STAGING"
           unzip -q "$ARCHIVE" -d "$STAGING"
 
           SOURCE=""
           MATCHES=0
-
           if [ -f "$STAGING/package.json" ] && [ -f "$STAGING/server.js" ]; then
             SOURCE="$STAGING"
             MATCHES=1
@@ -59,14 +86,19 @@ jobs:
             exit 1
           fi
 
-          test -f "$SOURCE/package.json"
-          test -f "$SOURCE/server.js"
-          test -f "$SOURCE/index.html"
-          test -f "$SOURCE/public/index.html"
-          test -f "$SOURCE/verify.js"
-
+          for file in package.json server.js index.html verify.js; do
+            test -f "$SOURCE/$file"
+          done
+          test -d "$SOURCE/public"
+          ARCHIVE_VERSION="${ARCHIVE#rimaz-final-deep-audit-}"
+          ARCHIVE_VERSION="${ARCHIVE_VERSION%.zip}"
+          ACTUAL_VERSION="$(cd "$SOURCE" && node -p "require('./package.json').version")"
+          if [ "$ACTUAL_VERSION" != "$ARCHIVE_VERSION" ]; then
+            echo "ERROR: Archive filename version $ARCHIVE_VERSION does not match package version $ACTUAL_VERSION"
+            exit 1
+          fi
           echo "PROJECT_SOURCE=$SOURCE" >> "$GITHUB_ENV"
-          echo "Project root validated: $SOURCE"
+          echo "Project root validated: $SOURCE (version $ACTUAL_VERSION)"
 
       - name: Run source checks before changing repository
         shell: bash
@@ -77,30 +109,25 @@ jobs:
           node --check verify.js
           node verify.js
 
-      - name: Create rollback branch before replacement
+      - name: Create repository rollback branch
         shell: bash
         run: |
           set -euo pipefail
           BACKUP_BRANCH="backups/pre-zip-sync-${GITHUB_RUN_ID}"
           git push origin "HEAD:refs/heads/$BACKUP_BRANCH"
-          echo "Rollback branch created: $BACKUP_BRANCH"
+          echo "Repository rollback branch created: $BACKUP_BRANCH"
+          echo "This branch does not back up the external hosting volume."
 
-      - name: Replace application source while preserving runtime data
+      - name: Synchronize only application-managed files
         shell: bash
         run: |
           set -euo pipefail
-
-          rsync -a --delete \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='data.json' \
-            --exclude='google1a84d9d1dec7b85d.html' \
-            --exclude='rimaz-final-deep-audit-46.93.72.zip' \
-            --exclude='node_modules/' \
-            --exclude='data/' \
-            --exclude='uploads/' \
-            --exclude='private-media/' \
-            "$PROJECT_SOURCE/" ./
+          install -m 0644 "$PROJECT_SOURCE/server.js" ./server.js
+          install -m 0644 "$PROJECT_SOURCE/index.html" ./index.html
+          install -m 0644 "$PROJECT_SOURCE/package.json" ./package.json
+          install -m 0644 "$PROJECT_SOURCE/verify.js" ./verify.js
+          mkdir -p ./public
+          rsync -a --delete --exclude='/google1a84d9d1dec7b85d.html' "$PROJECT_SOURCE/public/" ./public/
 
       - name: Verify synchronized repository
         shell: bash
@@ -109,19 +136,18 @@ jobs:
           node --check server.js
           node --check verify.js
           node verify.js
+          cmp -s index.html public/index.html
 
-      - name: Commit validated replacement
+      - name: Commit validated application replacement
         shell: bash
         run: |
           set -euo pipefail
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           git add -A
           if ! git diff --cached --quiet; then
-            git commit -m "Validated clean replace from audited ZIP"
+            git commit -m "Validated application source sync from audited ZIP"
             git push origin HEAD:main
           else
-            echo "No changes to commit"
+            echo "No application changes to commit"
           fi
