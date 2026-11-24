@@ -1,3 +1,12 @@
+## Repository maintenance — 2026-11-24 (no application version change)
+
+- Organized project continuity notes, engineering audits, and operations records under `docs/project/`, `docs/audits/`, and `docs/operations/`; the root now keeps only the primary README and changelog among Markdown files.
+- Added a categorized documentation index and regression checks for missing documents, broken index links, and reports scattered in the repository root.
+- Removed the incomplete nested `rimaz-chat-iraqi-main/` duplicate after confirming it contained only a placeholder data file and a duplicate Google verification file.
+- Added repository hygiene rules and documentation for persistent runtime data, Docker exclusions, and guarded source synchronization.
+- Kept the audited source ZIP at the repository root because the current archive-audit and manual-sync workflows depend on that exact path.
+- Kept application entry points and `public/` in their runtime-required locations; no production data or hosting volume was changed.
+
 ## v46.93.72 (2026-11-22)
 
 - Fixed transient anti-spam state lifecycle: per-session message windows are removed only after the reconnect grace period ends and the session removal is durably saved; orphaned transient entries are also swept periodically.
