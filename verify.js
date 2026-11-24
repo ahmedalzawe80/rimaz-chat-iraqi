@@ -2181,6 +2181,10 @@ try {
   const syncWorkflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'unzip-upload.yml'), 'utf8');
   const archiveWorkflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'audit-rootfix-archive.yml'), 'utf8');
   const validateWorkflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'validate-project.yml'), 'utf8');
+  const packageManifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const lockManifest = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
+  const dockerfile = fs.readFileSync(path.join(root, 'Dockerfile'), 'utf8');
+  const sortedDependencies = value => JSON.stringify(Object.entries(value || {}).sort(([a],[b]) => a.localeCompare(b)));
   const nestedLegacy = path.join(root, 'rimaz-chat-iraqi-main');
   const checks = [
     ['local dependencies and runtime directories are ignored by Git', ignore.includes('/node_modules/') && ignore.includes('/data/') && ignore.includes('/uploads/') && ignore.includes('/private-media/')],
@@ -2190,6 +2194,9 @@ try {
     ['manual public asset synchronization excludes the Google verification file from deletion', syncWorkflow.includes("--exclude='/google1a84d9d1dec7b85d.html'")],
     ['the incomplete nested project duplicate is removed', !fs.existsSync(nestedLegacy)],
     ['Docker build exclusions no longer reference the deleted nested project', !dockerIgnore.includes('rimaz-chat-iraqi-main/')],
+    ['committed npm lockfile v3 matches package identity and dependency declarations', lockManifest.lockfileVersion === 3 && !!lockManifest.packages?.[''] && lockManifest.packages[''].name === packageManifest.name && lockManifest.packages[''].version === packageManifest.version && sortedDependencies(lockManifest.packages[''].dependencies) === sortedDependencies(packageManifest.dependencies) && sortedDependencies(lockManifest.packages[''].devDependencies) === sortedDependencies(packageManifest.devDependencies)],
+    ['production Docker image installs only the locked production dependency graph', dockerfile.includes('RUN npm ci --omit=dev') && !dockerfile.includes('npm install --omit=dev')],
+    ['permanent CI requires npm ci and verifies the dependency tree', validateWorkflow.includes('npm ci --no-audit --no-fund') && validateWorkflow.includes('npm ls --depth=0')],
     ['manual source replacement requires explicit confirmation on main', syncWorkflow.includes('confirm_main_replacement') && syncWorkflow.includes("github.ref == 'refs/heads/main' && inputs.confirm_main_replacement == true")],
     ['manual source sync is scoped to application and locked build files plus public assets', syncWorkflow.includes('for file in server.js index.html package.json package-lock.json Dockerfile verify.js; do') && syncWorkflow.includes('install -m 0644 "$PROJECT_SOURCE/$file" "./$file"') && syncWorkflow.includes("rsync -a --delete --exclude='/google1a84d9d1dec7b85d.html' \"$PROJECT_SOURCE/public/\" ./public/") && !syncWorkflow.includes('rsync -a --delete "$PROJECT_SOURCE/" ./')],
     ['manual source sync refuses a stale archive that differs from main', syncWorkflow.includes('Require archive to match current main source') && syncWorkflow.includes('cmp -s "$PROJECT_SOURCE/$file" "$file"') && syncWorkflow.includes('diff -qr --no-dereference "$PROJECT_SOURCE/public" ./public')],
