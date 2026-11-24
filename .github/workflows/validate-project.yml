@@ -9,6 +9,12 @@ on:
     branches:
       - fix/bound-private-media-ticket-cache
   pull_request:
+    # Push validation runs on every candidate commit. Only validate PR lifecycle
+    # events here; bot archive commits must not trigger approval-gated sync runs.
+    types:
+      - opened
+      - reopened
+      - ready_for_review
     branches:
       - safety/validate-and-backup-before-sync
       - main
