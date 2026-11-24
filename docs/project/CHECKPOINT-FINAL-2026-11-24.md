@@ -107,3 +107,14 @@ Always inspect the current PR head and exact-head CI first. Keep work on `fix/bo
 - Candidate code validation run [45420675671](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45420675671) passed on the same source candidate before the archive commit. The later PR archive-audit run had started before the ZIP replacement and therefore does not validate the refreshed ZIP; the successful builder run above is the evidence for the refreshed archive.
 - Final cleanup commit: `c68ff6fb361228d82f208cc6dd824fbfead194ec`. PR-triggered checks for the cleanup commit require GitHub Actions approval and are not represented as green here.
 - This is repository/archive validation only. It does not replace live Deplexo backup/restore, isolated staging, runtime/load checks, or production approval. No merge, deployment, restart, or live-data change occurred.
+
+## Private/wall media module enforcement — 2026-11-24
+
+- Root-cause finding: the shared `POST /api/media` upload route checked the private-media sender threshold and wall's temporary stop flag, but did not enforce the independent `privateChat` and `wall` module switches. This allowed the media-upload transport to bypass the module shutdown enforced by the text/history routes.
+- Fixed both branches server-side. When a module is disabled, the already-uploaded temporary file is removed before returning HTTP 403; accepted uploads retain the existing authorization and storage flow.
+- Added regression assertions requiring both module checks to exist in the media route, clean up rejected files, and run before private-message/wall-post mutation.
+- Server fix: [a297c05](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/commit/a297c0526f7ab5a41b0e7f3e217ac8ec11a01e64).
+- Regression tests: [d29626a](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/commit/d29626aee164956001f54ca6aa86d6c33f6da437).
+- Current branch head at checkpoint: `d29626aee164956001f54ca6aa86d6c33f6da437`. Exact-head GitHub Actions results were not yet available when this note was written; do not claim the new tests or Docker build have passed until the runs report success.
+- The ZIP archive predates these source/test changes and must be rebuilt and pass CRC, safe-path, tracked-file parity, extracted `npm ci`, `npm test`, and Docker checks before anyone uses it. Do not upload or synchronize the old ZIP.
+- PR #3 remains open, draft, and unmerged. No main update, deployment, restart, or live-data modification has occurred.
