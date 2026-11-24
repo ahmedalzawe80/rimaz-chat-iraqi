@@ -2182,6 +2182,7 @@ try {
         db:{messages:[{id:'committed'}]},
         failures,
         timer:null,
+        console:{error(){}},
         save(){
           if(this.failures>0){this.failures--;throw new Error('simulated disk failure');}
           this.saved=this.db.messages.map(message=>message.id);
