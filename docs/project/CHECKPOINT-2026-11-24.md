@@ -263,3 +263,12 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Added three regression assertions for save-before-cancel ordering, rollback behavior, and successful cleanup ordering.
 - Exact code/test SHA `c6a9885aaed362433be28444ecedbd00f1aa0d5c` passed PR workflow run `45377998719`: 538 pass markers, 0 failure markers, JavaScript syntax checks passed, full regression checks passed, and production Docker build passed.
 - CI is still not a substitute for staging/live-server testing. No merge, PR closure, production deployment/restart, ZIP sync, or live persistent-volume/database/uploads/private-media modification.
+
+
+## Disconnected-session retry and HTTP chat metadata parity — 2026-11-24
+- A second lifecycle defect was found in `scheduleSessionDisconnectCleanup`: after the 60-second grace timer fired, a failed database save restored the session but returned without scheduling another cleanup attempt. The session could remain orphaned indefinitely in the running process.
+- The failure path now schedules a fresh 60-second cleanup attempt after restoring the session and guest/profile state. The timer remains bounded and unref'ed; transient state is still cleared only after a successful save.
+- The HTTP `/api/message` fallback also now includes the same `role` and effective `vip` fields as Socket.IO `send-message`, keeping public-message payload metadata consistent across transports.
+- Added regression checks for cleanup retry, rollback ordering, and HTTP/Socket.IO message metadata parity.
+- Exact code/test SHA `41742dda0db75e22d9d8906de3261dfd88231d5c` passed PR workflow run `45378243267`: 544 pass markers, 0 failure markers, JavaScript syntax checks, regression suite, and production Docker build all succeeded.
+- CI validates repository checks and image construction only; live-server/staging and persistent-volume backup/restore validation remain outstanding. No merge, PR closure, deployment/restart, ZIP sync, or live data/volume modification.
