@@ -134,3 +134,19 @@ The restore regression assertion now requires the disk-to-disk copy, exclusive d
 - Archive-only commit: 9a27af2255adc56a61c580a5406ec49e4c18ae5f.
 
 This removes another full-database transient Buffer from restore confirmation. It does not remove the old database object retained for rollback, the new parsed restore object, the staged restore JSON text, or the remaining backup serialization allocations. The 128 MB provider issue therefore remains unproven at production level.
+
+
+## Bounded-memory backup output correction — 2026-11-24
+
+A further source review confirmed two remaining avoidable serialization peaks: the full TAR/GZIP backup built a complete pretty-printed JSON string and copied it into a Buffer, while the database-only endpoint built the complete JSON response string before sending it.
+
+The candidate now:
+- Uses the existing bounded-memory `writeJsonSync` serializer to write each database snapshot to a unique, exclusive, mode-0600 temporary file.
+- Fsyncs the completed temporary snapshot before exposing it to a download stream.
+- Adds the full-backup database file to TAR as a disk-backed entry; the TAR generator removes the temporary database file in a `finally` block after streaming or iterator cancellation.
+- Streams the database-only backup with `fs.createReadStream`, and removes the temporary file on stream close, error, or client disconnect.
+- Retains the existing backup JSON format, pretty-printing, excluded live sessions/private messages, TAR entry name, and archive file ordering.
+
+New regression coverage dynamically exercises the temp-file serializer with Arabic and large Unicode content, compares its exact output with native `JSON.stringify(value, null, 2)`, verifies restrictive 0600 permissions, rejects circular values, and verifies cleanup after failure. Additional assertions ensure both backup routes stream disk files and do not call `JSON.stringify` or create a database-sized Buffer.
+
+This removes the two confirmed full-output serialization allocations from the backup endpoints. It does **not** prove the 128 MB hosting issue is fixed: the live database remains resident, temporary disk capacity must be sufficient, concurrent backup requests can still consume disk and I/O, and restore preview/confirmation still parse a full JSON text/object graph. Staging tests must cover backup cancellation, concurrent downloads, disk-full/permission failures, archive integrity, restore round-trip, and representative-load RSS/heap/external measurements. No live Deplexo deployment or data-volume operation is implied by these source changes.
