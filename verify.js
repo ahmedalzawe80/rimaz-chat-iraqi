@@ -741,6 +741,14 @@ try {
   else fail('upload signature validator accepts valid containers and rejects MIME spoofing');
 } catch (error) { fail('upload signature fixture tests', error.message); }
 
+// Socket.IO session ownership: a superseded socket must not reclaim a session by emitting join again.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const joinHandler = source.match(/socket\.on\('join',[\s\S]*?\n  \}\);/);
+  if (joinHandler && joinHandler[0].includes('socket.data.sid!==requestedSid||!isCurrentSessionSocket(socket)') && joinHandler[0].includes('sessionUser(requestedSid)')) pass('superseded Socket.IO sessions cannot reclaim ownership through join');
+  else fail('superseded Socket.IO sessions cannot reclaim ownership through join');
+} catch (error) { fail('Socket.IO session ownership guard', error.message); }
+
 // All upload routes must validate actual file bytes, and room-message HTTP fallback
 // must prove that the same session joined the requested Socket.IO room.
 try {
