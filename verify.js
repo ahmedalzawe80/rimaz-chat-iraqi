@@ -1274,7 +1274,7 @@ try {
     const helperEnd=serverText.indexOf('const sessionTransientCleanupTimer=',helperStart);
     const helperSource=serverText.slice(helperStart,helperEnd);
     const botMessageWindows=new Map([['gone',{}],['live',{}]]),privateMessageWindows=new Map([['gone',{}]]),callSignalWindows=new Map([['gone',{}]]),voiceSignalWindows=new Map([['gone',{}]]),welcomeSentSessions=new Set(['gone','live']),sessions=new Map([['gone',{}],['live',{}]]),socketUsers=new Map([['live',{}]]),sessionDisconnectTimers=new Map([['gone',{}]]);
-    const helpers=vm.runInNewContext(helperSource+';({clearSessionTransientState,pruneOrphanedSessionState})',{botMessageWindows,callSignalWindows,voiceSignalWindows,welcomeSentSessions,sessions,socketUsers,sessionDisconnectTimers});
+    const helpers=vm.runInNewContext(helperSource+';({clearSessionTransientState,pruneOrphanedSessionState})',{botMessageWindows,privateMessageWindows,callSignalWindows,voiceSignalWindows,welcomeSentSessions,sessions,socketUsers,sessionDisconnectTimers});
     helpers.clearSessionTransientState('gone');
     const cleared=!botMessageWindows.has('gone')&&!privateMessageWindows.has('gone')&&!callSignalWindows.has('gone')&&!voiceSignalWindows.has('gone')&&!welcomeSentSessions.has('gone');
     botMessageWindows.set('orphan',{});sessions.set('orphan',{});
