@@ -1264,7 +1264,7 @@ const SAFE_UPLOAD_TYPES = Object.freeze({
 });
 const uploadStorage = multer.diskStorage({
   destination:UP_DIR,
-  filename:(req,file,cb)=>cb(null,Date.now()+'-'+crypto.randomBytes(8).toString('hex')+(SAFE_UPLOAD_TYPES[file.mimetype]||'.bin'))
+  filename:(req,file,cb)=>cb(null,Date.now()+'-'+crypto.randomBytes(8).toString('hex')+(SAFE_UPLOAD_TYPES[String(file.mimetype||'').toLowerCase()]||'.bin'))
 });
 function uploadFilter(req,file,cb){
   const allowed=Object.hasOwn(SAFE_UPLOAD_TYPES,String(file.mimetype||'').toLowerCase());
