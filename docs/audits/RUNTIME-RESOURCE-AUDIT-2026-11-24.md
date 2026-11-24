@@ -63,3 +63,23 @@ The change:
 ## Next production evidence required
 
 Before deployment, inspect the hosting container events and resource graphs, capture the live database file size and Node heap/RSS under normal traffic, and verify the restart reason and running commit. Preserve the live data volume and use a staging deployment for smoke and restore tests.
+
+## Historical Deplexo log correlation — 2026-11-24
+
+### Repeated port-3000 startup messages
+
+The historical log line `Rimaz server listening on 3000` reports the HTTP server's listening port. In the current source, `PORT` is configured from `process.env.PORT || 3000`, and the Dockerfile exposes port 3000. The repeated line proves that the process entered its listen callback multiple times; it does **not** identify a 300 MB limit, connection limit, timeout, or restart cause. Correlate each start timestamp with the provider's container lifecycle events and exit status.
+
+### Historical `ticket is not defined` exception
+
+The earlier Deplexo log reported `ReferenceError: ticket is not defined` four times at the then-deployed `/app/server.js:657`, reached through `requireAuth` at line 646. The current candidate's private-media stream route explicitly declares `const ticket=privateMediaPlaybackTickets.get(token)` before reading `ticket.expiresAt`, `ticket.filename`, or `ticket.account`. This source-level comparison suggests the old deployed artifact/path differed from the current candidate; it does not prove which revision was live when the error occurred.
+
+Five isolated regression checks were added for the current ticket implementation: same-account/file ticket reuse and expiry refresh, the 32-ticket per-account cap, the 4,096-ticket process-wide cap, expiry pruning, and declaration/authorization ordering in the stream route. Candidate push run [45479669853](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45479669853) passed source and extracted-archive validation with **608 checks and zero failures** in each, and both Docker builds succeeded. This validates the candidate only; confirm the deployed commit and inspect contemporaneous logs after a staged deployment before declaring the historical production exception resolved.
+
+### 128 MB hosting memory violation
+
+The user-provided Deplexo panel showed 37.4 MB used out of 128 MB at the time it was viewed, while the provider also recorded a prior memory-limit violation. Four low-load health snapshots (one online user) showed RSS between 72.14 and 75.97 MB without a monotonic rise. Those snapshots do not establish peak usage or rule out a leak under concurrent traffic.
+
+The current server health endpoint reports RSS, heap used/total, external memory, array buffers, database bytes, upload file count/bytes, uptime, online users, and room count. Restore uploads are staged to disk rather than Multer memory storage; pending previews retain a path and summary, are capped at two, and expire after five minutes. The restore file limit is 20 MB. Confirmation still reads the JSON text and parses the replacement object, so a large restore can temporarily require substantial additional memory.
+
+**Status:** the historical 128 MB violation is not proven fixed. No production OOM event, exit code, current database size, or representative concurrent-load measurement is available. Do not lower Node's heap limit or claim memory safety based only on the low-load snapshots. Required evidence is a staged run under representative load with repeated RSS/heap/external/arrayBuffers samples, database size, upload activity, process exit/restart events, and provider OOM status.
