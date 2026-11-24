@@ -2008,8 +2008,10 @@ app.post('/api/admin/restore/database/confirm',requireAdmin,(req,res)=>{
   const protectedOwnerName=process.env.OWNER_NAME||'owner';if(!restoreContainsOwner(checked.clean,protectedOwnerName))throw new Error('النسخة لا تحتوي حساب صاحب الموقع؛ رُفضت لحماية إمكانية الدخول للإدارة');
   if(fs.existsSync(DB_FILE)){
    recoveryFile=DB_FILE+'.pre-restore-'+Date.now()+'.json';
+   // Copy disk-to-disk so the live database is never duplicated into a full RAM Buffer.
    try{
     fs.copyFileSync(DB_FILE,recoveryFile,fs.constants.COPYFILE_EXCL);
+    fs.chmodSync(recoveryFile,0o600);
     const recoveryFd=fs.openSync(recoveryFile,'r+');
     try{fs.fsyncSync(recoveryFd);}finally{fs.closeSync(recoveryFd);}
    }catch(recoveryError){try{fs.unlinkSync(recoveryFile);}catch(_){}throw recoveryError;}
