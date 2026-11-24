@@ -235,3 +235,14 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - PR #3 remains open and draft, currently mergeable, and unmerged. PR #2 remains open/draft and overlaps the cleanup changes; do not merge or close either without explicit direction.
 - package-lock.json is still absent; dependency resolution is not yet reproducible. Do not switch to npm ci until a real registry-generated lockfile is reviewed and validated on Node 24.
 - No merge, production deployment/restart, ZIP sync, or live persistent-volume/database/uploads/private-media modification was performed.
+
+## HTTP / Socket.IO public-chat parity continuation — 2026-11-24
+- The public HTTP fallback now checks that the socket belongs to the current authenticated session and matching account, and that it is joined to the requested room.
+- HTTP and Socket.IO now call the same room anti-spam limiter (burst/repeat policy); Socket.IO normalizes the text to the same 2000-character limit before policy checks.
+- HTTP fallback preserves built-in bot commands by invoking the same server command handler before treating the text as a normal room message.
+- Added regression assertions for transport policy parity and a runtime fixture for burst/repeat rate limiting.
+- Latest branch head: 727d3f8401ef69d62eeaa2ec162f4580f9f3352b. Latest exact-SHA CI run 45376496516 completed successfully: 530 pass markers, 0 failure markers, production Docker build passed.
+- CI still explicitly requires live-server testing. This is not a production deployment or a validation of the Deplexo live volume.
+- PR #3 remains open/draft and targets the safety branch (base SHA 08807d8be8393a7cf29309c670d7acfd59c5f78c), not main. Main remains at a2c74fded15ea5cfde38d310a84c3c8edfe994b3. The cleanup and chat fixes are therefore not yet in main or the live site.
+- Current branch tree root is reduced to application/config essentials; documentation is grouped under docs/, and the obsolete nested project directory is absent. The root data.json is a documented placeholder, and the audit ZIP remains because workflows refer to it.
+- Next: stop making isolated micro-commits; reconcile overlapping PR #2/#3, review final diff as one release candidate, then obtain/verify backup + staging before any main merge or production promotion.
