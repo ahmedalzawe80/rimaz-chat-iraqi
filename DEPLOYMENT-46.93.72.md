@@ -16,7 +16,7 @@ The rollback branch is a snapshot of Git-tracked repository state. It is **not**
 
 ## Hosting and persistent storage
 
-- Use Node.js 20 or later.
+- Use Node.js 24 LTS, matching `package.json` and the production Docker image.
 - Start with `npm start` (or `node server.js`); the default port is `3000`.
 - Mount the persistent hosting volume at `/data`.
 - Set `DATA_DIR=/data/rimaz` so the database, uploads, and private media survive container replacement.
