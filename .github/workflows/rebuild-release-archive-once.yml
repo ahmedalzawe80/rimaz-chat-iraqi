@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   rebuild:
-    if: ${{ github.event.head_commit.message == 'chore(release): add one-time archive builder' }}
+    if: ${{ !contains(github.event.head_commit.message, 'refresh audited source archive') && !contains(github.event.head_commit.message, 'remove one-time archive builder') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout candidate branch
@@ -26,7 +26,7 @@ jobs:
           archive = "rimaz-final-deep-audit-46.93.72.zip"
           temporary = archive + ".tmp"
           excluded = {archive, ".github/workflows/rebuild-release-archive-once.yml"}
-          paths = subprocess.check_output(["git", "ls-files", "-z"]).decode().split("\\0")
+          paths = subprocess.check_output(["git", "ls-files", "-z"]).decode().split("\0")
           paths = sorted(p for p in paths if p and p not in excluded)
           with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
               for name in paths:
