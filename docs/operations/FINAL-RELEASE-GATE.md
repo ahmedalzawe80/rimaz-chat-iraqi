@@ -189,3 +189,25 @@ Platform references: [Deplexo storage and filesystem](https://docs.deplexo.com/o
 - Archive-only commit: `81d99d39b78044eed4ea8557240b51acc53173e6`. It changes only `rimaz-final-deep-audit-46.93.72.zip`; archive size is **16,359,464 bytes**.
 - Current PR #3 head is `81d99d39b78044eed4ea8557240b51acc53173e6`, still **Draft / Open / Unmerged**. `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
 - No deployment, restart, ZIP synchronization to production, or live-volume/data change has occurred. The operational release blockers below remain mandatory.
+ 
+## Final candidate re-audit — 2026-11-24 19:42 UTC
+
+- Exact source/documentation candidate `7b47b00f662867b89e17ef1597337eb697166eba` passed [Actions run #708](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45472720285). Both source validation and post-validation archive refresh/extraction jobs succeeded.
+- Source: locked npm install, dependency-tree verification, JavaScript syntax, **603 regression checks / 0 failures**, production Docker build.
+- Extracted archive: safe archive and tracked-file parity checks, locked install, dependency-tree verification, syntax, **603 regression checks / 0 failures**, synchronized HTML, production Docker build, and **0 vulnerabilities** in the production dependency install.
+- Archive-only head: `50c61f0d55513e3840ea71fdff14e609042fa2ed`; only the ZIP changed. Size: **16,359,829 bytes**.
+- The current tree has one release ZIP and no nested duplicate project directory. Before the nested directory was removed, its database placeholder and Google verification file were verified byte-identical to the retained root/public copies. Root `data.json`, root Google verification, and `public/google1a84d9d1dec7b85d.html` remain preserved.
+- No browser entry file is part of the PR diff; current visual UI markup was not changed in this repair candidate.
+- Manual sync workflow review: dispatch-only, must run from `main`, requires explicit boolean confirmation, checks archive safety/version/exact source parity, validates dependencies/tests/Docker before and after sync, and creates a repository rollback branch. The only `rsync --delete` is restricted to `public/` after exact archive-to-main parity; it explicitly excludes the Google verification file. Root placeholder data and the external Deplexo persistent volume are not synchronized by this workflow.
+- Current PR #3 head: `50c61f0d55513e3840ea71fdff14e609042fa2ed`; open/draft/unmerged; base `safety/validate-and-backup-before-sync`. The safety base is 12 commits ahead of production `main`. `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
+
+### Non-negotiable production blockers
+
+1. Independent consistent backup of live `/data/rimaz` to storage outside the app/volume.
+2. Isolated restore of database JSON plus `uploads/` and `private-media/`, with database validity, owner record, file counts, hashes, paths and permissions verified.
+3. Staging smoke tests for login/reconnect, public/private chat, rooms, voice/video, moderation/member-card actions, uploads, backup/restore, and multiple devices.
+4. Runtime evidence for restart reasons, exit/OOM status, memory/RSS and controlled-load behavior.
+5. Provider-side confirmation that `cf-connecting-ip` and `x-real-ip` are sanitized by Deplexo before IP-based trust.
+6. Fresh exact-candidate validation and explicit user approval before any promotion.
+
+The available GitHub connection cannot access Deplexo's live dashboard or persistent volume. Do not mark this gate complete, merge to production, run the main-only sync workflow, or deploy/restart based on CI success alone.
