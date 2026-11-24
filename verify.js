@@ -2405,6 +2405,23 @@ try {
 } catch(error) { fail('disconnected-session cleanup retry regression checks',error.message); }
 
 
+// Rejected blocked terms must not consume the public-chat anti-spam quota in either transport.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const httpStart=source.indexOf("app.post('/api/message'");
+  const httpEnd=source.indexOf("\n});",httpStart);
+  const socketStart=source.indexOf("socket.on('send-message'");
+  const socketEnd=source.indexOf("\n  socket.on(",socketStart);
+  const http=httpStart>=0&&httpEnd>httpStart?source.slice(httpStart,httpEnd):'';
+  const socket=socketStart>=0&&socketEnd>socketStart?source.slice(socketStart,socketEnd):'';
+  const checks=[
+    ['HTTP rejects blocked public-chat terms before consuming the anti-spam quota',http.indexOf('blockedChatTerm(text)')>=0&&http.indexOf('blockedChatTerm(text)')<http.indexOf('roomMessageRateLimitError(sessionId,text)')],
+    ['Socket.IO rejects blocked public-chat terms before consuming the anti-spam quota',socket.indexOf('blockedChatTerm(text)')>=0&&socket.indexOf('blockedChatTerm(text)')<socket.indexOf('roomMessageRateLimitError(socket.data.sid,text)')],
+    ['both transports retain anti-spam protection before processing built-in bot commands',http.indexOf('roomMessageRateLimitError(sessionId,text)')<http.indexOf('processBuiltInBotCommand(joinedSocket')&&socket.indexOf('roomMessageRateLimitError(socket.data.sid,text)')<socket.indexOf('processBuiltInBotCommand(socket')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('blocked-term anti-spam quota ordering regression checks',error.message); }
+
 // HTTP fallback and Socket.IO public messages must expose the same role/VIP metadata.
 try {
   const source=fs.readFileSync(server,'utf8');
