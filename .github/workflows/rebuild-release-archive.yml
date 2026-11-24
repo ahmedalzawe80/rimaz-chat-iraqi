@@ -6,6 +6,7 @@ on:
       - fix/bound-private-media-ticket-cache
     paths:
       - '.github/workflows/rebuild-release-archive.yml'
+      - '.github/workflows/unzip-upload.yml'
 
 permissions:
   contents: write
