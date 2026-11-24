@@ -1699,8 +1699,9 @@ app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{
     const actorPermissions=ALL_PERMISSION_KEYS.filter(k=>hasPermission(actor,k));
     if(!actorCanGrantElevatedRank&&definition.permissions.some(k=>!actorPermissions.includes(k)))return res.status(403).json({error:'لا يمكنك منح رتبة تحتوي صلاحيات أعلى من صلاحياتك'});
   }
-  const p=profile(n),previousProfile=JSON.parse(JSON.stringify(p));
-  const previousRankAudit=db.rankAudit,previousNotifications=db.notifications?.[n]?JSON.parse(JSON.stringify(db.notifications[n])):undefined;
+  const hadProfile=Object.prototype.hasOwnProperty.call(db.profiles||{},n),p=profile(n),previousProfile=JSON.parse(JSON.stringify(p));
+  const hadRankAudit=Object.prototype.hasOwnProperty.call(db,'rankAudit'),previousRankAudit=db.rankAudit;
+  const hadNotificationsRoot=Object.prototype.hasOwnProperty.call(db,'notifications'),hadMemberNotifications=Object.prototype.hasOwnProperty.call(db.notifications||{},n),previousNotifications=hadMemberNotifications?JSON.parse(JSON.stringify(db.notifications[n])):undefined;
   db.rankAudit=Array.isArray(db.rankAudit)?db.rankAudit.slice():[];
   const grantedAt=Date.now();
   delete p.rankPreviousRole;
@@ -1721,8 +1722,9 @@ app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{
   db.notifications[n]=[inboxItem,...(Array.isArray(db.notifications[n])?db.notifications[n]:[])].slice(0,100);
   try{save();}
   catch(error){
-    db.profiles[n]=previousProfile;db.rankAudit=previousRankAudit;
-    if(previousNotifications===undefined)delete db.notifications[n];else db.notifications[n]=previousNotifications;
+    if(hadProfile)db.profiles[n]=previousProfile;else delete db.profiles[n];
+    if(hadRankAudit)db.rankAudit=previousRankAudit;else delete db.rankAudit;
+    if(hadNotificationsRoot){if(hadMemberNotifications)db.notifications[n]=previousNotifications;else delete db.notifications[n];}else delete db.notifications;
     console.error('Rank assignment persistence failed:',error.message);
     return res.status(500).json({error:'تعذر حفظ منح الرتبة وإشعارها؛ لم يتم تطبيق التغيير'});
   }
