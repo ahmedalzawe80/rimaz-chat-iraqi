@@ -251,7 +251,7 @@ if(Array.isArray(db.welcomeMessages) && db.welcomeMessages.length===2 && db.welc
 try { save(); } catch(e) { console.error('Could not persist welcome-message defaults/migration:',e.message); }
 // Remove expired timed announcements after restarts; expiry is stored with the announcement.
 const expiredAnnouncementIds=new Set((db.announcements||[]).filter(a=>a&&['5m','15m'].includes(a.duration)&&Number(a.at)+900000<=Date.now()).map(a=>String(a.id)));
-if(expiredAnnouncementIds.size){db.announcements=(db.announcements||[]).filter(a=>!expiredAnnouncementIds.has(String(a.id)));db.messages=(db.messages||[]).filter(m=>![...expiredAnnouncementIds].some(id=>String(m.id||'').startsWith(id+'-')));try{fs.writeFileSync(DB_FILE,JSON.stringify(db,null,2))}catch(e){console.error('Could not clean expired announcements:',e.message)}}
+if(expiredAnnouncementIds.size){db.announcements=(db.announcements||[]).filter(a=>!expiredAnnouncementIds.has(String(a.id)));db.messages=(db.messages||[]).filter(m=>![...expiredAnnouncementIds].some(id=>String(m.id||'').startsWith(id+'-')));try{save()}catch(e){console.error('Could not clean expired announcements:',e.message)}}
 // Direct private conversations and the wall are separate from db.rooms.
 // Keep room announcements available in every configured room, including rooms
 // whose access kind is private; only one-to-one DMs and the wall are excluded.
