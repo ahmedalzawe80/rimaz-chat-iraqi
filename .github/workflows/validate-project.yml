@@ -85,7 +85,7 @@ jobs:
           import os, re, stat, subprocess, zipfile
           archive='rimaz-final-deep-audit-46.93.72.zip'
           builder='.github/workflows/rebuild-release-archive-once.yml'
-          tracked=subprocess.check_output(['git','ls-files','-z']).decode().split('\\0')
+          tracked=subprocess.check_output(['git','ls-files','-z']).decode().split('\0')
           paths=sorted(p for p in tracked if p and p not in (archive,builder) and os.path.isfile(p))
           with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:
               for path in paths:
@@ -98,7 +98,7 @@ jobs:
               actual=set()
               total=0
               for item in z.infolist():
-                  name=item.filename.replace('\\\\','/')
+                  name=item.filename.replace('\\','/')
                   if name.startswith('/') or re.match(r'^[A-Za-z]:',name) or any(p in ('.','..') for p in name.split('/')):raise SystemExit('Unsafe path: '+name)
                   if ((item.external_attr>>16)&0o170000)==stat.S_IFLNK:raise SystemExit('Symlink: '+name)
                   if not item.is_dir():
