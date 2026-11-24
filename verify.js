@@ -1500,7 +1500,7 @@ try {
   const serverText = fs.readFileSync(server, 'utf8');
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const checks = [
-    ['full backup route supports delegated site_admin and streams gzip archive', serverText.includes("app.get('/api/admin/backup/full',requireAdmin") && serverText.includes('source=Readable.from(fullBackupTar()),archive=zlib.createGzip') && serverText.includes('source.pipe(archive).pipe(res)')],
+    ['full backup route supports delegated site_admin and uses pipeline to cancel streams on response close', serverText.includes("app.get('/api/admin/backup/full',requireAdmin") && serverText.includes('source=Readable.from(fullBackupTar()),archive=zlib.createGzip') && serverText.includes('pipeline(source,archive,res') && serverText.includes("const { Readable, pipeline } = require('stream')")],
     ['full backup includes sanitized database snapshot, uploads, and private-media but excludes transient private messages', serverText.includes("name:'database/rimaz-database.json'") && serverText.includes("['uploads',UP_DIR],['private-media',PRIVATE_MEDIA_DIR]") && (serverText.match(/database:\{\.\.\.db,sessions:\{\},privateMessages:\[\]\}/g)||[]).length===2],
      ['database-only backup excludes transient private conversations', serverText.includes("app.get('/api/admin/backup/database',requireAdmin") && serverText.includes('database:{...db,sessions:{},privateMessages:[]}')],
     ['archive traversal skips symbolic links and streams file data instead of loading all media into RAM', serverText.includes('if(item.isSymbolicLink())continue') && serverText.includes('fs.createReadStream(entry.disk)')],
