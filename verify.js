@@ -1972,3 +1972,13 @@ try {
   const ok=handler.includes('room!==u.room')&&handler.includes('!socket.rooms.has(room)')&&handler.includes('removeSessionFromRoomRuntime(sid,room)')&&handler.includes("socket.data.user.room=''");
   if(ok)pass('leave-room handler verifies active room and Socket.IO membership before mutating room state');else fail('leave-room room-membership authorization',handler.slice(0,500));
 } catch(error) { fail('leave-room room-membership authorization',error.message); }
+
+// Room voice negotiation state must expire and remain bounded under abandoned peer negotiations.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const offer=source.slice(source.indexOf("socket.on('voice-peer-offer'"),source.indexOf("socket.on('voice-peer-answer'"));
+  const answer=source.slice(source.indexOf("socket.on('voice-peer-answer'"),source.indexOf("socket.on('voice-peer-ice'"));
+  const ice=source.slice(source.indexOf("socket.on('voice-peer-ice'"),source.indexOf("socket.on('leave-room'"));
+  const ok=source.includes('const MAX_ACTIVE_VOICE_PAIRS=8192')&&source.includes('const VOICE_PAIR_TTL_MS=120000')&&source.includes('pruneActiveVoicePairs()')&&offer.includes('activeVoicePairs.size>=MAX_ACTIVE_VOICE_PAIRS')&&answer.includes('Date.now()-state.created>VOICE_PAIR_TTL_MS')&&ice.includes('Date.now()-state.created>VOICE_PAIR_TTL_MS')&&ice.includes('state.a!==sid&&state.b!==sid');
+  if(ok)pass('voice negotiation pairs expire, are capacity-bounded, and ICE relays require the authorized pair');else fail('bounded voice negotiation lifecycle');
+} catch(error) { fail('bounded voice negotiation lifecycle',error.message); }
