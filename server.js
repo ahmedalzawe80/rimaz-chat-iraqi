@@ -2105,6 +2105,8 @@ app.delete('/api/profile/banner',requireAuth,(req,res)=>{if(!hasPermission(req.u
 app.post('/api/media',requireAuth,upload.single('file'),validateUploadedContent('media'),(req,res)=>{
   const u=req.user, to=cleanName(req.body.to||''), scope=String(req.body.scope||'private');
   if(!req.file)return res.status(400).json({error:'لم يتم اختيار ملف'});
+  if(scope==='private'&&!siteModuleEnabled('privateChat')){removeUploadedFile(req.file);return res.status(403).json({error:'المحادثات الخاصة متوقفة من إدارة الموقع'});}
+  if(scope==='wall'&&!siteModuleEnabled('wall')){removeUploadedFile(req.file);return res.status(403).json({error:'ميزة الحائط متوقفة من إدارة الموقع'});}
   if(globalBanned(u.name,requestClientIp(req))){removeUploadedFile(req.file);return res.status(403).json({error:'لا يمكنك إرسال الوسائط أثناء الحظر العام'});}
   if(scope==='private'&&!canMedia(u)){removeUploadedFile(req.file);return res.status(403).json({error:`الصور والفيديو والصوت والاتصال تفتح عند ${PRIVATE_MEDIA_LIKES_REQUIRED} إعجاب من المرسل`});}
   if(scope==='wall'&&db.wallEnabled===false){removeUploadedFile(req.file);return res.status(403).json({error:'الجدار متوقف مؤقتاً من الإدارة'});}
