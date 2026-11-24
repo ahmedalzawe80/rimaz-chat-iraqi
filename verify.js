@@ -2050,6 +2050,7 @@ try {
   const dockerIgnore = fs.readFileSync(path.join(root, '.dockerignore'), 'utf8');
   const syncWorkflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'unzip-upload.yml'), 'utf8');
   const archiveWorkflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'audit-rootfix-archive.yml'), 'utf8');
+  const validateWorkflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'validate-project.yml'), 'utf8');
   const nestedLegacy = path.join(root, 'rimaz-chat-iraqi-main');
   const checks = [
     ['local dependencies and runtime directories are ignored by Git', ignore.includes('/node_modules/') && ignore.includes('/data/') && ignore.includes('/uploads/') && ignore.includes('/private-media/')],
@@ -2063,6 +2064,7 @@ try {
     ['manual source sync is scoped to app files and public assets, not the repository root', syncWorkflow.includes('install -m 0644 "$PROJECT_SOURCE/server.js" ./server.js') && syncWorkflow.includes("rsync -a --delete --exclude='/google1a84d9d1dec7b85d.html' \"$PROJECT_SOURCE/public/\" ./public/") && !syncWorkflow.includes('rsync -a --delete "$PROJECT_SOURCE/" ./')],
     ['manual source sync checks archive version and validates symlink-free safe paths', syncWorkflow.includes('ARCHIVE_VERSION') && syncWorkflow.includes('stat.S_IFLNK') && syncWorkflow.includes('Unsafe archive path')],
     ['archive audit rejects traversal paths and symlinks before extraction', archiveWorkflow.includes('stat.S_IFLNK') && archiveWorkflow.includes("part in ('.', '..')")]
+    ,['pull-request validation runs for repository configuration and documentation changes', validateWorkflow.includes("'*.md'") && validateWorkflow.includes("'docs/**/*.md'") && validateWorkflow.includes("'.gitignore'") && validateWorkflow.includes("'.editorconfig'") && validateWorkflow.includes("'.gitattributes'") && validateWorkflow.includes("'.github/**'")]
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
 } catch (error) {
@@ -2122,7 +2124,8 @@ try {
     'CONTRIBUTING.md',
     '.editorconfig',
     '.gitattributes',
-    '.github/pull_request_template.md'
+    '.github/pull_request_template.md',
+    '.github/dependabot.yml'
   ];
   const missing = required.filter(file => !fs.existsSync(path.join(root, file)));
   if (missing.length === 0) pass('repository contributor guidance and file-format policies are present');
