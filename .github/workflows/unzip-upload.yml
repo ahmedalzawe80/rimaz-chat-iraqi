@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_main_replacement:
-        description: "I reviewed the archive and approve replacing application files on main."
+        description: "I reviewed the archive and approve syncing the exact validated application source to main."
         type: boolean
         required: true
         default: false
@@ -27,6 +27,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Node.js from .nvmrc
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
       - name: Validate ZIP integrity and safe paths
         shell: bash
         run: |
@@ -42,7 +47,11 @@ jobs:
           archive = sys.argv[1]
           seen = set()
           with zipfile.ZipFile(archive) as z:
-              for item in z.infolist():
+              infos = z.infolist()
+              if len(infos) > 30000:
+                  raise SystemExit(f"Too many archive entries: {len(infos)}")
+              total_size = 0
+              for item in infos:
                   name = item.filename.replace("\\", "/")
                   parts = name.split("/")
                   if name.startswith("/") or re.match(r"^[A-Za-z]:", name) or any(part in (".", "..") for part in parts):
@@ -54,7 +63,14 @@ jobs:
                       if name in seen:
                           raise SystemExit(f"Duplicate archive file path: {name}")
                       seen.add(name)
-          print(f"Archive paths validated: {len(seen)} files")
+                  total_size += item.file_size
+                  if item.file_size > 0 and item.compress_size == 0:
+                      raise SystemExit(f"Invalid compressed size for: {item.filename}")
+                  if item.compress_size > 0 and item.file_size / item.compress_size > 250:
+                      raise SystemExit(f"Suspicious compression ratio for: {item.filename}")
+              if total_size > 500 * 1024 * 1024:
+                  raise SystemExit(f"Archive expands beyond 500 MiB: {total_size}")
+          print(f"Archive paths validated: {len(seen)} files; expanded bytes: {total_size}")
           PY
 
       - name: Extract and validate application root
@@ -86,7 +102,7 @@ jobs:
             exit 1
           fi
 
-          for file in package.json server.js index.html verify.js; do
+          for file in package.json package-lock.json Dockerfile server.js index.html verify.js; do
             test -f "$SOURCE/$file"
           done
           test -d "$SOURCE/public"
@@ -100,14 +116,31 @@ jobs:
           echo "PROJECT_SOURCE=$SOURCE" >> "$GITHUB_ENV"
           echo "Project root validated: $SOURCE (version $ACTUAL_VERSION)"
 
-      - name: Run source checks before changing repository
+      - name: Require archive to match current main source
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in package.json package-lock.json Dockerfile server.js index.html verify.js; do
+            if ! cmp -s "$PROJECT_SOURCE/$file" "$file"; then
+              echo "ERROR: Archived $file differs from the reviewed main branch."
+              echo "Refusing to replace newer repository code with a stale archive."
+              exit 1
+            fi
+          done
+          diff -qr --no-dereference "$PROJECT_SOURCE/public" ./public
+          echo "Archive exactly matches the current main application source."
+
+      - name: Run clean install, regression tests, and production build before sync
         shell: bash
         run: |
           set -euo pipefail
           cd "$PROJECT_SOURCE"
+          npm ci --no-audit --no-fund
+          npm ls --depth=0
           node --check server.js
           node --check verify.js
-          node verify.js
+          npm test
+          docker build --pull -t rimaz-chat-iraqi:archive-pre-sync .
 
       - name: Create repository rollback branch
         shell: bash
@@ -118,14 +151,13 @@ jobs:
           echo "Repository rollback branch created: $BACKUP_BRANCH"
           echo "This branch does not back up the external hosting volume."
 
-      - name: Synchronize only application-managed files
+      - name: Synchronize validated application and build files
         shell: bash
         run: |
           set -euo pipefail
-          install -m 0644 "$PROJECT_SOURCE/server.js" ./server.js
-          install -m 0644 "$PROJECT_SOURCE/index.html" ./index.html
-          install -m 0644 "$PROJECT_SOURCE/package.json" ./package.json
-          install -m 0644 "$PROJECT_SOURCE/verify.js" ./verify.js
+          for file in server.js index.html package.json package-lock.json Dockerfile verify.js; do
+            install -m 0644 "$PROJECT_SOURCE/$file" "./$file"
+          done
           mkdir -p ./public
           rsync -a --delete --exclude='/google1a84d9d1dec7b85d.html' "$PROJECT_SOURCE/public/" ./public/
 
@@ -133,10 +165,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm ls --depth=0
           node --check server.js
           node --check verify.js
-          node verify.js
+          npm test
           cmp -s index.html public/index.html
+          docker build --pull -t rimaz-chat-iraqi:post-sync .
 
       - name: Commit validated application replacement
         shell: bash
@@ -149,5 +184,5 @@ jobs:
             git commit -m "Validated application source sync from audited ZIP"
             git push origin HEAD:main
           else
-            echo "No application changes to commit"
+            echo "No application changes to commit; main already matches the audited archive."
           fi
