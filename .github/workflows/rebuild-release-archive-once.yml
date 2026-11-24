@@ -52,3 +52,5 @@ jobs:
           git add rimaz-final-deep-audit-46.93.72.zip
           git commit -m "chore(release): refresh audited source archive"
           git push origin HEAD:fix/bound-private-media-ticket-cache
+
+# Trigger the one-time rebuild after the workflow file exists on the branch.
