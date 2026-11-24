@@ -4,7 +4,7 @@
 - Added a repository structure guide that records root-file ownership, runtime asset discovery, and why apparently duplicate media must not be deleted without a migration review.
 - Added a categorized documentation index and regression checks for missing documents, broken index links, and reports scattered in the repository root.
 - Removed the incomplete nested `rimaz-chat-iraqi-main/` duplicate after confirming it contained only a placeholder data file and a duplicate Google verification file.
-- Added `.editorconfig`, `.gitattributes`, `CONTRIBUTING.md`, a pull-request template, Dependabot schedules, and immutable SHA pins for GitHub Actions; CI now watches documentation and repository-configuration changes.
+- Added `.editorconfig`, `.gitattributes`, `.nvmrc`, `CONTRIBUTING.md`, a pull-request template, Dependabot schedules, and immutable SHA pins for GitHub Actions; CI now watches documentation and repository-configuration changes, uses the shared Node version pin, and cancels superseded runs.
 - Added repository hygiene rules and documentation for persistent runtime data, Docker exclusions, and guarded source synchronization.
 - Kept the audited source ZIP at the repository root because the current archive-audit and manual-sync workflows depend on that exact path.
 - Kept application entry points and `public/` in their runtime-required locations; no production data or hosting volume was changed.
