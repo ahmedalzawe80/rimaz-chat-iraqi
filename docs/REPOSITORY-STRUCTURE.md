@@ -18,15 +18,21 @@ This guide explains why each top-level area exists and which files must remain i
 │   ├── gifts/
 │   ├── smileys/
 │   └── vip-gifts/
-├── server.js
+├── .dockerignore
+├── .editorconfig
+├── .gitattributes
+├── .gitignore
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── Dockerfile
+├── README.md
+├── data.json                 # tracked warning placeholder
+├── google1a84d9d1dec7b85d.html
 ├── index.html
 ├── package.json
-├── Dockerfile
-├── verify.js
-├── README.md
-├── CONTRIBUTING.md
-├── CHANGELOG.md
-└── repository/hosting integration files
+├── rimaz-final-deep-audit-46.93.72.zip
+├── server.js
+└── verify.js
 ```
 
 The last line is a category description, not a literal directory. The root also contains a small tracked data placeholder, the domain-verification file, Docker/Git configuration, and the audited ZIP required by the current workflows.
