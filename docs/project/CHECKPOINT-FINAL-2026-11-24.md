@@ -1,33 +1,33 @@
 # Rimaz — final continuation checkpoint (2026-11-24)
 
-## Current verified repository state
+## Current repository state
 
 - Repository: `ahmedalzawe80/rimaz-chat-iraqi`
 - Working branch: `fix/bound-private-media-ticket-cache`
-- Latest known PR #3 head at checkpoint creation: `1cf3dadeddf0feb06e46ca318f9c97843ac2b203`
+- PR #3 head immediately before this checkpoint refresh: `aeb656918c04a7019c624cfe242fcc8161d06b5b`
 - PR #3: https://github.com/ahmedalzawe80/rimaz-chat-iraqi/pull/3
 - PR #3 is open, draft, unmerged, and targets `safety/validate-and-backup-before-sync`.
-- PR #3 currently lists 33 changed paths.
-- PR #2's 11 changed paths are all included in PR #3; PR #2 has no unique paths and must not be merged separately.
+- PR #3 currently contains 34 changed paths.
+- All 11 changed paths in PR #2 are included in PR #3; PR #2 has no unique paths and must not be merged separately.
 - Repository default branch is `main`. No merge, main update, Deplexo deployment/restart, ZIP sync, or live data modification was performed.
 
-## Exact-head CI evidence
+## Latest verified CI
 
-The PR head immediately before this checkpoint refresh, `7abc591fa7b370ea5a77088fe42e9239e0976474`, passed GitHub Actions run [45406653849](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45406653849).
+The latest fully verified PR head is `7abc591fa7b370ea5a77088fe42e9239e0976474`, which passed GitHub Actions run [45406653849](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45406653849).
 
-The job and all listed steps completed successfully:
+The `validate` job and all listed steps completed successfully:
 - Node.js setup from `.nvmrc`
 - JavaScript syntax checks
 - Project regression tests via `npm test`
 - Production Docker image build
 
-The workflow connector did not expose the test runner's numeric pass count for this run. The earlier report of 556 passes / 0 failures belongs only to SHA `c30b7b92093dbbf4162cb6f30573355ad20b0f1f`, run `45379916442`; do not attribute that count to later SHAs.
+The workflow connector did not expose the numeric test pass count for this run. The earlier 556 pass / 0 failure result belongs only to SHA `c30b7b92093dbbf4162cb6f30573355ad20b0f1f`, run `45379916442`; do not attribute it to later commits.
 
-The documentation-only release-gate refresh is commit `1cf3dadeddf0feb06e46ca318f9c97843ac2b203`. Its own CI must be checked before claiming it passed.
+The subsequent commits `1cf3dadeddf0feb06e46ca318f9c97843ac2b203`, `481193ad8217aa9549b3528774bbd1bf8d2cd2a8`, `536c1f82ddd46d695e97b2d82c34954a21cc8554`, and `aeb656918c04a7019c624cfe242fcc8161d06b5b` update release/checkpoint documentation. A PR workflow run was not returned for the latest documentation head when checked. Do not claim these documentation commits have passed CI until a run is confirmed.
 
 ## Outstanding release blockers
 
-1. No `package-lock.json` exists. Docker currently uses `npm install --omit=dev`. Generate and review a real lockfile on Node.js 24, then validate clean install/tests/image build before moving to `npm ci`. Never fabricate integrity hashes.
+1. No `package-lock.json` exists. Docker currently uses `npm install --omit=dev`. Generate and review a genuine lockfile on Node.js 24, then validate clean install, tests, and image build before moving to `npm ci`. Never fabricate integrity hashes.
 2. No independent backup of the live Deplexo persistent volume has been verified.
 3. No isolated staging restore or end-to-end smoke test has been evidenced.
 4. No live Deplexo restart/OOM/exit-code/heap/RSS evidence has been collected.
