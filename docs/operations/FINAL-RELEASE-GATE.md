@@ -21,25 +21,27 @@ This record separates verified source/archive work from hosting operations that 
 - The lockfile root package identity and dependency declarations match `package.json`; it records 96 package entries.
 - The production Dockerfile uses `npm ci --omit=dev`.
 - The permanent validation workflow requires `npm ci`, `npm ls --depth=0`, JavaScript syntax checks, `npm test`, and the production Docker build. It has no fallback to floating `npm install`.
-- Regression checks now assert lockfile identity/dependency consistency, Docker's locked production install, and the permanent CI install contract.
+- Regression checks assert lockfile identity/dependency consistency, Docker's locked production install, and the permanent CI install contract.
 
 ## Audited source archive and synchronization safety
 
-- The archive audit found that the previously stored ZIP had a `package.json` different from the reviewed candidate. The audit failed closed; no ZIP synchronization or production operation was run.
-- Rebuilt `rimaz-final-deep-audit-46.93.72.zip` deterministically from the reviewed tracked candidate files. The new archive contains 394 tracked files and is 16,336,813 bytes.
-- The archive rebuild job tested both the candidate and the extracted archive as standalone projects. Each run completed `npm ci`, `npm ls --depth=0`, syntax checks, and `npm test` with 567 pass markers and zero failure markers, followed by a successful Docker build.
+- The old ZIP was found to contain a `package.json` different from the reviewed candidate. The audit failed closed; no ZIP synchronization or production operation was run.
+- Rebuilt `rimaz-final-deep-audit-46.93.72.zip` deterministically from the reviewed tracked candidate. It contains 394 tracked files and is 16,336,813 bytes.
+- The archive rebuild job tested both the candidate and extracted archive as standalone projects. Each completed `npm ci`, `npm ls --depth=0`, syntax checks, and `npm test` with 567 pass markers and zero failures, followed by a successful Docker build.
 - Both Docker builds installed the locked production dependency tree (95 packages); npm audit output reported zero vulnerabilities.
-- The archive audit now rejects unsafe paths, symlinks, duplicate file paths, excessive archive size/entries, and suspicious compression ratios. It requires exact parity for package manifest, lockfile, Dockerfile, server, browser entry, regression file, and the complete `public/` tree.
-- The manual source-sync workflow now refuses an archive that differs from current `main`; it validates locked install, dependency tree, regression suite, and Docker build before and after sync. It remains manual-only, requires explicit confirmation on `main`, and is not a Deplexo deployment command.
+- The archive audit rejects unsafe paths, symlinks, duplicate file paths, excessive archive size/entries, and suspicious compression ratios. It requires exact parity for package manifest, lockfile, Dockerfile, server, browser entry, regression file, and the complete `public/` tree.
+- The manual source-sync workflow refuses an archive that differs from current `main`; it validates locked install, dependency tree, regression suite, and Docker build before and after sync. It remains manual-only, requires explicit confirmation on `main`, and is not a Deplexo deployment command.
+- The one-time archive builder workflow was removed after the ZIP was regenerated and tested.
 
-## CI evidence
+## Exact-head CI evidence
 
-- Exact candidate validation on commit `086bbb09717a6d2c92009f4301528cf3f317f7b6`, run [45408438472](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45408438472), passed `npm ci`, `npm ls`, syntax checks, 562 regression pass markers, and production Docker build.
-- The later archive rebuild run [45409544443](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45409544443) passed candidate and archive validation, each with 567 pass markers and zero failures, and built both Docker images.
+Final post-cleanup candidate commit `5ec794813d0a0fc1b8eb2376182e1749ec933fa2` passed both workflows:
+- [Validation run 45409969779](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45409969779): `npm ci`, `npm ls --depth=0`, syntax checks, 567 regression pass markers, zero failures, and production Docker build.
+- [Archive audit run 45409969751](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45409969751): safe extraction, exact source/lockfile/Dockerfile/public parity, 567 regression pass markers, zero failures, and Docker build.
+- The validation Docker build installed 95 locked production packages and reported zero vulnerabilities.
 - Earlier validation on `c30b7b92093dbbf4162cb6f30573355ad20b0f1f`, run `45379916442`, reported 556 pass markers and zero failures. That count belongs only to that SHA.
-- A fresh permanent validation and archive-audit run on the final post-cleanup PR head is still required before merge.
 
-CI and container builds do not prove live Deplexo runtime health, load behavior, or backup restorability.
+CI and container builds do not prove live Deplexo runtime health, load behavior, or backup restorability. Any subsequent source or workflow change requires a fresh check on its exact head.
 
 ## Required staging and hosting checks
 
