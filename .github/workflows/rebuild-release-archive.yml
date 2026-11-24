@@ -9,6 +9,8 @@ on:
       - '.github/workflows/unzip-upload.yml'
       - '.github/workflows/audit-rootfix-archive.yml'
       - 'verify.js'
+      - '*.md'
+      - 'docs/**/*.md'
 
 permissions:
   contents: write
