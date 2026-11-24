@@ -1963,3 +1963,12 @@ try {
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('v46.93.55 member-number regression checks',error.message); }
+// Socket leave-room requests must be bound to the authenticated socket's current room.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf("socket.on('leave-room'");
+  const end=source.indexOf("socket.on('send-message'",start);
+  const handler=source.slice(start,end);
+  const ok=handler.includes('room!==u.room')&&handler.includes('!socket.rooms.has(room)')&&handler.includes('removeSessionFromRoomRuntime(sid,room)')&&handler.includes("socket.data.user.room=''");
+  if(ok)pass('leave-room handler verifies active room and Socket.IO membership before mutating room state');else fail('leave-room room-membership authorization',handler.slice(0,500));
+} catch(error) { fail('leave-room room-membership authorization',error.message); }
