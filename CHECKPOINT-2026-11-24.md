@@ -121,3 +121,11 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Added regression assertions verifying both backup formats sanitize private messages.
 - Commits: `93d52a774f486c55a24f195fdf77759dec0c2a45` (server), `dbab93a848f06037078e6e8dae05ade0c66df7e6` (verify).
 - Branch-only. GitHub currently returns no status checks or PR workflow runs for the latest head; execution remains unverified. No merge, deployment, production data access, or behavior changes.
+
+
+## Admin upload authorization ordering fix (2026-11-24)
+- Found two authenticated-but-unauthorized upload routes that parsed and wrote multipart files to temporary upload storage before checking the caller's permission: gift catalog GIF upload and ad campaign image upload.
+- Moved authentication and the relevant module/permission checks ahead of their Multer upload middleware. Authorized upload validation, file formats, storage paths, and successful behavior remain unchanged; unauthorized requests are rejected before multipart parsing.
+- Added regression checks in `verify.js` asserting the authentication and permission gates occur before the upload middleware for both routes.
+- Commits: `ddf33923379497f152bf5573c4b7bc2fcabc0e20` (server), `d623da1535a58e901786b07dfd110497c8ac326b` (verify).
+- Branch-only; no runtime test execution or CI success is claimed. No merge, deployment, or production access.
