@@ -626,7 +626,10 @@ function scheduleSessionDisconnectCleanup(sid,user){
     try{save();}catch(error){
       console.error('Disconnected session cleanup failed:',error.message);sessions.set(sid,current);db.sessions[sid]=current;
       if(current.type==='guest'){if(previousGuest!==undefined)db.guests[current.name]=previousGuest;if(previousProfile!==undefined)db.profiles[current.name]=previousProfile;if(previousWallReadAt!==undefined)db.wallReadAt[guestKey]=previousWallReadAt;}
-      if(hadWelcome)welcomeSentSessions.add(sid);return;
+      if(hadWelcome)welcomeSentSessions.add(sid);
+      // The grace timer already fired; retry cleanup after a transient persistence failure.
+      scheduleSessionDisconnectCleanup(sid,current);
+      return;
     }
     clearSessionTransientState(sid);
     emitState();
