@@ -30,6 +30,7 @@ on:
       - '.nvmrc'
       - '.gitattributes'
       - 'rimaz-final-deep-audit-46.93.72.zip'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -45,6 +46,15 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            echo "NOTICE: package-lock.json is not present yet; using npm install for this transitional run."
+            npm install --no-audit --no-fund
+          fi
 
       - name: Check JavaScript syntax
         run: |
