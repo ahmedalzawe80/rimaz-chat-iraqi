@@ -212,3 +212,18 @@ Platform references: [Deplexo storage and filesystem](https://docs.deplexo.com/o
 - `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No merge, deployment/restart, ZIP sync to production, or live-data change occurred.
 - IP-ban trust remains a provider-specific staging check: verify Deplexo overwrites/sanitizes `cf-connecting-ip` and `x-real-ip` before relying on those headers. This is not yet a confirmed vulnerability.
 - Production still requires independent backup of `/data/rimaz`, tested restore into isolated staging, complete smoke tests, runtime/load evidence, and explicit promotion approval.
+
+
+## Latest continuation update — 2026-11-24
+
+- A targeted permissions audit found that an early `/api/admin/data` branch always returned `panel_access`, shadowing the intended `ALL_PERMISSION_KEYS` mapping below it.
+- Fixed the mapping in `server.js` so the endpoint's central guard accepts the explicitly enumerated permission set. The endpoint's response remains filtered by each individual permission; this does not bypass or widen action permissions.
+- Added a regression assertion in `verify.js` to catch the unreachable/shadowed mapping.
+- Source fix: `9ec6ebbf71a2467aee67115a37e33cc9950c93df`.
+- Regression test: `a7bfce38ebdbebf10495c1a063d89a0fbf15b578`.
+- [GitHub Actions run #704](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45469789989) succeeded on exact source SHA `a7bfce38ebdbebf10495c1a063d89a0fbf15b578`: 603 regression checks, zero failures, dependency-tree verification, syntax checks, and production Docker build.
+- The extracted release archive also passed 603 checks with zero failures; the rebuilt archive contains 394 files and is 16,357,277 bytes. Archive Docker build succeeded and npm audit reported 0 vulnerabilities.
+- CI generated archive-only commit `a49f10afcda33eac55ea974c60ee57e866f4e28c`; it changes only the release ZIP.
+- Current safety boundary remains unchanged: PR #3 is draft/open/unmerged; `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`; no production deploy/restart, ZIP sync, or live-data modification has occurred.
+
+The external backup, isolated restore/staging smoke tests, Deplexo runtime evidence, and provider proxy-header trust confirmation remain mandatory before promotion.
