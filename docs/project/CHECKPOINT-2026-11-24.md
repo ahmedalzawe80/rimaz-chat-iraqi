@@ -308,3 +308,16 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - `package-lock.json` remains absent. No lockfile was fabricated and no `npm ci` migration was attempted. A genuine lockfile generated and verified on Node.js 24 remains required for reproducible dependency installation.
 - Staging smoke tests, independent Deplexo persistent-volume backup/restore, live restart/OOM/heap/RSS evidence, and final production approval remain outstanding. CI success does not satisfy these operational checks.
 - No merge, main update, deployment/restart, ZIP sync, or live database/uploads/private-media/persistent-volume modification was performed.
+
+
+## Backup-output memory correction continuation — 2026-11-24
+
+- Audited the remaining backup serialization paths in `server.js`: full TAR/GZIP backup previously materialized the full pretty JSON string and a second full Buffer; database-only backup materialized the full JSON response string.
+- Added `createDatabaseBackupTempFile`, which uses the existing bounded-memory `writeJsonSync` writer, unique exclusive temporary paths, mode 0600, and file fsync.
+- Full TAR backup now uses a disk-backed database entry and removes the temporary snapshot in the async generator's `finally` block, including iterator cancellation/error paths.
+- Database-only backup now pipes a read stream from its temporary snapshot and cleans it on stream close/error/client disconnect.
+- Added regression coverage for byte-for-byte pretty JSON parity with Arabic/large Unicode data, restrictive permissions, circular-data rejection, partial-file cleanup, and both endpoint streaming contracts.
+- Source commit: `e624e97a37fffe258224c2b4d63b48d3feb3f3ec`; regression-test commit: `0edd31e52c21e3910eb21e624e33da38315f5c15`; runtime-audit documentation commit: `ce2879507ec549c22663217e8bf3739182fa35db`.
+- At checkpoint creation, the GitHub connector returned no combined status entries for these commits and no PR-triggered workflow runs; therefore the new tests/build/archive refresh are **not yet reported as passed**. Do not claim validation until a fresh exact-head Actions run is confirmed.
+- Remaining memory risk: restore preview/confirmation still reads and parses full JSON text/object graphs. No 128 MB production fix is claimed. Staging backup/restore round-trip, cancelled/concurrent backup, disk-full and permission-failure tests, representative-load memory sampling, independent live-volume backup, and deployment approval remain mandatory.
+- Production `main`, Deplexo, and live data remain untouched; PR #3 remains the integration candidate. Do not merge or deploy before the documented release gates pass.
