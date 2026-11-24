@@ -17,7 +17,7 @@ This directory contains maintained project records, engineering audits, and oper
 - [Transaction safety audit](audits/TRANSACTION-SAFETY-AUDIT-2026-11-24.md) — persistence, rollback, and failure handling.
 
 ## Operations
-- [Deployment notes](operations/DEPLOYMENT-46.93.72.md) — historical deployment package and operational guidance.
+- [Final release gate](operations/FINAL-RELEASE-GATE.md) — consolidated source-validation evidence, remaining staging requirements, and production promotion boundary.\n- [Deployment notes](operations/DEPLOYMENT-46.93.72.md) — historical deployment package and operational guidance.
 - [Repair notes](operations/REPAIR-NOTES-46.93.72.md) — recorded repair history and context.
 
 ## Contributor guidance
