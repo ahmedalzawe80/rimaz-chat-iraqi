@@ -1,5 +1,7 @@
 # Rimaz Chat — Deep Audit and Repair Candidate (46.93.72)
 
+> **Historical source-package audit.** Its 448-check Node.js 22 result and 46.93.72 baseline findings are retained for history only; they do not describe the current branch head. See the [current transaction-safety audit](TRANSACTION-SAFETY-AUDIT-2026-11-24.md), [runtime resource audit](RUNTIME-RESOURCE-AUDIT-2026-11-24.md), and [final release gate](../operations/FINAL-RELEASE-GATE.md) for current evidence and blockers.
+
 ## Scope and method
 - Reviewed the uploaded project archive and the uploaded 46.93.71 source archive, then prepared 46.93.72 repair candidate.
 - Ran Node syntax checks for `server.js` and `verify.js`.
