@@ -158,3 +158,12 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - PR #3 first Node 24 run reached the regression suite and exposed exactly two stale source-text assertions, not syntax or runtime failures: the v46.69 backup assertion still expected the old sessions-only snapshot, and the gift-upload assertion expected Multer before the newly added authorization middleware.
 - Updated those assertions in `verify.js` to require private-message sanitization and the gifts module/permission gates before Multer. Commit: `4400248f3715e7f54bbb57703e23dac89fa308db`.
 - Await a fresh PR #3 CI run on this latest commit; do not treat the prior failing run as passed. No merge, deployment, main update, ZIP sync, or production data access.
+
+
+## Final CI confirmation (2026-11-24)
+- PR #3 latest observed head: `7d7ce901374f661255ea35d336cdc2a9f5e724d1`.
+- Workflow run `45340898331` completed with conclusion `success` on that exact SHA.
+- All job steps succeeded: checkout, Node.js 24 setup, JavaScript syntax checks, `npm test`, and production Docker image build.
+- PR #2 and PR #3 were re-fetched after this run: both remain open, draft, unmerged, and GitHub reports `mergeable=true`; both target `safety/validate-and-backup-before-sync`.
+- This confirms repository CI and container build only. It does not replace dependency-lockfile work, staging smoke tests, Deplexo runtime diagnosis, independent production-volume backup/restore verification, or explicit merge/deploy approval.
+- No merge, deployment, main update, ZIP sync, or production database/uploads/private-media access was performed.
