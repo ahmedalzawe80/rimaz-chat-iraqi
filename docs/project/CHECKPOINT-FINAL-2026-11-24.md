@@ -182,3 +182,11 @@ Always inspect the current PR head and exact-head CI first. Keep work on `fix/bo
 - The connected GitHub access does not provide Deplexo dashboard or live-volume access. No live backup or staging restore has been claimed or attempted. Keep production promotion blocked until those hosting-side checks and explicit approval are complete.
 
 Platform references: [Deplexo storage and filesystem](https://docs.deplexo.com/operations/storage/), [deployment lifecycle and rollback limits](https://docs.deplexo.com/operations/deployments/), [Deplexo FAQ](https://docs.deplexo.com/getting-started/faq/).
+
+
+## PR history and final integration strategy — 2026-11-24
+
+- GitHub currently reports PR #3 as mergeable/clean, with **462 incremental commits** and **36 changed files** relative to `main`. The commits are the granular repair/test/checkpoint history accumulated during the audit; they are not 462 distinct files or 462 independent releases.
+- The designated safety integration branch is itself 12 commits ahead of `main`. PR #3 targets that safety branch and is still draft/open/unmerged.
+- To keep the production history professional and readable, do not merge these hundreds of incremental commits with a regular merge commit. After all live backup, isolated restore, staging, runtime, and approval gates pass, use a reviewed squash-based promotion plan so the final application state lands as one coherent release commit. Preserve the detailed commit/CI audit trail in GitHub and the release notes.
+- Do not force-push or rewrite the active PR branch during this audit. Before any promotion, re-fetch `main`, the safety branch, and PR head; compare all changed paths and workflow files again, then require green validation on the exact release candidate.
