@@ -58,7 +58,7 @@ If `/data` exists and `DATA_DIR` is not explicitly set, the server defaults to `
 - `.github/workflows/`: pull-request validation, archive audit, and guarded manual source synchronization.
 - `.github/dependabot.yml`: scheduled dependency update proposals for GitHub Actions and npm.
 - `package-lock.json`: exact npm dependency tree used by local, CI, and Docker clean installs.
-- `rimaz-final-deep-audit-46.93.72.zip`: audited source archive used by the archive validation workflow and manual source-sync process.
+- `rimaz-final-deep-audit-46.93.72.zip`: deterministic source archive rebuilt from the reviewed candidate; CI verifies source parity and the manual sync workflow refuses stale archives.
 
 ## Docker
 
