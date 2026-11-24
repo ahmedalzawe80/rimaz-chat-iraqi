@@ -2012,9 +2012,19 @@ app.post('/api/admin/restore/database/confirm',requireAdmin,(req,res)=>{
   db.adminAuditLogs=db.adminAuditLogs.slice(0,500);
   save();
   discardDatabaseRestorePreview(token,pending);
+  // Invalidate every pre-restore in-memory identity before disconnect callbacks run.
+  // Otherwise the old sessions Map can continue authenticating stale session IDs during
+  // the normal disconnect grace period, even though the restored database has no sessions.
   for(const timer of sessionDisconnectTimers.values())clearTimeout(timer);
   sessionDisconnectTimers.clear();
-  botMessageWindows.clear();callSignalWindows.clear();voiceSignalWindows.clear();welcomeSentSessions.clear();
+  for(const timer of privateDisconnectTimers.values())clearTimeout(timer);
+  privateDisconnectTimers.clear();
+  sessions.clear();
+  socketUsers.clear();
+  roomSockets.clear();
+  activeCallPairs.clear();
+  activeVoicePairs.clear();
+  botMessageWindows.clear();privateMessageWindows.clear();callSignalWindows.clear();voiceSignalWindows.clear();welcomeSentSessions.clear();
   try{io.disconnectSockets(true);}catch(e){console.warn('Could not disconnect restored sessions:',e.message);}
   res.json({ok:true,message:'تمت استعادة قاعدة البيانات. تم إنهاء الجلسات النشطة.',recoveryFile:path.basename(recoveryFile||DB_FILE)});
  }catch(e){
