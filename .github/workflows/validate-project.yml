@@ -20,7 +20,9 @@ on:
       - 'docs/**/*.md'
       - 'Dockerfile'
       - '.dockerignore'
-      - '.github/workflows/**'
+      - '.github/**'
+      - '.editorconfig'
+      - '.gitattributes'
       - 'rimaz-final-deep-audit-46.93.72.zip'
 
 permissions:
