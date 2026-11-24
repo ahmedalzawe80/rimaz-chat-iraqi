@@ -65,3 +65,14 @@ Always inspect the current PR head and exact-head CI first. Keep work on `fix/bo
 - Exact-head validation run [45412772398](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45412772398) passed on this commit: 567 pass markers, zero failures, production Docker build successful, and npm audit output reported zero vulnerabilities.
 - Exact-head archive audit run [45412772526](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45412772526) passed on this commit: archive integrity/parity, 567 pass markers, zero failures, dependency-tree verification, and Docker build.
 - These are repository/CI checks only. They do not establish live Deplexo health or replace independent backup and staging restore tests.
+
+
+## Private-message rate-limit correction and refreshed archive — 2026-11-24
+
+- Moved private-message rate-limit accounting after content, recipient, privacy, ignore, and online-availability checks, and after any required private-hidden-state save succeeds. Invalid or unavailable-recipient attempts no longer consume the sender's delivery quota.
+- Added runtime regression coverage for the three-identical-message limit, seven-message/five-second window, reset behavior, empty input, and limiter placement before accepted-message delivery.
+- Rebuilt `rimaz-final-deep-audit-46.93.72.zip` from current tracked files after the server/test changes. The one-time builder workflow was removed after the archive commit; no temporary builder remains in the repository.
+- Latest candidate head: `7d3a76fb6452c2cdddecf90f3d62e6d1a52e2dba`.
+- [Validation run 45413521661](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45413521661) passed on the exact head: locked install, dependency tree, syntax, regression suite, and production Docker build.
+- [Archive audit run 45413521644](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45413521644) passed on the exact head: safe extraction, archive/source parity, CRC integrity, locked dependency tree, syntax, regression suite, and Docker build.
+- These checks validate the repository candidate only; independent live-volume backup/restore and isolated staging remain outstanding.
