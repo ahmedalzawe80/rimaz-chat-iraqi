@@ -246,3 +246,12 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - PR #3 remains open/draft and targets the safety branch (base SHA 08807d8be8393a7cf29309c670d7acfd59c5f78c), not main. Main remains at a2c74fded15ea5cfde38d310a84c3c8edfe994b3. The cleanup and chat fixes are therefore not yet in main or the live site.
 - Current branch tree root is reduced to application/config essentials; documentation is grouped under docs/, and the obsolete nested project directory is absent. The root data.json is a documented placeholder, and the audit ZIP remains because workflows refer to it.
 - Next: stop making isolated micro-commits; reconcile overlapping PR #2/#3, review final diff as one release candidate, then obtain/verify backup + staging before any main merge or production promotion.
+
+
+## HTTP bot-command response parity — 2026-11-24
+- Follow-up review found a concrete transport mismatch: the shared bot command handler emitted a Socket.IO error for an unauthorized or incomplete `/تنبيه` command, but the HTTP fallback still returned `{ok:true,command:true}`, falsely acknowledging the command.
+- The shared handler now accepts an optional error callback. The HTTP route maps missing admin permission to HTTP 403 and missing notice text to HTTP 400; the Socket.IO path retains its existing `error-msg` behavior. Authorization remains enforced by `canNotice(user)`.
+- Added regression checks proving both transports call the shared handler, HTTP does not return false success, and the permission/argument failures retain their expected status and socket error behavior.
+- One intermediate test commit had a JavaScript syntax error in the newly added test block (run 45377300512); the test was corrected before proceeding. The corrected exact code/test SHA `af883dd9e02588e3938b64d00bd2f26859b3d4a9` passed run `45377349922`: 535 pass markers, 0 failure markers, syntax checks passed, regression suite passed, and production Docker build passed.
+- CI still explicitly states live-server testing is required. This validates source/static fixtures and container build only, not Deplexo runtime behavior or persistent-volume safety.
+- PR #3 remains open/draft and unmerged. No merge, PR closure, production deployment/restart, ZIP sync, or live data/volume modification.
