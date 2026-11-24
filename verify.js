@@ -2006,3 +2006,21 @@ try {
   const ok=handler.includes('Date.now()-state.created>120000')&&handler.includes('activeCallPairs.delete(pair)')&&handler.includes("socketBySession(state.caller)");
   if(ok)pass('private call answers reject expired pending offers and missing caller sockets');else fail('private call answer expiry enforcement');
 } catch(error) { fail('private call answer expiry enforcement',error.message); }
+
+
+// Authorization must run before multipart upload middleware to prevent unauthorized disk/CPU consumption.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const giftStart=source.indexOf("app.post('/api/admin/gifts/catalog/upload'");
+  const giftEnd=source.indexOf("app.post('/api/admin/gifts/catalog/delete'",giftStart);
+  const adsStart=source.indexOf("app.post('/api/admin/ads'");
+  const adsEnd=source.indexOf("app.patch('/api/admin/ads/:id'",adsStart);
+  const gift=source.slice(giftStart,giftEnd),ads=source.slice(adsStart,adsEnd);
+  const giftUpload=gift.indexOf("uploadSmallImage.single('file')");
+  const adsUpload=ads.indexOf("uploadImage.single('file')");
+  const checks=[
+    ['gift catalog upload authenticates, checks module and permission before parsing multipart data',giftStart>=0&&giftUpload>0&&gift.indexOf('requireAuth')<giftUpload&&gift.indexOf("siteModuleEnabled('gifts')")<giftUpload&&gift.indexOf("hasPermission(req.user,'gift_catalog_manage')")<giftUpload],
+    ['ad campaign upload authenticates and checks campaign permission before parsing multipart data',adsStart>=0&&adsUpload>0&&ads.indexOf('requireAuth')<adsUpload&&ads.indexOf('canManageAds(req.user)')<adsUpload]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('upload authorization ordering checks',error.message); }
