@@ -4,24 +4,28 @@ Rimaz is a Node.js chat application using Express and Socket.IO. The repository 
 
 ## Requirements
 
-- Node.js 24 LTS (the repository pins the major version in `.nvmrc`)
+- Node.js 24 LTS (the repository pins the major version in .nvmrc)
 - npm
 
 ## Run locally
 
 ```sh
-npm install
+npm ci
 npm start
 ```
+
+Use `npm ci` for a clean, repeatable install from the committed `package-lock.json`. When intentionally changing dependencies, update `package.json` and `package-lock.json` together with `npm install`, review the diff, and validate with `npm ci`.
 
 The server listens on port `3000` by default. Set `PORT` to override it.
 
 ## Validate changes
 
 ```sh
+npm ci
 node --check server.js
 node --check verify.js
 npm test
+docker build -t rimaz-chat-iraqi:local .
 ```
 
 The regression suite is run by GitHub Actions for pull requests that change application code, assets, build configuration, or repository maintenance files. Passing local checks is not a substitute for a staging smoke test.
@@ -53,11 +57,12 @@ If `/data` exists and `DATA_DIR` is not explicitly set, the server defaults to `
 - `verify.js`: regression checks.
 - `.github/workflows/`: pull-request validation, archive audit, and guarded manual source synchronization.
 - `.github/dependabot.yml`: scheduled dependency update proposals for GitHub Actions and npm.
+- `package-lock.json`: exact npm dependency tree used by local, CI, and Docker clean installs.
 - `rimaz-final-deep-audit-46.93.72.zip`: audited source archive used by the archive validation workflow and manual source-sync process.
 
 ## Docker
 
-The Dockerfile installs production dependencies and copies the application. `.dockerignore` excludes runtime data, local dependencies, archives, and repository-only workflow files from the image build context. The persistent data volume must be mounted separately; it is not part of the image.
+The Dockerfile installs production dependencies with `npm ci --omit=dev` from the committed lockfile and copies the application. `.dockerignore` excludes runtime data, local dependencies, archives, and repository-only workflow files from the image build context. The persistent data volume must be mounted separately; it is not part of the image.
 
 ## Safe repository workflow
 
