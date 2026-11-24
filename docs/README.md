@@ -11,15 +11,16 @@ This directory contains maintained project records, engineering audits, and oper
 - [Engineering handoff](project/HANDOFF-2026-11-24.md) — implementation context and ongoing repair work.
 
 ## Engineering audits
-- [Code audit](audits/CODE-AUDIT.md) — application security and implementation review.
-- [Final deep audit](audits/FINAL-DEEP-AUDIT.md) — comprehensive historical audit.
+- [Code audit](audits/CODE-AUDIT.md) — historical v46.93.37 audit; use the current transaction/runtime audits for the latest source state.
+- [Final deep audit](audits/FINAL-DEEP-AUDIT.md) — historical v46.93.72 source snapshot; superseded by the current audits and release gate.
 - [Audit follow-up](audits/AUDIT-FOLLOWUP-2026-11-24.md) — follow-up findings and remediation notes.
 - [Runtime resource audit](audits/RUNTIME-RESOURCE-AUDIT-2026-11-24.md) — resource lifecycle and memory review.
 - [Transaction safety audit](audits/TRANSACTION-SAFETY-AUDIT-2026-11-24.md) — persistence, rollback, and failure handling.
 
 ## Operations
 - [Final release gate](operations/FINAL-RELEASE-GATE.md) — exact-head CI evidence, remaining staging requirements, and production promotion boundary.
-- [Deployment notes](operations/DEPLOYMENT-46.93.72.md) — historical deployment package and operational guidance.
+- [Deployment notes](operations/DEPLOYMENT-46.93.72.md) — historical package reference; not production authorization.
+- [Repair notes](operations/REPAIR-NOTES-46.93.72.md) — historical baseline repairs; current verification is in the final checkpoint and release gate.
 - [Repair notes](operations/REPAIR-NOTES-46.93.72.md) — recorded repair history and context.
 
 ## Contributor guidance
