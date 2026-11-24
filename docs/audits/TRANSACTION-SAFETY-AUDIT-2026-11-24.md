@@ -49,3 +49,10 @@ Rollback-safe persistence was added to admin message deletion, profile edits, li
 - No production restart cause, OOM event, exit code or health-check termination reason has been established.
 - No staging restore, live media playback, or multi-device chat/voice smoke test has been performed.
 - Do not merge, deploy, restart, or run destructive ZIP sync without explicit user approval and an independently verified backup/restore.
+
+
+## Startup migration fail-closed repair — 2026-11-24
+- Confirmed startup migration paths previously caught save failures and continued: smiley gallery migration, welcome-message defaults, expired-announcement cleanup, and gift catalogue migration.
+- This could leave memory ahead of disk and allow an unrelated later write to persist a migration whose own commit had failed.
+- All four paths now log a fatal startup error and throw when persistence fails. Startup stops rather than serving a mixed committed/uncommitted state.
+- Added four regression assertions. Exact PR head `de1225f8d9b0ecfa25c8666a3c641aa87ba19714`, run `45379172304`: 552 pass markers, zero failures; syntax, regression, and Docker build succeeded.
