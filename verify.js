@@ -741,6 +741,17 @@ try {
   else fail('upload signature validator accepts valid containers and rejects MIME spoofing');
 } catch (error) { fail('upload signature fixture tests', error.message); }
 
+
+// Deleting a nonexistent gift must not create a profile or trigger profile() expiry mutations.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const routeStart = source.indexOf("app.post('/api/admin/gift/delete'");
+  const routeEnd = source.indexOf("function countGifImageFrames", routeStart);
+  const route = routeStart >= 0 && routeEnd > routeStart ? source.slice(routeStart, routeEnd) : '';
+  if (route.includes("const p=db.profiles[n];if(!p||!Array.isArray(p.gifts)||!p.gifts.length)return res.status(404)") && !route.includes('const p=profile(n)')) pass('deleting a missing gift does not create or mutate a profile');
+  else fail('deleting a missing gift does not create or mutate a profile');
+} catch (error) { fail('gift deletion no-mutation regression', error.message); }
+
 // Socket.IO session ownership: a superseded socket must not reclaim a session by emitting join again.
 try {
   const source = fs.readFileSync(server, 'utf8');
