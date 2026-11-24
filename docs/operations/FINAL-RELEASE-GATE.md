@@ -71,3 +71,13 @@ Repository organization, deterministic dependency installation, archive parity, 
 - Archive validation now checks ZIP member CRC/integrity before extraction. Extracted archive validation also checks `npm ls --depth=0`, JavaScript syntax, root/public HTML parity, regression tests, and Docker build.
 - [Validation run 45412772398](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45412772398) and [archive audit run 45412772526](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45412772526) both passed on this exact commit; each test run reported 567 pass markers and zero failures, and both Docker builds succeeded. Validation/audit logs reported zero npm vulnerabilities.
 - This strengthens repository verification only; backup/restore, isolated staging, runtime/load checks, and promotion approval remain outstanding.
+
+
+## Private-message limiter and current archive verification — 2026-11-24
+
+- Private-message rate-limit accounting now occurs only after content and recipient eligibility checks and after any required conversation-state save succeeds. This prevents rejected or offline-recipient attempts from consuming the delivery quota.
+- Regression coverage exercises repeated-message and rolling-window limits, reset behavior, empty content, and route ordering.
+- The ZIP was rebuilt from current tracked application/docs files; the temporary builder workflow was removed. The current archive passed exact application/public parity and CRC validation.
+- Latest candidate head: `7d3a76fb6452c2cdddecf90f3d62e6d1a52e2dba`.
+- [Validation run 45413521661](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45413521661) and [archive audit run 45413521644](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45413521644) both passed on this exact head, including regression tests and Docker build.
+- Production promotion remains blocked on independent backup/restore, staging smoke tests, runtime/load evidence, and final approval.
