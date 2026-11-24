@@ -1037,8 +1037,12 @@ function requireAdmin(req,res,next){
     const acceptedPermissions=Array.isArray(permission)?permission:[permission];
     if(!acceptedPermissions.some(key=>hasPermission(req.user,key)))return res.status(403).json({error:'ما عندك صلاحية لهذا القسم أو الإجراء'});
     const write=['POST','PUT','PATCH','DELETE'].includes(req.method);
+    const auditBefore=db.adminAuditLogs;
+    const auditBeforeLength=Array.isArray(auditBefore)?auditBefore.length:-1;
+    const auditBeforeFirst=Array.isArray(auditBefore)?auditBefore[0]?.id:undefined;
     if(write)res.on('finish',()=>{
       if(res.statusCode<200||res.statusCode>=300)return;
+      if(db.adminAuditLogs!==auditBefore||(Array.isArray(db.adminAuditLogs)&&(db.adminAuditLogs.length!==auditBeforeLength||db.adminAuditLogs[0]?.id!==auditBeforeFirst)))return;
       const previous=db.adminAuditLogs;
       const body=req.body&&typeof req.body==='object'?req.body:{};
       const target=String(body.name||body.target||body.member||'').slice(0,40);
