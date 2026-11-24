@@ -1,3 +1,5 @@
+> **Historical deployment record:** this document is retained for release history, not as the current deployment procedure. The repository's current archive is `rimaz-final-deep-audit-46.93.72.zip`; always inspect the current guarded workflow and project checkpoint before any synchronization. Never run a production replacement without an independent persistent-volume backup, staging verification, and explicit approval.
+
 # Rimaz Chat 46.93.72 — Deployment notes
 
 ## Package layout
