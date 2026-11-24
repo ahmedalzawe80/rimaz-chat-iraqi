@@ -2107,3 +2107,19 @@ try {
 } catch (error) {
   fail('documentation structure regression checks', error.message);
 }
+
+
+// Repository guidance files are part of the supported contributor workflow.
+try {
+  const required = [
+    'CONTRIBUTING.md',
+    '.editorconfig',
+    '.gitattributes',
+    '.github/pull_request_template.md'
+  ];
+  const missing = required.filter(file => !fs.existsSync(path.join(root, file)));
+  if (missing.length === 0) pass('repository contributor guidance and file-format policies are present');
+  else fail('repository contributor guidance and file-format policies are present', missing.join(', '));
+} catch (error) {
+  fail('repository contributor guidance and file-format policies are present', error.message);
+}
