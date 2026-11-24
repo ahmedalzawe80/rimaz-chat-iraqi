@@ -61,3 +61,7 @@ The Dockerfile installs production dependencies and copies the application. `.do
 ## Safe repository workflow
 
 Work on a feature or maintenance branch and open a pull request to `main`. Do not merge or deploy until the PR checks pass and the change has been reviewed. The manual ZIP synchronization workflow is restricted to `main` and requires an explicit confirmation input; its rollback branch backs up Git-tracked repository state only, not the live hosting volume.
+
+## Documentation index
+
+See [docs/README.md](docs/README.md) for a categorized index of audits, handoff notes, deployment records, and change history. Existing document paths are preserved to avoid breaking references.
