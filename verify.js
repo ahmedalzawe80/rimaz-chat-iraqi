@@ -2697,7 +2697,7 @@ try {
     const normalFirst=await completed.next();
     const normalFile=normalFirst.value?.disk;
     const normalSecond=await completed.next();
-    checks.push(['full-backup TAR generator removes its database temp file after normal exhaustion',normalSecond.done&&normalFile&&fs.existsSync(normalFile)&&!fs.existsSync(normalFile)]);
+    checks.push(['full-backup TAR generator removes its database temp file after normal exhaustion',normalSecond.done&&normalFile&&!fs.existsSync(normalFile)]);
 
     const blockedUploads=path.join(temp,'uploads-is-file');
     fs.writeFileSync(blockedUploads,'not a directory');
