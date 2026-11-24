@@ -6,6 +6,7 @@ on:
       - fix/bound-private-media-ticket-cache
   pull_request:
     branches:
+      - safety/validate-and-backup-before-sync
       - main
     paths:
       - 'server.js'
