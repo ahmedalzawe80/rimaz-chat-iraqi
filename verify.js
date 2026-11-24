@@ -2068,3 +2068,42 @@ try {
 } catch (error) {
   fail('repository hygiene and safe source-sync checks', error.message);
 }
+
+
+// Documentation layout: keep root focused and ensure every indexed document resolves.
+try {
+  const docsRoot = path.join(root, 'docs');
+  const indexPath = path.join(docsRoot, 'README.md');
+  const index = fs.readFileSync(indexPath, 'utf8');
+  const requiredDocs = [
+    'project/CHECKPOINT-2026-11-24.md',
+    'project/HANDOFF-2026-11-24.md',
+    'audits/CODE-AUDIT.md',
+    'audits/FINAL-DEEP-AUDIT.md',
+    'audits/AUDIT-FOLLOWUP-2026-11-24.md',
+    'audits/RUNTIME-RESOURCE-AUDIT-2026-11-24.md',
+    'audits/TRANSACTION-SAFETY-AUDIT-2026-11-24.md',
+    'operations/DEPLOYMENT-46.93.72.md',
+    'operations/REPAIR-NOTES-46.93.72.md'
+  ];
+  const staleRootDocs = [
+    'CHECKPOINT-2026-11-24.md','HANDOFF-2026-11-24.md','CODE-AUDIT.md',
+    'FINAL-DEEP-AUDIT.md','AUDIT-FOLLOWUP-2026-11-24.md',
+    'RUNTIME-RESOURCE-AUDIT-2026-11-24.md','TRANSACTION-SAFETY-AUDIT-2026-11-24.md',
+    'DEPLOYMENT-46.93.72.md','REPAIR-NOTES-46.93.72.md'
+  ];
+  const brokenLinks = [...index.matchAll(/\]\(([^)]+)\)/g)]
+    .map(match => match[1])
+    .filter(link => !/^https?:\/\//i.test(link))
+    .filter(link => !fs.existsSync(path.resolve(docsRoot, link)));
+  const missingDocs = requiredDocs.filter(file => !fs.existsSync(path.join(docsRoot, file)));
+  const scatteredDocs = staleRootDocs.filter(file => fs.existsSync(path.join(root, file)));
+  const checks = [
+    ['all project, audit, and operations documents are in their categorized docs folders', missingDocs.length === 0],
+    ['documentation index contains no broken relative links', brokenLinks.length === 0],
+    ['categorized reports are not scattered in the repository root', scatteredDocs.length === 0]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label, JSON.stringify({missingDocs,brokenLinks,scatteredDocs}));
+} catch (error) {
+  fail('documentation structure regression checks', error.message);
+}
