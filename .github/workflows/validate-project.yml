@@ -63,3 +63,64 @@ jobs:
 
       - name: Build production container
         run: docker build --pull -t rimaz-chat-iraqi:ci .
+
+  refresh-release-archive:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/fix/bound-private-media-ticket-cache' && github.actor != 'github-actions[bot]'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout validated branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/bound-private-media-ticket-cache
+          fetch-depth: 0
+
+      - name: Rebuild and verify exact tracked-file archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re, stat, subprocess, zipfile
+          archive='rimaz-final-deep-audit-46.93.72.zip'
+          builder='.github/workflows/rebuild-release-archive-once.yml'
+          tracked=subprocess.check_output(['git','ls-files','-z']).decode().split('\\0')
+          paths=sorted(p for p in tracked if p and p not in (archive,builder) and os.path.isfile(p))
+          with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for path in paths:
+                  info=zipfile.ZipInfo(path,date_time=(2024,1,1,0,0,0))
+                  info.external_attr=(stat.S_IFREG|stat.S_IMODE(os.stat(path).st_mode))<<16
+                  info.compress_type=zipfile.ZIP_DEFLATED
+                  with open(path,'rb') as f:z.writestr(info,f.read(),compress_type=zipfile.ZIP_DEFLATED,compresslevel=9)
+          with zipfile.ZipFile(archive) as z:
+              if z.testzip():raise SystemExit('ZIP CRC failure')
+              actual=set()
+              total=0
+              for item in z.infolist():
+                  name=item.filename.replace('\\\\','/')
+                  if name.startswith('/') or re.match(r'^[A-Za-z]:',name) or any(p in ('.','..') for p in name.split('/')):raise SystemExit('Unsafe path: '+name)
+                  if ((item.external_attr>>16)&0o170000)==stat.S_IFLNK:raise SystemExit('Symlink: '+name)
+                  if not item.is_dir():
+                      if name in actual:raise SystemExit('Duplicate path: '+name)
+                      actual.add(name)
+                  total+=item.file_size
+                  if item.compress_size and item.file_size/item.compress_size>250:raise SystemExit('Suspicious compression ratio: '+name)
+              if actual!=set(paths):raise SystemExit(f'Parity mismatch missing={sorted(set(paths)-actual)[:10]} extra={sorted(actual-set(paths))[:10]}')
+              if total>500*1024*1024:raise SystemExit('Expanded archive too large')
+          print(f'Exact archive rebuilt and verified: {len(actual)} files, {os.path.getsize(archive)} bytes')
+          PY
+
+      - name: Commit refreshed archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+users.noreply.github.com"
+          git add rimaz-final-deep-audit-46.93.72.zip
+          if git diff --cached --quiet; then
+            echo "Archive already matches the validated source."
+            exit 0
+          fi
+          git commit -m "build: refresh audited archive after validated changes"
+          git push origin HEAD:refs/heads/fix/bound-private-media-ticket-cache
