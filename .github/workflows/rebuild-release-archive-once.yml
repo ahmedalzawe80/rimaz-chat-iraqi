@@ -1,0 +1,54 @@
+name: One-time audited archive refresh
+
+on:
+  push:
+    branches:
+      - fix/bound-private-media-ticket-cache
+    paths:
+      - .github/workflows/rebuild-release-archive-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: fix/bound-private-media-ticket-cache
+          fetch-depth: 0
+      - name: Build deterministic source archive
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, subprocess, zipfile
+          archive = "rimaz-final-deep-audit-46.93.72.zip"
+          temporary = archive + ".tmp"
+          excluded = {archive, ".github/workflows/rebuild-release-archive-once.yml"}
+          paths = subprocess.check_output(["git", "ls-files", "-z"]).decode().split("\0")
+          paths = sorted(p for p in paths if p and p not in excluded)
+          with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+              for name in paths:
+                  info = zipfile.ZipInfo(name, date_time=(2026, 11, 24, 0, 0, 0))
+                  info.compress_type = zipfile.ZIP_DEFLATED
+                  info.create_system = 3
+                  info.external_attr = (0o100644 << 16)
+                  with open(name, "rb") as source:
+                      z.writestr(info, source.read(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+          os.replace(temporary, archive)
+          with zipfile.ZipFile(archive) as z:
+              bad = z.testzip()
+              if bad:
+                  raise SystemExit("CRC failure: " + bad)
+          print(f"Archived {len(paths)} tracked files; bytes={os.path.getsize(archive)}")
+          PY
+      - name: Commit refreshed archive
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add rimaz-final-deep-audit-46.93.72.zip
+          git commit -m "chore(release): refresh audited source archive"
+          git push origin HEAD:fix/bound-private-media-ticket-cache
