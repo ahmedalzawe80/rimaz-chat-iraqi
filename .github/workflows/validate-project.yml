@@ -84,9 +84,8 @@ jobs:
           python3 - <<'PY'
           import os, re, stat, subprocess, zipfile
           archive='rimaz-final-deep-audit-46.93.72.zip'
-          builder='.github/workflows/rebuild-release-archive-once.yml'
           tracked=subprocess.check_output(['git','ls-files','-z']).decode().split('\0')
-          paths=sorted(p for p in tracked if p and p not in (archive,builder) and os.path.isfile(p))
+          paths=sorted(p for p in tracked if p and p != archive and os.path.isfile(p))
           with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:
               for path in paths:
                   info=zipfile.ZipInfo(path,date_time=(2024,1,1,0,0,0))
