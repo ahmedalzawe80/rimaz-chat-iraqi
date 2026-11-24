@@ -199,6 +199,8 @@ try {
   else fail('Socket room messages enforce chat filter');
   if (privateRoute && privateRoute[0].includes('blockedChatTerm(text)')) pass('private messages enforce chat filter');
   else fail('private messages enforce chat filter');
+  if (socketRoute && socketRoute[0].includes('globalBanned(u.name,socketClientIp(socket))') && socketRoute[0].includes("error-msg',{error:'لا يمكنك الكتابة أثناء الحظر العام'}")) pass('public room messages recheck global bans at send time, not only on room join');
+  else fail('public room messages recheck global bans at send time');
 } catch (error) { fail('chat filter route checks', error.message); }
 
 // Upload hardening: whitelist client MIME values, derive safe stored extensions,
