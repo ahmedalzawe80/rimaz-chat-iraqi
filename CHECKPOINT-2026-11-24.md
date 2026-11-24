@@ -149,3 +149,12 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Historical green CI references in audit docs belong to earlier commits (including `4b887d809092927be228bd125df815d262403dde`), not the latest PR heads. Do not present 460/477 historical checks as current-head validation.
 - Outstanding before merge: resolve workflow target/runtime mismatch and shared-file integration; obtain fresh green checks on the final combined head; verify package install/build; inspect/add a genuine dependency lockfile and switch to `npm ci` only after validating it; perform staging smoke tests including login/reconnect, public/private chat, rooms, voice/video, uploads, backup/restore, and multi-device behavior; collect Deplexo restart/exit/OOM/heap/RSS evidence.
 - Production boundaries unchanged: no merge, main update, ZIP sync, deployment/restart, or production volume/database/media access has been performed. Before production, independently back up and verify restore of the live persistent volume and obtain explicit final approval.
+
+
+## CI alignment and regression assertion repair (2026-11-24)
+- Aligned both PR validation workflows with Node.js 24 and added the actual safety PR base branch alongside main, so pull-request checks run for the branches these PRs target.
+- Updated PR #2 README and deployment notes from Node 20 to Node 24 to match PR #3 package engine and Docker base.
+- Latest PR #2 head `61fa6489f75f9446313e7cf124bc486640a8e1b9`: push and pull_request validation runs completed successfully on Node 24; regression suite passed.
+- PR #3 first Node 24 run reached the regression suite and exposed exactly two stale source-text assertions, not syntax or runtime failures: the v46.69 backup assertion still expected the old sessions-only snapshot, and the gift-upload assertion expected Multer before the newly added authorization middleware.
+- Updated those assertions in `verify.js` to require private-message sanitization and the gifts module/permission gates before Multer. Commit: `4400248f3715e7f54bbb57703e23dac89fa308db`.
+- Await a fresh PR #3 CI run on this latest commit; do not treat the prior failing run as passed. No merge, deployment, main update, ZIP sync, or production data access.
