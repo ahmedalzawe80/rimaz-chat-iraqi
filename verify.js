@@ -1982,3 +1982,13 @@ try {
   const ok=source.includes('const MAX_ACTIVE_VOICE_PAIRS=8192')&&source.includes('const VOICE_PAIR_TTL_MS=120000')&&source.includes('pruneActiveVoicePairs()')&&offer.includes('activeVoicePairs.size>=MAX_ACTIVE_VOICE_PAIRS')&&answer.includes('Date.now()-state.created>VOICE_PAIR_TTL_MS')&&ice.includes('Date.now()-state.created>VOICE_PAIR_TTL_MS')&&ice.includes('state.a!==sid&&state.b!==sid');
   if(ok)pass('voice negotiation pairs expire, are capacity-bounded, and ICE relays require the authorized pair');else fail('bounded voice negotiation lifecycle');
 } catch(error) { fail('bounded voice negotiation lifecycle',error.message); }
+
+// A pending private call cannot be answered after its negotiation window or after the caller socket disappears.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf("socket.on('call-answer'");
+  const end=source.indexOf("socket.on('call-reject'",start);
+  const handler=source.slice(start,end);
+  const ok=handler.includes('Date.now()-state.created>120000')&&handler.includes('activeCallPairs.delete(pair)')&&handler.includes("socketBySession(state.caller)");
+  if(ok)pass('private call answers reject expired pending offers and missing caller sockets');else fail('private call answer expiry enforcement');
+} catch(error) { fail('private call answer expiry enforcement',error.message); }
