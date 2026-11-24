@@ -4,7 +4,7 @@ Rimaz is a Node.js chat application using Express and Socket.IO. The repository 
 
 ## Requirements
 
-- Node.js 20 or later
+- Node.js 24 LTS
 - npm
 
 ## Run locally
