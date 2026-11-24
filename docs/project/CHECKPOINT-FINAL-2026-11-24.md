@@ -275,3 +275,12 @@ The repository candidate and archive are CI-validated. The project is **not yet 
 - Archive: **395 files / 16,370,888 bytes**, CRC and exact tracked-file parity passed. Archive-only commit: 9a27af2255adc56a61c580a5406ec49e4c18ae5f.
 - This removes one database-sized transient Buffer from restore confirmation; it does not remove the retained old database object, the parsed replacement object, or restore JSON text. Full backup/database backup allocation paths remain open. The historical 128 MB issue is not declared fixed.
 - PR #3 remains draft/open/unmerged; main and Deplexo remain untouched. All hosting-side release blockers remain in force.
+
+
+## Latest verified repository state — 2026-11-24 20:44 UTC
+
+- Latest source/test candidate remains a2a3c11274770af65de0810414a9e6a233474221. The subsequent resource-audit/checkpoint documentation candidate 7ab35f676db1f479f0c0fc06340fd2767e6adac8 passed [Actions run #45483597986](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45483597986).
+- Both source validation and extracted-archive validation passed **610 checks, zero failures**; both production Docker builds succeeded; npm audit reported **0 vulnerabilities**. The archive job verified **395 files / 16,371,911 bytes**, CRC, and exact tracked-file parity.
+- Current branch is fix/bound-private-media-ticket-cache. PR #3 remains open/draft/unmerged, based on safety/validate-and-backup-before-sync. Production main remains a2c74fded15ea5cfde38d310a84c3c8edfe994b3.
+- The latest source work is server-side only; index.html and public/index.html remain unchanged. No production merge, deployment/restart, ZIP sync, or live-data modification occurred.
+- Continue next with the still-unresolved backup JSON/Buffer amplification and restore parse/object overlap, then obtain provider-side staging load/restart/OOM evidence. Do not treat the current CI pass as production sign-off.
