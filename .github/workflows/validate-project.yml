@@ -65,7 +65,9 @@ jobs:
         run: docker build --pull -t rimaz-chat-iraqi:ci .
 
   refresh-release-archive:
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/fix/bound-private-media-ticket-cache') || (github.event_name == 'pull_request' && github.event.pull_request.number == 3 && github.event.pull_request.head.ref == 'fix/bound-private-media-ticket-cache')
+    # Archive writes must run only once per branch push. PR validation remains read-only,
+    # preventing concurrent push/PR jobs from racing to commit the same ZIP file.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/fix/bound-private-media-ticket-cache'
     needs: validate
     runs-on: ubuntu-latest
     permissions:
