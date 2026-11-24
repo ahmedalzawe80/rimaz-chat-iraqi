@@ -60,9 +60,9 @@ Latest diagnosis: the private-chat assertion was overly exact about listener tex
 - Remaining reproducibility gap: no package-lock.json/npm shrinkwrap yet; Docker still uses npm install --omit=dev, not npm ci. Generate a real lockfile from trusted registry; never fabricate integrity hashes.
 
 ## Saved reports
-Handoff: https://github.com/ahmedalzawe80/rimaz-chat-iraqi/blob/fix/bound-private-media-ticket-cache/HANDOFF-2026-11-24.md
-Runtime resource audit: https://github.com/ahmedalzawe80/rimaz-chat-iraqi/blob/fix/bound-private-media-ticket-cache/RUNTIME-RESOURCE-AUDIT-2026-11-24.md
-Transaction audit (verify file exists on branch): https://github.com/ahmedalzawe80/rimaz-chat-iraqi/blob/fix/bound-private-media-ticket-cache/TRANSACTION-SAFETY-AUDIT-2026-11-24.md
+Handoff: https://github.com/ahmedalzawe80/rimaz-chat-iraqi/blob/fix/bound-private-media-ticket-cache/docs/project/HANDOFF-2026-11-24.md
+Runtime resource audit: https://github.com/ahmedalzawe80/rimaz-chat-iraqi/blob/fix/bound-private-media-ticket-cache/docs/audits/RUNTIME-RESOURCE-AUDIT-2026-11-24.md
+Transaction audit (verify file exists on branch): https://github.com/ahmedalzawe80/rimaz-chat-iraqi/blob/fix/bound-private-media-ticket-cache/docs/audits/TRANSACTION-SAFETY-AUDIT-2026-11-24.md
 
 ## Next actions
 1. Diagnose/fix the two current red checks, rerun CI, verify Docker build.
