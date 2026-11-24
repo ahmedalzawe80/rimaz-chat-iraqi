@@ -753,6 +753,17 @@ try {
   else fail('missing gift catalog deletion does not initialize catalog state');
 } catch (error) { fail('gift catalog deletion no-mutation regression', error.message); }
 
+
+// Failed gift-catalog upload must roll back a newly initialized catalog property as well as the item/file.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const routeStart = source.indexOf("app.post('/api/admin/gifts/catalog/upload'");
+  const routeEnd = source.indexOf("app.post('/api/admin/gifts/catalog/delete'", routeStart);
+  const route = routeStart >= 0 && routeEnd > routeStart ? source.slice(routeStart, routeEnd) : '';
+  if (route.includes("catalogKey=category==='vip'?'vipGiftCatalog':'giftCatalog',hadCatalog=Object.prototype.hasOwnProperty.call(db,catalogKey),previousCatalog=db[catalogKey]") && route.includes("if(!Array.isArray(previousCatalog)){if(hadCatalog)db[catalogKey]=previousCatalog;else delete db[catalogKey];}")) pass('failed gift-catalog upload restores absent catalog state');
+  else fail('failed gift-catalog upload restores absent catalog state');
+} catch (error) { fail('gift-catalog upload rollback regression', error.message); }
+
 // Deleting a nonexistent gift must not create a profile or trigger profile() expiry mutations.
 try {
   const source = fs.readFileSync(server, 'utf8');
