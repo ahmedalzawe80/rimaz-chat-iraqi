@@ -1537,6 +1537,7 @@ app.post('/api/message',requireAuth,async(req,res)=>{
   if(roomBanned(u.name,room))return res.status(403).json({error:'أنت محظور من هذه الغرفة'});
   if(roomMuted(u.name,room))return res.status(403).json({error:'أنت مكتوم في هذه الغرفة'});
   const rateError=roomMessageRateLimitError(sessionId,text);if(rateError)return res.status(429).json({error:rateError});
+  if(await processBuiltInBotCommand(joinedSocket,u,room,text))return res.json({ok:true,command:true});
   if(blockedChatTerm(text))return res.status(403).json({error:'رسالتك تحتوي على كلمة غير مسموح بها'});
   const r=db.rooms.find(x=>x.id===room); if(!r)return res.status(404).json({error:'الغرفة غير موجودة'});
   const m={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:u.type,text,at:Date.now(),likes:userLikes(u),profile:profile(u.name)};try{await addMessage(m)}catch(e){console.error('HTTP room message save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الرسالة'});}io.to(room).emit('message',m);res.json({ok:true,message:m});
