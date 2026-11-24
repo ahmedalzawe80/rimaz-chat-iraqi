@@ -2206,7 +2206,10 @@ async function processBuiltInBotCommand(socket,user,room,text,onError=null){
 
 io.on('connection',socket=>{
   socket.on('join',async({sid,room='public',password=''}={})=>{
-    const u=sessionUser(sid); if(!u)return;
+    // A socket may join initially or move rooms, but a superseded socket must never reclaim the same session.
+    const requestedSid=String(sid||'');
+    if(socket.data.sid&&(socket.data.sid!==requestedSid||!isCurrentSessionSocket(socket)))return;
+    const u=sessionUser(requestedSid); if(!u)return;
     const targetRoom=db.rooms.find(r=>r.id===room); if(!targetRoom){socket.emit('join-error',{error:'الغرفة غير موجودة'});return;}if(targetRoom.kind==='voice'&&!siteModuleEnabled('voiceRooms')){socket.emit('join-error',{error:'الغرف الصوتية متوقفة من إدارة الموقع'});return;}
     if(targetRoom.passwordHash&&!bcrypt.compareSync(String(password||''),targetRoom.passwordHash)){socket.emit('join-error',{error:'الغرفة مقفلة؛ أدخل الباسورد الصحيح'});return;} 
     // Validate access before changing the active room, then move this socket atomically.
