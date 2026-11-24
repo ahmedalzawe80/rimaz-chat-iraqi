@@ -57,3 +57,14 @@ A later review of the current working branch found a shadowed permission rule in
 - Archive-only head after CI: `a49f10afcda33eac55ea974c60ee57e866f4e28c`.
 
 This follow-up changes the historical "read-only/no runtime changes" statement above only for the later commits listed here. It does not represent live-server or production verification. `main` remains unchanged, PR #3 remains draft/open/unmerged, and no Deplexo deployment, restart, ZIP sync, or live-data modification was performed.
+
+## Superseding repository and archive check — 2026-11-24 19:42 UTC
+
+The opening sections above preserve the original read-only runtime audit and its historical branch snapshot. The current source candidate and release boundary are:
+
+- Source/documentation candidate `7b47b00f662867b89e17ef1597337eb697166eba` passed [Actions run #708](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45472720285), including 603 regression checks with zero failures and a successful production Docker build.
+- The extracted archive passed its own 603 regression checks, HTML parity, Docker build, and production dependency installation with zero reported vulnerabilities.
+- Latest archive-only commit: `50c61f0d55513e3840ea71fdff14e609042fa2ed`, changing only the ZIP (16,359,829 bytes).
+- The current tree contains no nested duplicate project directory and only one release ZIP. The removed nested `data.json` and Google verification file were compared against retained copies and were byte-identical; the root placeholder and root/public verification files remain.
+- PR #3 remains draft/open/unmerged on `safety/validate-and-backup-before-sync`; production `main` remains unchanged at `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
+- The source and archive are CI-validated only. No Deplexo deployment, live-volume backup, restore, or staging runtime test has been performed. Those remain mandatory before promotion.
