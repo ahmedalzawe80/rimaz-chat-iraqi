@@ -18,10 +18,8 @@ on:
       - 'npm-shrinkwrap.json'
       - '*.md'
       - 'docs/**/*.md'
-      - '.gitignore'
       - 'Dockerfile'
       - '.dockerignore'
-      - '.gitignore'
       - '.github/workflows/**'
       - 'rimaz-final-deep-audit-46.93.72.zip'
 
