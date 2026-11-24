@@ -348,8 +348,11 @@ migratePrivateMediaToProtectedStorage();
 function purgePrivateHistoryAtStartup(){
   const hadHistory=(db.privateMessages||[]).length>0;
   db.privateMessages=[];
+  let notificationsChanged=false;
   for(const [name,items] of Object.entries(db.notifications||{})){
-    if(Array.isArray(items))db.notifications[name]=items.filter(item=>!String(item?.type||'').startsWith('private'));
+    if(!Array.isArray(items))continue;
+    const retained=items.filter(item=>!String(item?.type||'').startsWith('private'));
+    if(retained.length!==items.length){db.notifications[name]=retained;notificationsChanged=true;}
   }
   let removedFiles=0;
   for(const entry of fs.readdirSync(PRIVATE_MEDIA_DIR,{withFileTypes:true})){
@@ -358,7 +361,9 @@ function purgePrivateHistoryAtStartup(){
     catch(error){if(error.code!=='ENOENT')console.warn('Startup private media purge failed:',error.message);}
   }
   if(hadHistory||removedFiles)console.log(`Purged transient private history and ${removedFiles} private media file(s).`);
-  if(hadHistory||removedFiles)save();
+  // Persist notification-only cleanup too; otherwise stale private notices remain on disk
+  // and are needlessly reprocessed after every restart.
+  if(hadHistory||removedFiles||notificationsChanged)save();
 }
 purgePrivateHistoryAtStartup();
 
