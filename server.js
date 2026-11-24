@@ -2295,8 +2295,9 @@ app.get(/.*/,(req,res)=>sendSeoIndex(req,res));
 server.listen(PORT,()=>console.log(`Rimaz server listening on ${PORT}`));
 function gracefulShutdown(signal){
   if(messageSaveTimer){clearTimeout(messageSaveTimer);messageSaveTimer=null;}
-  try{save();}catch(error){console.error(`Final database save failed during ${signal}:`,error.message);}
-  io.close(()=>process.exit(0));
+  let finalSaveSucceeded=true;
+  try{save();}catch(error){finalSaveSucceeded=false;console.error(`Final database save failed during ${signal}:`,error.message);}
+  io.close(()=>process.exit(finalSaveSucceeded?0:1));
   const forceExit=setTimeout(()=>process.exit(1),10000);forceExit.unref?.();
 }
 process.once('SIGTERM',()=>gracefulShutdown('SIGTERM'));
