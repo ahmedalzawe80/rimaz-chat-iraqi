@@ -118,3 +118,14 @@ Always inspect the current PR head and exact-head CI first. Keep work on `fix/bo
 - Current branch head at checkpoint: `d29626aee164956001f54ca6aa86d6c33f6da437`. Exact-head GitHub Actions results were not yet available when this note was written; do not claim the new tests or Docker build have passed until the runs report success.
 - The ZIP archive predates these source/test changes and must be rebuilt and pass CRC, safe-path, tracked-file parity, extracted `npm ci`, `npm test`, and Docker checks before anyone uses it. Do not upload or synchronize the old ZIP.
 - PR #3 remains open, draft, and unmerged. No main update, deployment, restart, or live-data modification has occurred.
+
+## Superseding verified continuation state — 2026-11-24
+
+- This section supersedes the earlier note above that the media-module fix had not yet passed CI and that the archive was still stale.
+- The private/wall media-upload module checks are committed in server commit [a297c05](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/commit/a297c0526f7ab5a41b0e7f3e217ac8ec11a01e64), with regression assertions in [d29626a](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/commit/d29626aee164956001f54ca6aa86d6c33f6da437).
+- Exact candidate cleanup head `d135c04dfaa50957e004ff7366af78826a9cc264` passed [validation run 45423336513](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45423336513): locked dependency install, dependency-tree check, JavaScript syntax, full regression suite, and production Docker build.
+- The same exact head passed [archive audit run 45423336536](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45423336536): safe extraction, CRC/layout checks, exact candidate/archive parity, HTML/JavaScript checks, locked install, regression suite, and Docker build.
+- The one-time archive builder successfully generated a 394-file archive of 16,343,579 bytes in [run 45423165350](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45423165350). Its temporary workflow was then removed in cleanup commit `d135c04`; the archive intentionally excludes that temporary workflow.
+- This checkpoint refresh is itself part of the release documentation; rebuild the ZIP once more after this note is committed, then require a fresh exact-head archive audit before treating the ZIP as current.
+- PR #3 remains open, draft, and unmerged. No main update, Deplexo deployment/restart, ZIP sync to the live site, or live-data modification has occurred.
+- Production remains blocked on an independent backup of the Deplexo persistent volume, successful restore to isolated staging, end-to-end smoke tests, and runtime/load evidence.
