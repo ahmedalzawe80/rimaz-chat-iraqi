@@ -2001,15 +2001,17 @@ app.post('/api/admin/restore/database/confirm',requireAdmin,(req,res)=>{
  if(confirmation!=='استعادة ريماز')return res.status(400).json({error:'اكتب عبارة استعادة ريماز للتأكيد'});
  const previous=db;
  let recoveryFile='';
+ let recoveryReady=false;
  try{
   const checked=validateDatabaseRestoreFile(fs.readFileSync(pending.filePath,'utf8'));
   const protectedOwnerName=process.env.OWNER_NAME||'owner';if(!restoreContainsOwner(checked.clean,protectedOwnerName))throw new Error('النسخة لا تحتوي حساب صاحب الموقع؛ رُفضت لحماية إمكانية الدخول للإدارة');
   if(fs.existsSync(DB_FILE)){
    recoveryFile=DB_FILE+'.pre-restore-'+Date.now()+'.json';
-   fs.copyFileSync(DB_FILE,recoveryFile,fs.constants.COPYFILE_EXCL);
-   fs.chmodSync(recoveryFile,0o600);
-   const recoveryFd=fs.openSync(recoveryFile,'r+');
-   try{fs.fsyncSync(recoveryFd);}finally{fs.closeSync(recoveryFd);}
+   const recoveryData=fs.readFileSync(DB_FILE);
+   const recoveryFd=fs.openSync(recoveryFile,'wx',0o600);
+   try{fs.writeFileSync(recoveryFd,recoveryData);fs.fsyncSync(recoveryFd);}catch(recoveryError){try{fs.unlinkSync(recoveryFile);}catch(_){}throw recoveryError;}finally{fs.closeSync(recoveryFd);}
+   try{const recoveryDirFd=fs.openSync(DATA_DIR,'r');try{fs.fsyncSync(recoveryDirFd);}finally{fs.closeSync(recoveryDirFd);}}catch(syncError){console.error('Recovery database directory sync unavailable:',syncError.message);}
+   recoveryReady=true;
   }
   db=checked.clean;
   db.sessions={};db.privateMessages=[];
@@ -2036,6 +2038,7 @@ app.post('/api/admin/restore/database/confirm',requireAdmin,(req,res)=>{
   try{io.disconnectSockets(true);}catch(e){console.warn('Could not disconnect restored sessions:',e.message);}
   res.json({ok:true,message:'تمت استعادة قاعدة البيانات. تم إنهاء الجلسات النشطة.',recoveryFile:path.basename(recoveryFile||DB_FILE)});
  }catch(e){
+  if(recoveryFile&&!recoveryReady){try{fs.unlinkSync(recoveryFile);}catch(_){}}
   db=previous;
   try{save();}catch(rollbackError){console.error('Database restore rollback failed:',rollbackError);}
   res.status(500).json({error:'فشلت الاستعادة وتمت محاولة الرجوع للبيانات السابقة. احتفظ بنسخة الاسترداد قبل أي محاولة أخرى.'});
