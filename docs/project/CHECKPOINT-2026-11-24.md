@@ -272,3 +272,11 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Added regression checks for cleanup retry, rollback ordering, and HTTP/Socket.IO message metadata parity.
 - Exact code/test SHA `41742dda0db75e22d9d8906de3261dfd88231d5c` passed PR workflow run `45378243267`: 544 pass markers, 0 failure markers, JavaScript syntax checks, regression suite, and production Docker build all succeeded.
 - CI validates repository checks and image construction only; live-server/staging and persistent-volume backup/restore validation remain outstanding. No merge, PR closure, deployment/restart, ZIP sync, or live data/volume modification.
+
+
+## Rank assignment exact rollback repair — 2026-11-24
+- Transaction review found that a failed `POST /api/admin/rank` save restored a cloned target profile even when no profile existed before the operation. It also left newly created empty root objects (`rankAudit` / `notifications`) in memory rather than restoring their original existence state.
+- The route now snapshots prior existence for the target profile, rank-audit root, notifications root, and target inbox. On save failure it restores the previous profile only if it existed, otherwise removes the newly created profile; it restores or deletes the rank-audit and notifications roots according to their prior existence and restores the target inbox exactly.
+- Added regression assertions for each rollback boundary.
+- Exact code/test SHA `8c6134e2d320618f171b4120a3de9bf1c0913942` passed PR workflow run `45378519916`: 548 pass markers, 0 failure markers, syntax checks, full regression suite, and production Docker build passed.
+- No merge/deployment or production data/volume modification. Live/staging verification and backup/restore are still required before promotion.
