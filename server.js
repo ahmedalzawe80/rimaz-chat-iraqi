@@ -988,11 +988,7 @@ if(Number(db.healthViewPermissionMigrationVersion||0)<2){
 function requirePermission(permission){return (req,res,next)=>requireAuth(req,res,()=>hasPermission(req.user,permission)?next():res.status(403).json({error:'ما عندك صلاحية لهذا الإجراء'}));}
 function permissionForAdminPath(req){
  const p=req.path;
- if(p==='/api/admin/data'){
-  if(hasPermission(req.user,'panel_access'))return 'panel_access';
-  if(['audit_view','stats_view','chat_filter_manage','member_status_manage','users_view'].some(k=>hasPermission(req.user,k)))return 'panel_access';
-  return 'panel_access';
- }
+ if(p==='/api/admin/data')return ALL_PERMISSION_KEYS;
  if(p==='/api/admin/audit-logs')return 'audit_view';
  if(p.startsWith('/api/admin/subscriptions'))return 'subscriptions_manage';
  if(p.startsWith('/api/admin/ads'))return 'ads_manage';
