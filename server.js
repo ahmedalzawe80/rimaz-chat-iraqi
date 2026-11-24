@@ -2004,7 +2004,13 @@ app.post('/api/admin/restore/database/confirm',requireAdmin,(req,res)=>{
  try{
   const checked=validateDatabaseRestoreFile(fs.readFileSync(pending.filePath,'utf8'));
   const protectedOwnerName=process.env.OWNER_NAME||'owner';if(!restoreContainsOwner(checked.clean,protectedOwnerName))throw new Error('النسخة لا تحتوي حساب صاحب الموقع؛ رُفضت لحماية إمكانية الدخول للإدارة');
-  if(fs.existsSync(DB_FILE)){recoveryFile=DB_FILE+'.pre-restore-'+Date.now()+'.json';fs.copyFileSync(DB_FILE,recoveryFile,fs.constants.COPYFILE_EXCL);}
+  if(fs.existsSync(DB_FILE)){
+   recoveryFile=DB_FILE+'.pre-restore-'+Date.now()+'.json';
+   fs.copyFileSync(DB_FILE,recoveryFile,fs.constants.COPYFILE_EXCL);
+   fs.chmodSync(recoveryFile,0o600);
+   const recoveryFd=fs.openSync(recoveryFile,'r+');
+   try{fs.fsyncSync(recoveryFd);}finally{fs.closeSync(recoveryFd);}
+  }
   db=checked.clean;
   db.sessions={};db.privateMessages=[];
   db.adminAuditLogs=Array.isArray(db.adminAuditLogs)?db.adminAuditLogs:[];
