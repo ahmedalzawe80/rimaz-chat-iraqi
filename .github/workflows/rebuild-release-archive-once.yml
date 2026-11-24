@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   rebuild:
-    if: github.event.head_commit.message == 'chore(release): add one-time archive builder'
+    if: ${{ github.event.head_commit.message == 'chore(release): add one-time archive builder' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout candidate branch
