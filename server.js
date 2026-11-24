@@ -231,7 +231,7 @@ if(!Array.isArray(db.chatShortcuts)) db.chatShortcuts=[]; if(!Array.isArray(db.c
     db.smileysSeedVersion=9;
     db.smileysSeeded=true;
     try { save(); console.log(`Installed ${artwork.length} supplied smileys + ${mobile.length} mobile emojis (migration v9).`); }
-    catch(e) { console.error('Could not persist smiley gallery migration:',e.message); }
+    catch(e) { console.error('FATAL: could not persist smiley gallery migration; startup stopped:',e.message); throw new Error('Smiley gallery migration could not be persisted; refusing to start with uncommitted startup state.'); }
   }
 }
 
@@ -248,10 +248,10 @@ const legacyWelcomeTexts=new Set(['إدارة ريماز ترحب بالأعضا
 if(Array.isArray(db.welcomeMessages) && db.welcomeMessages.length && db.welcomeMessages.every(m=>legacyWelcomeTexts.has(String(m.text||'').trim()))) db.welcomeMessages=agreedWelcomeDefaults;
 // If the saved set is the old default pair, replace it with the approved default text.
 if(Array.isArray(db.welcomeMessages) && db.welcomeMessages.length===2 && db.welcomeMessages.some(m=>String(m.text||'').includes('إدارة ريماز ترحب'))) db.welcomeMessages=agreedWelcomeDefaults;
-try { save(); } catch(e) { console.error('Could not persist welcome-message defaults/migration:',e.message); }
+try { save(); } catch(e) { console.error('FATAL: could not persist welcome-message defaults/migration; startup stopped:',e.message); throw new Error('Welcome-message migration could not be persisted; refusing to start with uncommitted startup state.'); }
 // Remove expired timed announcements after restarts; expiry is stored with the announcement.
 const expiredAnnouncementIds=new Set((db.announcements||[]).filter(a=>a&&['5m','15m'].includes(a.duration)&&Number(a.at)+900000<=Date.now()).map(a=>String(a.id)));
-if(expiredAnnouncementIds.size){db.announcements=(db.announcements||[]).filter(a=>!expiredAnnouncementIds.has(String(a.id)));db.messages=(db.messages||[]).filter(m=>![...expiredAnnouncementIds].some(id=>String(m.id||'').startsWith(id+'-')));try{save()}catch(e){console.error('Could not clean expired announcements:',e.message)}}
+if(expiredAnnouncementIds.size){db.announcements=(db.announcements||[]).filter(a=>!expiredAnnouncementIds.has(String(a.id)));db.messages=(db.messages||[]).filter(m=>![...expiredAnnouncementIds].some(id=>String(m.id||'').startsWith(id+'-')));try{save()}catch(e){console.error('FATAL: could not persist expired-announcement cleanup; startup stopped:',e.message);throw new Error('Expired-announcement cleanup could not be persisted; refusing to start with uncommitted startup state.')}}
 // Direct private conversations and the wall are separate from db.rooms.
 // Keep room announcements available in every configured room, including rooms
 // whose access kind is private; only one-to-one DMs and the wall are excluded.
@@ -312,7 +312,7 @@ if(db.vipGiftCatalogV7Initialized!==true){
   }
 }
 if(!Array.isArray(db.vipGiftCatalog))db.vipGiftCatalog=[];
-try{if(giftCatalogMigrationChanged)save();}catch(error){console.error('Could not persist gift catalogue migration:',error.message)}
+try{if(giftCatalogMigrationChanged)save();}catch(error){console.error('FATAL: could not persist gift catalogue migration; startup stopped:',error.message);throw new Error('Gift catalogue migration could not be persisted; refusing to start with uncommitted startup state.')}
 
 function migratePrivateMediaToProtectedStorage(){
   let changed=false;
