@@ -29,6 +29,18 @@ try {
   else fail('startup announcement cleanup must preserve atomic and private-message persistence contracts');
 } catch (error) { fail('startup announcement persistence regression check', error.message); }
 
+// Startup data migrations must fail closed when their durable commit fails.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const checks = [
+    ['smiley gallery migration aborts startup when persistence fails', source.includes("FATAL: could not persist smiley gallery migration; startup stopped:") && source.includes('Smiley gallery migration could not be persisted; refusing to start with uncommitted startup state.')],
+    ['welcome-message migration aborts startup when persistence fails', source.includes("FATAL: could not persist welcome-message defaults/migration; startup stopped:") && source.includes('Welcome-message migration could not be persisted; refusing to start with uncommitted startup state.')],
+    ['expired-announcement cleanup aborts startup when persistence fails', source.includes("FATAL: could not persist expired-announcement cleanup; startup stopped:") && source.includes('Expired-announcement cleanup could not be persisted; refusing to start with uncommitted startup state.')],
+    ['gift catalogue migration aborts startup when persistence fails', source.includes("FATAL: could not persist gift catalogue migration; startup stopped:") && source.includes('Gift catalogue migration could not be persisted; refusing to start with uncommitted startup state.')]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+} catch (error) { fail('startup migration fail-closed regression checks', error.message); }
+
 // Regression checks for the production startup bootstrap and packed smiley assets.
 try {
   const source = fs.readFileSync(server, 'utf8');
