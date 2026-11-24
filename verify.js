@@ -2294,3 +2294,21 @@ try {
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('logout reconnect-grace rollback regression checks',error.message); }
+
+
+// Disconnected-session cleanup must retry after a transient durable-save failure.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function scheduleSessionDisconnectCleanup(sid,user){');
+  const end=source.indexOf('const startupSessionDatabase=',start);
+  const helper=start>=0&&end>start?source.slice(start,end):'';
+  const catchStart=helper.indexOf('try{save();}catch(error){');
+  const catchEnd=helper.indexOf('\n    }',catchStart);
+  const failure=catchStart>=0&&catchEnd>catchStart?helper.slice(catchStart,catchEnd):'';
+  const checks=[
+    ['disconnected-session cleanup restores the session after a failed durable save',failure.includes('sessions.set(sid,current);db.sessions[sid]=current;')],
+    ['failed disconnected-session cleanup schedules a fresh bounded reconnect-grace retry',failure.includes('scheduleSessionDisconnectCleanup(sid,current);')],
+    ['transient state is cleared only after the cleanup save succeeds',helper.indexOf('clearSessionTransientState(sid);')>catchEnd&&helper.indexOf('clearSessionTransientState(sid);')>helper.indexOf('try{save();}')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('disconnected-session cleanup retry regression checks',error.message); }
