@@ -5,6 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const { Readable } = require('stream');
+const { writeJsonSync } = require('./lib/json-writer');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { Server } = require('socket.io');
@@ -260,17 +261,16 @@ const RANK_PERMISSION_PROFILES=['admin-full','admin-shield','crown-gold','crown-
 const CORE_RANK_LEVELS=Object.freeze({'admin-full':1000,'admin-shield':900,'crown-gold':800,'crown-silver':700,'super-black':600,'super-white':500,'super-red':400});
 db.accountPermissions=db.accountPermissions&&typeof db.accountPermissions==='object'?db.accountPermissions:{};
 function save(){
-  // Keep the existing synchronous/atomic contract for every route, but avoid
-  // pretty-printing the entire database and forcing two disk flushes per event.
+  // Keep the existing synchronous/atomic contract for every route while writing
+  // JSON in bounded chunks instead of allocating a second full-database string.
   // Private messages are deliberately memory-only and are never written to disk.
   const snapshot = { ...db, privateMessages: [] };
-  const serialized = JSON.stringify(snapshot);
   const tempFile = `${DB_FILE}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
   let fd = null;
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     fd = fs.openSync(tempFile, 'wx', 0o600);
-    fs.writeFileSync(fd, serialized, 'utf8');
+    writeJsonSync(fd, snapshot);
     fs.fsyncSync(fd);
     fs.closeSync(fd); fd = null;
     fs.renameSync(tempFile, DB_FILE);
