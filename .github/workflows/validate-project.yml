@@ -1,8 +1,12 @@
 name: Validate Rimaz Project
 
 on:
+  push:
+    branches:
+      - maintenance/repository-cleanup-2026-11-24
   pull_request:
     branches:
+      - safety/validate-and-backup-before-sync
       - main
     paths:
       - 'server.js'
@@ -10,6 +14,14 @@ on:
       - 'index.html'
       - 'public/**'
       - 'package.json'
+      - 'package-lock.json'
+      - 'npm-shrinkwrap.json'
+      - 'README.md'
+      - '.gitignore'
+      - '.dockerignore'
+      - 'Dockerfile'
+      - 'CHANGELOG.md'
+      - 'DEPLOYMENT-46.93.72.md'
       - '.github/workflows/**'
       - 'rimaz-final-deep-audit-46.93.72.zip'
 
@@ -23,10 +35,10 @@ jobs:
       - name: Checkout pull request
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Check JavaScript syntax
         run: |

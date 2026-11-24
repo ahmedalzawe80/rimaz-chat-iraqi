@@ -1,23 +1,35 @@
 # Rimaz Chat 46.93.72 — Deployment notes
 
-## Package layout
+## Application package
 
-This archive is intentionally flat: `package.json`, `server.js`, `index.html`, and `public/` are at the archive root. Extract the archive contents directly into the application root; do not create an extra wrapper directory.
+The audited source archive is `rimaz-final-deep-audit-46.93.72.zip`. Its project root is flat and contains `package.json`, `server.js`, `index.html`, `public/`, and `verify.js`. Extract the archive contents directly into the application root; do not add an extra wrapper directory.
 
-The redundant nested project directory and the old embedded 46.93.71 archive were excluded. All current application source files and public assets from the 46.93.72 candidate are retained.
+The Git repository's incomplete `rimaz-chat-iraqi-main/` duplicate is not part of the application and is removed by the repository-maintenance change.
 
-## GitHub repository automation
+## GitHub source synchronization
 
-The existing repository workflow `.github/workflows/unzip-upload.yml` looks for a ZIP named exactly `rimaz-final-deep-audit-46.93.71.zip` in the repository root. This delivery uses that exact filename for compatibility, but its project contents are version **46.93.72**.
+The manual workflow `.github/workflows/unzip-upload.yml` expects the exact archive filename above. It runs only when dispatched from `main` and now requires the `confirm_main_replacement` input to be explicitly checked.
 
-Upload this ZIP to the repository root, then run **Actions → Clean Replace Project Upload → Run workflow**. The workflow intentionally preserves the repository's existing `.github` workflow, root `data.json`, and root Google verification file. Review the Actions log and resulting commit before proceeding.
+The workflow validates ZIP paths and symlinks, checks the archive package version against its filename, and creates a rollback branch before changing files. It synchronizes only the application-managed root files (`server.js`, `index.html`, `package.json`, `verify.js`) and the contents of `public/`. It does not mirror the entire repository root, so README, audit reports, GitHub workflows, Docker configuration, and other repository-maintenance files are retained.
 
-## Hosting deployment
+The rollback branch is a snapshot of Git-tracked repository state. It is **not** a backup of the live Deplexo persistent volume or its database/uploads. Back up and verify the hosting volume separately before any production operation.
 
-Extract the archive so `package.json`, `server.js`, `index.html`, and `public/` are directly in the application root. Install the dependencies with `npm install` and start with `npm start`, or use the hosting platform's equivalent build/start configuration.
+## Hosting and persistent storage
 
-Before deployment, take a backup of the live persistent database and uploads. Do not replace the live persistent database with the archive's placeholder `data.json`. Keep the hosting persistent data volume mounted and configured as before.
+- Use Node.js 24 LTS, matching `package.json` and the production Docker image.
+- Start with `npm start` (or `node server.js`); the default port is `3000`.
+- Mount the persistent hosting volume at `/data`.
+- Set `DATA_DIR=/data/rimaz` so the database, uploads, and private media survive container replacement.
+- Keep `PUBLIC_SITE_URL` set to the verified public origin if the domain changes.
+
+The application stores `data.json`, `uploads/`, and `private-media/` under `DATA_DIR`. Do not replace the live database with the root-level Git placeholder `data.json`; it explicitly warns that it is not production data.
+
+The Docker build excludes runtime directories and the root placeholder through `.dockerignore`. A new image must not be treated as a data backup.
+
+## Dependency reproducibility note
+
+The repository currently has no committed `package-lock.json`. `package.json` uses semver ranges, so `npm install` may resolve newer compatible dependency versions on a later build. Add and validate a lockfile in a separate controlled change before relying on fully reproducible dependency installs.
 
 ## Validation boundary
 
-The local regression suite passed 448 checks on Node.js 22.16.0, and `server.js` and `verify.js` passed syntax checks. The production-reported Node.js 20.20.2 runtime was not available for an exact-version test. No live hosting, production database, real concurrent-load, or production restore test was performed. Deploy to staging and smoke-test login/reconnect, chat, rooms, voice/video, uploads, and backup restore before promoting to production.
+Run `node --check server.js`, `node --check verify.js`, and `npm test` before merging. Passing repository checks does not prove live hosting health. Deploy to staging first and smoke-test login/reconnect, public/private chat, rooms, voice/video, uploads, and backup/restore behavior. Confirm memory and uptime measurements under a controlled workload before promoting to production.
