@@ -255,3 +255,11 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - One intermediate test commit had a JavaScript syntax error in the newly added test block (run 45377300512); the test was corrected before proceeding. The corrected exact code/test SHA `af883dd9e02588e3938b64d00bd2f26859b3d4a9` passed run `45377349922`: 535 pass markers, 0 failure markers, syntax checks passed, regression suite passed, and production Docker build passed.
 - CI still explicitly states live-server testing is required. This validates source/static fixtures and container build only, not Deplexo runtime behavior or persistent-volume safety.
 - PR #3 remains open/draft and unmerged. No merge, PR closure, production deployment/restart, ZIP sync, or live data/volume modification.
+
+
+## Logout reconnect-grace rollback repair — 2026-11-24
+- A focused persistent-session audit found a lifecycle ordering defect in `POST /api/logout`: it cancelled the disconnected-session reconnect-grace timer before attempting the durable session deletion. If the database save failed, the route restored the session in memory/database and returned HTTP 500, but the cleanup timer remained cancelled. A disconnected session could then become orphaned beyond its intended grace period.
+- Moved `cancelSessionDisconnectCleanup(sid)` to after the successful save. On persistence failure, the existing rollback restores the session and the original reconnect timer remains active; on success, the timer is cancelled before transient state is cleared and sockets are disconnected.
+- Added three regression assertions for save-before-cancel ordering, rollback behavior, and successful cleanup ordering.
+- Exact code/test SHA `c6a9885aaed362433be28444ecedbd00f1aa0d5c` passed PR workflow run `45377998719`: 538 pass markers, 0 failure markers, JavaScript syntax checks passed, full regression checks passed, and production Docker build passed.
+- CI is still not a substitute for staging/live-server testing. No merge, PR closure, production deployment/restart, ZIP sync, or live persistent-volume/database/uploads/private-media modification.
