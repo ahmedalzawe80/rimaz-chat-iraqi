@@ -90,3 +90,14 @@ Repository organization, deterministic dependency installation, archive parity, 
 - Historical handoff documents are labeled as historical; current continuation belongs in the final checkpoint and this release gate.
 - Archive rebuilt after the documentation corrections; temporary builder workflow removed after completion.
 - Independent live-volume backup/restore and staging are still unavailable. Production promotion remains blocked; no merge, main update, ZIP sync, deploy, or restart has occurred.
+
+
+## Public chat anti-spam ordering correction — 2026-11-24
+
+- Reordered public-message validation in both HTTP and Socket.IO: blocked-term rejection now occurs before anti-spam quota accounting. A rejected message can no longer consume the sender's public-chat message allowance.
+- The anti-spam check remains before built-in bot-command processing, so bot commands retain the existing flood protection.
+- Added regression assertions for both transport paths and for preserving bot-command rate protection.
+- Server commit: [aa5de8c](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/commit/aa5de8c9591ee9a077ba795f4fb197a51faf2e97); test commit: [fc50eb8](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/commit/fc50eb8493424c5bc0763d4fbdf897e9f722f524).
+- This change is source-reviewed through the repository contents, but no exact-head Actions run has been returned yet. Do not claim test-suite or Docker success for this head until CI confirms it.
+- The committed ZIP predates these latest server/test edits and is therefore stale. Do not use or synchronize it. It must be rebuilt from the exact candidate and pass archive parity/CRC checks before any release use.
+- PR #3 remains open, draft, and unmerged. No main-branch update, deployment, restart, or live-data modification has occurred.
