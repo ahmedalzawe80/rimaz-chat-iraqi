@@ -191,3 +191,13 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Dependency lockfile remains absent. No lockfile was fabricated, no dependency versions were pinned by guesswork, and no install workflow was changed.
 - No source-code change was made in this audit pass because no new reproducible defect was established. Continue with exhaustive Socket.IO/HTTP authorization equivalence and persistent mutation failure-path review, adding regression tests for any confirmed issue.
 - No merge, PR closure, production deployment, restart, ZIP sync, or live persistent-volume modification was performed.
+
+
+## Public chat global-ban defense-in-depth fix — 2026-11-24
+- Confirmed a defense-in-depth gap in Socket.IO `send-message`: room join checked global name/IP bans and the ban action disconnects matching sockets, but the message handler itself did not recheck the current global-ban state.
+- Added `globalBanned(u.name,socketClientIp(socket))` to the public room message handler before room mute/ban checks and before message persistence/broadcast. A currently banned identity/IP is now rejected at send time even if a stale/racing socket reaches the handler.
+- Added a regression assertion in `verify.js` requiring this send-time global-ban check and its error path.
+- Code/test commit head: `a0c7543875bf8077de68d7af6dcd0bd5fa5ed526`.
+- Workflow run `45362431893` completed successfully on that exact SHA: JavaScript syntax, project regression tests, and production Docker build all succeeded.
+- The next commit only updates checkpoint/handoff documentation; CI for that documentation-only SHA must be checked separately.
+- No live deployment, merge, restart, or production data modification.
