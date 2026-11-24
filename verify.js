@@ -2047,6 +2047,26 @@ try {
 } catch(error) { fail('room/avatar upload authorization ordering checks',error.message); }
 
 
+// A failed final database flush must not be reported as a clean process shutdown.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function gracefulShutdown(signal){');
+  const end=source.indexOf("\nprocess.once('SIGTERM'",start);
+  if(start<0||end<0)throw new Error('graceful shutdown function was not found');
+  const fn=source.slice(start,end);
+  const run=failSave=>{
+    const events=[];
+    const context={messageSaveTimer:null,clearTimeout:()=>{},save:()=>{if(failSave)throw new Error('disk failure');},
+      console:{error:()=>{}},io:{close:callback=>{events.push('close');callback();}},
+      process:{exit:code=>events.push(['exit',code])},setTimeout:()=>({unref(){}})};
+    vm.createContext(context);vm.runInContext(fn+";gracefulShutdown('SIGTERM');",context);return events;
+  };
+  const success=run(false),failure=run(true);
+  const ok=success.some(x=>Array.isArray(x)&&x[0]==='exit'&&x[1]===0)&&failure.some(x=>Array.isArray(x)&&x[0]==='exit'&&x[1]===1);
+  if(ok)pass('graceful shutdown exits nonzero when the final atomic database save fails');
+  else fail('graceful shutdown save-failure exit status',JSON.stringify({success,failure}));
+} catch(error) { fail('graceful shutdown save-failure exit status',error.message); }
+
 // Repository hygiene and safe source-sync regression checks.
 try {
   const ignore = fs.readFileSync(path.join(root, '.gitignore'), 'utf8');
