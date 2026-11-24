@@ -1,4 +1,5 @@
 name: Rebuild release archive once
+# Keep this workflow triggerable when a reviewed source change requires an exact archive refresh.
 
 on:
   push:
