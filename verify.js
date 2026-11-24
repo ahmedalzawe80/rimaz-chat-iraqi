@@ -754,6 +754,17 @@ try {
 } catch (error) { fail('gift catalog deletion no-mutation regression', error.message); }
 
 
+
+// Failed admin gift send must remove a profile that the route created only for this attempted mutation.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const routeStart = source.indexOf("app.post('/api/admin/gift',(req,res)");
+  const routeEnd = source.indexOf("app.post('/api/admin/gift/delete'", routeStart);
+  const route = routeStart >= 0 && routeEnd > routeStart ? source.slice(routeStart, routeEnd) : '';
+  if (route.includes('const hadProfile=Object.prototype.hasOwnProperty.call(db.profiles,n),p=profile(n)') && route.includes("if(!hadProfile)delete db.profiles[n];")) pass('failed admin gift send removes newly created profile');
+  else fail('failed admin gift send removes newly created profile');
+} catch (error) { fail('admin gift-send profile rollback regression', error.message); }
+
 // Failed gift-catalog upload must roll back a newly initialized catalog property as well as the item/file.
 try {
   const source = fs.readFileSync(server, 'utf8');
