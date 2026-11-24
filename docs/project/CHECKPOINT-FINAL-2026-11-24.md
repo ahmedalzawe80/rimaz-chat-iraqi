@@ -76,3 +76,12 @@ Always inspect the current PR head and exact-head CI first. Keep work on `fix/bo
 - [Validation run 45413521661](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45413521661) passed on the exact head: locked install, dependency tree, syntax, regression suite, and production Docker build.
 - [Archive audit run 45413521644](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45413521644) passed on the exact head: safe extraction, archive/source parity, CRC integrity, locked dependency tree, syntax, regression suite, and Docker build.
 - These checks validate the repository candidate only; independent live-volume backup/restore and isolated staging remain outstanding.
+
+
+## Final continuation state — 2026-11-24
+
+- Verified branch tip before this documentation refresh: `b3a44f5e29df7b9c8c63e717afcc275becdf997c`.
+- [Validation run 45413964291](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45413964291) and [archive audit run 45413964564](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45413964564) both completed successfully on that exact tip. Validation covered locked install, dependency tree, syntax, regression suite, and Docker build. Archive audit covered CRC integrity, safe extraction, exact app/build/public parity, locked install, regression suite, and Docker build.
+- The historical handoff and earlier checkpoint documents are now explicitly marked as historical and point to this final checkpoint and the release gate.
+- The archive was regenerated after those documentation corrections; its app/build/public parity is enforced by the archive audit. The one-time builder workflow was removed again after generation.
+- Production gates remain open: no independent hosting-volume backup/restore or isolated staging is available, so no merge, main update, ZIP sync to main, deployment, or restart is authorized/performed.
