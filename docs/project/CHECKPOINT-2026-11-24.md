@@ -222,3 +222,16 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - No merge, deployment, restart, ZIP sync, or live persistent-volume/data modification.
 
 - Validation update: workflow run 45373709187 completed successfully on exact code/test SHA e501cc27925274e22cbaf6d2c9505d3b1e1a5c72; 521 pass markers, 0 failure markers, syntax/regression checks and production Docker build succeeded. The log explicitly says live-server testing is still required.
+
+## Public chat durable-acknowledgement repair — 2026-11-24
+- Confirmed a real persistence-semantics defect in public room chat: addMessage appended to in-memory history, scheduled a delayed write, and callers broadcast/returned success before the database write completed. A later disk failure could therefore leave users seeing a message that was not durably stored.
+- Replaced fire-and-forget message writes with a bounded batch commit queue. Pending messages remain outside db.messages/room history until the atomic database save succeeds. The queue batches concurrent messages, commits the candidate history, then resolves callers; on failure it restores the previous committed message array and retries up to three attempts. After the final failure, all pending callers are rejected and the uncommitted messages are discarded from memory.
+- Updated HTTP /api/message and Socket.IO send-message to await the commit before broadcasting or returning success. Bot messages, welcome messages, and room join/move/leave/disconnect presence events also await the same commit before broadcasting.
+- Graceful shutdown now attempts to flush queued messages and exits nonzero if pending writes remain uncommitted. The database save path now fsyncs the temporary file before atomic rename and best-effort fsyncs the data directory after rename.
+- Added runtime regression fixtures for pending-message invisibility, commit-before-resolution, retry after a simulated disk failure, and transport broadcast ordering. Existing shutdown and batching fixtures were updated for the new queue contract.
+- Latest code/test head: 65f3be74386dd59b68a0bec09883d3da41ec7b19.
+- PR #3 run 45376045363 and push run 45376034493 both completed successfully on that exact SHA. The PR validation job passed JavaScript syntax, the regression suite (526 pass markers, 0 failure markers), and production Docker build.
+- CI output explicitly states live-server testing is still required. This change has not been tested against the Deplexo production process or persistent volume.
+- PR #3 remains open and draft, currently mergeable, and unmerged. PR #2 remains open/draft and overlaps the cleanup changes; do not merge or close either without explicit direction.
+- package-lock.json is still absent; dependency resolution is not yet reproducible. Do not switch to npm ci until a real registry-generated lockfile is reviewed and validated on Node 24.
+- No merge, production deployment/restart, ZIP sync, or live persistent-volume/database/uploads/private-media modification was performed.
