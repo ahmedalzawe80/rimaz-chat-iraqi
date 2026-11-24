@@ -30,3 +30,20 @@ pnpm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Local package-manager credentials
+.npmrc
+!.npmrc.example
+
+# Local database exports, credentials, and backups
+*.sqlite
+*.sqlite3
+*.db
+*.sql
+*.dump
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+backups/
