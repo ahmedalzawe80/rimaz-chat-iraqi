@@ -2435,3 +2435,32 @@ try {
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('rank assignment exact rollback regression checks',error.message); }
+
+
+// Private-message rate limiting applies only after recipient and content eligibility checks.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const helperStart=source.indexOf('const privateMessageWindows=new Map();');
+  const helperEnd=source.indexOf('function clearSessionTransientState(sid){',helperStart);
+  if(helperStart<0||helperEnd<0)throw new Error('private-message limiter helper not found');
+  const helper=source.slice(helperStart,helperEnd);
+  const context={Map,Date};
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.allow=allowPrivateMessage;',context);
+  const repeated=[context.allow('sid','same',1000),context.allow('sid','same',1001),context.allow('sid','same',1002),context.allow('sid','same',1003)];
+  const distinct=[context.allow('sid','one',1004),context.allow('sid','two',1005),context.allow('sid','three',1006),context.allow('sid','four',1007)];
+  const reset=context.allow('sid','after-window',6001);
+  const empty=context.allow('sid','   ',6002);
+  const start=source.indexOf("socket.on('private-message'");
+  const end=source.indexOf("socket.on('call-offer'",start);
+  const route=source.slice(start,end);
+  const rate=route.indexOf('allowPrivateMessage(sid,text)');
+  const checks=[
+    ['private-message limiter allows three identical messages and rejects the fourth',repeated.join(',')==='true,true,true,false'],
+    ['private-message limiter enforces seven messages per five-second window across distinct content',distinct.slice(0,3).every(Boolean)&&distinct[3]===false],
+    ['private-message limiter resets after its five-second window and rejects empty messages',reset===true&&empty===false],
+    ['private-message limiter runs after blocked-term, recipient, privacy, ignore, and online checks',rate>route.indexOf('blockedChatTerm(text)')&&rate>route.indexOf('getUser(to)')&&rate>route.indexOf('tp.privateOpen===false')&&rate>route.indexOf('ignored)return')&&rate>route.indexOf('hasConnectedSessionForUser(to)')],
+    ['private-message limiter runs before the accepted message is appended and delivered',rate>=0&&rate<route.indexOf('db.privateMessages=[...')&&rate<route.indexOf("emitToUser(to,'private-message',m)")]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('private-message rate-limit ordering regression checks',error.message); }
