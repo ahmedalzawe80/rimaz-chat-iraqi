@@ -2077,7 +2077,6 @@ try {
   const docsRoot = path.join(root, 'docs');
   const indexPath = path.join(docsRoot, 'README.md');
   const index = fs.readFileSync(indexPath, 'utf8');
-  const rootReadme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
   const requiredDocs = [
     'project/CHECKPOINT-2026-11-24.md',
     'project/HANDOFF-2026-11-24.md',
