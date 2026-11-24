@@ -83,3 +83,38 @@ The user-provided Deplexo panel showed 37.4 MB used out of 128 MB at the time it
 The current server health endpoint reports RSS, heap used/total, external memory, array buffers, database bytes, upload file count/bytes, uptime, online users, and room count. Restore uploads are staged to disk rather than Multer memory storage; pending previews retain a path and summary, are capped at two, and expire after five minutes. The restore file limit is 20 MB. Confirmation still reads the JSON text and parses the replacement object, so a large restore can temporarily require substantial additional memory.
 
 **Status:** the historical 128 MB violation is not proven fixed. No production OOM event, exit code, current database size, or representative concurrent-load measurement is available. Do not lower Node's heap limit or claim memory safety based only on the low-load snapshots. Required evidence is a staged run under representative load with repeated RSS/heap/external/arrayBuffers samples, database size, upload activity, process exit/restart events, and provider OOM status.
+
+
+## Root-cause persistence memory correction — 2026-11-24 20:35 UTC
+
+### Confirmed code-level allocation in the normal database save path
+
+The previous save() implementation made a shallow database snapshot and then called JSON.stringify(snapshot). That materialized a second, complete UTF-16 JSON string proportional to the entire persisted database before writing the temporary file. The original in-memory database remained resident at the same time. This is a deterministic source-level allocation on every durable save; it is not, by itself, proof that this allocation caused the provider's historical 128 MB violation.
+
+The candidate now uses lib/json-writer.js:
+
+- Walks the JSON-compatible database value synchronously, preserving the existing single-process snapshot semantics (no asynchronous interleaving with live mutations).
+- Escapes strings in 4 KiB segments and writes through a bounded 64 KiB output buffer rather than allocating a second full-database JSON string.
+- Keeps the existing unique .tmp file, exclusive creation, restrictive file mode, file fsync, atomic rename, best-effort directory fsync, cleanup on failure, and private-message exclusion.
+- Keeps the persisted compact JSON representation and the synchronous save() contract used by existing routes.
+
+Regression coverage compares the writer's exact output against native JSON.stringify for Arabic/Unicode and chunk-boundary strings, escaped text, sparse arrays, undefined/non-finite values, Date and Buffer toJSON, and repeated shared references. It also checks circular-value rejection and executes the real atomic save() implementation in an isolated temporary directory to confirm valid output, private-message exclusion, and no leftover temporary files.
+
+### Exact candidate validation
+
+- Source/documentation/test candidate: 96f8220df1ad5b1603bd36416fc75c84f3735507.
+- [GitHub Actions run #45482153155](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45482153155) passed both validate and refresh-release-archive.
+- Source and extracted archive each passed **610 checks, zero failures**; both production Docker builds succeeded; npm audit reported **0 vulnerabilities**.
+- Archive refresh verified **395 files**, **16,368,568 bytes**, CRC integrity and exact tracked-file parity.
+- Archive-only commit: b14714bfd16d47a4a12f37a1599a8ea11c9fc565; it changes only rimaz-final-deep-audit-46.93.72.zip.
+
+### Remaining concrete memory-amplification paths
+
+This correction reduces the transient allocation in routine save() calls. It does **not** establish that total RSS fits the 128 MB provider limit. The following paths still materialize large data in memory and require separate design and validation:
+
+1. Full backup builds a complete pretty-printed JSON string and then copies it into a Buffer before adding it to the streamed tar/gzip output. Concurrent full-backup requests can multiply this peak.
+2. Database-only backup materializes the complete pretty-printed JSON response string.
+3. Restore preview and confirmation read the complete backup file as a string and parse a second object graph. Confirmation also reads the live database into a full recovery Buffer before serializing the replacement database.
+4. The in-memory database itself remains resident by design; this writer only removes the additional full serialization string from routine saves.
+
+These are verified source-level allocation paths, not proof of the historical OOM cause. Do not lower the Node heap limit, reduce product functionality, or declare the 128 MB issue solved. Next code work should address backup/restore peak allocation while preserving exact archive contents, recovery guarantees, and restore safety; then validate under representative staging load and correlate with Deplexo exit/OOM evidence.
