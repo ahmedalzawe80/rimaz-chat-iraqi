@@ -46,6 +46,28 @@ try {
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
 } catch (error) { fail('rank-art assignment exact rollback regression checks', error.message); }
 
+
+// Startup private-history purge must durably save notification-only cleanup.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function purgePrivateHistoryAtStartup(){');
+  const end=source.indexOf('\npurgePrivateHistoryAtStartup();',start);
+  const fn=start>=0&&end>start?source.slice(start,end):'';
+  if(!fn)throw new Error('startup private-history purge function not found');
+  const db={privateMessages:[],notifications:{member:[{type:'private-message'},{type:'welcome'}]}};
+  const files={readdirSync:()=>[]};
+  let saves=0;
+  const context={db,fs:files,path:{join:(...parts)=>parts.join('/')},PRIVATE_MEDIA_DIR:'/private-media',save:()=>{saves++;},console:{log:()=>{},warn:()=>{}}};
+  vm.createContext(context);
+  vm.runInContext(fn+';purgePrivateHistoryAtStartup();',context);
+  const cleaned=db.notifications.member.length===1&&db.notifications.member[0].type==='welcome';
+  const checks=[
+    ['startup purge removes stale private notifications even when no private messages or media remain',cleaned],
+    ['startup purge persists notification-only cleanup to disk',saves===1]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('startup private-history notification persistence regression checks',error.message); }
+
 // Startup data migrations must fail closed when their durable commit fails.
 try {
   const source = fs.readFileSync(server, 'utf8');
