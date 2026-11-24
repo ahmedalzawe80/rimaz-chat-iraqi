@@ -1501,7 +1501,9 @@ app.get('/api/notifications',requireAuth,(req,res)=>{const started=Number(req.us
 app.post('/api/notifications/read',requireAuth,(req,res)=>{const key=accountKey(req.user.name),had=Object.prototype.hasOwnProperty.call(db.notifications,key),previous=db.notifications[key];db.notifications[key]=[];try{save();}catch(error){if(had)db.notifications[key]=previous;else delete db.notifications[key];return res.status(500).json({error:'تعذر حفظ حالة الإشعارات'});}res.json({ok:true});});
 
 app.post('/api/message',requireAuth,(req,res)=>{
-  const u=req.user, room=String(req.body.room||'public'), text=String(req.body.text||'').trim().slice(0,2000);
+  const u=req.user;
+  if(globalBanResponse(res,u.name,requestClientIp(req)))return;
+  const room=String(req.body.room||'public'), text=String(req.body.text||'').trim().slice(0,2000);
   if(!text)return res.status(400).json({error:'الرسالة فارغة'});
   const sessionId=String(req.get('x-session')||'');
   const joinedSocket=[...io.sockets.sockets.values()].find(so=>so.data?.sid===sessionId&&so.data?.user?.room===room&&so.rooms.has(room));
