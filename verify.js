@@ -2024,3 +2024,21 @@ try {
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('upload authorization ordering checks',error.message); }
+
+
+// Room-owner and avatar eligibility checks must also precede multipart file parsing.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const roomStart=source.indexOf("app.post('/api/rooms/:id/image'");
+  const roomEnd=source.indexOf("function clearRoomImage",roomStart);
+  const avatarStart=source.indexOf("app.post('/api/profile/avatar'");
+  const avatarEnd=source.indexOf("app.delete('/api/profile/avatar'",avatarStart);
+  const room=source.slice(roomStart,roomEnd),avatar=source.slice(avatarStart,avatarEnd);
+  const roomUpload=room.indexOf("uploadImage.single('file')");
+  const avatarUpload=avatar.indexOf("uploadImage.single('file')");
+  const checks=[
+    ['room image upload verifies room existence and owner/manager authorization before parsing multipart data',roomStart>=0&&roomUpload>0&&room.indexOf('requireAuth')<roomUpload&&room.indexOf("db.rooms.find(x=>x.id===req.params.id)")<roomUpload&&room.indexOf("hasPermission(req.user,'room_image_manage')")<roomUpload],
+    ['avatar upload checks the likes eligibility rule before parsing multipart data',avatarStart>=0&&avatarUpload>0&&avatar.indexOf('requireAuth')<avatarUpload&&avatar.indexOf('?.likes??getGuest(req.user.name)?.likes??0)<10')<avatarUpload]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('room/avatar upload authorization ordering checks',error.message); }
