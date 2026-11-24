@@ -101,3 +101,14 @@ Repository organization, deterministic dependency installation, archive parity, 
 - This change is source-reviewed through the repository contents, but no exact-head Actions run has been returned yet. Do not claim test-suite or Docker success for this head until CI confirms it.
 - The committed ZIP predates these latest server/test edits and is therefore stale. Do not use or synchronize it. It must be rebuilt from the exact candidate and pass archive parity/CRC checks before any release use.
 - PR #3 remains open, draft, and unmerged. No main-branch update, deployment, restart, or live-data modification has occurred.
+
+
+## Superseding archive rebuild result — 2026-11-24 15:02 UTC
+
+- The earlier note that the ZIP was stale is superseded: the release archive has now been regenerated from the exact tracked candidate after the public-chat anti-spam and message-type fixes.
+- Archive: 394 tracked files, 16,341,846 bytes. The rebuild validated CRC, safe paths, no duplicate paths or symlinks, and exact parity against all 394 tracked candidate files (excluding the archive itself and the temporary builder workflow).
+- Rebuild/verification run [45420675947](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45420675947) completed successfully. Inside the extracted archive, `npm ci`, `npm ls --depth=0`, JavaScript syntax checks, `npm test`, HTML parity, and production Docker build all passed; Docker installed 95 production packages and npm audit reported zero vulnerabilities.
+- The temporary one-time builder workflow was removed after it committed the ZIP. Its path is not part of the final candidate or archive.
+- Candidate code validation run [45420675671](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45420675671) passed on the same source candidate before the archive commit. The later PR archive-audit run had started before the ZIP replacement and therefore does not validate the refreshed ZIP; the successful builder run above is the evidence for the refreshed archive.
+- Final cleanup commit: `c68ff6fb361228d82f208cc6dd824fbfead194ec`. PR-triggered checks for the cleanup commit require GitHub Actions approval and are not represented as green here.
+- This is repository/archive validation only. It does not replace live Deplexo backup/restore, isolated staging, runtime/load checks, or production approval. No merge, deployment, restart, or live-data change occurred.
