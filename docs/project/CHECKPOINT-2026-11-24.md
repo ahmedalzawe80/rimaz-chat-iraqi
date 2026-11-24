@@ -180,3 +180,14 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - PR #2 and PR #3 were re-fetched after this run: both remain open, draft, unmerged, and GitHub reports `mergeable=true`; both target `safety/validate-and-backup-before-sync`.
 - This confirms repository CI and container build only. It does not replace dependency-lockfile work, staging smoke tests, Deplexo runtime diagnosis, independent production-volume backup/restore verification, or explicit merge/deploy approval.
 - No merge, deployment, main update, ZIP sync, or production database/uploads/private-media access was performed.
+
+
+## Continued audit checkpoint — 2026-11-24 (latest verified branch state)
+- PR #3 remains open/draft and targets `safety/validate-and-backup-before-sync`. Current head: `65c258692c8768b0d5ced74507e06cd6ee495ce5`; current base: `08807d8be8393a7cf29309c670d7acfd59c5f78c`.
+- Pull-request workflow run `45354617318` completed successfully on that exact head SHA. This is the latest confirmed CI result; do not infer anything about unobserved push-triggered runs.
+- Rechecked the application route inventory: 74 `/api/admin` route declarations were found. The inventory shows authentication/permission middleware or explicit authorization checks on the routes inspected, including the member-action dispatcher and the specialized smiley-upload permission middleware. This is an inventory pass, not a completed proof of authorization parity.
+- Rechecked the five-minute global-ban flow: the ban is saved before side effects, matching sockets are removed/disconnected, and room join checks the active global ban. Public `send-message` also checks current socket/session and room mute/ban state; a direct per-message global-ban check is a possible defense-in-depth improvement, but no bypass was reproduced, so no speculative code change was made.
+- Reviewed the atomic save implementation and selected moderation/member routes: writes use temp-file creation with exclusive mode, close, then rename; the sampled routes restore in-memory state when save fails and emit side effects only after successful persistence. This does not yet constitute a full audit of every mutation route.
+- Dependency lockfile remains absent. No lockfile was fabricated, no dependency versions were pinned by guesswork, and no install workflow was changed.
+- No source-code change was made in this audit pass because no new reproducible defect was established. Continue with exhaustive Socket.IO/HTTP authorization equivalence and persistent mutation failure-path review, adding regression tests for any confirmed issue.
+- No merge, PR closure, production deployment, restart, ZIP sync, or live persistent-volume modification was performed.
