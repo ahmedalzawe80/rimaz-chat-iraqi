@@ -2312,3 +2312,19 @@ try {
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('disconnected-session cleanup retry regression checks',error.message); }
+
+
+// HTTP fallback and Socket.IO public messages must expose the same role/VIP metadata.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const httpStart=source.indexOf("app.post('/api/message'");
+  const socketStart=source.indexOf("socket.on('send-message'");
+  const http=source.slice(httpStart,source.indexOf("\n});",httpStart));
+  const socket=source.slice(socketStart,source.indexOf("\n  socket.on(",socketStart));
+  const checks=[
+    ['HTTP and Socket.IO public messages both include effective role metadata',http.includes('role:roleOf(u)')&&socket.includes('role:roleOf(u)')],
+    ['HTTP and Socket.IO public messages both include effective VIP state',http.includes('vip:vipActive(u.name)')&&socket.includes('vip:vipActive(u.name)')],
+    ['both transports retain the same likes and profile metadata',http.includes('likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)')&&socket.includes('likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('HTTP and Socket.IO public message payload parity checks',error.message); }
