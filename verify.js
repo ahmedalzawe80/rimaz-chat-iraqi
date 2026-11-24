@@ -2132,6 +2132,7 @@ try {
 try {
   const required = [
     'CONTRIBUTING.md',
+    '.nvmrc',
     '.editorconfig',
     '.gitattributes',
     '.github/pull_request_template.md',
