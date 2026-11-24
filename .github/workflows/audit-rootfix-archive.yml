@@ -17,21 +17,6 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'Dockerfile'
-  pull_request:
-    branches:
-      - safety/validate-and-backup-before-sync
-      - main
-    paths:
-      - 'rimaz-final-deep-audit-46.93.72.zip'
-      - '.nvmrc'
-      - '.github/workflows/audit-rootfix-archive.yml'
-      - 'server.js'
-      - 'verify.js'
-      - 'index.html'
-      - 'public/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'Dockerfile'
   workflow_dispatch:
 
 permissions:
