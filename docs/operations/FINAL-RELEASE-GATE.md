@@ -63,3 +63,11 @@ Do not modify the live database, uploads, private media, or persistent volume du
 ## Completion definition
 
 Repository organization, deterministic dependency installation, archive parity, and source/build validation are implemented in the candidate. Production publication remains blocked until independent backup/restore, staging smoke tests, runtime evidence, final-head CI, and promotion checks are complete.
+
+
+## Latest archive audit follow-up — 2026-11-24
+
+- Latest verified candidate commit: [70884a8b0a800f686e94e7137b03d9eee09fee11](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/commit/70884a8b0a800f686e94e7137b03d9eee09fee11).
+- Archive validation now checks ZIP member CRC/integrity before extraction. Extracted archive validation also checks `npm ls --depth=0`, JavaScript syntax, root/public HTML parity, regression tests, and Docker build.
+- [Validation run 45412772398](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45412772398) and [archive audit run 45412772526](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45412772526) both passed on this exact commit; each test run reported 567 pass markers and zero failures, and both Docker builds succeeded. Validation/audit logs reported zero npm vulnerabilities.
+- This strengthens repository verification only; backup/restore, isolated staging, runtime/load checks, and promotion approval remain outstanding.
