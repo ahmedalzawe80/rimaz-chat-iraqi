@@ -2274,3 +2274,23 @@ try {
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('HTTP and Socket.IO bot-command parity regression checks',error.message); }
+
+
+// Logout must not cancel reconnect-grace cleanup until the durable session deletion succeeds.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf("app.post('/api/logout',requireAuth");
+  const end=source.indexOf("\n});",start);
+  const route=start>=0&&end>start?source.slice(start,end):'';
+  const saveIndex=route.indexOf('try{save()}catch(e)');
+  const failureIndex=route.indexOf("return res.status(500).json({error:'تعذر حفظ تسجيل الخروج، حاول مرة أخرى'})");
+  const cancelIndex=route.indexOf('cancelSessionDisconnectCleanup(sid);');
+  const clearIndex=route.indexOf('clearSessionTransientState(sid);');
+  const disconnectIndex=route.indexOf('so.disconnect(true)');
+  const checks=[
+    ['logout keeps the reconnect-grace timer active until session deletion is durably saved',saveIndex>=0&&failureIndex>saveIndex&&cancelIndex>failureIndex],
+    ['failed logout restores the session and returns without clearing transient reconnect state',route.includes('sessions.set(sid,u);db.sessions[sid]=u;')&&failureIndex>0&&clearIndex>failureIndex],
+    ['successful logout cancels the grace timer before clearing transient state and disconnecting sockets',cancelIndex>=0&&clearIndex>cancelIndex&&disconnectIndex>clearIndex]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('logout reconnect-grace rollback regression checks',error.message); }
