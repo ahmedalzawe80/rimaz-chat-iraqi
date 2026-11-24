@@ -261,7 +261,7 @@ try {
 try {
   const source = fs.readFileSync(server, 'utf8');
   const checks = [
-    ['upload extension is derived from safe MIME allow-list', source.includes('SAFE_UPLOAD_TYPES[file.mimetype]') && !source.includes("path.extname(file.originalname||'')")],
+    ['upload extension lookup normalizes MIME casing exactly like the allow-list filter', source.includes("SAFE_UPLOAD_TYPES[String(file.mimetype||'').toLowerCase()]") && source.includes('Object.hasOwn(SAFE_UPLOAD_TYPES,String(file.mimetype||\'\').toLowerCase())') && !source.includes("path.extname(file.originalname||'')")],
     ['general upload size is capped at 50 MB', source.includes('fileSize:50*1024*1024')],
     ['image upload size is capped at 8 MB', source.includes('fileSize:8*1024*1024')],
     ['image endpoints use image-only upload middleware', (source.match(/uploadImage\.single\('file'\)/g)||[]).length >= 3],
