@@ -1436,11 +1436,11 @@ app.post('/api/logout',requireAuth,(req,res)=>{
   const guestWallReadKey=u?.type==='guest'?keyName(u.name):'';
   const previousGuestWallReadAt=guestWallReadKey?db.wallReadAt?.[guestWallReadKey]:undefined;
   const hadWelcome=welcomeSentSessions.has(sid);
-  cancelSessionDisconnectCleanup(sid);
   if(name)db.messages=(db.messages||[]).filter(m=>!(m?.type==='presence'&&keyName(m.from)===keyName(name)));
   if(u?.type==='guest'){delete db.guests[u.name];delete db.profiles[u.name];delete db.wallReadAt[guestWallReadKey];}
   sessions.delete(sid);welcomeSentSessions.delete(sid);delete db.sessions[sid];
   try{save()}catch(e){if(previousMessages!==undefined)db.messages=previousMessages;if(u){sessions.set(sid,u);db.sessions[sid]=u;if(u.type==='guest'){if(previousGuest!==undefined)db.guests[u.name]=previousGuest;if(previousProfile!==undefined)db.profiles[u.name]=previousProfile;if(previousGuestWallReadAt!==undefined)db.wallReadAt[guestWallReadKey]=previousGuestWallReadAt;}if(hadWelcome)welcomeSentSessions.add(sid);}console.error('Logout persistence failed:',e.message);return res.status(500).json({error:'تعذر حفظ تسجيل الخروج، حاول مرة أخرى'});}
+  cancelSessionDisconnectCleanup(sid);
   clearSessionTransientState(sid);
   for(const so of [...io.sockets.sockets.values()])if(so.data?.sid===sid)so.disconnect(true);
   if(name)schedulePrivateConversationCleanup(name);
