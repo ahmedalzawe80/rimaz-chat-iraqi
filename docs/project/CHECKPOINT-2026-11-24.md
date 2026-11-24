@@ -1,8 +1,10 @@
 # Rimaz — saved continuation checkpoint (2026-11-24)
 
-> **Current repository status (2026-11-24):** branch `fix/bound-private-media-ticket-cache` is at `8c3a3a59c883fb042d48101e0ee7583d709ae3cf`. PR #3 is an open draft targeting `safety/validate-and-backup-before-sync`. Its latest push validation (run `45353136074`) and pull-request validation (run `45353145854`) both passed: Node.js 24 syntax checks, `npm test` (518 passing check markers and 0 failure markers), and the production Docker build. The archive-audit workflow also passed on the current action-pin revision. PR #2 remains an open draft, but its cleanup changes are incorporated into PR #3; do not merge it separately. Production `main` remains at `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No Deplexo deployment, ZIP synchronization, or live persistent-volume changes were performed.
+> **Current repository status (2026-11-24):** the repository-cleanup work is consolidated on branch `fix/bound-private-media-ticket-cache`. The last fully pull-request-validated SHA before this checkpoint update is `651f6d1617104028a7445644e7fcdbf7df1ec1e2`; PR #3 run `45354063735` completed successfully on that exact SHA, including syntax checks, all 518 regression checks (0 failures), and production Docker build. A push-triggered run for the same SHA was still queued when checked. PR #3 remains open/draft against `safety/validate-and-backup-before-sync`. PR #2 remains open/draft at `61fa6489f75f9446313e7cf124bc486640a8e1b9`; all 11 of its changed paths also appear in PR #3, so it is redundant and must not be merged separately. `main` remains at `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`; the safety base remains `08807d8be8393a7cf29309c670d7acfd59c5f78c`. No Deplexo deployment, ZIP synchronization, or live persistent-volume changes were performed.
 >
-> **Outstanding:** there is still no committed `package-lock.json`, so dependency installation is not fully reproducible. Staging smoke tests, independent backup/restore verification, and live Deplexo resource measurements remain unperformed. CI success is not proof of live production health.
+> **Repository structure status:** 392 tracked files; root contains only three Markdown guides (`README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`), while project, audit, and operations documentation is categorized under `docs/`. Added `.nvmrc` as the single Node.js major-version source for local setup and CI. Five identical-content file pairs were reviewed: two synchronized root/public verification/HTML pairs and three named media pairs retained because asset filenames can affect generated IDs.
+>
+> **Outstanding:** no committed `package-lock.json`; dependency installation is therefore not fully reproducible. Staging smoke tests, independent backup/restore verification, and live Deplexo resource measurements remain unperformed. CI success is not proof of live production health.
 
 
 User priority: make repository structure and maintenance professional first; then continue root-cause application fixes with regression tests. Never claim perfection based on CI alone.
@@ -13,16 +15,22 @@ Do NOT merge PRs, change main, deploy/restart Deplexo, run ZIP sync, or touch pr
 ## Repository state
 Repository: ahmedalzawe80/rimaz-chat-iraqi
 Application branch: fix/bound-private-media-ticket-cache
-Current PR #3 head: 22546fac8d8eee45c4046f3963c9bc60c2378ab0
+Current PR #3 head at checkpoint baseline: 651f6d1617104028a7445644e7fcdbf7df1ec1e2
 PR #3: https://github.com/ahmedalzawe80/rimaz-chat-iraqi/pull/3 (open, draft, not merged)
-PR #2: https://github.com/ahmedalzawe80/rimaz-chat-iraqi/pull/2 (open, draft, not merged; head 86137b5de057d72e838dcf10241f6bb5a3d6178e)
+PR #2: https://github.com/ahmedalzawe80/rimaz-chat-iraqi/pull/2 (open, draft, not merged; head 61fa6489f75f9446313e7cf124bc486640a8e1b9; all 11 changed paths overlap PR #3)
 Working base: safety/validate-and-backup-before-sync
 Last recorded production/base commit: 08807d8be8393a7cf29309c670d7acfd59c5f78c
 Deplexo service noble-horizon-5826: https://noble-horizon-5826.de.deplexo.com/
 No production deployment or persistent-volume access was performed.
 
-## Latest CI — verification not yet reported for latest commit
-Latest diagnosis: the private-chat assertion was overly exact about listener text; corrected to reflect actual socket data declaration without removing enforcement checks. The transient cleanup fixture had a genuine test harness omission: it declared `privateMessageWindows` but failed to pass it into the VM context executing `clearSessionTransientState`, causing a runtime ReferenceError. Commit `84ce94e3ad51550dc70913bc4b3f482a542328d8` fixed assertion text and fixture map declaration; commit `22546fac8d8eee45c4046f3963c9bc60c2378ab0` subsequently added the missing VM-context binding. CI status and workflow-run retrieval for this latest SHA returned no records; success is not confirmed. Earlier green run 45286406940 predates these changes and is not proof current head passes.
+## Latest CI — current checkpoint baseline
+
+- PR #3 baseline SHA: `651f6d1617104028a7445644e7fcdbf7df1ec1e2`.
+- Pull-request run `45354063735` completed successfully on that exact SHA.
+- Job `validate` succeeded: Node.js was selected from `.nvmrc`; JavaScript syntax checks passed; `npm test` completed with 518 pass markers and 0 failure markers; production Docker build passed.
+- Push run `45354057468` for the same SHA was still queued at the time of this checkpoint. Do not confuse queued status with failure or success.
+- The validation workflow now uses immutable action commit pins, one Node version source, and concurrency cancellation for superseded runs.
+- This is CI/container evidence only, not staging or live-production verification.
 
 ## Work already in PR #2
 - Removed incomplete nested rimaz-chat-iraqi-main folder after verifying it was not canonical source.
@@ -67,16 +75,16 @@ Runtime resource audit: https://github.com/ahmedalzawe80/rimaz-chat-iraqi/blob/f
 Transaction audit (verify file exists on branch): https://github.com/ahmedalzawe80/rimaz-chat-iraqi/blob/fix/bound-private-media-ticket-cache/docs/audits/TRANSACTION-SAFETY-AUDIT-2026-11-24.md
 
 ## Next actions
-1. Diagnose/fix the two current red checks, rerun CI, verify Docker build.
-2. Continue audit of all persistent mutation paths, especially subscriptions, ads, rank definitions, restore, private cursors.
-3. Compare all Socket.IO authorization with HTTP equivalents; test stale sockets/direct HTTP/alternate routes.
-4. Audit rate limits, timers, Maps/Sets, collection bounds and cleanup.
-5. Keep root index.html/public/index.html identical where required.
-6. Generate genuine npm lockfile and switch to npm ci.
-7. Inspect Deplexo exact deployed commit/image digest, instance count, exit code, OOM and health-check reason. Historical startup messages and ReferenceError ticket is not defined do not prove cause.
-8. Never merge/deploy without independent backup+restore, staging smoke tests, and explicit approval.
 
-Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ عالج فشل CI الحالي (فحص private chat module وفحص session transient cleanup)، ثم واصل تدقيق الصلاحيات والحفظ والاعتمادات، بدون دمج أو نشر."
+1. Confirm CI for the checkpoint-update commit and verify both push and pull-request runs on the latest SHA.
+2. Finish repository integration review. PR #2 has no unique changed paths compared with PR #3; keep it open as a draft until the user explicitly approves closing it.
+3. Generate a genuine `package-lock.json` using the trusted npm registry, review the resolved dependency tree, validate on Node 24, then move Docker/CI to deterministic `npm ci`. Do not fabricate lockfile integrity values.
+4. Continue audit of persistent mutation paths, Socket.IO/HTTP authorization parity, timers, rate limits, and bounded Maps/Sets.
+5. Complete staging smoke tests: login/reconnect, public/private chat, rooms, voice/video, uploads, backup/restore, and multi-device behavior.
+6. Obtain Deplexo deployment SHA/image digest, instance count, exit status, OOM evidence, and heap/RSS measurements.
+7. Before any production promotion: independently back up the persistent volume, verify restore, complete staging tests, and obtain explicit approval.
+
+Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ ابدأ من آخر SHA ونتائج CI المسجلة، وواصل ترتيب المستودع وتدقيق الحفظ والصلاحيات والاعتمادات، بدون دمج أو نشر."
 
 
 ## Continuation progress (2026-11-24)
