@@ -85,3 +85,9 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Added a regression assertion in `verify.js` to check both assign and cancel paths cap history at 100 entries.
 - This is a bounded-memory/data-growth improvement, not a live test result. CI availability still unresolved.
 - Commits: `92ef66daeb4b50ee9dde11fb363348d71767b302` (server) and `5b2b1a20b9c7d54e37f9544dd84fa7150aa8f144` (test).
+
+
+## Socket leave-room authorization review (2026-11-24)
+- Found that `leave-room` accepted a caller-supplied room without requiring it to match the socket's authenticated current room or its Socket.IO room membership. The handler then cleared the user's active room state, creating an inconsistent runtime state.
+- Added guard requiring `room===u.room` and `socket.rooms.has(room)` before mutation, and a regression check in verify.js.
+- Changes are branch-only; no runtime execution/CI proof, merge, deployment, or production access.
