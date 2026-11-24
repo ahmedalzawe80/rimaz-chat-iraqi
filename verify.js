@@ -46,7 +46,7 @@ try {
       finally { fs.closeSync(fd); }
       const actual = fs.readFileSync(file, 'utf8');
       const expected = JSON.stringify(value, null, space);
-      if (actual !== expected || count !== Buffer.byteLength(expected, 'utf8')) throw new Error('streamed JSON differs from native JSON.stringify');
+      if (actual !== expected || count !== Buffer.byteLength(expected, 'utf8')) { let index=0; while(index<actual.length&&index<expected.length&&actual[index]===expected[index])index++; throw new Error('streamed JSON differs from native JSON.stringify at space='+JSON.stringify(space)+' index='+index+' expected='+JSON.stringify(expected.slice(index,index+50))+' actual='+JSON.stringify(actual.slice(index,index+50))+' bytes='+count+'/'+Buffer.byteLength(expected,'utf8')); }
     }
     const cycle = {}; cycle.self = cycle;
     const fd = fs.openSync(path.join(tempDir, 'cycle.json'), 'wx', 0o600);
