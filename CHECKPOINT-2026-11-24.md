@@ -78,3 +78,10 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Latest repair commit: `22546fac8d8eee45c4046f3963c9bc60c2378ab0` (test fixture VM binding).
 - Latest CI lookup for this commit: no status records and no PR workflow runs returned by connector; CI remains unverified.
 - No merge, deployment, sync, or production data access occurred.
+
+
+## Further audit — 2026-11-24
+- Subscription audit found unbounded per-subscription `history` arrays on grant/renew and cancel. Both paths now truncate history to the latest 100 entries after prepending each event.
+- Added a regression assertion in `verify.js` to check both assign and cancel paths cap history at 100 entries.
+- This is a bounded-memory/data-growth improvement, not a live test result. CI availability still unresolved.
+- Commits: `92ef66daeb4b50ee9dde11fb363348d71767b302` (server) and `5b2b1a20b9c7d54e37f9544dd84fa7150aa8f144` (test).
