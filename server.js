@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const zlib = require('zlib');
-const { Readable } = require('stream');
+const { Readable, pipeline } = require('stream');
 const { writeJsonSync } = require('./lib/json-writer');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
@@ -2014,7 +2014,7 @@ app.get('/api/admin/backup/database',requireAdmin,(req,res)=>{
   else res.destroy(e);
  }
 });
-app.get('/api/admin/backup/full',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخة الاحتياطية الكاملة'});res.set('Cache-Control','no-store, no-cache, must-revalidate');res.set('Content-Type','application/gzip');res.set('Content-Disposition',`attachment; filename=\"rimaz-full-backup-${new Date().toISOString().slice(0,10)}.tar.gz\"`);const source=Readable.from(fullBackupTar()),archive=zlib.createGzip({level:6});source.on('error',error=>archive.destroy(error));archive.on('error',error=>{console.error('Full backup stream failed:',error);if(!res.headersSent)res.status(500).json({error:'تعذر إنشاء النسخة الاحتياطية الكاملة'});else res.destroy(error);});source.pipe(archive).pipe(res);});
+app.get('/api/admin/backup/full',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخة الاحتياطية الكاملة'});res.set('Cache-Control','no-store, no-cache, must-revalidate');res.set('Content-Type','application/gzip');res.set('Content-Disposition',`attachment; filename=\"rimaz-full-backup-${new Date().toISOString().slice(0,10)}.tar.gz\"`);const source=Readable.from(fullBackupTar()),archive=zlib.createGzip({level:6});pipeline(source,archive,res,error=>{if(error&&error.code!=='ERR_STREAM_PREMATURE_CLOSE')console.error('Full backup pipeline failed:',error);});});
 app.post('/api/admin/restore/database/preview',requireAdmin,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية استعادة النسخة'});
  restoreUpload.single('backup')(req,res,error=>{
