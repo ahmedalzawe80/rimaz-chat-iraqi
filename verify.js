@@ -211,6 +211,22 @@ try {
   else fail('Socket.IO normalizes the same 2000-character message before anti-spam and filtering');
 } catch (error) { fail('chat filter route checks', error.message); }
 
+// Exercise the shared public-room anti-spam limiter independently of either transport.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const helper=source.match(/function roomMessageRateLimitError\(sid,text,now=Date\.now\(\)\)\s*\{[\s\S]*?\n\}/);
+  if(!helper)throw new Error('shared room anti-spam helper not found');
+  const context={db:{botSettings:{}},botMessageWindows:new Map(),normalizedBotSettings:()=>({antiSpam:{enabled:true}})};
+  vm.createContext(context);
+  vm.runInContext(helper[0]+'\nglobalThis.checkRate=(sid,text,now)=>roomMessageRateLimitError(sid,text,now);',context);
+  const firstSeven=Array.from({length:7},(_,i)=>context.checkRate('session-a','message-'+i,1000)).every(x=>x==='');
+  const eighth=!!context.checkRate('session-a','message-8',1000);
+  const repeats=Array.from({length:3},()=>context.checkRate('session-b','same text',1000)).every(x=>x==='')&&!!context.checkRate('session-b','same text',1000);
+  const reset=context.checkRate('session-a','after-window',7001)==='';
+  if(firstSeven&&eighth&&repeats&&reset)pass('shared room anti-spam limiter enforces burst/repeat limits and resets its five-second window');
+  else fail('shared room anti-spam runtime fixture',JSON.stringify({firstSeven,eighth,repeats,reset}));
+} catch(error) { fail('shared room anti-spam runtime fixture',error.message); }
+
 // Upload hardening: whitelist client MIME values, derive safe stored extensions,
 // apply smaller image limits, and clean files rejected by post-upload policy checks.
 try {
