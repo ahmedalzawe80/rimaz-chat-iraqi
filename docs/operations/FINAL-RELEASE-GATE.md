@@ -114,17 +114,18 @@ Repository organization, deterministic dependency installation, archive parity, 
 - This is repository/archive validation only. It does not replace live Deplexo backup/restore, isolated staging, runtime/load checks, or production approval. No merge, deployment, restart, or live-data change occurred.
 
 
-## Latest verified continuation — 2026-11-24 18:19 UTC
+## Latest verified continuation — 2026-11-24 18:20 UTC
 
-- Current integrated branch head: `cb6ebaa1b6df99d0f67b6e88394089b58715e6c6`. The latest commit is the automated archive-only refresh; it changes only `rimaz-final-deep-audit-46.93.72.zip`.
-- Source/test/workflow changes immediately before that archive commit are on `55f1eb421a300f527d9fc82752d977b0fe9895e8`:
+- Current branch head: `c1a9ec12c0c042b36a918daa762ebe0078306856`. The latest commit is the automated archive-only refresh; it changes only `rimaz-final-deep-audit-46.93.72.zip`.
+- Source, workflow, regression-test, and documentation changes immediately before the archive refresh are at `7d42fc653421d8f82a4412fec5998aa6fad12e7c` and its ancestors:
   - `server.js`: startup cleanup now durably saves stale private-notification removal even when no transient private-message history or media files remain.
-  - `verify.js`: added an isolated runtime regression test proving notification-only cleanup persists.
-  - `.github/workflows/validate-project.yml`: generated ZIP is removed from the pull-request path filter. The archive is still rebuilt and tested in the post-validation push job; an archive-only bot commit no longer starts a redundant PR workflow requiring approval.
-  - `verify.js`: regression assertion ensures the generated ZIP remains excluded from the PR path filter.
-- Exact-head source validation: [PR run #682 / 45458016574](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45458016574) passed on source commit `55f1eb4`: locked install, dependency-tree verification, syntax checks, full regression suite (**602 pass markers, zero failures**), and production Docker build.
-- Exact-head push/archive validation: [run #681 / 45458005876](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45458005876) passed on the same source commit. Both source and extracted-archive suites reported **602 pass markers, zero failures**; both production Docker builds succeeded. Archive job rebuilt and verified **394 tracked files**, **16,349,681 bytes**, CRC/path safety, and exact tracked-file parity before testing the extracted project.
-- Refreshed archive commit: `cb6ebaa1b6df99d0f67b6e88394089b58715e6c6`; archive SHA-1: `685799df18a19e0a3a44d3404429157d61a29e27`.
-- The old PR run #679 with `action_required` was triggered by the earlier ZIP-only commit while the ZIP was in the PR path filter. The path filter is now corrected. Latest PR validation #682 is green, and the archive-only commit did not create a new PR validation run.
+  - `verify.js`: isolated runtime regression test proves notification-only cleanup is persisted.
+  - `.github/workflows/validate-project.yml`: candidate PR path filter excludes the generated ZIP; the push workflow still rebuilds and tests the archive after source validation.
+  - `verify.js`: protects that workflow configuration with a regression assertion.
+  - Both this checkpoint and the final release-gate document now record the exact validation evidence and outstanding production gates.
+- Exact source/PR validation: [run #686 / 45458293892](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45458293892) passed on `7d42fc6`: locked dependency install, dependency-tree verification, syntax checks, full regression suite (**602 pass markers, zero failures**), and production Docker build.
+- Exact push/archive validation: [run #685 / 45458283035](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45458283035) passed on the same source commit. Source and extracted-archive suites each reported **602 pass markers, zero failures**; both production Docker builds succeeded. The archive job rebuilt and verified **394 tracked files**, **16,351,284 bytes**, CRC/path safety, and exact tracked-file parity before testing the extracted project.
+- Refreshed archive commit: `c1a9ec12c0c042b36a918daa762ebe0078306856`; archive SHA-1: `91e054152c8dfb4e2b1e03496444033876f03114`.
+- GitHub PR workflow status: [run #687 / 45458439519](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45458439519) for the bot-authored archive commit is `action_required` and returned **no jobs**. This is an approval gate, not a failed test. The candidate path-filter change does not suppress updates to this integrated PR because the PR's overall diff still contains source, workflow, and documentation paths. No approval action is available through the connected GitHub operations; do not claim this gate is cleared.
 - PR #3 remains open, draft, and unmerged. `main` remains at `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No merge, production deployment/restart, ZIP sync to Deplexo, or live-data modification occurred.
 - Production release gates remain open: independent live-volume backup, verified restore into isolated staging, end-to-end smoke tests, runtime/load evidence, and explicit promotion approval. CI success alone is not production approval.
