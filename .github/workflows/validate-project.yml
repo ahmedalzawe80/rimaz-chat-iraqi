@@ -47,14 +47,11 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --no-audit --no-fund
-          else
-            echo "NOTICE: package-lock.json is not present yet; using npm install for this transitional run."
-            npm install --no-audit --no-fund
-          fi
+      - name: Install exact locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify installed dependency tree
+        run: npm ls --depth=0
 
       - name: Check JavaScript syntax
         run: |
