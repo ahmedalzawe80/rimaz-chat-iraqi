@@ -203,6 +203,12 @@ try {
   else fail('private messages enforce chat filter');
   if (socketRoute && socketRoute[0].includes('globalBanned(u.name,socketClientIp(socket))') && socketRoute[0].includes("error-msg',{error:'لا يمكنك الكتابة أثناء الحظر العام'}")) pass('public room messages recheck global bans at send time, not only on room join');
   else fail('public room messages recheck global bans at send time');
+  if (httpRoute && httpRoute[0].includes('roomMessageRateLimitError(sessionId,text)') && socketRoute && socketRoute[0].includes('roomMessageRateLimitError(socket.data.sid,text)')) pass('HTTP and Socket.IO public messages share the same anti-spam policy');
+  else fail('HTTP and Socket.IO public messages share the same anti-spam policy');
+  if (httpRoute && httpRoute[0].includes('isCurrentSessionSocket(so)') && httpRoute[0].includes("keyName(so.data?.user?.name||'')===keyName(u.name)")) pass('HTTP fallback requires the current socket and matching authenticated account');
+  else fail('HTTP fallback requires the current socket and matching authenticated account');
+  if (socketRoute && socketRoute[0].includes("String(d?.text||'').trim().slice(0,2000)") && socketRoute[0].includes('roomMessageRateLimitError')) pass('Socket.IO normalizes the same 2000-character message before anti-spam and filtering');
+  else fail('Socket.IO normalizes the same 2000-character message before anti-spam and filtering');
 } catch (error) { fail('chat filter route checks', error.message); }
 
 // Upload hardening: whitelist client MIME values, derive safe stored extensions,
