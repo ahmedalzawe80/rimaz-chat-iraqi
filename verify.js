@@ -5,6 +5,7 @@ const vm = require('node:vm');
 const os = require('node:os');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
+const { writeJsonSync } = require('./lib/json-writer');
 
 const root = __dirname;
 const failures = [];
@@ -15,6 +16,48 @@ const server = path.join(root, 'server.js');
 const serverCheck = spawnSync(process.execPath, ['--check', server], { encoding: 'utf8' });
 if (serverCheck.status === 0) pass('server.js syntax');
 else fail('server.js syntax', serverCheck.stderr || serverCheck.stdout);
+
+// The bounded-memory writer must preserve native JSON output for persisted values.
+try {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-json-writer-'));
+  try {
+    const shared = { label: 'مشترك', value: 42 };
+    const sparse = [];
+    sparse.length = 4;
+    sparse[1] = undefined;
+    sparse[2] = NaN;
+    sparse[3] = Infinity;
+    const value = {
+      arabic: 'دردشة ريماز عراقية',
+      unicode: '💚🌹'.repeat(12000),
+      escaped: 'quotes " slash \\ newline\n tab\t',
+      sparse,
+      date: new Date('2026-11-24T12:34:56.000Z'),
+      bytes: Buffer.from([0, 1, 127, 128, 255]),
+      first: shared,
+      second: shared,
+      omitted: undefined
+    };
+    for (const space of [0, 2, '  ']) {
+      const file = path.join(tempDir, 'snapshot-' + String(space).length + '-' + String(space).replace(/\s/g, 's') + '.json');
+      const fd = fs.openSync(file, 'wx', 0o600);
+      let count;
+      try { count = writeJsonSync(fd, value, { space, chunkSize: 1024 }); }
+      finally { fs.closeSync(fd); }
+      const actual = fs.readFileSync(file, 'utf8');
+      const expected = JSON.stringify(value, null, space);
+      if (actual !== expected || count !== Buffer.byteLength(expected, 'utf8')) throw new Error('streamed JSON differs from native JSON.stringify');
+    }
+    const cycle = {}; cycle.self = cycle;
+    const fd = fs.openSync(path.join(tempDir, 'cycle.json'), 'wx', 0o600);
+    let cycleRejected = false;
+    try { writeJsonSync(fd, cycle); } catch (error) { cycleRejected = /circular/i.test(error.message); }
+    finally { fs.closeSync(fd); }
+    if (!cycleRejected) throw new Error('circular values were not rejected');
+    pass('bounded-memory JSON writer matches native serialization across Unicode, arrays, dates, buffers, and shared references');
+    pass('bounded-memory JSON writer rejects circular values before atomic replacement');
+  } finally { fs.rmSync(tempDir, { recursive: true, force: true }); }
+} catch (error) { fail('bounded-memory JSON writer regression checks', error.message); }
 
 // Startup expiry cleanup must use the canonical atomic save path, which also keeps private DMs off disk.
 try {
@@ -736,7 +779,7 @@ try {
   const source = fs.readFileSync(server, 'utf8');
   const saveFn = source.match(/function save\(\)\s*\{[\s\S]*?\n\}/);
   const loadBlock = source.match(/let db;[\s\S]*?\nfor \(const \[k,v\] of Object\.entries\(defaults\(\)\)/);
-  if (saveFn && ['.tmp', "fs.openSync(tempFile, 'wx'", 'JSON.stringify(snapshot)', 'privateMessages: []', 'fs.fsyncSync(fd)', 'fs.renameSync(tempFile, DB_FILE)'].every(x => saveFn[0].includes(x))) pass('database writes use fsynced atomic replacement and never persist private messages');
+  if (saveFn && ['.tmp', "fs.openSync(tempFile, 'wx'", 'writeJsonSync(fd, snapshot)', 'privateMessages: []', 'fs.fsyncSync(fd)', 'fs.renameSync(tempFile, DB_FILE)'].every(x => saveFn[0].includes(x))) pass('database writes use fsynced atomic replacement and never persist private messages');
   else fail('database writes use compact atomic replacement and never persist private messages');
   if (loadBlock && loadBlock[0].includes("error.code === 'ENOENT'") && loadBlock[0].includes('fs.copyFileSync(DB_FILE, recoveryCopy') && loadBlock[0].includes('Refusing to start with an invalid database')) pass('corrupt database is preserved and startup fails closed');
   else fail('corrupt database is preserved and startup fails closed');
@@ -750,7 +793,7 @@ try {
   if (!saveFn) throw new Error('save() implementation not found');
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-atomic-save-'));
   try {
-    const context = { fs, crypto, DATA_DIR: tempDir, DB_FILE: path.join(tempDir, 'data.json'), db: { users: { test: { likes: 7 } }, messages: [], privateMessages: [{text:'secret'}] }, process: { pid: process.pid } };
+    const context = { fs, crypto, writeJsonSync, DATA_DIR: tempDir, DB_FILE: path.join(tempDir, 'data.json'), db: { users: { test: { likes: 7 } }, messages: [], privateMessages: [{text:'secret'}] }, process: { pid: process.pid } };
     vm.createContext(context);
     vm.runInContext(`${saveFn[0]}\nglobalThis.performSave = save;`, context);
     context.performSave();
