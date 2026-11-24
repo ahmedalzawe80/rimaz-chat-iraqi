@@ -1537,7 +1537,11 @@ app.post('/api/message',requireAuth,async(req,res)=>{
   if(roomBanned(u.name,room))return res.status(403).json({error:'أنت محظور من هذه الغرفة'});
   if(roomMuted(u.name,room))return res.status(403).json({error:'أنت مكتوم في هذه الغرفة'});
   const rateError=roomMessageRateLimitError(sessionId,text);if(rateError)return res.status(429).json({error:rateError});
-  if(await processBuiltInBotCommand(joinedSocket,u,room,text))return res.json({ok:true,command:true});
+  let botCommandError=null;
+  if(await processBuiltInBotCommand(joinedSocket,u,room,text,(message,status=403)=>{botCommandError={message,status};})){
+    if(botCommandError)return res.status(botCommandError.status).json({error:botCommandError.message});
+    return res.json({ok:true,command:true});
+  }
   if(blockedChatTerm(text))return res.status(403).json({error:'رسالتك تحتوي على كلمة غير مسموح بها'});
   const r=db.rooms.find(x=>x.id===room); if(!r)return res.status(404).json({error:'الغرفة غير موجودة'});
   const m={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:u.type,text,at:Date.now(),likes:userLikes(u),profile:profile(u.name)};try{await addMessage(m)}catch(e){console.error('HTTP room message save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الرسالة'});}io.to(room).emit('message',m);res.json({ok:true,message:m});
@@ -2171,7 +2175,7 @@ function pruneOrphanedSessionState(){
 const sessionTransientCleanupTimer=setInterval(pruneOrphanedSessionState,5*60*1000);
 sessionTransientCleanupTimer.unref?.();
 async function emitRoomBotMessage(room,text){const message={id:crypto.randomUUID(),room,from:'رماز بوت',displayName:'🤖 رماز بوت',type:'text',text:String(text||'').slice(0,1000),at:Date.now(),role:'bot',bot:true};try{await addMessage(message);io.to(room).emit('message',message);}catch(error){console.warn('Chat bot response failed:',error.message);}}
-async function processBuiltInBotCommand(socket,user,room,text){
+async function processBuiltInBotCommand(socket,user,room,text,onError=null){
  const settings=normalizedBotSettings(db.botSettings),raw=String(text||'').trim();if(!/^[!/]/.test(raw))return false;
  const [head,...tail]=raw.slice(1).trim().split(/\s+/),cmd=String(head||'').toLowerCase(),arg=tail.join(' ').trim();if(!cmd)return false;
  if(['مساعدة','help','بوتات'].includes(cmd)){const lines=['🤖 أوامر بوت رماز:'];if(settings.games.enabled)lines.push('/نرد — رمية نرد','/عملة — رمي العملة','/رقم — رقم عشوائي');if(settings.stats.enabled)lines.push('/احصائياتي — معلومات حسابك','/المتواجدين — عدد المتصلين','/احصائيات — إحصائيات الدردشة');if(settings.adminCommands.enabled&&canNotice(user))lines.push('/تنبيه نص الرسالة — إعلان إداري للغرفة');if(lines.length===1)lines.push('لا توجد بوتات تفاعلية مفعّلة حالياً.');await emitRoomBotMessage(room,lines.join('\n'));return true;}
@@ -2188,8 +2192,8 @@ async function processBuiltInBotCommand(socket,user,room,text){
   return true;
  }
  if(settings.adminCommands.enabled&&['تنبيه','announce'].includes(cmd)){
-  if(!canNotice(user)){socket.emit('error-msg',{error:'هذا الأمر يحتاج صلاحية إرسال التنبيهات الإدارية'});return true;}
-  if(!arg){socket.emit('error-msg',{error:'اكتب نص التنبيه بعد الأمر /تنبيه'});return true;}
+  if(!canNotice(user)){const message='هذا الأمر يحتاج صلاحية إرسال التنبيهات الإدارية';if(onError)onError(message,403);else socket.emit('error-msg',{error:message});return true;}
+  if(!arg){const message='اكتب نص التنبيه بعد الأمر /تنبيه';if(onError)onError(message,400);else socket.emit('error-msg',{error:message});return true;}
   io.to(room).emit('admin-notice',{from:user.name,text:arg.slice(0,500)});await emitRoomBotMessage(room,`📢 تم إرسال التنبيه بواسطة ${displayName(user.name)}.`);return true;
  }
  return false;
