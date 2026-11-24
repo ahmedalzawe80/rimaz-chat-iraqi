@@ -742,6 +742,17 @@ try {
 } catch (error) { fail('upload signature fixture tests', error.message); }
 
 
+
+// Deleting from a missing catalog must not initialize or mutate catalog state.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const routeStart = source.indexOf("app.post('/api/admin/gifts/catalog/delete'");
+  const routeEnd = source.indexOf("app.", routeStart + 8);
+  const route = routeStart >= 0 ? source.slice(routeStart, routeEnd > routeStart ? routeEnd : routeStart + 1800) : '';
+  if (route.includes("const catalog=category==='vip'?db.vipGiftCatalog:db.giftCatalog;if(!Array.isArray(catalog))return res.status(404)") && !route.includes('db.giftCatalog=Array.isArray') && !route.includes('db.vipGiftCatalog=Array.isArray')) pass('missing gift catalog deletion does not initialize catalog state');
+  else fail('missing gift catalog deletion does not initialize catalog state');
+} catch (error) { fail('gift catalog deletion no-mutation regression', error.message); }
+
 // Deleting a nonexistent gift must not create a profile or trigger profile() expiry mutations.
 try {
   const source = fs.readFileSync(server, 'utf8');
