@@ -159,3 +159,26 @@ Always inspect the current PR head and exact-head CI first. Keep work on `fix/bo
 - GitHub PR workflow status: [run #687 / 45458439519](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45458439519) for the bot-authored archive commit is `action_required` and returned **no jobs**. This is an approval gate, not a failed test. The candidate path-filter change does not suppress updates to this integrated PR because the PR's overall diff still contains source, workflow, and documentation paths. No approval action is available through the connected GitHub operations; do not claim this gate is cleared.
 - PR #3 remains open, draft, and unmerged. `main` remains at `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No merge, production deployment/restart, ZIP sync to Deplexo, or live-data modification occurred.
 - Production release gates remain open: independent live-volume backup, verified restore into isolated staging, end-to-end smoke tests, runtime/load evidence, and explicit promotion approval. CI success alone is not production approval.
+
+
+## Superseding CI and Deplexo safety checkpoint — 2026-11-24 19:07 UTC
+
+- Source/workflow/test head `c935b18715de9c756e73f02610554653dfe45f91` passed [push validation and archive refresh run #694](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45466637249).
+- Source validation: locked `npm ci`, dependency-tree check, JS syntax, full regression suite (**602 pass markers, zero failures**), and production Docker build all succeeded.
+- Archive validation: rebuilt and verified **394 tracked files**, **16,351,608 bytes**, CRC/path/symlink/duplicate checks and exact tracked-file parity; extracted archive completed locked install, dependency-tree check, syntax, **602 regression pass markers, zero failures**, HTML parity, and production Docker build. npm audit reported **0 vulnerabilities**.
+- Archive-only refresh commit: `262876e141e6a4d34049951e10fee01a534b921f`; changed only `rimaz-final-deep-audit-46.93.72.zip`. Archive Git blob SHA: `80b5b299d9108f48ed2f10b366315f40360d6e70`.
+- CI workflow now runs push validation on every candidate branch commit. PR validation is limited to `opened`, `reopened`, and `ready_for_review`; the push path performs the full checks on every source/documentation update. This prevents bot-authored ZIP-only commits from generating approval-gated PR `synchronize` runs. The old `action_required` run #691 belongs to a prior head; no new PR sync run was created after archive commit #262876.
+- An intermediate run #693 failed only because the new regression assertion encoded newline escapes incorrectly. That assertion was corrected; run #694 passed on the corrected source/test/workflow head. Do not treat #693 as the current result.
+- Latest branch head at this checkpoint: `262876e141e6a4d34049951e10fee01a534b921f`. PR #3 remains open/draft/unmerged, targeting `safety/validate-and-backup-before-sync`. `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No merge, Deplexo deployment/restart, ZIP sync to production, or live-data modification occurred.
+
+### Deplexo storage and backup boundary (verified against current platform documentation)
+
+- Deplexo's container image filesystem is read-only at runtime. `/tmp` is temporary (100 MB) and does not survive container replacement. The named persistent volume is mounted at `/data` by default and survives restarts/replacements on the same worker.
+- The volume belongs to its worker and is not shared across independent apps/workers. Deleting an application removes its data volume. Backups must be stored outside the application/volume and restoration must be tested.
+- The Rimaz server selects `DATA_DIR=/data/rimaz` when `/data` exists (unless explicitly overridden), with `data.json`, `uploads/`, and `private-media/` beneath it. Verify the actual production environment and mount in the dashboard before any operation.
+- Server shutdown handles `SIGTERM` and `SIGINT`, flushes queued message writes, attempts a final database save, closes Socket.IO, and exits nonzero if the final save fails. This is source-level evidence, not a live shutdown test.
+- A code rollback does not restore a database or recover deleted files. A Git rollback branch is not a volume backup.
+- Required before promotion: obtain an independent consistent backup of the live `/data/rimaz` state to an external destination; restore a copy into an isolated staging app/volume; verify database integrity and file counts/hashes; run login, reconnect, public/private chat, rooms, voice/video, moderation/member-card, upload, backup/restore, and multi-device smoke tests; observe runtime restarts, OOM, memory, and resource behavior.
+- The connected GitHub access does not provide Deplexo dashboard or live-volume access. No live backup or staging restore has been claimed or attempted. Keep production promotion blocked until those hosting-side checks and explicit approval are complete.
+
+Platform references: [Deplexo storage and filesystem](https://docs.deplexo.com/operations/storage/), [deployment lifecycle and rollback limits](https://docs.deplexo.com/operations/deployments/), [Deplexo FAQ](https://docs.deplexo.com/getting-started/faq/).
