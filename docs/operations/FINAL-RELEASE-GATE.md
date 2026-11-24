@@ -14,25 +14,26 @@ This record separates source-level and CI evidence from hosting operations that 
 - The nested incomplete project copy was removed from the candidate after verifying it contained only a placeholder data file and duplicate Google verification file.
 - PR #3 remains open, draft, unmerged, and targets `safety/validate-and-backup-before-sync`. It is not yet a production release.
 
-## Dependency reproducibility
+## Dependency reproducibility — completed in candidate
 
 - `package.json` requires Node.js `>=24 <25`; `.nvmrc` pins major version 24.
 - A genuine npm lockfile v3 was generated on Node.js 24 and committed in [`ed4ef756`](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/commit/ed4ef756a96351f6f368dba7295420cc0f6ebbd1).
 - The lockfile root package identity and dependency declarations match `package.json`; it records 96 package entries.
-- The production Dockerfile now uses `npm ci --omit=dev`.
-- The bootstrap workflow performed a clean `npm ci`, the regression suite, and a Docker build using the lockfile before committing the lockfile and Dockerfile change. The temporary bootstrap workflow was then removed.
-- The permanent validation workflow now requires `npm ci`, runs `npm ls --depth=0`, JavaScript syntax checks, `npm test`, and the production Docker build. It no longer has a fallback to floating `npm install`.
-- README, contributor guidance, changelog, and repository structure documentation now describe the lockfile-based workflow.
+- The production Dockerfile uses `npm ci --omit=dev`.
+- The one-time bootstrap workflow performed a clean `npm ci`, the regression suite, and a Docker build using the lockfile before committing the lockfile and Dockerfile change. That temporary workflow was then removed.
+- The permanent validation workflow requires `npm ci`, `npm ls --depth=0`, JavaScript syntax checks, `npm test`, and the production Docker build. It has no fallback to floating `npm install`.
+- README, contributor guidance, changelog, and repository structure documentation describe the deterministic install workflow.
 
-## CI evidence and current validation boundary
+## Exact-head CI evidence
 
-- GitHub Actions run [45407944962](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45407944962) completed successfully on the earlier candidate checkpoint `23568ae45ff37a2e349939f1374a6eac885c2e79`.
-- Its regression output contained 562 pass markers and zero failure markers; dependency installation and the production Docker build completed.
-- The lockfile/Dockerfile commit `ed4ef756a96351f6f368dba7295420cc0f6ebbd1` was created by the bootstrap workflow only after its `npm ci`, regression, and locked Docker build steps succeeded.
-- The permanent validation workflow has since been tightened to require `npm ci` and `npm ls`. A fresh completed PR check on the final documentation-updated head is still required before merge.
+- Commit `086bbb09717a6d2c92009f4301528cf3f317f7b6` passed GitHub Actions run [45408438472](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45408438472).
+- Every step completed successfully: Node.js 24 setup, `npm ci`, `npm ls --depth=0`, JavaScript syntax checks, `npm test`, and production Docker image build.
+- Regression output contained 562 pass markers and zero failure markers.
+- The Docker build used `npm ci --omit=dev`, installed 95 production packages, and reported zero vulnerabilities in that build's npm audit output.
+- The latest full code run before this exact-head run, `45407944962`, also passed; its 562 pass markers belong to its own SHA only.
 - Earlier validation on `c30b7b92093dbbf4162cb6f30573355ad20b0f1f`, run `45379916442`, reported 556 pass markers and zero failures. That count belongs only to that SHA.
 
-CI and container builds do not prove live Deplexo runtime health, load behavior, or backup restorability.
+CI and container builds do not prove live Deplexo runtime health, load behavior, or backup restorability. Any later source or workflow change requires a fresh check on its exact head.
 
 ## Required staging and hosting checks
 
@@ -53,4 +54,4 @@ Do not modify the live database, uploads, private media, or persistent volume du
 
 ## Completion definition
 
-Repository organization and deterministic dependency installation are now implemented in the candidate. Production publication remains blocked until fresh final-head CI, independent backup/restore, staging smoke tests, runtime evidence, and the required promotion checks are complete.
+Repository organization and deterministic dependency installation are implemented in the candidate. Production publication remains blocked until independent backup/restore, staging smoke tests, runtime evidence, final-head CI, and promotion checks are complete.
