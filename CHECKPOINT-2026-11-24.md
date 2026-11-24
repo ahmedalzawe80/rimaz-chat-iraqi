@@ -113,3 +113,11 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Added a regression check in `verify.js` that verifies the startup cleanup uses `save()`, does not write DB_FILE directly, and that the canonical save path excludes private messages and uses atomic rename.
 - Commits: `6849ebbb6a20b2f9eb116e08925302a05ceec9fe` (server), `8832cd3b6d9ce0509bf56c69d41dbe8debe535ca` (verify).
 - Branch-only change; test execution/CI not yet confirmed. No merge, deployment, sync, or production database access.
+
+
+## Backup privacy boundary fix (2026-11-24)
+- Found both database-only and full-backup exports copied the live in-memory `privateMessages` array into downloadable backup payloads, even though private conversations are intentionally transient, excluded from canonical disk persistence, and explicitly not restored.
+- Both backup snapshot constructors now set `privateMessages: []` alongside `sessions: {}`. The full backup still includes the existing media archives; no media behavior or chat behavior changed.
+- Added regression assertions verifying both backup formats sanitize private messages.
+- Commits: `93d52a774f486c55a24f195fdf77759dec0c2a45` (server), `dbab93a848f06037078e6e8dae05ade0c66df7e6` (verify).
+- Branch-only. GitHub currently returns no status checks or PR workflow runs for the latest head; execution remains unverified. No merge, deployment, production data access, or behavior changes.
