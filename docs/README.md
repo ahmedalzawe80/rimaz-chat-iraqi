@@ -2,6 +2,9 @@
 
 This directory contains maintained project records, engineering audits, and operational notes. Application entry points and runtime assets remain in their required locations.
 
+## Repository map
+- [Repository structure](REPOSITORY-STRUCTURE.md) — root-file ownership, runtime asset layout, and safe cleanup rules.
+
 ## Project continuity
 - [Current checkpoint](project/CHECKPOINT-2026-11-24.md) — repository state, verified checks, safety boundaries, and next steps.
 - [Engineering handoff](project/HANDOFF-2026-11-24.md) — implementation context and ongoing repair work.
