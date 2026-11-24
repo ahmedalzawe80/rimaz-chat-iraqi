@@ -288,3 +288,10 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Added four regression assertions covering each fail-closed path.
 - Exact head SHA `de1225f8d9b0ecfa25c8666a3c641aa87ba19714` passed PR workflow run `45379172304`: 552 pass markers, zero failure markers, JavaScript syntax, regression suite, and production Docker build all succeeded.
 - No merge, deployment/restart, ZIP sync, or live persistent-volume/data modification. Staging and verified backup/restore remain mandatory before promotion.
+
+
+## Rank-art rollback regression fixture + startup migration audit — 2026-11-24
+- Added checks for rank artwork assignment restoring prior art ID and URL on save failure, and for emitting updates only after save succeeds.
+- Initial test fixture incorrectly escaped its route-boundary newline and failed all four checks; corrected the fixture (not production route) and reran.
+- Exact SHA `c30b7b92093dbbf4162cb6f30573355ad20b0f1f`, PR workflow run `45379916442`: 556 pass markers, zero failures; syntax checks, full regression suite and Docker build passed.
+- No production deployment, live data changes, merge, or destructive synchronization.
