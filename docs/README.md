@@ -17,8 +17,11 @@ This directory contains maintained project records, engineering audits, and oper
 - [Deployment notes](operations/DEPLOYMENT-46.93.72.md) — historical deployment package and operational guidance.
 - [Repair notes](operations/REPAIR-NOTES-46.93.72.md) — recorded repair history and context.
 
+## Contributor guidance
+- [Contribution guide](../CONTRIBUTING.md) — branch policy, local checks, and data-safety requirements.
+
 ## Change history
-- [Changelog](../CHANGELOG.md) — chronological project changes.
+- [Changelog](../CHANGELOG.md) — chronological application and repository changes.
 
 ## Runtime-data boundary
 Git-tracked files and rollback branches do not back up the live Deplexo persistent volume. Before production replacement, create and verify an independent backup of live data and uploads, then complete staging smoke tests.
