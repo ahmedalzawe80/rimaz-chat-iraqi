@@ -194,9 +194,9 @@ try {
   const socketRoute = source.match(/socket\.on\('send-message',[\s\S]*?\n/);
   const privateRoute = source.match(/socket\.on\('private-message',[\s\S]*?\n/);
   if (httpRoute && httpRoute[0].includes('blockedChatTerm(text)') && httpRoute[0].includes('.slice(0,2000)')) pass('HTTP room messages enforce chat filter and 2000-character limit');
+  else fail('HTTP room messages enforce chat filter and 2000-character limit');
   if (httpRoute && httpRoute[0].includes('globalBanResponse(res,u.name,requestClientIp(req))') && httpRoute[0].indexOf('globalBanResponse') < httpRoute[0].indexOf('const room=')) pass('HTTP room messages reject global bans before room checks or message creation');
   else fail('HTTP room messages reject global bans before message creation');
-  else fail('HTTP room messages enforce chat filter');
   if (socketRoute && socketRoute[0].includes('blockedChatTerm(text)')) pass('Socket room messages enforce chat filter');
   else fail('Socket room messages enforce chat filter');
   if (privateRoute && privateRoute[0].includes('blockedChatTerm(text)')) pass('private messages enforce chat filter');
