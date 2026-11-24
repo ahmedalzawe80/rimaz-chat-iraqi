@@ -1,0 +1,89 @@
+name: Rebuild release archive once
+
+on:
+  push:
+    branches:
+      - fix/bound-private-media-ticket-cache
+    paths:
+      - '.github/workflows/rebuild-release-archive-once.yml'
+      - 'server.js'
+      - 'verify.js'
+      - 'index.html'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'Dockerfile'
+      - '*.md'
+      - 'docs/**/*.md'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/bound-private-media-ticket-cache
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Build and validate exact tracked-file archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re, stat, subprocess, zipfile
+          archive='rimaz-final-deep-audit-46.93.72.zip'
+          builder='.github/workflows/rebuild-release-archive-once.yml'
+          tracked=subprocess.check_output(['git','ls-files','-z']).decode().split('\0')
+          paths=sorted(p for p in tracked if p and p not in (archive,builder) and os.path.isfile(p))
+          with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for path in paths:
+                  info=zipfile.ZipInfo(path,date_time=(2024,1,1,0,0,0))
+                  info.external_attr=(stat.S_IFREG|stat.S_IMODE(os.stat(path).st_mode))<<16
+                  info.compress_type=zipfile.ZIP_DEFLATED
+                  with open(path,'rb') as f:z.writestr(info,f.read(),compress_type=zipfile.ZIP_DEFLATED,compresslevel=9)
+          target=os.path.join(os.environ['RUNNER_TEMP'],'rimaz-archive-check')
+          with zipfile.ZipFile(archive) as z:
+              if z.testzip():raise SystemExit('ZIP CRC failure')
+              actual=set()
+              total=0
+              for item in z.infolist():
+                  name=item.filename.replace('\\','/')
+                  if name.startswith('/') or re.match(r'^[A-Za-z]:',name) or any(p in ('.','..') for p in name.split('/')):raise SystemExit('Unsafe path: '+name)
+                  if ((item.external_attr>>16)&0o170000)==stat.S_IFLNK:raise SystemExit('Symlink: '+name)
+                  if not item.is_dir():
+                      if name in actual:raise SystemExit('Duplicate path: '+name)
+                      actual.add(name)
+                  total+=item.file_size
+                  if item.compress_size and item.file_size/item.compress_size>250:raise SystemExit('Suspicious compression ratio: '+name)
+              expected=set(paths)
+              if actual!=expected:raise SystemExit(f'Parity mismatch missing={sorted(expected-actual)[:10]} extra={sorted(actual-expected)[:10]}')
+              if total>500*1024*1024:raise SystemExit('Expanded archive too large')
+              z.extractall(target)
+          print(f'Archive CRC, safety and full tracked-file parity passed: {len(actual)} files, {os.path.getsize(archive)} bytes')
+          PY
+          PROJECT="$RUNNER_TEMP/rimaz-archive-check"
+          cd "$PROJECT"
+          npm ci --no-audit --no-fund
+          npm ls --depth=0
+          node --check server.js
+          node --check verify.js
+          npm test
+          cmp -s index.html public/index.html
+          docker build --pull -t rimaz-chat-iraqi:rebuilt-archive .
+      - name: Commit rebuilt archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add rimaz-final-deep-audit-46.93.72.zip
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "build: refresh audited archive after release notes"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:fix/bound-private-media-ticket-cache"
