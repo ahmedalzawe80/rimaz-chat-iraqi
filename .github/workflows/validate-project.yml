@@ -20,6 +20,7 @@ on:
       - 'docs/**/*.md'
       - 'Dockerfile'
       - '.dockerignore'
+      - '.gitignore'
       - '.github/**'
       - '.editorconfig'
       - '.gitattributes'
