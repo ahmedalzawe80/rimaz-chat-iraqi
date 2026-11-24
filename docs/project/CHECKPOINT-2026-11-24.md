@@ -1,5 +1,8 @@
 # Rimaz — saved continuation checkpoint (2026-11-24)
 
+> **Historical details below:** this checkpoint contains earlier branch SHAs and test status. Current verified repository state: PR #3 branch `fix/bound-private-media-ticket-cache`, head `975a0cdc7c2b0cba104fa1053cb0f4363a08b585`; latest push validation run `45346184696` completed successfully. PR #3 and PR #2 remain open drafts; neither is merged. No production deployment or persistent-volume changes were performed. Use this current status before relying on any older progress notes below.
+
+
 User priority: make the repository exceptionally clean and fix chat behavior/permissions at the root, with durable solutions and regression tests. Never claim perfection based on CI alone.
 
 ## Safety
