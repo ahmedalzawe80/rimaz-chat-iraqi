@@ -2663,3 +2663,53 @@ try {
   if(fullOk)pass('full tar backup streams the database temp file and removes it in generator finally');else fail('full tar backup must not materialize a full JSON string or Buffer');
   if(databaseOk)pass('database-only backup streams the restrictive temp file and cleans it after completion or disconnect');else fail('database-only backup must stream and clean its temporary file');
 } catch(error) { fail('bounded-memory database backup regression checks',error.message); }
+
+
+// The full-backup TAR entry generator must release its database snapshot file
+// on normal exhaustion, explicit iterator cancellation, and downstream failure.
+(async()=>{
+  const source=fs.readFileSync(server,'utf8');
+  const helperStart=source.indexOf('function createDatabaseBackupTempFile(snapshot,purpose){');
+  const generatorStart=source.indexOf('async function* fullBackupTarEntries(){',helperStart);
+  const generatorEnd=source.indexOf('async function* fullBackupTar(){',generatorStart);
+  if(helperStart<0||generatorStart<0||generatorEnd<0)throw new Error('backup helper/generator boundaries not found');
+  const executable=source.slice(helperStart,generatorEnd);
+  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-tar-generator-cleanup-'));
+  const uploads=path.join(temp,'uploads'),privateMedia=path.join(temp,'private-media');
+  fs.mkdirSync(uploads);fs.mkdirSync(privateMedia);
+  const context={
+    fs,path,crypto,writeJsonSync,DB_FILE:path.join(temp,'data.json'),db:{users:{alice:{name:'أحمد'}},sessions:{old:{name:'stale'}},privateMessages:[{text:'excluded'}]},
+    UP_DIR:uploads,PRIVATE_MEDIA_DIR:privateMedia,process:{pid:process.pid},
+    require:(name)=>name==='./package.json'?{version:'test'}:require(name),console
+  };
+  vm.createContext(context);
+  vm.runInContext(executable+';globalThis.createEntries=fullBackupTarEntries;',context);
+  const checks=[];
+  try{
+    const cancelled=context.createEntries();
+    const first=await cancelled.next();
+    const cancelledFile=first.value?.disk;
+    const cancelledValid=!first.done&&first.value?.name==='database/rimaz-database.json'&&cancelledFile&&fs.existsSync(cancelledFile)&&JSON.parse(fs.readFileSync(cancelledFile,'utf8')).database.users.alice.name==='أحمد';
+    await cancelled.return();
+    checks.push(['full-backup TAR generator removes its database temp file when the consumer cancels',cancelledValid&&!fs.existsSync(cancelledFile)]);
+
+    const completed=context.createEntries();
+    const normalFirst=await completed.next();
+    const normalFile=normalFirst.value?.disk;
+    const normalSecond=await completed.next();
+    checks.push(['full-backup TAR generator removes its database temp file after normal exhaustion',!normalSecond.done&&normalFile&&fs.existsSync(normalFile)&& (await completed.next()).done&&!fs.existsSync(normalFile)]);
+
+    const blockedUploads=path.join(temp,'uploads-is-file');
+    fs.writeFileSync(blockedUploads,'not a directory');
+    context.UP_DIR=blockedUploads;
+    const failed=context.createEntries();
+    const failureFirst=await failed.next();
+    const failedFile=failureFirst.value?.disk;
+    let rejected=false;
+    try{await failed.next();}catch(error){rejected=error.code==='ENOTDIR';}
+    checks.push(['full-backup TAR generator removes its database temp file when media enumeration fails',rejected&&failedFile&&!fs.existsSync(failedFile)]);
+  }finally{
+    fs.rmSync(temp,{recursive:true,force:true});
+  }
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+})().catch(error=>{fail('full-backup TAR generator cleanup lifecycle tests',error.message);process.exitCode=1;});
