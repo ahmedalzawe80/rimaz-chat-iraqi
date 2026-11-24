@@ -295,3 +295,14 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Initial test fixture incorrectly escaped its route-boundary newline and failed all four checks; corrected the fixture (not production route) and reran.
 - Exact SHA `c30b7b92093dbbf4162cb6f30573355ad20b0f1f`, PR workflow run `45379916442`: 556 pass markers, zero failures; syntax checks, full regression suite and Docker build passed.
 - No production deployment, live data changes, merge, or destructive synchronization.
+
+
+## Final consolidation phase — 2026-11-24
+- Consolidated the release decision into `docs/operations/FINAL-RELEASE-GATE.md` and indexed it from `docs/README.md`.
+- PR #3 is the sole integrated candidate: it contains 32 changed paths; all 11 paths changed by PR #2 are also present in PR #3, so PR #2 has no unique files and must not be merged separately.
+- Latest recorded application-code regression/build validation remains commit `c30b7b92093dbbf4162cb6f30573355ad20b0f1f`, run `45379916442`: 556 pass markers, zero failures, Node.js 24 syntax/test checks and Docker build all succeeded.
+- The final documentation-only consolidation commit `dcdcc4fc7024f004e4356575d4c7249315448254` passed workflow run `45406538019`: Node version setup, JavaScript syntax, `npm test`, and production Docker build all completed successfully.
+- PR #3 remains open, draft, unmerged, and targets `safety/validate-and-backup-before-sync`; the latest PR head after documentation consolidation is `dcdcc4fc7024f004e4356575d4c7249315448254`. PR #2 remains open/draft and redundant.
+- `package-lock.json` remains absent. No lockfile was fabricated and no `npm ci` migration was attempted. A genuine lockfile generated and verified on Node.js 24 remains required for reproducible dependency installation.
+- Staging smoke tests, independent Deplexo persistent-volume backup/restore, live restart/OOM/heap/RSS evidence, and final production approval remain outstanding. CI success does not satisfy these operational checks.
+- No merge, main update, deployment/restart, ZIP sync, or live database/uploads/private-media/persistent-volume modification was performed.
