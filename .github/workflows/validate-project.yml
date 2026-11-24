@@ -23,6 +23,7 @@ on:
       - '.gitignore'
       - '.github/**'
       - '.editorconfig'
+      - '.nvmrc'
       - '.gitattributes'
       - 'rimaz-final-deep-audit-46.93.72.zip'
 
