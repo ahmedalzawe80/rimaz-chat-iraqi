@@ -52,6 +52,7 @@ If `/data` exists and `DATA_DIR` is not explicitly set, the server defaults to `
 - `public/gifts/`, `public/smileys/`, `public/vip-gifts/`: built-in media served from disk.
 - `verify.js`: regression checks.
 - `.github/workflows/`: pull-request validation, archive audit, and guarded manual source synchronization.
+- `.github/dependabot.yml`: scheduled dependency update proposals for GitHub Actions and npm.
 - `rimaz-final-deep-audit-46.93.72.zip`: audited source archive used by the archive validation workflow and manual source-sync process.
 
 ## Docker
