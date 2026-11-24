@@ -9,7 +9,7 @@ on:
     paths:
       - 'rimaz-final-deep-audit-46.93.72.zip'
       - '.nvmrc'
-      - '.github/workflows/audit-rootfix-archive.yml'
+      - '.github/workflows/**'
       - 'server.js'
       - 'verify.js'
       - 'index.html'
@@ -107,7 +107,7 @@ jobs:
         run: |
           set -euo pipefail
           PROJECT="$RUNNER_TEMP/rimaz-rootfix/${{ steps.archive.outputs.root }}"
-          for file in package.json server.js verify.js index.html; do
+          for file in package.json package-lock.json Dockerfile server.js verify.js index.html; do
             if ! cmp -s "$PROJECT/$file" "$file"; then
               echo "ERROR: archived $file differs from the reviewed repository candidate."
               echo "Rebuild the audited ZIP from this exact candidate before it can be used for source synchronization."
