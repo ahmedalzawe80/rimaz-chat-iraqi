@@ -2092,18 +2092,24 @@ try {
     'RUNTIME-RESOURCE-AUDIT-2026-11-24.md','TRANSACTION-SAFETY-AUDIT-2026-11-24.md',
     'DEPLOYMENT-46.93.72.md','REPAIR-NOTES-46.93.72.md'
   ];
-  const brokenLinks = [...index.matchAll(/\]\(([^)]+)\)/g)]
+  const localLinks = markdown => [...markdown.matchAll(/\]\(([^)]+)\)/g)]
     .map(match => match[1])
-    .filter(link => !/^https?:\/\//i.test(link))
-    .filter(link => !fs.existsSync(path.resolve(docsRoot, link)));
+    .filter(link => !/^https?:\/\//i.test(link));
+  const brokenLinks = localLinks(index).filter(link => !fs.existsSync(path.resolve(docsRoot, link)));
+  const brokenRootLinks = localLinks(rootReadme).filter(link => !fs.existsSync(path.resolve(root, link)));
   const missingDocs = requiredDocs.filter(file => !fs.existsSync(path.join(docsRoot, file)));
   const scatteredDocs = staleRootDocs.filter(file => fs.existsSync(path.join(root, file)));
+  const allowedRootDocs = new Set(['README.md', 'CHANGELOG.md', 'CONTRIBUTING.md']);
+  const scatteredRootMarkdown = fs.readdirSync(root)
+    .filter(file => file.toLowerCase().endsWith('.md') && !allowedRootDocs.has(file));
   const checks = [
     ['all project, audit, and operations documents are in their categorized docs folders', missingDocs.length === 0],
     ['documentation index contains no broken relative links', brokenLinks.length === 0],
-    ['categorized reports are not scattered in the repository root', scatteredDocs.length === 0]
+    ['root README contains no broken relative links', brokenRootLinks.length === 0],
+    ['categorized reports are not scattered in the repository root', scatteredDocs.length === 0],
+    ['repository root keeps only its standard top-level Markdown guides', scatteredRootMarkdown.length === 0]
   ];
-  for (const [label, ok] of checks) ok ? pass(label) : fail(label, JSON.stringify({missingDocs,brokenLinks,scatteredDocs}));
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label, JSON.stringify({missingDocs,brokenLinks,brokenRootLinks,scatteredDocs,scatteredRootMarkdown}));
 } catch (error) {
   fail('documentation structure regression checks', error.message);
 }
