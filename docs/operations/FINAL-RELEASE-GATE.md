@@ -81,3 +81,12 @@ Repository organization, deterministic dependency installation, archive parity, 
 - Latest candidate head: `7d3a76fb6452c2cdddecf90f3d62e6d1a52e2dba`.
 - [Validation run 45413521661](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45413521661) and [archive audit run 45413521644](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45413521644) both passed on this exact head, including regression tests and Docker build.
 - Production promotion remains blocked on independent backup/restore, staging smoke tests, runtime/load evidence, and final approval.
+
+
+## Final continuation state — 2026-11-24
+
+- Verified branch tip before this documentation refresh: `b3a44f5e29df7b9c8c63e717afcc275becdf997c`.
+- [Validation run 45413964291](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45413964291) and [archive audit run 45413964564](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45413964564) passed on that exact tip. The validation included locked dependency installation, dependency-tree verification, syntax, regression suite, and Docker build. The archive audit included CRC, safe extraction, exact application/build/public parity, dependency tree, tests, and Docker build.
+- Historical handoff documents are labeled as historical; current continuation belongs in the final checkpoint and this release gate.
+- Archive rebuilt after the documentation corrections; temporary builder workflow removed after completion.
+- Independent live-volume backup/restore and staging are still unavailable. Production promotion remains blocked; no merge, main update, ZIP sync, deploy, or restart has occurred.
