@@ -1772,6 +1772,8 @@ try {
     ['v46.93.72 package version is current (private-media regression suite)',pkgNow.version==='46.93.72'],
     ['private media verifies an active recipient account and fans out to all its active sessions',route.includes('hasConnectedSessionForUser(to)')&&route.includes("emitToUser(to,'private-media',m)")&&!route.includes('targetSocket[0]')],
     ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',m)")&&source.includes("emitToUser(to,'private-media',m)")],
+    ['private media upload enforces the private-chat module switch and removes rejected uploads',route.includes("if(scope==='private'&&!siteModuleEnabled('privateChat')){removeUploadedFile(req.file);return res.status(403)")&&route.indexOf("if(scope==='private'&&!siteModuleEnabled('privateChat'))")<route.indexOf("db.privateMessages=[...")],
+    ['wall media upload enforces the wall module switch and removes rejected uploads',route.includes("if(scope==='wall'&&!siteModuleEnabled('wall')){removeUploadedFile(req.file);return res.status(403)")&&route.indexOf("if(scope==='wall'&&!siteModuleEnabled('wall'))")<route.indexOf("db.wall.push(post)")],
     ['QuickTime MOV uploads have a safe extension and require a valid ISO-BMFF signature',source.includes("'video/quicktime':'.mov'")&&source.includes("['video/mp4','video/quicktime'].includes(mime) && actual==='mp4'")],
     ['private conversation media remains transient and is not persisted by save()',source.includes('const snapshot = { ...db, privateMessages: [] }')&&source.includes('purgePrivateHistoryAtStartup()')]
   ];
