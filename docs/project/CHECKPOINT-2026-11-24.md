@@ -1,9 +1,11 @@
 # Rimaz — saved continuation checkpoint (2026-11-24)
 
-> **Historical snapshot:** the detailed notes below preserve earlier engineering findings and may contain outdated branch SHAs or CI statuses. The repository documentation reorganization was completed on commit `f6a953c3d4af46e29c757c3572eeab3d2aa168b6`; both its push validation (run `45347104959`) and pull-request validation (run `45347112788`) passed, including Node.js syntax checks, regression tests, and the production Docker build. PR #3 and PR #2 remain open drafts and are not merged. No production deployment or persistent-volume changes were performed. For the live branch head and newest checks, use the [PR #3 checks](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/pull/3).
+> **Current repository status (2026-11-24):** branch `fix/bound-private-media-ticket-cache` is at `93c9bf46aac99d73ef6d811722a76423e4c52701`. PR #3 remains an open draft targeting `safety/validate-and-backup-before-sync`. Its latest push validation (run `45352629637`) and pull-request validation (run `45352643529`) both passed: Node.js syntax, regression suite (519 passing check markers and 0 failure markers), and production Docker build. PR #2 is also still an open draft, but its repository-cleanup changes are now incorporated into PR #3; do not merge it separately. `main` remains unchanged. No Deplexo deployment, ZIP synchronization, or live persistent-volume changes were performed.
+>
+> **Outstanding:** there is still no committed `package-lock.json`, so dependency installation is not fully reproducible. Staging smoke tests, independent backup/restore verification, and live Deplexo resource measurements remain unperformed. CI success is not proof of live production health.
 
 
-User priority: make the repository exceptionally clean and fix chat behavior/permissions at the root, with durable solutions and regression tests. Never claim perfection based on CI alone.
+User priority: make repository structure and maintenance professional first; then continue root-cause application fixes with regression tests. Never claim perfection based on CI alone.
 
 ## Safety
 Do NOT merge PRs, change main, deploy/restart Deplexo, run ZIP sync, or touch production database/uploads/private media without explicit approval. Before deployment require independent backup, verified restore, staging smoke tests, and user approval.
