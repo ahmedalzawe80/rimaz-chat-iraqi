@@ -29,6 +29,23 @@ try {
   else fail('startup announcement cleanup must preserve atomic and private-message persistence contracts');
 } catch (error) { fail('startup announcement persistence regression check', error.message); }
 
+// Rank-art assignment must restore the exact prior definition state when save fails.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const start = source.indexOf("app.put('/api/admin/rank-art/assign'");
+  const end = source.indexOf("\\n});", start);
+  const route = start >= 0 && end > start ? source.slice(start, end) : '';
+  const saveIndex = route.indexOf('try{save()}catch(error)');
+  const catchStart = route.indexOf('catch(error){', saveIndex);
+  const checks = [
+    ['rank-art assignment captures prior art ID and URL before mutation',route.includes('const old={artId:definition.artId,artUrl:definition.artUrl}')],
+    ['rank-art assignment restores prior art ID or removes newly introduced ID on save failure',route.includes('if(old.artId!==undefined)definition.artId=old.artId;else delete definition.artId;')],
+    ['rank-art assignment restores prior art URL or removes newly introduced URL on save failure',route.includes('if(old.artUrl!==undefined)definition.artUrl=old.artUrl;else delete definition.artUrl;')],
+    ['rank-art assignment emits update only after durable save succeeds',saveIndex>=0&&route.indexOf("io.emit('rank-art-updated'")>saveIndex&&catchStart>=0]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+} catch (error) { fail('rank-art assignment exact rollback regression checks', error.message); }
+
 // Startup data migrations must fail closed when their durable commit fails.
 try {
   const source = fs.readFileSync(server, 'utf8');
