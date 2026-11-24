@@ -1685,7 +1685,7 @@ app.delete('/api/admin/avatar/:name',requireAdmin,(req,res)=>{
   if(previous.startsWith('/uploads/'))removePublicUploadIfUnreferenced(previous);
   io.emit('profile-changed',{name:n,profile:p});res.json({ok:true});
 });
-app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{
+app.post('/api/admin/rank',requireAdmin,(req,res)=>{
   const actor=req.user,n=accountKey(cleanName(req.body.name)),rank=String(req.body.rank||'');
   if(!hasPermission(actor,'rank_assign'))return res.status(403).json({error:'ما عندك صلاحية منح الرتب'});
   const user=getUser(n),guest=getGuest(n),target=user||guest;
@@ -1740,7 +1740,7 @@ app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{
     awardedAt:grantedAt
   });
   res.json({ok:true,rank,rankName:definition?.name||'بدون رتبة إضافية',rankUntil:p.rankUntil||null,name:n,type:guest?'guest':'member',cardQueued:!!definition,notificationId:inboxItem.id});
-});});
+});
 app.get('/api/admin/member-ip/:name' ,requireAuth,(req,res)=>{if(!hasPermission(req.user,'member_ip'))return res.status(403).json({error:'ما عندك صلاحية عرض IP'});const n=keyName(req.params.name);if(isOwnerName(n))return res.status(403).json({error:'معلومات اتصال صاحب الموقع محمية'});if(denyHigherRankTarget(req.user,n,res))return;const matches=[];for(const so of io.sockets.sockets.values()){const sid2=so.data?.sid,u2=so.data?.user||socketUsers.get(sid2);if(u2&&keyName(u2.name)===n){matches.push({ip:socketClientIp(so),room:u2.room||'',connected:true});}}res.json({name:req.params.name,connections:matches});});
 // Rank artwork and per-member decoration are separate from rank permissions and rank assignment.
 function rankArtItem(id){return (db.rankArtCatalog||[]).find(x=>String(x.id)===String(id))||null;}
