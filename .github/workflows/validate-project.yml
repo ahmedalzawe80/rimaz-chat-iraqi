@@ -17,6 +17,7 @@ on:
       - 'package-lock.json'
       - 'npm-shrinkwrap.json'
       - '*.md'
+      - 'docs/**/*.md'
       - '.gitignore'
       - 'Dockerfile'
       - '.dockerignore'
