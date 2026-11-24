@@ -201,3 +201,14 @@ Platform references: [Deplexo storage and filesystem](https://docs.deplexo.com/o
 - `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No merge, production deployment/restart, ZIP sync, or live-data change occurred.
 - Additional hosting-specific security check before release: the source currently prefers `cf-connecting-ip` and `x-real-ip` for IP-based bans/login history. Confirm that Deplexo's edge overwrites/sanitizes these headers before trusting them; if client-supplied values can pass through, an attacker may spoof the IP used by bans. No Deplexo header guarantee was found in the available platform docs, so this remains an explicit staging/provider verification item, not a confirmed exploit.
 - Live Deplexo volume backup, restore to isolated staging, runtime/load measurements, and production approval remain outstanding. The connected GitHub access does not grant access to the Deplexo dashboard or persistent volume.
+
+
+## Latest exact-head verification — 2026-11-24 19:12 UTC
+
+- Source/workflow/documentation candidate `f2af4a5cef8e4522bd307fc70c6ae5e98d405347` passed [GitHub Actions run #700](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45467584156): locked install, dependency-tree verification, syntax checks, **602 regression passes / 0 failures**, and production Docker build.
+- The same run's post-validation archive job rebuilt and verified **394 tracked files / 16,356,369 bytes**, CRC/path/parity checks, then tested the extracted archive with locked install, dependency tree, syntax, **602 regression passes / 0 failures**, HTML parity, and Docker. npm audit reported **0 vulnerabilities**.
+- Archive-only commit: `d3cb13ebb7fb959a2b3a98b1d3d20338dd66e8eb`; it changes only `rimaz-final-deep-audit-46.93.72.zip`. Archive blob SHA: `5add1af9cf3453ed971ac701d10a0086fc8b41ea`.
+- PR #3 now reports **456 commits / 36 changed files** relative to its safety base; it remains draft/open/unmerged. The PR description has been refreshed with run #700, the current archive, the squash-promotion plan, and the outstanding hosting checks.
+- `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No merge, deployment/restart, ZIP sync to production, or live-data change occurred.
+- IP-ban trust remains a provider-specific staging check: verify Deplexo overwrites/sanitizes `cf-connecting-ip` and `x-real-ip` before relying on those headers. This is not yet a confirmed vulnerability.
+- Production still requires independent backup of `/data/rimaz`, tested restore into isolated staging, complete smoke tests, runtime/load evidence, and explicit promotion approval.
