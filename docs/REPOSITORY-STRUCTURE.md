@@ -30,13 +30,14 @@ This guide explains why each top-level area exists and which files must remain i
 ├── data.json                 # tracked warning placeholder
 ├── google1a84d9d1dec7b85d.html
 ├── index.html
+├── package-lock.json         # exact npm dependency graph
 ├── package.json
 ├── rimaz-final-deep-audit-46.93.72.zip
 ├── server.js
 └── verify.js
 ```
 
-The root also contains a small tracked data placeholder, the domain-verification file, Docker/Git configuration, a Node.js version pin, and the audited ZIP required by the current workflows.
+The root also contains a small tracked data placeholder, the domain-verification file, Docker/Git configuration, a Node.js version pin, the npm lockfile, and the audited ZIP required by the current workflows.
 
 ## Root files that must not be moved casually
 
@@ -44,6 +45,7 @@ The root also contains a small tracked data placeholder, the domain-verification
 |---|---|
 | `server.js` | Application start command and Docker image expect this path |
 | `package.json` | npm and Docker build resolve dependencies from the project root |
+| `package-lock.json` | `npm ci` and the production Docker build use this exact dependency graph |
 | `index.html` | Main browser entry file and server SEO integration |
 | `Dockerfile` | Hosting and CI build from the repository root |
 | `verify.js` | Current npm test script runs this file |
@@ -56,7 +58,7 @@ The root also contains a small tracked data placeholder, the domain-verification
 
 ## Tooling consistency
 
-`.nvmrc` is the single Node.js major-version source for local development and GitHub Actions. `package.json` constrains supported runtime versions, while the Dockerfile uses the matching Node 24 base image. The validation workflow reads `.nvmrc` instead of duplicating a version literal and cancels superseded runs for the same branch or pull request.
+`.nvmrc` is the single Node.js major-version source for local development and GitHub Actions. `package.json` constrains supported runtime versions, while the Dockerfile uses the matching Node 24 base image. `package-lock.json` records the resolved dependency tree; local development, CI, and Docker use `npm ci` to install it without re-resolving version ranges. The validation workflow reads `.nvmrc` instead of duplicating a version literal and cancels superseded runs for the same branch or pull request.
 
 ## Runtime assets
 
