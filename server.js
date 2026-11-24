@@ -1921,15 +1921,37 @@ function tarHeader(name,size,mtime){
  if(Buffer.byteLength(fileName)>100||Buffer.byteLength(prefix)>155)throw new Error('Backup path is too long');
  header.write(fileName,0,100,'utf8');tarOctal(0o600,8).copy(header,100);tarOctal(0,8).copy(header,108);tarOctal(0,8).copy(header,116);tarOctal(size,12).copy(header,124);tarOctal(mtime,12).copy(header,136);header.fill(32,148,156);header[156]=48;header.write('ustar\0',257,6,'ascii');header.write('00',263,2,'ascii');header.write('rimaz',265,32,'ascii');header.write('rimaz',297,32,'ascii');if(prefix)header.write(prefix,345,155,'utf8');let sum=0;for(const byte of header)sum+=byte;header.write(sum.toString(8).padStart(6,'0')+'\0 ',148,8,'ascii');return header;
 }
+function createDatabaseBackupTempFile(snapshot,purpose){
+ const tempFile=DB_FILE+'.'+process.pid+'.'+String(purpose||'backup')+'.'+crypto.randomBytes(8).toString('hex')+'.tmp';
+ let fd=null;
+ try{
+  fd=fs.openSync(tempFile,'wx',0o600);
+  writeJsonSync(fd,snapshot,{space:2});
+  fs.fsyncSync(fd);
+  fs.closeSync(fd);fd=null;
+  return tempFile;
+ }catch(error){
+  if(fd!==null){try{fs.closeSync(fd);}catch(_){}}
+  try{fs.unlinkSync(tempFile);}catch(_){}
+  throw error;
+ }
+}
 async function* fullBackupTarEntries(){
- const snapshot={format:'rimaz-full-backup',version:1,createdAt:new Date().toISOString(),appVersion:require('./package.json').version||'unknown',database:{...db,sessions:{},privateMessages:[]}};
- const dbBytes=Buffer.from(JSON.stringify(snapshot,null,2));yield {name:'database/rimaz-database.json',buffer:dbBytes,size:dbBytes.length,mtime:Date.now()};
- const roots=[['uploads',UP_DIR],['private-media',PRIVATE_MEDIA_DIR]];
- for(const [archiveRoot,diskRoot] of roots){
-  const pending=[{disk:diskRoot,archive:archiveRoot}];
-  while(pending.length){const current=pending.pop();let items=[];try{items=fs.readdirSync(current.disk,{withFileTypes:true});}catch(error){if(error.code!=='ENOENT')throw error;continue;}
-   for(const item of items){const disk=path.join(current.disk,item.name),archive=current.archive+'/'+item.name;if(item.isSymbolicLink())continue;if(item.isDirectory()){pending.push({disk,archive});continue;}if(!item.isFile())continue;const stat=fs.statSync(disk);yield {name:archive,disk,size:stat.size,mtime:stat.mtimeMs};}
+ let databaseBackupFile='';
+ try{
+  const snapshot={format:'rimaz-full-backup',version:1,createdAt:new Date().toISOString(),appVersion:require('./package.json').version||'unknown',database:{...db,sessions:{},privateMessages:[]}};
+  databaseBackupFile=createDatabaseBackupTempFile(snapshot,'full-backup');
+  const databaseStat=fs.statSync(databaseBackupFile);
+  yield {name:'database/rimaz-database.json',disk:databaseBackupFile,size:databaseStat.size,mtime:databaseStat.mtimeMs};
+  const roots=[['uploads',UP_DIR],['private-media',PRIVATE_MEDIA_DIR]];
+  for(const [archiveRoot,diskRoot] of roots){
+   const pending=[{disk:diskRoot,archive:archiveRoot}];
+   while(pending.length){const current=pending.pop();let items=[];try{items=fs.readdirSync(current.disk,{withFileTypes:true});}catch(error){if(error.code!=='ENOENT')throw error;continue;}
+    for(const item of items){const disk=path.join(current.disk,item.name),archive=current.archive+'/'+item.name;if(item.isSymbolicLink())continue;if(item.isDirectory()){pending.push({disk,archive});continue;}if(!item.isFile())continue;const stat=fs.statSync(disk);yield {name:archive,disk,size:stat.size,mtime:stat.mtimeMs};}
+   }
   }
+ }finally{
+  if(databaseBackupFile){try{fs.unlinkSync(databaseBackupFile);}catch(error){if(error.code!=='ENOENT')console.error('Full backup temporary database cleanup failed:',error.message);}}
  }
 }
 async function* fullBackupTar(){
@@ -1970,7 +1992,28 @@ app.get('/api/admin/site-settings',requireAdmin,(req,res)=>{if(!isOwner(req.user
 app.put('/api/admin/site-settings',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية إدارة الموقع'});const b=req.body||{};const modules={...(db.siteSettings?.modules||DEFAULT_SITE_MODULES)};for(const key of Object.keys(DEFAULT_SITE_MODULES))if(Object.prototype.hasOwnProperty.call(b.modules||{},key))modules[key]=b.modules[key]===true;const next={siteName:String(b.siteName||'').trim().slice(0,60),tagline:String(b.tagline||'').trim().slice(0,300),notice:String(b.notice||'').trim().slice(0,300),allowRegistration:b.allowRegistration!==false,allowGuests:b.allowGuests!==false,modules};if(!next.siteName)return res.status(400).json({error:'اسم الموقع مطلوب'});const old=db.siteSettings,oldAudit=Array.isArray(db.adminAuditLogs)?db.adminAuditLogs.slice():db.adminAuditLogs;db.siteSettings=next;db.adminAuditLogs=db.adminAuditLogs||[];db.adminAuditLogs.unshift({id:crypto.randomUUID(),at:Date.now(),actor:String(req.user.name||'المالك').slice(0,32),method:'PUT',path:'/api/admin/site-settings',status:200});db.adminAuditLogs=db.adminAuditLogs.slice(0,500);try{save()}catch(e){if(old===undefined)delete db.siteSettings;else db.siteSettings=old;if(oldAudit===undefined)delete db.adminAuditLogs;else db.adminAuditLogs=oldAudit;return res.status(500).json({error:'تعذر حفظ إعدادات الموقع'});}io.emit('site-settings-changed',{siteName:next.siteName,tagline:next.tagline,notice:next.notice,modules:next.modules});res.json({ok:true,settings:next});});
 app.get('/api/admin/login-history',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية عرض سجل الدخول'});res.set('Cache-Control','no-store');res.json({items:(db.loginHistory||[]).slice(0,500),total:(db.loginHistory||[]).length});});
 app.get('/api/admin/health',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'health_view')&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية فحص النظام'});const walk=(dir)=>{let files=0,bytes=0;try{for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const full=path.join(dir,entry.name);if(entry.isDirectory()){const child=walk(full);files+=child.files;bytes+=child.bytes;}else if(entry.isFile()){const st=fs.statSync(full);files++;bytes+=st.size;}}}catch{}return {files,bytes};};let dbBytes=0;try{dbBytes=fs.statSync(DB_FILE).size}catch{}const uploads=walk(UP_DIR),memory=process.memoryUsage();res.set('Cache-Control','no-store');res.json({appVersion:require('./package.json').version||'unknown',node:process.version,uptimeSeconds:Math.floor(process.uptime()),dbBytes,uploads,heapUsed:memory.heapUsed,heapTotal:memory.heapTotal,external:memory.external,arrayBuffers:memory.arrayBuffers||0,rss:memory.rss,online:getOnlineUsers(req.user).length,rooms:(db.rooms||[]).length,modules:{...DEFAULT_SITE_MODULES,...(db.siteSettings?.modules||{})}});});
-app.get('/api/admin/backup/database',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخ الاحتياطي'});try{const snapshot={format:'rimaz-database-backup',version:1,createdAt:new Date().toISOString(),appVersion:require('./package.json').version||'unknown',database:{...db,sessions:{},privateMessages:[]}};const body=JSON.stringify(snapshot,null,2);res.set('Cache-Control','no-store, no-cache, must-revalidate');res.set('Content-Type','application/json; charset=utf-8');res.set('Content-Disposition',`attachment; filename="rimaz-database-backup-${new Date().toISOString().slice(0,10)}.json"`);res.send(body);}catch(e){console.error('Database backup failed:',e);res.status(500).json({error:'تعذر إنشاء النسخة الاحتياطية'});}});
+app.get('/api/admin/backup/database',requireAdmin,(req,res)=>{
+ if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخ الاحتياطي'});
+ let backupFile='';
+ try{
+  const snapshot={format:'rimaz-database-backup',version:1,createdAt:new Date().toISOString(),appVersion:require('./package.json').version||'unknown',database:{...db,sessions:{},privateMessages:[]}};
+  backupFile=createDatabaseBackupTempFile(snapshot,'database-backup');
+  const stream=fs.createReadStream(backupFile);
+  const cleanup=()=>{if(!backupFile)return;const file=backupFile;backupFile='';try{fs.unlinkSync(file);}catch(error){if(error.code!=='ENOENT')console.error('Database backup temporary file cleanup failed:',error.message);}};
+  stream.once('close',cleanup);
+  stream.once('error',error=>{cleanup();console.error('Database backup stream failed:',error);if(!res.headersSent)res.status(500).json({error:'تعذر إنشاء النسخة الاحتياطية'});else res.destroy(error);});
+  res.once('close',()=>{if(!stream.destroyed)stream.destroy();});
+  res.set('Cache-Control','no-store, no-cache, must-revalidate');
+  res.set('Content-Type','application/json; charset=utf-8');
+  res.set('Content-Disposition','attachment; filename="rimaz-database-backup-'+new Date().toISOString().slice(0,10)+'.json"');
+  stream.pipe(res);
+ }catch(e){
+  if(backupFile){try{fs.unlinkSync(backupFile);}catch(_){}}
+  console.error('Database backup failed:',e);
+  if(!res.headersSent)res.status(500).json({error:'تعذر إنشاء النسخة الاحتياطية'});
+  else res.destroy(e);
+ }
+});
 app.get('/api/admin/backup/full',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخة الاحتياطية الكاملة'});res.set('Cache-Control','no-store, no-cache, must-revalidate');res.set('Content-Type','application/gzip');res.set('Content-Disposition',`attachment; filename=\"rimaz-full-backup-${new Date().toISOString().slice(0,10)}.tar.gz\"`);const source=Readable.from(fullBackupTar()),archive=zlib.createGzip({level:6});source.on('error',error=>archive.destroy(error));archive.on('error',error=>{console.error('Full backup stream failed:',error);if(!res.headersSent)res.status(500).json({error:'تعذر إنشاء النسخة الاحتياطية الكاملة'});else res.destroy(error);});source.pipe(archive).pipe(res);});
 app.post('/api/admin/restore/database/preview',requireAdmin,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية استعادة النسخة'});
