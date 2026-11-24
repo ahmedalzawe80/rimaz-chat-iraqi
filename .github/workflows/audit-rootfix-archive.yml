@@ -61,6 +61,9 @@ jobs:
           seen_files = set()
           with zipfile.ZipFile(archive) as z:
               infos = z.infolist()
+              bad_member = z.testzip()
+              if bad_member is not None:
+                  raise SystemExit(f'Archive CRC/integrity check failed: {bad_member}')
               if len(infos) > 30000:
                   raise SystemExit(f'Too many archive entries: {len(infos)}')
               total_size = 0
@@ -139,5 +142,9 @@ jobs:
           PROJECT="$RUNNER_TEMP/rimaz-rootfix/${{ steps.archive.outputs.root }}"
           cd "$PROJECT"
           npm ci --no-audit --no-fund
+          npm ls --depth=0
+          node --check server.js
+          node --check verify.js
           npm test
+          cmp -s index.html public/index.html
           docker build --pull -t rimaz-chat-iraqi:archive-ci .
