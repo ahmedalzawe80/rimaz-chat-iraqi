@@ -1,0 +1,77 @@
+name: Rebuild Reviewed Source Archive
+
+on:
+  push:
+    branches:
+      - fix/bound-private-media-ticket-cache
+    paths:
+      - '.github/workflows/rebuild-release-archive.yml'
+      - 'server.js'
+      - 'verify.js'
+      - 'index.html'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'Dockerfile'
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'CONTRIBUTING.md'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rebuild-reviewed-source-archive
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout reviewed branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Rebuild archive from tracked source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, subprocess, zipfile
+          archive = 'rimaz-final-deep-audit-46.93.72.zip'
+          builder = '.github/workflows/rebuild-release-archive.yml'
+          tracked = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+          files = [name for name in tracked if name and name not in (archive, builder)]
+          if not files:
+              raise SystemExit('No tracked source files were found')
+          with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+              for name in sorted(files):
+                  if os.path.islink(name):
+                      raise SystemExit(f'Refusing to package tracked symlink: {name}')
+                  if not os.path.isfile(name):
+                      raise SystemExit(f'Tracked file is missing from checkout: {name}')
+                  z.write(name, arcname=name)
+          with zipfile.ZipFile(archive) as z:
+              bad = z.testzip()
+              if bad is not None:
+                  raise SystemExit(f'New archive failed CRC validation: {bad}')
+              print(f'Archive entries: {len(z.infolist())}')
+              print(f'Archive bytes: {os.path.getsize(archive)}')
+              print(f'CRC validation passed; {len(files)} tracked source files packaged.')
+          PY
+
+      - name: Commit rebuilt archive to this branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add rimaz-final-deep-audit-46.93.72.zip
+          if git diff --cached --quiet; then
+            echo "Archive already matches the tracked source files."
+          else
+            git commit -m "build: refresh audited source archive"
+            git push origin "HEAD:refs/heads/$GITHUB_REF_NAME"
+          fi
