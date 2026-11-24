@@ -1,5 +1,7 @@
 # Rimaz Chat 46.93.72 — Repair candidate notes
 
+> **Historical baseline notes only.** The 448-check local Node.js 22 result and original candidate state below are superseded by the current branch's exact-head CI. Use [the final checkpoint](../project/CHECKPOINT-FINAL-2026-11-24.md) and [final release gate](FINAL-RELEASE-GATE.md) for the current release candidate and operational requirements.
+
 This is a conservative repair candidate based on source archive commit `368c563d63ccf669f5f273aabe290fe39a7fa2d7` (baseline package `46.93.71`). It does not modify the production deployment or production data.
 
 ## Repairs
