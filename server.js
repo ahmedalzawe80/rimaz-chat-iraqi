@@ -271,8 +271,12 @@ function save(){
     fs.mkdirSync(DATA_DIR, { recursive: true });
     fd = fs.openSync(tempFile, 'wx', 0o600);
     fs.writeFileSync(fd, serialized, 'utf8');
+    fs.fsyncSync(fd);
     fs.closeSync(fd); fd = null;
     fs.renameSync(tempFile, DB_FILE);
+    // Best-effort directory sync makes the atomic rename survive sudden power loss on supported filesystems.
+    try { const dirFd=fs.openSync(DATA_DIR,'r'); try { fs.fsyncSync(dirFd); } finally { fs.closeSync(dirFd); } }
+    catch (syncError) { console.error('Database directory sync unavailable after atomic replacement:',syncError.message); }
   } catch (error) {
     if (fd !== null) { try { fs.closeSync(fd); } catch (_) {} }
     try { fs.unlinkSync(tempFile); } catch (_) {}
@@ -1164,20 +1168,42 @@ function globalBanned(name,ip){return !!globalBanStatus(name,ip);}
 function nameTaken(name){const n=keyName(name);if(!n)return false;return n==='owner'||(!!process.env.OWNER_NAME&&n===keyName(process.env.OWNER_NAME))||Object.keys(db.users||{}).some(x=>keyName(x)===n)||Object.keys(db.guests||{}).some(x=>keyName(x)===n);} 
 function removeFromChat(name, banned){ const n=keyName(name); for(const so of io.sockets.sockets.values()){ const sid2=so.data?.sid, u2=so.data?.user||socketUsers.get(sid2); if(!u2||keyName(u2.name)!==n)continue; const oldRoom=u2.room||''; if(oldRoom){so.leave(oldRoom);removeSessionFromRoomRuntime(sid2,oldRoom);} if(so.data?.user)so.data.user.room=''; if(socketUsers.get(sid2))socketUsers.get(sid2).room=''; so.emit('kicked',{global:true,banned:!!banned,room:oldRoom,...(banned?(globalBanStatus(n,'')||{}):{})}); if(banned)so.disconnect(true); } emitState(); }
 let messageSaveTimer=null;
-function scheduleMessageSave(delay=350){
+let pendingMessageWrites=[];
+let messageSaveAttempts=0;
+function scheduleMessageSave(delay=100){
   if(messageSaveTimer)return;
-  // Batch bursts of chat traffic into one durable database write instead of
-  // serializing and replacing the full JSON database for every single message.
-  messageSaveTimer=setTimeout(()=>{
-    messageSaveTimer=null;
-    try{save();}catch(error){console.error('Batched chat-message save failed:',error.message);scheduleMessageSave(3000);}
-  },delay);
+  messageSaveTimer=setTimeout(()=>{messageSaveTimer=null;flushMessageWrites();},delay);
   messageSaveTimer.unref?.();
 }
+function flushMessageWrites(){
+  if(messageSaveTimer){clearTimeout(messageSaveTimer);messageSaveTimer=null;}
+  if(!pendingMessageWrites.length)return true;
+  const batch=pendingMessageWrites.slice();
+  const previousMessages=db.messages;
+  db.messages=[...previousMessages,...batch.map(entry=>entry.message)].slice(-1000);
+  try{
+    save();
+    pendingMessageWrites.splice(0,batch.length);
+    messageSaveAttempts=0;
+    for(const entry of batch)entry.resolve();
+    if(pendingMessageWrites.length)scheduleMessageSave();
+    return true;
+  }catch(error){
+    db.messages=previousMessages;
+    messageSaveAttempts++;
+    console.error(`Batched chat-message save failed (attempt ${messageSaveAttempts}/3):`,error.message);
+    if(messageSaveAttempts<3){scheduleMessageSave(1000*messageSaveAttempts);return false;}
+    const failed=pendingMessageWrites.splice(0);
+    messageSaveAttempts=0;
+    for(const entry of failed)entry.reject(error);
+    return false;
+  }
+}
 function addMessage(m){
-  db.messages.push(m);
-  if(db.messages.length>1000)db.messages.splice(0,db.messages.length-1000);
-  scheduleMessageSave();
+  return new Promise((resolve,reject)=>{
+    pendingMessageWrites.push({message:m,resolve,reject});
+    scheduleMessageSave();
+  });
 }
 function notify(name,item){
   name=accountKey(name);
@@ -1500,7 +1526,7 @@ app.get('/api/private/contacts',requireAuth,(req,res)=>{
 app.get('/api/notifications',requireAuth,(req,res)=>{const started=Number(req.user.created)||0;res.set('Cache-Control','no-store');res.json((db.notifications[accountKey(req.user.name)]||db.notifications[req.user.name]||[]).filter(x=>Number(x.at||0)>=started).slice(0,50));});
 app.post('/api/notifications/read',requireAuth,(req,res)=>{const key=accountKey(req.user.name),had=Object.prototype.hasOwnProperty.call(db.notifications,key),previous=db.notifications[key];db.notifications[key]=[];try{save();}catch(error){if(had)db.notifications[key]=previous;else delete db.notifications[key];return res.status(500).json({error:'تعذر حفظ حالة الإشعارات'});}res.json({ok:true});});
 
-app.post('/api/message',requireAuth,(req,res)=>{
+app.post('/api/message',requireAuth,async(req,res)=>{
   const u=req.user;
   if(globalBanResponse(res,u.name,requestClientIp(req)))return;
   const room=String(req.body.room||'public'), text=String(req.body.text||'').trim().slice(0,2000);
@@ -1512,7 +1538,7 @@ app.post('/api/message',requireAuth,(req,res)=>{
   if(roomBanned(u.name,room))return res.status(403).json({error:'أنت محظور من هذه الغرفة'});
   if(roomMuted(u.name,room))return res.status(403).json({error:'أنت مكتوم في هذه الغرفة'});
   const r=db.rooms.find(x=>x.id===room); if(!r)return res.status(404).json({error:'الغرفة غير موجودة'});
-  const m={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:u.type,text,at:Date.now(),likes:userLikes(u),profile:profile(u.name)};try{addMessage(m)}catch(e){console.error('HTTP room message save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الرسالة'});}io.to(room).emit('message',m);res.json({ok:true,message:m});
+  const m={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:u.type,text,at:Date.now(),likes:userLikes(u),profile:profile(u.name)};try{await addMessage(m)}catch(e){console.error('HTTP room message save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الرسالة'});}io.to(room).emit('message',m);res.json({ok:true,message:m});
 });
 
 app.post('/api/like',requireAuth,(req,res)=>{
@@ -2128,33 +2154,33 @@ function pruneOrphanedSessionState(){
 }
 const sessionTransientCleanupTimer=setInterval(pruneOrphanedSessionState,5*60*1000);
 sessionTransientCleanupTimer.unref?.();
-function emitRoomBotMessage(room,text){const message={id:crypto.randomUUID(),room,from:'رماز بوت',displayName:'🤖 رماز بوت',type:'text',text:String(text||'').slice(0,1000),at:Date.now(),role:'bot',bot:true};try{addMessage(message);io.to(room).emit('message',message);}catch(error){console.warn('Chat bot response failed:',error.message);}}
-function processBuiltInBotCommand(socket,user,room,text){
+async function emitRoomBotMessage(room,text){const message={id:crypto.randomUUID(),room,from:'رماز بوت',displayName:'🤖 رماز بوت',type:'text',text:String(text||'').slice(0,1000),at:Date.now(),role:'bot',bot:true};try{await addMessage(message);io.to(room).emit('message',message);}catch(error){console.warn('Chat bot response failed:',error.message);}}
+async function processBuiltInBotCommand(socket,user,room,text){
  const settings=normalizedBotSettings(db.botSettings),raw=String(text||'').trim();if(!/^[!/]/.test(raw))return false;
  const [head,...tail]=raw.slice(1).trim().split(/\s+/),cmd=String(head||'').toLowerCase(),arg=tail.join(' ').trim();if(!cmd)return false;
- if(['مساعدة','help','بوتات'].includes(cmd)){const lines=['🤖 أوامر بوت رماز:'];if(settings.games.enabled)lines.push('/نرد — رمية نرد','/عملة — رمي العملة','/رقم — رقم عشوائي');if(settings.stats.enabled)lines.push('/احصائياتي — معلومات حسابك','/المتواجدين — عدد المتصلين','/احصائيات — إحصائيات الدردشة');if(settings.adminCommands.enabled&&canNotice(user))lines.push('/تنبيه نص الرسالة — إعلان إداري للغرفة');if(lines.length===1)lines.push('لا توجد بوتات تفاعلية مفعّلة حالياً.');emitRoomBotMessage(room,lines.join('\n'));return true;}
+ if(['مساعدة','help','بوتات'].includes(cmd)){const lines=['🤖 أوامر بوت رماز:'];if(settings.games.enabled)lines.push('/نرد — رمية نرد','/عملة — رمي العملة','/رقم — رقم عشوائي');if(settings.stats.enabled)lines.push('/احصائياتي — معلومات حسابك','/المتواجدين — عدد المتصلين','/احصائيات — إحصائيات الدردشة');if(settings.adminCommands.enabled&&canNotice(user))lines.push('/تنبيه نص الرسالة — إعلان إداري للغرفة');if(lines.length===1)lines.push('لا توجد بوتات تفاعلية مفعّلة حالياً.');await emitRoomBotMessage(room,lines.join('\n'));return true;}
  if(settings.games.enabled&&['نرد','dice','عملة','coin','رقم','random'].includes(cmd)){
-  if(['نرد','dice'].includes(cmd))emitRoomBotMessage(room,`🎲 ${displayName(user.name)} رمى النرد والنتيجة: ${1+Math.floor(Math.random()*6)}`);
-  else if(['عملة','coin'].includes(cmd))emitRoomBotMessage(room,`🪙 ${displayName(user.name)}: ${Math.random()<.5?'وجه':'كتابة'}`);
-  else emitRoomBotMessage(room,`🎯 ${displayName(user.name)} حصل على الرقم: ${1+Math.floor(Math.random()*100)}`);
+  if(['نرد','dice'].includes(cmd))await emitRoomBotMessage(room,`🎲 ${displayName(user.name)} رمى النرد والنتيجة: ${1+Math.floor(Math.random()*6)}`);
+  else if(['عملة','coin'].includes(cmd))await emitRoomBotMessage(room,`🪙 ${displayName(user.name)}: ${Math.random()<.5?'وجه':'كتابة'}`);
+  else await emitRoomBotMessage(room,`🎯 ${displayName(user.name)} حصل على الرقم: ${1+Math.floor(Math.random()*100)}`);
   return true;
  }
  if(settings.stats.enabled&&['احصائياتي','me','المتواجدين','online','احصائيات','stats'].includes(cmd)){
-  if(['احصائياتي','me'].includes(cmd)){const likes=userLikes(user);emitRoomBotMessage(room,`📊 ${displayName(user.name)}\nالرتبة: ${rankDefinition(profile(user.name).rank)?.name||'عضو'}\nالإعجابات: ${likes}\nالمستوى: ${level(likes)}\nالغرفة: ${db.rooms.find(r=>r.id===room)?.name||'الدردشة'}`);}
-  else if(['المتواجدين','online'].includes(cmd))emitRoomBotMessage(room,`👥 عدد المتواجدين حالياً: ${getOnlineUsers().length}`);
-  else emitRoomBotMessage(room,`📊 إحصائيات رماز: ${Object.keys(db.users||{}).length} عضو مسجل، ${Object.keys(db.guests||{}).length} زائر، ${getOnlineUsers().length} متصل حالياً.`);
+  if(['احصائياتي','me'].includes(cmd)){const likes=userLikes(user);await emitRoomBotMessage(room,`📊 ${displayName(user.name)}\nالرتبة: ${rankDefinition(profile(user.name).rank)?.name||'عضو'}\nالإعجابات: ${likes}\nالمستوى: ${level(likes)}\nالغرفة: ${db.rooms.find(r=>r.id===room)?.name||'الدردشة'}`);}
+  else if(['المتواجدين','online'].includes(cmd))await emitRoomBotMessage(room,`👥 عدد المتواجدين حالياً: ${getOnlineUsers().length}`);
+  else await emitRoomBotMessage(room,`📊 إحصائيات رماز: ${Object.keys(db.users||{}).length} عضو مسجل، ${Object.keys(db.guests||{}).length} زائر، ${getOnlineUsers().length} متصل حالياً.`);
   return true;
  }
  if(settings.adminCommands.enabled&&['تنبيه','announce'].includes(cmd)){
   if(!canNotice(user)){socket.emit('error-msg',{error:'هذا الأمر يحتاج صلاحية إرسال التنبيهات الإدارية'});return true;}
   if(!arg){socket.emit('error-msg',{error:'اكتب نص التنبيه بعد الأمر /تنبيه'});return true;}
-  io.to(room).emit('admin-notice',{from:user.name,text:arg.slice(0,500)});emitRoomBotMessage(room,`📢 تم إرسال التنبيه بواسطة ${displayName(user.name)}.`);return true;
+  io.to(room).emit('admin-notice',{from:user.name,text:arg.slice(0,500)});await emitRoomBotMessage(room,`📢 تم إرسال التنبيه بواسطة ${displayName(user.name)}.`);return true;
  }
  return false;
 }
 
 io.on('connection',socket=>{
-  socket.on('join',({sid,room='public',password=''}={})=>{
+  socket.on('join',async({sid,room='public',password=''}={})=>{
     const u=sessionUser(sid); if(!u)return;
     const targetRoom=db.rooms.find(r=>r.id===room); if(!targetRoom){socket.emit('join-error',{error:'الغرفة غير موجودة'});return;}if(targetRoom.kind==='voice'&&!siteModuleEnabled('voiceRooms')){socket.emit('join-error',{error:'الغرف الصوتية متوقفة من إدارة الموقع'});return;}
     if(targetRoom.passwordHash&&!bcrypt.compareSync(String(password||''),targetRoom.passwordHash)){socket.emit('join-error',{error:'الغرفة مقفلة؛ أدخل الباسورد الصحيح'});return;} 
@@ -2172,7 +2198,7 @@ io.on('connection',socket=>{
     if(previousRoom && previousRoom!==room){
       if(replacingSocket)previousSocket.leave(previousRoom);else socket.leave(previousRoom);
       removeSessionFromRoomRuntime(sid,previousRoom);
-      if(!u.ghost&&!alreadyInPreviousRoom){const leaveNotice={id:crypto.randomUUID(),room:previousRoom,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'move',exitKind:'room',targetRoom:room,text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{addMessage(leaveNotice)}catch(e){console.warn('Room-move presence could not be saved:',e.message)}emitPresenceToRoom(previousRoom,leaveNotice);}
+      if(!u.ghost&&!alreadyInPreviousRoom){const leaveNotice={id:crypto.randomUUID(),room:previousRoom,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'move',exitKind:'room',targetRoom:room,text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{await addMessage(leaveNotice);emitPresenceToRoom(previousRoom,leaveNotice)}catch(e){console.warn('Room-move presence could not be saved:',e.message)}}
       emitVoiceState(previousRoom);
       const oldMembers=roomSockets.get(previousRoom)||new Set();
       for(const memberSid of [...oldMembers]){const active=socketUsers.get(memberSid);if(!active||active.room!==previousRoom)oldMembers.delete(memberSid);}
@@ -2185,7 +2211,7 @@ io.on('connection',socket=>{
     socket.emit('room-joined',{room});
     // Deliver welcome cards before the room history so the entry sequence is stable and predictable.
     if(!welcomeSentSessions.has(sid)){for(const item of (db.welcomeMessages||[]).filter(x=>x.enabled!==false&&String(x.text||'').trim())){const welcome={id:'welcome-'+crypto.randomUUID(),room,from:'شات ريماز',displayName:item.title||'الترحيب',type:'welcome',text:item.text,at:Date.now(),profile:{nameColor:'#2877b9',bgColor:'#eaf5ff'}};socket.emit('message',welcome);}welcomeSentSessions.add(sid);}
-    socket.emit('history',{room,items:roomHistoryWithAnnouncements(room,u,Number(u.created)||0)}); if(!u.ghost&&!alreadyInTargetRoom){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'join',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{addMessage(pm)}catch(e){console.warn('Join presence could not be saved:',e.message)}emitPresenceToRoom(room,pm);const bot=normalizedBotSettings(db.botSettings).welcome;if(bot.enabled===true&&room==='public'){const welcomeText=String(bot.text||'أهلاً وسهلاً بك في دردشة رماز ❤️').slice(0,240);const welcomeMessage={id:crypto.randomUUID(),room,from:'رماز بوت',displayName:'🤖 رماز بوت',type:'text',text:welcomeText.replace(/\{name\}/g,displayName(u.name)),at:Date.now(),role:'bot',bot:true};try{addMessage(welcomeMessage);io.to(room).emit('message',welcomeMessage)}catch(error){console.warn('Welcome bot message failed:',error.message)}}} emitState(); const joinedRoom=db.rooms.find(r=>r.id===room); if(joinedRoom?.kind==='voice'){for(const [speakerSid,speaker] of (voiceSpeakers.get(room)||new Map()))socketBySession(speakerSid)?.emit('voice-peer-joined',{room,sid,name:u.name});emitVoiceState(room);}
+    socket.emit('history',{room,items:roomHistoryWithAnnouncements(room,u,Number(u.created)||0)}); if(!u.ghost&&!alreadyInTargetRoom){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'join',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{await addMessage(pm);emitPresenceToRoom(room,pm)}catch(e){console.warn('Join presence could not be saved:',e.message)}const bot=normalizedBotSettings(db.botSettings).welcome;if(bot.enabled===true&&room==='public'){const welcomeText=String(bot.text||'أهلاً وسهلاً بك في دردشة رماز ❤️').slice(0,240);const welcomeMessage={id:crypto.randomUUID(),room,from:'رماز بوت',displayName:'🤖 رماز بوت',type:'text',text:welcomeText.replace(/\{name\}/g,displayName(u.name)),at:Date.now(),role:'bot',bot:true};try{await addMessage(welcomeMessage);io.to(room).emit('message',welcomeMessage)}catch(error){console.warn('Welcome bot message failed:',error.message)}}} emitState(); const joinedRoom=db.rooms.find(r=>r.id===room); if(joinedRoom?.kind==='voice'){for(const [speakerSid,speaker] of (voiceSpeakers.get(room)||new Map()))socketBySession(speakerSid)?.emit('voice-peer-joined',{room,sid,name:u.name});emitVoiceState(room);}
   });
   socket.on('request-mic',({room,raised,seatIndex}={})=>{
     if(!isCurrentSessionSocket(socket))return;
@@ -2214,8 +2240,8 @@ io.on('connection',socket=>{
   socket.on('voice-peer-offer',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validSessionDescription(d.offer,'offer'))return;const speakers=voiceSpeakers.get(room),members=roomSockets.get(room);if(!speakers?.has(sid)||!members?.has(d.to)||d.to===sid)return;const target=socketUsers.get(d.to);if(!target||target.room!==room)return;pruneActiveVoicePairs();const pairKey=voiceRoomPairKey(room,sid,d.to);if(!activeVoicePairs.has(pairKey)&&activeVoicePairs.size>=MAX_ACTIVE_VOICE_PAIRS)return;activeVoicePairs.set(pairKey,{room,a:sid,b:d.to,offerer:sid,created:Date.now()});socketBySession(d.to)?.emit('voice-peer-offer',{room,from:sid,fromName:u.name,offer:d.offer});});
   socket.on('voice-peer-answer',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validSessionDescription(d.answer,'answer'))return;const speakers=voiceSpeakers.get(room),members=roomSockets.get(room),state=activeVoicePairs.get(voiceRoomPairKey(room,d.to,sid));if(!members?.has(sid)||!speakers?.has(d.to)||!state||Date.now()-state.created>VOICE_PAIR_TTL_MS||state.offerer!==d.to||state.b!==sid)return;socketBySession(d.to)?.emit('voice-peer-answer',{room,from:sid,answer:d.answer});});
   socket.on('voice-peer-ice',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validIceCandidate(d.candidate))return;const members=roomSockets.get(room),state=activeVoicePairs.get(voiceRoomPairKey(room,sid,d.to));if(!members?.has(sid)||!members?.has(d.to)||!state||Date.now()-state.created>VOICE_PAIR_TTL_MS||(state.a!==sid&&state.b!==sid)||(state.a!==d.to&&state.b!==d.to))return;socketBySession(d.to)?.emit('voice-peer-ice',{room,from:sid,candidate:d.candidate});});
-  socket.on('leave-room',({room}={})=>{const u=socket.data.user,sid=socket.data.sid;if(!isCurrentSessionSocket(socket)||!u||!room||room!==u.room||!socket.rooms.has(room))return;const accountStillInRoom=[...socketUsers.entries()].some(([otherSid,active])=>otherSid!==sid&&active.room===room&&keyName(active.name)===keyName(u.name));socket.leave(room);removeSessionFromRoomRuntime(sid,room);if(socketUsers.get(sid))socketUsers.get(sid).room='';if(socket.data.user)socket.data.user.room='';if(!u.ghost&&!accountStillInRoom){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',exitKind:'room',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{addMessage(pm)}catch(e){console.warn('Leave presence could not be saved:',e.message)}emitPresenceToRoom(room,pm);}{const members=roomSockets.get(room)||new Set();for(const memberSid of [...members]){const active=socketUsers.get(memberSid);if(!active||active.room!==room)members.delete(memberSid);}if(members.size===0){roomSockets.delete(room);try{save()}catch(e){console.error('Room state save failed:',e.message)}}}emitState();});
-  socket.on('send-message',d=>{const u=socket.data.user;if(!u||!isCurrentSessionSocket(socket))return;const room=String(d?.room||'');if(!room||u.room!==room||!socket.rooms.has(room))return socket.emit('error-msg',{error:'أنت خارج الغرفة'});const targetRoom=db.rooms.find(r=>r.id===room);if(!targetRoom)return socket.emit('error-msg',{error:'الغرفة غير موجودة'});if(globalBanned(u.name,socketClientIp(socket)))return socket.emit('error-msg',{error:'لا يمكنك الكتابة أثناء الحظر العام'});if(roomMuted(u.name,room)||roomBanned(u.name,room))return socket.emit('error-msg',{error:'لا يمكنك الكتابة هنا'});const text=String(d?.text||'').trim();if(!text)return;const botConfig=normalizedBotSettings(db.botSettings).antiSpam;if(botConfig.enabled){const now=Date.now(),windowState=botMessageWindows.get(socket.data.sid)||{start:now,count:0,lastText:'',repeat:0};if(now-windowState.start>5000){windowState.start=now;windowState.count=0;windowState.lastText='';windowState.repeat=0;}windowState.count++;windowState.repeat=windowState.lastText===text?windowState.repeat+1:1;windowState.lastText=text;botMessageWindows.set(socket.data.sid,windowState);if(windowState.count>7||windowState.repeat>3)return socket.emit('error-msg',{error:'🤖 بوت الحماية: تم إيقاف الرسائل المتكررة أو السريعة، انتظر قليلاً'});}if(processBuiltInBotCommand(socket,u,room,text))return;if(blockedChatTerm(text))return socket.emit('error-msg',{error:'رسالتك تحتوي على كلمة غير مسموح بها'});const m={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'text',text:text.slice(0,2000),at:Date.now(),likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)};try{addMessage(m)}catch(e){console.error('Socket room message save failed:',e.message);return socket.emit('error-msg',{error:'تعذر حفظ الرسالة، حاول مرة أخرى'});}io.to(room).emit('message',m);});
+  socket.on('leave-room',async({room}={})=>{const u=socket.data.user,sid=socket.data.sid;if(!isCurrentSessionSocket(socket)||!u||!room||room!==u.room||!socket.rooms.has(room))return;const accountStillInRoom=[...socketUsers.entries()].some(([otherSid,active])=>otherSid!==sid&&active.room===room&&keyName(active.name)===keyName(u.name));socket.leave(room);removeSessionFromRoomRuntime(sid,room);if(socketUsers.get(sid))socketUsers.get(sid).room='';if(socket.data.user)socket.data.user.room='';if(!u.ghost&&!accountStillInRoom){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',exitKind:'room',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{await addMessage(pm);emitPresenceToRoom(room,pm)}catch(e){console.warn('Leave presence could not be saved:',e.message)}}{const members=roomSockets.get(room)||new Set();for(const memberSid of [...members]){const active=socketUsers.get(memberSid);if(!active||active.room!==room)members.delete(memberSid);}if(members.size===0){roomSockets.delete(room);try{save()}catch(e){console.error('Room state save failed:',e.message)}}}emitState();});
+  socket.on('send-message',async d=>{const u=socket.data.user;if(!u||!isCurrentSessionSocket(socket))return;const room=String(d?.room||'');if(!room||u.room!==room||!socket.rooms.has(room))return socket.emit('error-msg',{error:'أنت خارج الغرفة'});const targetRoom=db.rooms.find(r=>r.id===room);if(!targetRoom)return socket.emit('error-msg',{error:'الغرفة غير موجودة'});if(globalBanned(u.name,socketClientIp(socket)))return socket.emit('error-msg',{error:'لا يمكنك الكتابة أثناء الحظر العام'});if(roomMuted(u.name,room)||roomBanned(u.name,room))return socket.emit('error-msg',{error:'لا يمكنك الكتابة هنا'});const text=String(d?.text||'').trim();if(!text)return;const botConfig=normalizedBotSettings(db.botSettings).antiSpam;if(botConfig.enabled){const now=Date.now(),windowState=botMessageWindows.get(socket.data.sid)||{start:now,count:0,lastText:'',repeat:0};if(now-windowState.start>5000){windowState.start=now;windowState.count=0;windowState.lastText='';windowState.repeat=0;}windowState.count++;windowState.repeat=windowState.lastText===text?windowState.repeat+1:1;windowState.lastText=text;botMessageWindows.set(socket.data.sid,windowState);if(windowState.count>7||windowState.repeat>3)return socket.emit('error-msg',{error:'🤖 بوت الحماية: تم إيقاف الرسائل المتكررة أو السريعة، انتظر قليلاً'});}if(await processBuiltInBotCommand(socket,u,room,text))return;if(blockedChatTerm(text))return socket.emit('error-msg',{error:'رسالتك تحتوي على كلمة غير مسموح بها'});const m={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'text',text:text.slice(0,2000),at:Date.now(),likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)};try{await addMessage(m)}catch(e){console.error('Socket room message save failed:',e.message);return socket.emit('error-msg',{error:'تعذر حفظ الرسالة، حاول مرة أخرى'});}io.to(room).emit('message',m);});
   socket.on('private-typing',d=>{
     const user=socket.data.user,sid=socket.data.sid;
     if(!user||!sid||!isCurrentSessionSocket(socket)||!siteModuleEnabled('privateChat'))return;
@@ -2254,7 +2280,7 @@ io.on('connection',socket=>{
   socket.on('call-reject',d=>{const u=socket.data.user,sid=socket.data.sid;if(!isCurrentSessionSocket(socket)||!u||!d?.to||!allowCallSignal(sid))return;const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||state.callee!==sid||state.caller!==target[0])return;activeCallPairs.delete(pair);socketBySession(target[0])?.emit('call-rejected',{from:u.name,reason:String(d.reason||'declined').slice(0,32)});});
   socket.on('call-end',d=>{const u=socket.data.user,sid=socket.data.sid;if(!isCurrentSessionSocket(socket)||!u||!sid||!d?.to)return;const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||(state.caller!==sid&&state.callee!==sid))return;activeCallPairs.delete(pair);socketBySession(target[0])?.emit('call-ended',{from:u.name});});
   socket.on('ice',d=>{const u=socket.data.user,sid=socket.data.sid;if(!isCurrentSessionSocket(socket)||!u||!sid||!d?.to)return;if(!allowCallSignal(sid))return;if(!validIceCandidate(d.candidate))return;const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const state=activeCallPairs.get(callPairKey(sid,target[0]));if(!state||(!state.answered&&Date.now()-state.created>120000))return;socketBySession(target[0])?.emit('ice',{from:u.name,candidate:d.candidate});});
-  socket.on('disconnect',()=>{
+  socket.on('disconnect',async()=>{
     if(socket.data.privateTypingTimer){clearTimeout(socket.data.privateTypingTimer);socket.data.privateTypingTimer=null;}if(socket.data.privateTypingTo){emitToUser(socket.data.privateTypingTo,'private-typing',{from:socket.data.user?.name||'',typing:false});socket.data.privateTypingTo='';}
     const sid=socket.data.sid,u=socket.data.user,active=sid?socketUsers.get(sid):null;
     // A late disconnect from a superseded socket must never evict the new live session.
@@ -2270,8 +2296,7 @@ io.on('connection',socket=>{
     const accountStillInRoom=!!room&&[...socketUsers.values()].some(other=>other.room===room&&keyName(other.name)===keyName(u?.name));
     if(u&&room&&!u.ghost&&!accountStillInRoom){
       const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',exitKind:'chat',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};
-      try{addMessage(pm)}catch(e){console.warn('Disconnect presence could not be saved:',e.message)}
-      emitPresenceToRoom(room,pm);
+      try{await addMessage(pm);emitPresenceToRoom(room,pm)}catch(e){console.warn('Disconnect presence could not be saved:',e.message)}
     }
     if(room){
       const members=roomSockets.get(room)||new Set();
@@ -2298,6 +2323,7 @@ server.listen(PORT,()=>console.log(`Rimaz server listening on ${PORT}`));
 function gracefulShutdown(signal){
   if(messageSaveTimer){clearTimeout(messageSaveTimer);messageSaveTimer=null;}
   let finalSaveSucceeded=true;
+  if(pendingMessageWrites.length){flushMessageWrites();if(pendingMessageWrites.length)finalSaveSucceeded=false;}
   try{save();}catch(error){finalSaveSucceeded=false;console.error(`Final database save failed during ${signal}:`,error.message);}
   io.close(()=>process.exit(finalSaveSucceeded?0:1));
   const forceExit=setTimeout(()=>process.exit(1),10000);forceExit.unref?.();
