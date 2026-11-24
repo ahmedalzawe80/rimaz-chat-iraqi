@@ -1,15 +1,17 @@
 ## Repository maintenance — 2026-11-24 (no application version change)
 
-- Organized project continuity notes, engineering audits, and operations records under `docs/project/`, `docs/audits/`, and `docs/operations/`; the root now keeps only the standard README, CHANGELOG, and CONTRIBUTING guides among Markdown files.
-- Added a repository structure guide that records root-file ownership, runtime asset discovery, and why apparently duplicate media must not be deleted without a migration review.
-- Added a categorized documentation index and regression checks for missing documents, broken index links, and reports scattered in the repository root.
+- Organized project continuity notes, engineering audits, and operations records under `docs/project/`, `docs/audits/`, and `docs/operations/`; the root keeps the standard README, CHANGELOG, and CONTRIBUTING guides among Markdown files.
+- Added a repository structure guide, categorized documentation index, and regression checks for broken links and reports scattered in the root.
 - Removed the incomplete nested `rimaz-chat-iraqi-main/` duplicate after confirming it contained only a placeholder data file and a duplicate Google verification file.
-- Added a genuine npm v3 lockfile generated on Node.js 24, verified a clean `npm ci` install, and changed the production Docker build to `npm ci --omit=dev` for deterministic dependency resolution.
-- Updated contributor and local-run instructions to use `npm ci`; CI now requires the committed lockfile and verifies the installed dependency tree.
-- Added `.editorconfig`, `.gitattributes`, `.nvmrc`, `CONTRIBUTING.md`, a pull-request template, Dependabot schedules, and immutable SHA pins for GitHub Actions; CI watches documentation and repository-configuration changes, uses the shared Node version pin, and cancels superseded runs.
-- Added repository hygiene rules and documentation for persistent runtime data, Docker exclusions, and guarded source synchronization.
-- Kept the audited source ZIP at the repository root because the current archive-audit and manual-sync workflows depend on that exact path.
-- Kept application entry points and `public/` in their runtime-required locations; no production data or hosting volume was changed.
+- Added a genuine npm v3 lockfile generated on Node.js 24, verified clean `npm ci`, and changed production Docker installation to `npm ci --omit=dev`.
+- Updated README, contributor guidance, deployment notes, and CI so clean installs use the committed lockfile; CI checks the dependency tree before running regression tests and building Docker.
+- Added regression assertions for lockfile/package manifest consistency, locked Docker installation, and the permanent CI contract.
+- Rebuilt the audited ZIP deterministically from 394 tracked candidate files after archive audit detected that the previous archive had drifted from the reviewed package manifest.
+- Added archive parity checks for package manifest, lockfile, Dockerfile, server/browser entry files, regression checks, and public assets; archive validation also rejects traversal, symlinks, duplicate file paths, and oversized/compression-bomb entries.
+- Hardened manual source sync to refuse stale archives and to run locked dependency, regression, and Docker checks before and after synchronization.
+- Added `.editorconfig`, `.gitattributes`, `.nvmrc`, `CONTRIBUTING.md`, a pull-request template, Dependabot schedules, and immutable SHA pins for GitHub Actions.
+- Kept the audited source ZIP at the repository root because the archive-audit and guarded manual-sync workflows depend on that exact path.
+- No production data or hosting volume was changed.
 
 ## v46.93.72 (2026-11-22)
 
