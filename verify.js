@@ -2054,7 +2054,7 @@ try {
   const nestedLegacy = path.join(root, 'rimaz-chat-iraqi-main');
   const checks = [
     ['local dependencies and runtime directories are ignored by Git', ignore.includes('/node_modules/') && ignore.includes('/data/') && ignore.includes('/uploads/') && ignore.includes('/private-media/')],
-    ['runtime temporary files and database recovery copies are ignored by Git', ignore.includes('*.tmp') && ignore.includes('*.corrupt-*') && ignore.includes('*.pre-restore-*')],
+    ['runtime temporary files and database recovery copies are ignored by Git', ignore.includes('*.tmp') && ignore.includes('*.corrupt-*') && ignore.includes('*.pre-restore-*') && ignore.includes('.npmrc') && ignore.includes('*.sqlite') && ignore.includes('*.db') && ignore.includes('*.pem') && ignore.includes('backups/')],
     ['the intentional root data placeholder remains tracked and documented', fs.existsSync(path.join(root, 'data.json')) && fs.readFileSync(path.join(root, 'data.json'), 'utf8').includes('Initial placeholder only')],
     ['root and public Google verification files remain present and byte-identical', fs.existsSync(path.join(root, 'google1a84d9d1dec7b85d.html')) && fs.existsSync(path.join(root, 'public', 'google1a84d9d1dec7b85d.html')) && fs.readFileSync(path.join(root, 'google1a84d9d1dec7b85d.html'), 'utf8') === fs.readFileSync(path.join(root, 'public', 'google1a84d9d1dec7b85d.html'), 'utf8')],
     ['manual public asset synchronization excludes the Google verification file from deletion', syncWorkflow.includes("--exclude='/google1a84d9d1dec7b85d.html'")],
