@@ -16,6 +16,7 @@ private-media/
 *.pre-restore-*
 
 # Credentials, certificates, local backups and generated artifacts.
+.npmrc
 .env
 .env.*
 !.env.example
