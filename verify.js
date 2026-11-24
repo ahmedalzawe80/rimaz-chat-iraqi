@@ -33,7 +33,7 @@ try {
 try {
   const source = fs.readFileSync(server, 'utf8');
   const start = source.indexOf("app.put('/api/admin/rank-art/assign'");
-  const end = source.indexOf("\\n});", start);
+  const end = source.indexOf("\n});", start);
   const route = start >= 0 && end > start ? source.slice(start, end) : '';
   const saveIndex = route.indexOf('try{save()}catch(error)');
   const catchStart = route.indexOf('catch(error){', saveIndex);
