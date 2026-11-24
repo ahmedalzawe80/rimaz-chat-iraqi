@@ -264,3 +264,14 @@ The repository candidate and archive are CI-validated. The project is **not yet 
 - Archive refresh verified **395 files / 16,368,568 bytes**, CRC and exact tracked-file parity. Archive-only commit: b14714bfd16d47a4a12f37a1599a8ea11c9fc565.
 - This removes one known transient allocation from routine database saves; it does **not** prove the 128 MB provider issue fixed. Full backup still materializes a JSON string and Buffer; database-only backup still materializes a full response string; restore preview/confirm still hold file text plus parsed data and confirmation's recovery Buffer. These paths are explicitly recorded for the next root-cause phase.
 - Production boundary is unchanged: PR #3 stays draft/open/unmerged; main and Deplexo remain untouched. Independent live-volume backup, isolated full restore, staging smoke/load testing, provider restart/OOM evidence, trusted proxy-header confirmation, and explicit promotion approval remain mandatory.
+
+
+## Restore recovery peak-memory correction — 2026-11-24 20:42 UTC
+
+- Restore confirmation previously read the complete live database into a Buffer and then wrote that Buffer into the recovery file. Replaced this with an exclusive disk-to-disk copy using copyFileSync, explicitly applied mode 0600, and fsynced the recovery file and directory before allowing restore to continue.
+- The existing rollback/recoveryReady gate remains intact; a failed copy/permission/sync removes the incomplete recovery file and aborts the restore.
+- Regression checks now require the exclusive disk copy, restrictive permissions, and fsync, and reject the old full-file recoveryData Buffer.
+- Source/test candidate a2a3c11274770af65de0810414a9e6a233474221 passed [Actions run #45483322714](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45483322714): source and extracted archive each passed **610 checks / zero failures**, both production Docker builds passed, and npm audit reported **0 vulnerabilities**.
+- Archive: **395 files / 16,370,888 bytes**, CRC and exact tracked-file parity passed. Archive-only commit: 9a27af2255adc56a61c580a5406ec49e4c18ae5f.
+- This removes one database-sized transient Buffer from restore confirmation; it does not remove the retained old database object, the parsed replacement object, or restore JSON text. Full backup/database backup allocation paths remain open. The historical 128 MB issue is not declared fixed.
+- PR #3 remains draft/open/unmerged; main and Deplexo remain untouched. All hosting-side release blockers remain in force.
