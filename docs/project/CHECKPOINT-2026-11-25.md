@@ -37,3 +37,8 @@
 6. Fresh exact-head CI and explicit approval before promotion.
 
 Do not merge PR #3, change `main`, deploy/restart Deplexo, run production ZIP sync, or modify live data until the release blockers pass and the owner explicitly approves.
+
+## Test review correction — 2026-11-25
+- During source-level review, the normal-exhaustion cleanup test was corrected to consume every yielded TAR entry before asserting generator completion; the generator also enumerates uploads and private media after the database entry.
+- Commit: `8d9cc997e1f321e0ee68223b8d41681978af97d0`.
+- Still pending: execute `npm test`, syntax checks and container/archive workflow on the exact branch head; no confirmed CI results are available.
