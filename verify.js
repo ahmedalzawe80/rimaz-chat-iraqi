@@ -2250,3 +2250,22 @@ try {
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('chat durable-acknowledgement regression checks',error.message); }
+
+
+// HTTP and Socket.IO must report identical built-in bot command failures.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const http=source.match(/app\\.post\\('\\/api\\/message',[\\s\\S]*?\\n\\}\\);/);
+  const socket=source.match(/socket\\.on\\('send-message',[\\s\\S]*?\\n/);
+  const start=source.indexOf('async function processBuiltInBotCommand(');
+  const end=source.indexOf('\\n}',start);
+  const command=start>=0&&end>start?source.slice(start,end):'';
+  const checks=[
+    ['HTTP and Socket.IO both call the shared built-in bot command handler',!!http&&!!socket&&http[0].includes('processBuiltInBotCommand(joinedSocket,u,room,text')&&socket[0].includes('processBuiltInBotCommand(socket,u,room,text)')],
+    ['HTTP bot command failures are returned as HTTP errors rather than false success',!!http&&http[0].includes('botCommandError')&&http[0].includes('res.status(botCommandError.status).json')],
+    ['the shared bot handler reports missing admin notice text as HTTP 400 and socket error',command.includes("onError(message,400)")&&command.includes("socket.emit('error-msg',{error:message})")],
+    ['the shared bot handler reports missing admin permission as HTTP 403 and socket error',command.includes("onError(message,403)")&&command.includes("socket.emit('error-msg',{error:message})")],
+    ['admin notice commands remain protected by canNotice authorization',command.includes('if(!canNotice(user))')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('HTTP and Socket.IO bot-command parity regression checks',error.message); }
