@@ -112,3 +112,19 @@ Repository organization, deterministic dependency installation, archive parity, 
 - Candidate code validation run [45420675671](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45420675671) passed on the same source candidate before the archive commit. The later PR archive-audit run had started before the ZIP replacement and therefore does not validate the refreshed ZIP; the successful builder run above is the evidence for the refreshed archive.
 - Final cleanup commit: `c68ff6fb361228d82f208cc6dd824fbfead194ec`. PR-triggered checks for the cleanup commit require GitHub Actions approval and are not represented as green here.
 - This is repository/archive validation only. It does not replace live Deplexo backup/restore, isolated staging, runtime/load checks, or production approval. No merge, deployment, restart, or live-data change occurred.
+
+
+## Latest verified continuation — 2026-11-24 18:19 UTC
+
+- Current integrated branch head: `cb6ebaa1b6df99d0f67b6e88394089b58715e6c6`. The latest commit is the automated archive-only refresh; it changes only `rimaz-final-deep-audit-46.93.72.zip`.
+- Source/test/workflow changes immediately before that archive commit are on `55f1eb421a300f527d9fc82752d977b0fe9895e8`:
+  - `server.js`: startup cleanup now durably saves stale private-notification removal even when no transient private-message history or media files remain.
+  - `verify.js`: added an isolated runtime regression test proving notification-only cleanup persists.
+  - `.github/workflows/validate-project.yml`: generated ZIP is removed from the pull-request path filter. The archive is still rebuilt and tested in the post-validation push job; an archive-only bot commit no longer starts a redundant PR workflow requiring approval.
+  - `verify.js`: regression assertion ensures the generated ZIP remains excluded from the PR path filter.
+- Exact-head source validation: [PR run #682 / 45458016574](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45458016574) passed on source commit `55f1eb4`: locked install, dependency-tree verification, syntax checks, full regression suite (**602 pass markers, zero failures**), and production Docker build.
+- Exact-head push/archive validation: [run #681 / 45458005876](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45458005876) passed on the same source commit. Both source and extracted-archive suites reported **602 pass markers, zero failures**; both production Docker builds succeeded. Archive job rebuilt and verified **394 tracked files**, **16,349,681 bytes**, CRC/path safety, and exact tracked-file parity before testing the extracted project.
+- Refreshed archive commit: `cb6ebaa1b6df99d0f67b6e88394089b58715e6c6`; archive SHA-1: `685799df18a19e0a3a44d3404429157d61a29e27`.
+- The old PR run #679 with `action_required` was triggered by the earlier ZIP-only commit while the ZIP was in the PR path filter. The path filter is now corrected. Latest PR validation #682 is green, and the archive-only commit did not create a new PR validation run.
+- PR #3 remains open, draft, and unmerged. `main` remains at `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No merge, production deployment/restart, ZIP sync to Deplexo, or live-data modification occurred.
+- Production release gates remain open: independent live-volume backup, verified restore into isolated staging, end-to-end smoke tests, runtime/load evidence, and explicit promotion approval. CI success alone is not production approval.
