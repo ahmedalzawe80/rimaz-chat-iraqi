@@ -1,0 +1,126 @@
+name: Rebuild audited release archive
+
+on:
+  push:
+    branches:
+      - fix/bound-private-media-ticket-cache
+    paths:
+      - '.github/workflows/rebuild-release-archive.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rimaz-release-archive-builder
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    if: github.ref == 'refs/heads/fix/bound-private-media-ticket-cache'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/bound-private-media-ticket-cache
+          fetch-depth: 0
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Validate candidate before packaging
+        run: |
+          npm ci --no-audit --no-fund
+          npm ls --depth=0
+          node --check server.js
+          node --check verify.js
+          npm test
+          docker build --pull -t rimaz-chat-iraqi:archive-source .
+
+      - name: Rebuild deterministic full-source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import hashlib, os, subprocess, zipfile
+          from pathlib import Path
+
+          archive = Path('rimaz-final-deep-audit-46.93.72.zip')
+          excluded = {
+              archive.as_posix(),
+              '.github/workflows/rebuild-release-archive.yml',
+          }
+          tracked = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+          paths = sorted(p for p in tracked if p and p not in excluded)
+          if not paths:
+              raise SystemExit('No tracked source files were found for the release archive.')
+
+          temporary = archive.with_suffix('.zip.tmp')
+          with zipfile.ZipFile(temporary, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+              for name in paths:
+                  path = Path(name)
+                  if path.is_symlink():
+                      raise SystemExit(f'Refusing to package symlink: {name}')
+                  if not path.is_file():
+                      raise SystemExit(f'Tracked release path is not a regular file: {name}')
+                  info = zipfile.ZipInfo(name, date_time=(2026, 11, 24, 0, 0, 0))
+                  info.compress_type = zipfile.ZIP_DEFLATED
+                  info.external_attr = 0o100644 << 16
+                  z.writestr(info, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+          os.replace(temporary, archive)
+
+          if archive.stat().st_size >= 95 * 1024 * 1024:
+              raise SystemExit(f'Rebuilt archive is too large for safe GitHub storage: {archive.stat().st_size} bytes')
+
+          with zipfile.ZipFile(archive) as z:
+              bad = z.testzip()
+              if bad:
+                  raise SystemExit(f'Archive CRC validation failed for {bad}')
+              names = set(z.namelist())
+              required = {'package.json', 'package-lock.json', 'server.js', 'verify.js', 'index.html', 'public/index.html'}
+              missing = required - names
+              if missing:
+                  raise SystemExit(f'Rebuilt archive is missing required paths: {sorted(missing)}')
+              for name in ('package.json', 'server.js', 'verify.js', 'index.html'):
+                  if hashlib.sha256(z.read(name)).digest() != hashlib.sha256(Path(name).read_bytes()).digest():
+                      raise SystemExit(f'Archive source mismatch for {name}')
+              archived_public = {n for n in names if n.startswith('public/') and not n.endswith('/')}
+              current_public = {p.as_posix() for p in Path('public').rglob('*') if p.is_file()}
+              if archived_public != current_public:
+                  raise SystemExit('Archived public file set does not match the candidate public directory.')
+              for name in current_public:
+                  if hashlib.sha256(z.read(name)).digest() != hashlib.sha256(Path(name).read_bytes()).digest():
+                      raise SystemExit(f'Archive public asset mismatch for {name}')
+          print(f'Rebuilt and verified {len(paths)} tracked files; archive size {archive.stat().st_size} bytes.')
+          PY
+
+      - name: Test the rebuilt archive as a standalone project
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGING="$RUNNER_TEMP/rimaz-release-archive"
+          mkdir -p "$STAGING"
+          unzip -q rimaz-final-deep-audit-46.93.72.zip -d "$STAGING"
+          cd "$STAGING"
+          npm ci --no-audit --no-fund
+          npm ls --depth=0
+          node --check server.js
+          node --check verify.js
+          npm test
+          docker build --pull -t rimaz-chat-iraqi:archive-ci .
+
+      - name: Commit refreshed audited archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add rimaz-final-deep-audit-46.93.72.zip
+          if git diff --cached --quiet; then
+            echo "The audited archive already matches this candidate."
+          else
+            git commit -m "build: refresh audited source archive from candidate"
+            git push origin HEAD:fix/bound-private-media-ticket-cache
+          fi
