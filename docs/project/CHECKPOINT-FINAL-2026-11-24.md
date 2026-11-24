@@ -4,39 +4,42 @@
 
 - Repository: `ahmedalzawe80/rimaz-chat-iraqi`
 - Working branch: `fix/bound-private-media-ticket-cache`
-- PR #3 head immediately before this checkpoint refresh: `aeb656918c04a7019c624cfe242fcc8161d06b5b`
 - PR #3: https://github.com/ahmedalzawe80/rimaz-chat-iraqi/pull/3
-- PR #3 is open, draft, unmerged, and targets `safety/validate-and-backup-before-sync`.
-- PR #3 currently contains 34 changed paths.
-- All 11 changed paths in PR #2 are included in PR #3; PR #2 has no unique paths and must not be merged separately.
-- Repository default branch is `main`. No merge, main update, Deplexo deployment/restart, ZIP sync, or live data modification was performed.
+- PR #3 remains open, draft, unmerged, and targets `safety/validate-and-backup-before-sync`.
+- PR #3 currently contains 35 changed paths. All 11 changed paths in PR #2 are included in PR #3; PR #2 has no unique files and must not be merged separately.
+- Repository default branch is `main`. No merge, main update, Deplexo deployment/restart, ZIP sync, or live data modification has been performed.
 
-## Latest verified CI
+## Deterministic dependency installation — completed in candidate
 
-The latest fully verified PR head is `7abc591fa7b370ea5a77088fe42e9239e0976474`, which passed GitHub Actions run [45406653849](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45406653849).
+- Added a genuine npm lockfile v3 generated on Node.js 24: `package-lock.json`.
+- Lockfile root identity and dependency declarations match `package.json`; the lock contains 96 package entries.
+- Lockfile commit: [`ed4ef756a96351f6f368dba7295420cc0f6ebbd1`](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/commit/ed4ef756a96351f6f368dba7295420cc0f6ebbd1).
+- Dockerfile now uses `npm ci --omit=dev`.
+- The lockfile bootstrap job performed `npm ci`, `npm test`, and a Docker build with the lockfile before committing the result. Its one-time workflow was subsequently removed.
+- The permanent validation workflow now requires `npm ci`, `npm ls --depth=0`, syntax checks, `npm test`, and a Docker build. No fallback to unpinned `npm install` remains.
+- README, CONTRIBUTING, CHANGELOG, and repository-structure documentation were updated for the new deterministic workflow.
 
-The `validate` job and all listed steps completed successfully:
-- Node.js setup from `.nvmrc`
-- JavaScript syntax checks
-- Project regression tests via `npm test`
-- Production Docker image build
+## CI evidence
 
-The workflow connector did not expose the numeric test pass count for this run. The earlier 556 pass / 0 failure result belongs only to SHA `c30b7b92093dbbf4162cb6f30573355ad20b0f1f`, run `45379916442`; do not attribute it to later commits.
+- GitHub Actions run [45407944962](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45407944962) completed successfully on checkpoint SHA `23568ae45ff37a2e349939f1374a6eac885c2e79`.
+- Its regression output contained 562 pass markers and zero failure markers; dependency installation and the Docker build completed.
+- The lockfile/Dockerfile commit `ed4ef756` was created only after the bootstrap workflow's clean install, regression suite, and locked Docker build succeeded.
+- The permanent validation workflow was tightened after that run to require `npm ci` and `npm ls`. Fresh green checks on the final current head are still required; do not attribute the 562 marker count to later commits.
+- Earlier run `45379916442` on SHA `c30b7b92093dbbf4162cb6f30573355ad20b0f1f` reported 556 pass markers and zero failures. That result belongs only to that earlier SHA.
 
-The subsequent commits `1cf3dadeddf0feb06e46ca318f9c97843ac2b203`, `481193ad8217aa9549b3528774bbd1bf8d2cd2a8`, `536c1f82ddd46d695e97b2d82c34954a21cc8554`, and `aeb656918c04a7019c624cfe242fcc8161d06b5b` update release/checkpoint documentation. A PR workflow run was not returned for the latest documentation head when checked. Do not claim these documentation commits have passed CI until a run is confirmed.
+## Outstanding production release gates
 
-## Outstanding release blockers
-
-1. No `package-lock.json` exists. Docker currently uses `npm install --omit=dev`. Generate and review a genuine lockfile on Node.js 24, then validate clean install, tests, and image build before moving to `npm ci`. Never fabricate integrity hashes.
-2. No independent backup of the live Deplexo persistent volume has been verified.
-3. No isolated staging restore or end-to-end smoke test has been evidenced.
-4. No live Deplexo restart/OOM/exit-code/heap/RSS evidence has been collected.
-5. No final production approval has been given.
+1. Independent backup of the live Deplexo persistent volume, including database, uploads, and private media.
+2. Restore that backup into isolated staging and verify integrity.
+3. End-to-end smoke tests: login, reconnect grace, public/private chat, room lifecycle, voice/video, moderation/member-card actions, uploads, backup/restore, and multi-device sessions.
+4. Runtime evidence for exit codes, restarts, OOM, heap/RSS, and representative load.
+5. Fresh green CI on the final exact PR head and final review.
+6. Confirm persistent-volume mount and production environment settings before promotion.
 
 ## Safety boundary
 
-Do not merge PR #3, change `main`, close or merge PR #2, deploy/restart Deplexo, run ZIP sync, or touch live database/uploads/private media/persistent volume without explicit approval and the verified backup + staging gates.
+The owner has requested publication after completion, but production promotion must wait for the release gates above. Do not merge PR #3, change `main`, run ZIP synchronization, deploy/restart Deplexo, or modify live database/uploads/private media/persistent volume before the backup, staging, and approval gates are satisfied.
 
 ## Resume instructions
 
-Continue from this checkpoint and inspect the latest branch head and CI first. Keep changes on `fix/bound-private-media-ticket-cache`. Prioritize a genuine lockfile and deterministic dependency install only when a trusted Node.js 24 environment and npm registry are available. Do not claim staging or production validation without actual access and evidence.
+Always inspect the current PR head and exact-head CI first. Keep work on `fix/bound-private-media-ticket-cache`. Do not claim production readiness from CI alone. Continue with final PR validation and staging/backup coordination; publish only after the release gates are actually complete.
