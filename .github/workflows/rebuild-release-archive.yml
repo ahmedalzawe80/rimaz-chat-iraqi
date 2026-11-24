@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/rebuild-release-archive.yml'
       - '.github/workflows/unzip-upload.yml'
+      - 'verify.js'
 
 permissions:
   contents: write
