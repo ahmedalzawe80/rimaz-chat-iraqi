@@ -91,3 +91,10 @@ Resume phrase: "نكمل مشروع ريماز من CHECKPOINT-2026-11-24.md؛ �
 - Found that `leave-room` accepted a caller-supplied room without requiring it to match the socket's authenticated current room or its Socket.IO room membership. The handler then cleared the user's active room state, creating an inconsistent runtime state.
 - Added guard requiring `room===u.room` and `socket.rooms.has(room)` before mutation, and a regression check in verify.js.
 - Changes are branch-only; no runtime execution/CI proof, merge, deployment, or production access.
+
+
+## Room voice negotiation lifecycle hardening (2026-11-24)
+- Found that authorized room voice negotiation pairs had no independent expiry or global capacity bound; abandoned negotiations could remain in memory until a peer left/disconnected.
+- Added a 120-second TTL, periodic stale-pair pruning, an 8,192-pair process cap, and expiry/participant checks before answer and ICE relay.
+- Added regression coverage for expiry, capacity, pruning, and ICE participant authorization.
+- Branch-only changes; no CI/runtime test success asserted, no merge, deployment, or production data changes.
