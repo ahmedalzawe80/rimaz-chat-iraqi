@@ -2025,6 +2025,8 @@ app.post('/api/admin/restore/database/confirm',requireAdmin,(req,res)=>{
   activeCallPairs.clear();
   activeVoicePairs.clear();
   botMessageWindows.clear();privateMessageWindows.clear();callSignalWindows.clear();voiceSignalWindows.clear();welcomeSentSessions.clear();
+  voiceSpeakers.clear();
+  privateMediaPlaybackTickets.clear();
   try{io.disconnectSockets(true);}catch(e){console.warn('Could not disconnect restored sessions:',e.message);}
   res.json({ok:true,message:'تمت استعادة قاعدة البيانات. تم إنهاء الجلسات النشطة.',recoveryFile:path.basename(recoveryFile||DB_FILE)});
  }catch(e){
