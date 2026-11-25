@@ -69,6 +69,26 @@ jobs:
       - name: Build production container
         run: docker build --pull -t rimaz-chat-iraqi:ci .
 
+      - name: Smoke-test production container HTTP and Socket.IO
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/rimaz-home.html /tmp/rimaz-socketio.txt
+          docker run --detach --name rimaz-smoke --publish 127.0.0.1:3000:3000 --env PORT=3000 --env DATA_DIR=/tmp/rimaz-smoke-data rimaz-chat-iraqi:ci
+          cleanup() {
+            docker logs rimaz-smoke || true
+            docker rm --force rimaz-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3000/ -o /tmp/rimaz-home.html; then break; fi
+            sleep 1
+          done
+          test -s /tmp/rimaz-home.html
+          grep -qi '<html' /tmp/rimaz-home.html
+          curl --fail --silent 'http://127.0.0.1:3000/socket.io/?EIO=4&transport=polling' -o /tmp/rimaz-socketio.txt
+          grep -q '^0{' /tmp/rimaz-socketio.txt
+
   refresh-release-archive:
     # Archive writes must run only once per branch push. PR validation remains read-only,
     # preventing concurrent push/PR jobs from racing to commit the same ZIP file.
