@@ -5,7 +5,7 @@
 - Working branch: `fix/bound-private-media-ticket-cache`
 - Integrated review: PR #3, still open/draft/unmerged.
 - Production `main`: `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`; no production merge, Deplexo deployment/restart, ZIP sync, or live-volume/data operation was performed.
-- Latest validation-fix commit verified in this continuation: `44659fc2ec779b3d6eeb6e9158f2b690f0686624` (isolated USTAR test fixture supplies `crypto`). Earlier backup-stream source change: `98faac0a91c4820d7f18103710a505d07d3242ae`.
+- Latest source/test candidate: `cade62bb05edc7cfece5f879151ef65b300d548c`; archive-only refresh commit: `f7d1f0d7d877851d58a227554543ef96cc1bbab5`. Earlier backup-stream source change: `98faac0a91c4820d7f18103710a505d07d3242ae`.
 
 ## New backup lifecycle work
 - Added dynamic isolated regression coverage in `verify.js` for `fullBackupTarEntries()`: explicit iterator cancellation, normal exhaustion, and media enumeration failure must all remove the temporary database snapshot file.
@@ -17,11 +17,20 @@
 - **Validation status update (2026-11-25 continuation):** GitHub Actions run `45489183705` on commit `44659fc2ec779b3d6eeb6e9158f2b690f0686624` completed successfully. Regression tests, syntax check, production Docker build, dependency audit (0 vulnerabilities reported), and `refresh-release-archive` all completed successfully. This validates the static/archive workflow, not live restore, staging, or 128 MB runtime behavior.
 - The release archive refresh workflow completed successfully on the validated candidate; verify archive commit/blob linkage and its exact extracted content before promotion.
 
+
+## Restore preview admission control — 2026-11-25
+- Added a preflight check after admin authorization and before Multer receives the file. Expired previews are purged first; if both pending-preview slots are occupied by other admins, the request is rejected before disk upload and JSON parsing.
+- The same admin can still replace their own preview, preserving the previous replacement behavior. The existing post-validation capacity check remains as a final invariant.
+- Added runtime regression coverage for same-owner replacement, full-queue rejection, and middleware ordering before Multer.
+- Source/test candidate cade62bb05edc7cfece5f879151ef65b300d548c passed GitHub Actions run [45598139159](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45598139159): source validation and production Docker build passed; the archive job rebuilt the tracked-file ZIP, checked integrity/path/parity, extracted it, then passed locked install, dependency-tree check, syntax, tests, HTML parity, and Docker build.
+- Archive-only commit f7d1f0d7d877851d58a227554543ef96cc1bbab5 changes only rimaz-final-deep-audit-46.93.72.zip.
+- Current branch head is f7d1f0d7d877851d58a227554543ef96cc1bbab5; PR #3 remains open/draft/unmerged. Production main remains a2c74fded15ea5cfde38d310a84c3c8edfe994b3.
+
 ## Remaining memory risks
 - Routine database save uses the bounded-memory `lib/json-writer.js`.
 - Restore recovery copy is disk-to-disk with exclusive creation, mode 0600 and fsync.
 - Full/database-only backup serialize snapshots to temporary disk files; full backup now has coordinated stream cancellation.
-- Restore preview and confirmation still read the full uploaded JSON as a string and parse a replacement object graph. This remains a material peak-memory risk under a 128 MB container limit. Do not claim the historical 128 MB violation is fixed.
+- Restore preview and confirmation still read the full uploaded JSON as a string and parse a replacement object graph. The new capacity preflight avoids parsing uploads that cannot be queued, but it does not reduce the peak memory of one accepted restore. This remains a material risk under a 128 MB container limit. Do not claim the historical 128 MB violation is fixed.
 - Staging must cover cancellation, concurrent backups, disk-full/permission errors, TAR/GZIP integrity, backup/restore round-trip, and representative-load RSS/heap/external/arrayBuffers plus provider exit/OOM evidence.
 
 ## Points / deduction investigation
