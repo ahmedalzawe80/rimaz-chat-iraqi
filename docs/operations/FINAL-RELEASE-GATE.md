@@ -81,3 +81,16 @@ The user has authorized publication after completion, but that authorization doe
 5. Final exact-diff and PR-chain review before promotion.
 
 PR #3 remains open/draft against the safety branch; PR #1 remains the safety prerequisite; PR #2 is an overlapping draft and is not to be merged separately. Main is unchanged. No Deplexo deploy/restart, production ZIP sync, or live-volume mutation has occurred.
+
+
+## Latest exact candidate verification — 2026-11-25 20:09 UTC
+
+- Source/test/workflow candidate: `87fea24082765a08721238c8dd025c36c93ad922`.
+- Exact-head Actions run [#45692013572](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45692013572) completed successfully on both `validate` and `refresh-release-archive`.
+- The source validation passed 636 regression checks, locked dependency installation, dependency-tree verification, JavaScript syntax, production Docker build, and the production-container smoke test. npm audit reported 0 vulnerabilities.
+- The rebuilt archive was independently extracted and tested; it contains 399 files (16,362,356 bytes), and the archive job passed its regression checks and Docker build. Archive-only commit: `246d3c4ccadb7aadc81ec68d8a7d1d5ad13aeb55`.
+- The smoke test exercised authenticated public/private chat, private-media authorization and playback, voice-room negotiation, video-call signaling, homepage HTTP, Socket.IO polling, and 24 concurrent homepage/Socket.IO requests. Under the 128 MiB / 0.25 CPU container limits, cgroup v2 reported 74,211,328 bytes current and 78,151,680 bytes peak after the workload; Docker confirmed the container remained running and was not OOM-killed. This is an isolated CI workload, not representative Deplexo telemetry.
+- Backup media discovery was extended to include uploaded rank artwork stored in `rankDefinitions[].artUrl`; a regression fixture verifies that referenced artwork is included alongside profile, gift, and chat media. Unreferenced uploads and private-media files remain excluded by design.
+- The repository tree contains no nested `rimaz-chat-iraqi-main/` project copy. Root/public `index.html` and the Google verification file are byte-identical; `data.json` is only the 138-byte warning placeholder, not production data. The audited ZIP remains at root because both guarded archive workflows require that exact path.
+- PR #3 remains open/draft/unmerged, based on `safety/validate-and-backup-before-sync`. Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`; no production sync, deployment, restart, or live-volume change occurred.
+- The operational blockers above remain in force: independently backed-up Deplexo volume, isolated full-volume restore drill, representative staging tests, production memory/OOM telemetry, and provider-confirmed proxy-header trust. CI success does not waive them.
