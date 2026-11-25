@@ -7,6 +7,7 @@ const zlib = require('zlib');
 const { Readable, pipeline } = require('stream');
 const { writeJsonSync } = require('./lib/json-writer');
 const { readJsonFile } = require('./lib/json-reader');
+const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { Server } = require('socket.io');
@@ -2061,12 +2062,17 @@ app.post('/api/admin/restore/database/preview',requireAdmin,restoreUploadGate,(r
   try{
    try{fs.chmodSync(uploadedFile.path,0o600);}catch(_){}
    purgeExpiredDatabaseRestores();
-   const checked=validateDatabaseRestoreData(readJsonFile(uploadedFile.path,{maxBytes:20*1024*1024}));
-   const protectedOwnerName=process.env.OWNER_NAME||'owner';if(!restoreContainsOwner(checked.clean,protectedOwnerName))throw new Error('النسخة لا تحتوي حساب صاحب الموقع؛ رُفضت لحماية إمكانية الدخول للإدارة');
+   const summary=inspectDatabaseRestoreFile(uploadedFile.path,{
+    template:defaults(),
+    maxBytes:20*1024*1024,
+    ownerName:req.user.name,
+    configuredOwnerName:process.env.OWNER_NAME||'',
+    normalizeName:keyName
+   });
    for(const [oldToken,oldPreview] of pendingDatabaseRestores)if(oldPreview.owner===keyName(req.user.name))discardDatabaseRestorePreview(oldToken,oldPreview);
    if(pendingDatabaseRestores.size>=MAX_PENDING_DATABASE_RESTORES)throw new Error('توجد معاينات استعادة أخرى قيد الانتظار؛ أكمل إحداها أو انتظر انتهاء صلاحيتها');
    const token=crypto.randomBytes(32).toString('hex');
-   pendingDatabaseRestores.set(token,{filePath:uploadedFile.path,summary:checked.summary,owner:keyName(req.user.name),expiresAt:Date.now()+5*60*1000});
+   pendingDatabaseRestores.set(token,{filePath:uploadedFile.path,summary,owner:keyName(req.user.name),expiresAt:Date.now()+5*60*1000});
    uploadedFile.path='';
    res.set('Cache-Control','no-store');
    res.json({ok:true,token,expiresInSeconds:300,summary:checked.summary,warning:'سيتم استبدال بيانات قاعدة البيانات الحالية. الجلسات النشطة والرسائل الخاصة المؤقتة لن تُستعاد.'});
