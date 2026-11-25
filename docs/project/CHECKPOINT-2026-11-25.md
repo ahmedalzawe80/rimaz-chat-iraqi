@@ -5,7 +5,7 @@
 - Working branch: `fix/bound-private-media-ticket-cache`
 - Integrated review: PR #3, still open/draft/unmerged.
 - Production `main`: `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`; no production merge, Deplexo deployment/restart, ZIP sync, or live-volume/data operation was performed.
-- Latest source/test commit in this continuation: `4fbe46348d5e3afbaff2efbfad46a0de105eb10d` (verify assertion); preceding server change: `98faac0a91c4820d7f18103710a505d07d3242ae`.
+- Latest validation-fix commit verified in this continuation: `44659fc2ec779b3d6eeb6e9158f2b690f0686624` (isolated USTAR test fixture supplies `crypto`). Earlier backup-stream source change: `98faac0a91c4820d7f18103710a505d07d3242ae`.
 
 ## New backup lifecycle work
 - Added dynamic isolated regression coverage in `verify.js` for `fullBackupTarEntries()`: explicit iterator cancellation, normal exhaustion, and media enumeration failure must all remove the temporary database snapshot file.
@@ -14,8 +14,8 @@
 - Changed the route to Node's `stream.pipeline(source, archive, res, callback)` and imported `pipeline`. Pipeline teardown propagates premature response closure to the source stream, allowing the async generator's `finally` cleanup to run.
 - Updated the route regression assertion to require the cancellable pipeline.
 - The database-only backup route already streams a restrictive temporary file and cleans it on stream close/error/response close.
-- **Validation status:** latest GitHub commit status query returned no status entries, and the connected workflow-run lookup only exposes PR-triggered runs (none returned for this push commit). Therefore the new tests, syntax check, Docker build, and archive refresh are **pending/unconfirmed**, not green. Recheck GitHub Actions for the exact latest branch head before relying on this change.
-- The tracked release ZIP still has blob SHA `96867de7440dd0ca946615975f382980a8a67724`, unchanged from the pre-follow-up candidate. Treat it as **stale** until the push workflow rebuilds it from the validated exact head and the extracted archive independently passes `npm test` and Docker validation.
+- **Validation status update (2026-11-25 continuation):** GitHub Actions run `45489183705` on commit `44659fc2ec779b3d6eeb6e9158f2b690f0686624` completed successfully. Regression tests, syntax check, production Docker build, dependency audit (0 vulnerabilities reported), and `refresh-release-archive` all completed successfully. This validates the static/archive workflow, not live restore, staging, or 128 MB runtime behavior.
+- The release archive refresh workflow completed successfully on the validated candidate; verify archive commit/blob linkage and its exact extracted content before promotion.
 
 ## Remaining memory risks
 - Routine database save uses the bounded-memory `lib/json-writer.js`.
