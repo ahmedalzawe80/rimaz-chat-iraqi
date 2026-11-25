@@ -2893,7 +2893,7 @@ try {
   assert.equal(metrics.memory.oomKillEvents,1);
   assert.equal(metrics.cpu.throttledPeriods,4);
   const cpuOnly=readCgroupMetrics('/cpu-only',file=>{
-    if(file==='/cpu-only/cpu.stat')return 'usage_usec 9000\\nnr_periods 12\\nnr_throttled 3';
+    if(file==='/cpu-only/cpu.stat')return 'usage_usec 9000\nnr_periods 12\nnr_throttled 3';
     const error=new Error('missing');error.code='ENOENT';throw error;
   });
   assert.equal(cpuOnly.available,true);
