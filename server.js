@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 const { Readable, pipeline } = require('stream');
 const { writeJsonSync } = require('./lib/json-writer');
-const { readJsonFile } = require('./lib/json-reader');
+const { readJsonFile, validateJsonFile } = require('./lib/json-reader');
 const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
 const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
 const { normalizeIp, normalizeTrustedProxyHeader, createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
@@ -285,7 +285,7 @@ function refreshLastKnownGoodDatabase(){
   if(!fs.existsSync(DB_FILE))return;
   const now=Date.now();
   if(now-lastKnownGoodDatabaseBackupAt<LAST_KNOWN_GOOD_INTERVAL_MS)return;
-  const tempFile=`${LAST_KNOWN_GOOD_FILE}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+  const tempFile=`${DB_FILE}.${process.pid}.database-backup.${crypto.randomBytes(8).toString('hex')}.tmp`;
   let fd=null;
   try{
     // Copy the prior committed generation, then parse the copy before it can
@@ -295,8 +295,7 @@ function refreshLastKnownGoodDatabase(){
     fd=fs.openSync(tempFile,'r+');
     fs.fsyncSync(fd);
     fs.closeSync(fd);fd=null;
-    const verified=readJsonFile(tempFile);
-    if(!verified||typeof verified!=='object'||Array.isArray(verified))throw new Error('Previous database root is not a JSON object');
+    validateJsonFile(tempFile);
     fs.renameSync(tempFile,LAST_KNOWN_GOOD_FILE);
     try{const dirFd=fs.openSync(DATA_DIR,'r');try{fs.fsyncSync(dirFd);}finally{fs.closeSync(dirFd);}}
     catch(syncError){console.error('Last-known-good database directory sync unavailable:',syncError.message);}
@@ -320,8 +319,7 @@ function save(){
     fs.fsyncSync(fd);
     fs.closeSync(fd); fd = null;
     // Refuse to promote a malformed candidate; keep the committed database intact.
-    const candidate=readJsonFile(tempFile);
-    if(!candidate||typeof candidate!=='object'||Array.isArray(candidate))throw new Error('New database snapshot failed JSON integrity validation');
+    validateJsonFile(tempFile);
     // Preserve a verified previous generation before replacing the current file.
     refreshLastKnownGoodDatabase();
     fs.renameSync(tempFile, DB_FILE);
