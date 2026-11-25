@@ -2507,15 +2507,13 @@ try {
   const index = fs.readFileSync(indexPath, 'utf8');
   const requiredDocs = [
     'REPOSITORY-STRUCTURE.md',
-    'project/CHECKPOINT-2026-11-24.md',
-    'project/HANDOFF-2026-11-24.md',
+    'project/CHECKPOINT-2026-11-25.md',
     'audits/CODE-AUDIT.md',
     'audits/FINAL-DEEP-AUDIT.md',
     'audits/AUDIT-FOLLOWUP-2026-11-24.md',
     'audits/RUNTIME-RESOURCE-AUDIT-2026-11-24.md',
     'audits/TRANSACTION-SAFETY-AUDIT-2026-11-24.md',
-    'operations/DEPLOYMENT-46.93.72.md',
-    'operations/REPAIR-NOTES-46.93.72.md'
+    'operations/DEPLOYMENT-46.93.72.md'
   ];
   const staleRootDocs = [
     'CHECKPOINT-2026-11-24.md','HANDOFF-2026-11-24.md','CODE-AUDIT.md',
