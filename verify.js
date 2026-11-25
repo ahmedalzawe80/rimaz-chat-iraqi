@@ -2844,6 +2844,8 @@ try {
 } catch(error) { fail('private-media playback ticket regression checks',error.message); }
 
  
+try { const health=serverText.slice(serverText.indexOf("app.get('/api/admin/health'"),serverText.indexOf("app.get('/api/admin/backup/database'")); if(health.includes('ipAttribution:{trustedProxyConfigured:!!process.env.TRUSTED_PROXY_CIDRS')&&htmlText.includes('توثيق بروكسي IP')&&htmlText.includes('نطاقات البروكسي الموثوقة غير مهيأة'))pass('admin health panel exposes trusted-proxy readiness without disclosing configured CIDRs');else fail('trusted-proxy readiness health indicator'); } catch(error){fail('trusted-proxy readiness health indicator',error.message);}
+
 // Container health metrics must parse cgroup v2 counters without failing when the host does not expose them.
 try {
   const fixture = {
