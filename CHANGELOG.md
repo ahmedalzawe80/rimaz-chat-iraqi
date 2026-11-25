@@ -658,3 +658,12 @@
 - Added request method/path and stack trace to unhandled request error logs (query strings are excluded so media ticket tokens are not logged).
 - Updated regression checks to validate image signatures on disk, media-serving behavior, and package version.
 - Historical Deplexo log error `ReferenceError: ticket is not defined` was already fixed in the private media ticket route in an earlier release; this version keeps that fix and adds more diagnostic logging.
+
+
+## 2026-11-25 — Restore preview and repository hardening
+- Added a token-level streaming restore inspector. Preview validates the versioned backup format, database field types, owner presence, and member/guest/room/message/wall counts without retaining the replacement database object graph.
+- Kept full schema validation at confirmation. Confirmation creates a restrictive disk recovery copy, releases the previous database object before parsing the replacement, and atomically restores the previous database file if persistence fails.
+- Added regression coverage for owner-role case sensitivity, duplicate JSON/account keys, configured owner matching, schema failures, unique account counts, and multi-megabyte message arrays.
+- Added a bounded-chunk JSON reader/writer, restore upload admission control, and cancellable full-backup stream cleanup.
+- Exact source/test commit `cbf0f15119ff0be6eee6bd8fa7fc76c019c82841` passed [Actions run #45602868789](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45602868789): 626 regression checks, syntax, locked install, dependency tree, and Docker build. The refreshed archive was extracted and independently passed install, tests, HTML parity, and Docker build.
+- This does not prove the historical 128 MB Deplexo memory issue is fixed; staging restore and representative-load memory evidence remain mandatory.

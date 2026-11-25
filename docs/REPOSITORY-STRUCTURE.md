@@ -16,7 +16,8 @@ This guide explains why each top-level area exists and which files must remain i
 │   └── project/
 ├── lib/
 │   ├── json-reader.js
-│   └── json-writer.js
+│   ├── json-writer.js
+│   └── restore-inspector.js
 ├── public/
 │   ├── gifts/
 │   ├── smileys/
@@ -55,19 +56,20 @@ The root also contains a small tracked data placeholder, the domain-verification
 | `.nvmrc` | Canonical Node.js major version used by local nvm setup and CI |
 | `data.json` | Tracked warning placeholder retained for repository/workflow compatibility; it is not production data |
 | `google1a84d9d1dec7b85d.html` | Domain verification endpoint; keep it byte-identical to the copy under `public/` |
-| `rimaz-final-deep-audit-46.93.72.zip` | Exact input path for the archive audit and guarded manual synchronization workflows |
+| `rimaz-final-deep-audit-46.93.72.zip` | Exact input path for archive audit and guarded manual synchronization workflows |
 
 `public/index.html` is a synchronized fallback copy of the root `index.html`. The regression suite checks that the two copies remain byte-identical.
 
 ## Tooling consistency
 
-`.nvmrc` is the single Node.js major-version source for local development and GitHub Actions. `package.json` constrains supported runtime versions, while the Dockerfile uses the matching Node 24 base image. `package-lock.json` records the resolved dependency tree; local development, CI, and Docker use `npm ci` to install it without re-resolving version ranges. The validation workflow reads `.nvmrc` instead of duplicating a version literal and cancels superseded runs for the same branch or pull request.
+`.nvmrc` is the single Node.js major-version source for local development and GitHub Actions. `package.json` constrains supported runtime versions, while the Dockerfile uses the matching Node 24 base image. `package-lock.json` records the resolved dependency tree; local development, CI, and Docker use `npm ci` to install it without re-resolving version ranges.
 
 ## Persistence and JSON helpers
 
-- `lib/json-reader.js` incrementally parses the live database and staged restore files in bounded chunks; it applies a nesting limit and avoids a full source-text allocation.
+- `lib/json-reader.js` incrementally parses the live database and restore-confirmation file in bounded chunks, with a nesting limit and without allocating a full source-text string.
 - `lib/json-writer.js` serializes database snapshots in bounded chunks for durable atomic writes and backup staging.
-- Keep these helpers separate from `server.js` so file-format and persistence behavior can be regression-tested independently.
+- `lib/restore-inspector.js` validates staged restore previews from JSON tokens without retaining the full replacement database graph.
+- Keep persistence helpers separate from `server.js` so file-format and failure behavior can be regression-tested independently.
 
 ## Runtime assets
 
@@ -77,13 +79,13 @@ Some files have identical contents but distinct names. Two duplicate pairs are i
 
 ## Documentation ownership
 
-- `docs/project/`: continuation checkpoints and handoff records.
+- `docs/project/`: one current continuation checkpoint.
 - `docs/audits/`: security, runtime-resource, and transaction-safety findings.
-- `docs/operations/`: release and operational procedures.
-- `docs/README.md`: navigation index for all maintained documentation.
+- `docs/operations/`: release gate and deployment procedures.
+- `docs/README.md`: navigation index for maintained documentation.
 
 Keep implementation entry points in the root, application media in `public/`, and non-runtime reports in the appropriate `docs/` category.
 
 ## Data and release safety
 
-Git history and rollback branches cover tracked repository files only. They do not back up the live Deplexo persistent volume, database, uploads, or private media. Never replace the live data with the tracked placeholder or with a source archive. Production promotion requires a separately verified volume backup, a restore test, staging smoke tests, and explicit approval.
+Git history and rollback branches cover tracked repository files only. They do not back up the live Deplexo persistent volume, database, uploads, or private media. Never replace live data with the tracked placeholder or a source archive. Production promotion requires a separately verified volume backup, a restore test, staging smoke tests, and explicit approval.
