@@ -217,8 +217,8 @@ try{
   const end=source.indexOf('// v46.82.0:',start);
   const block=source.slice(start,end);
   const checks=[
-    ['candidate JSON is parsed before atomic promotion',block.indexOf('const candidate=readJsonFile(tempFile)')<block.indexOf('fs.renameSync(tempFile, DB_FILE)')],
-    ['last-known-good copy is validated before replacing the recovery point',block.includes('const verified=readJsonFile(tempFile)')&&block.indexOf('const verified=readJsonFile(tempFile)')<block.indexOf('fs.renameSync(tempFile,LAST_KNOWN_GOOD_FILE)')],
+    ['candidate JSON is validated before atomic promotion',block.indexOf('validateJsonFile(tempFile)')<block.indexOf('fs.renameSync(tempFile, DB_FILE)')],
+    ['last-known-good copy is validated before replacing the recovery point',block.includes('validateJsonFile(tempFile)')&&block.indexOf('validateJsonFile(tempFile)')<block.indexOf('fs.renameSync(tempFile,LAST_KNOWN_GOOD_FILE)')],
     ['last-known-good copy is restrictive, synced, and atomically replaced',block.includes("fs.chmodSync(tempFile,0o600)")&&block.includes('fs.fsyncSync(fd)')&&block.includes('fs.renameSync(tempFile,LAST_KNOWN_GOOD_FILE)')],
     ['invalid startup database keeps a corrupt copy and never auto-applies an older recovery candidate',source.includes('const lastKnownGoodFile=')&&source.includes('It was NOT applied automatically')&&source.includes('COPYFILE_EXCL')]
   ];
@@ -959,7 +959,7 @@ try {
   if (!saveFn) throw new Error('save() implementation not found');
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-atomic-save-'));
   try {
-    const context = { fs, crypto, writeJsonSync, DATA_DIR: tempDir, DB_FILE: path.join(tempDir, 'data.json'), db: { users: { test: { likes: 7 } }, messages: [], privateMessages: [{text:'secret'}] }, process: { pid: process.pid } };
+    const context = { fs, crypto, writeJsonSync, validateJsonFile, DATA_DIR: tempDir, DB_FILE: path.join(tempDir, 'data.json'), db: { users: { test: { likes: 7 } }, messages: [], privateMessages: [{text:'secret'}] }, process: { pid: process.pid } };
     vm.createContext(context);
     vm.runInContext(`${saveFn[0]}\nglobalThis.performSave = save;`, context);
     context.performSave();
@@ -2536,7 +2536,7 @@ try {
         messageSaveTimer:null,pendingMessageWrites:[{message:{id:'queued'},resolve:()=>resolved++,reject:()=>{}}],
         messageSaveAttempts:1,db:{messages:[{id:'existing'}]},
         clearTimeout:()=>{},setTimeout:(fn)=>setTimeout(fn,1),
-        save(){if(left-->0)throw new Error('simulated transient disk failure');saved=this.db.messages.map(x=>x.id);},
+        save(){if(left-->0)throw new Error('simulated transient disk failure');saved=context.db.messages.map(x=>x.id);},
         console:{error(){}}
       };
       vm.createContext(context);
