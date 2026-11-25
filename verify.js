@@ -2941,8 +2941,10 @@ try {
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-backup-media-integrity-'));
   const uploads=path.join(temp,'uploads');fs.mkdirSync(uploads);
   fs.writeFileSync(path.join(uploads,'present.png'),'ok');
-  const refs=createBackupMediaSnapshot({database:{messages:[{text:'/uploads/not-a-file.png',media:{url:'/uploads/present.png'}}]},uploadDirectory:uploads,dataDirectory:temp});
-  try { assert.equal(refs.entries.length,1); } finally { refs.cleanup(); }
+  fs.writeFileSync(path.join(uploads,'gift.png'),'gift');
+  const sharedGift={giftImage:'/uploads/gift.png'};
+  const refs=createBackupMediaSnapshot({database:{messages:[{text:'/uploads/not-a-file.png',media:{url:'/uploads/present.png'}}],profiles:{alice:{gifts:[sharedGift]}},giftCatalog:[{image:'/uploads/gift.png'}]},uploadDirectory:uploads,dataDirectory:temp});
+  try { assert.deepEqual(refs.entries.map(entry=>entry.name),['uploads/gift.png','uploads/present.png']); } finally { refs.cleanup(); }
   assert.throws(()=>createBackupMediaSnapshot({database:{profiles:{alice:{avatar:'/uploads/missing.png'}}},uploadDirectory:uploads,dataDirectory:temp}),/Referenced public upload is missing/);
   fs.symlinkSync(path.join(uploads,'present.png'),path.join(uploads,'link.png'));
   assert.throws(()=>createBackupMediaSnapshot({database:{profiles:{alice:{avatar:'/uploads/link.png'}}},uploadDirectory:uploads,dataDirectory:temp}),/not a regular file/);
