@@ -94,3 +94,12 @@ PR #3 remains open/draft against the safety branch; PR #1 remains the safety pre
 - The repository tree contains no nested `rimaz-chat-iraqi-main/` project copy. Root/public `index.html` and the Google verification file are byte-identical; `data.json` is only the 138-byte warning placeholder, not production data. The audited ZIP remains at root because both guarded archive workflows require that exact path.
 - PR #3 remains open/draft/unmerged, based on `safety/validate-and-backup-before-sync`. Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`; no production sync, deployment, restart, or live-volume change occurred.
 - The operational blockers above remain in force: independently backed-up Deplexo volume, isolated full-volume restore drill, representative staging tests, production memory/OOM telemetry, and provider-confirmed proxy-header trust. CI success does not waive them.
+
+
+## Latest branch refresh — 2026-11-25
+
+- Latest source/test candidate: `96f8220df1ad5b1603bd36416fc75c84f3735507`. Its only change is more precise failure diagnostics in one `verify.js` assertion; runtime application code is unchanged by this commit.
+- Latest archive-only refresh: `7d49e4f79b18111bd6ce2eff9d2f74845e3c40c7`; it changes only `rimaz-final-deep-audit-46.93.72.zip`.
+- The successful run `#45603823711` / 627 regression checks recorded above validates the earlier source candidate `e943ee295afb94ff581daafb4a415a53c5984948` and archive `54f042a2f6589ee0ee8022e21001767e5a5e15ba`, **not** the later source/test and archive refresh commits.
+- The connected GitHub status and PR-run lookups returned no checks or PR-triggered runs for `7d49e4f`. Exact-head CI is **unverified**. Treat it as neither passed nor failed until a fresh run is observed on the current head.
+- PR #3 remains open/draft/unmerged; production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No production merge, deployment, restart, ZIP sync, or live-data operation has occurred.
