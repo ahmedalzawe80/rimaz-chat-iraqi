@@ -2075,7 +2075,7 @@ app.post('/api/admin/restore/database/preview',requireAdmin,restoreUploadGate,(r
    pendingDatabaseRestores.set(token,{filePath:uploadedFile.path,summary,owner:keyName(req.user.name),expiresAt:Date.now()+5*60*1000});
    uploadedFile.path='';
    res.set('Cache-Control','no-store');
-   res.json({ok:true,token,expiresInSeconds:300,summary:checked.summary,warning:'سيتم استبدال بيانات قاعدة البيانات الحالية. الجلسات النشطة والرسائل الخاصة المؤقتة لن تُستعاد.'});
+   res.json({ok:true,token,expiresInSeconds:300,summary,warning:'سيتم استبدال بيانات قاعدة البيانات الحالية. الجلسات النشطة والرسائل الخاصة المؤقتة لن تُستعاد.'});
   }catch(e){removeUploadedFile(uploadedFile);res.status(400).json({error:e.message||'ملف النسخة غير صالح'});}
  });
 });
