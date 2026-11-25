@@ -62,3 +62,15 @@
 ## Non-negotiable release boundary
 
 Keep PR #1 and PR #3 unmerged, leave `main` untouched, and do not deploy/restart Deplexo or run the main-only ZIP synchronization workflow until the independent volume backup, isolated restore, staging tests, provider telemetry/trust-boundary checks, and final explicit promotion approval are complete.
+
+
+## Follow-up verification — 2026-11-26 (latest review)
+
+- The cgroup metrics correction and the health-panel null guard are now validated together. Source/test commit: `cef0952d327b22296f0d6cef088d62fb61ae4d22`.
+- GitHub Actions run [#45707176482](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45707176482) completed successfully: both `validate` and `refresh-release-archive` succeeded. The validation job passed locked dependency installation/tree verification, JavaScript syntax, regression tests, production Docker build, and HTTP + Socket.IO smoke test.
+- The immediately preceding CPU-only test run failed because its multiline fixture was escaped incorrectly; the fixture was corrected in `025b1c0e2689f90983f0f4e2fcd94d41f955f619`, and run [#45706685335](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45706685335) passed. The later health-panel commits `4c562aa...` and `659f52c...` were superseded/cancelled by the combined exact-source validation; the final combined run above is green.
+- The successful archive job created archive-only head commit `89aa8a83894a53cf70160419570f30ccc2f160d3`, changing only `rimaz-final-deep-audit-46.93.72.zip`. There are no check runs attached to that ZIP-only commit; the source parent `cef0952...` is the exact commit tested by run #45707176482.
+- PR #3 remains open/draft/unmerged, with head `89aa8a8...` and base safety head `67d162b...`. PR #1 remains open/draft/unmerged against `main`; PR #2 remains open/draft, stale and not mergeable. Do not merge PR #2 independently.
+- Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. The PR #3 working tree has 413 tracked tree entries, 22 root entries, no nested duplicate project directory, and one required release ZIP.
+- The source change prevents CPU-only cgroup data from being marked unavailable and prevents a missing cgroup memory counter from being rendered as a false `0.00 MB`. It does not establish that Deplexo's historical OOM issue is resolved.
+- No merge, production sync, Deplexo restart/deploy, or live-volume modification occurred. Independent live-volume backup/isolated restore, provider telemetry and proxy trust confirmation, and real browser/device WebRTC/TURN tests remain mandatory promotion blockers.
