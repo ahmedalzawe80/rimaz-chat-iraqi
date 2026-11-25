@@ -137,10 +137,10 @@ try {
 
 try {
   const validationSource = fs.readFileSync(server, 'utf8');
-  const validationStart = validationSource.indexOf('function validateDatabaseRestoreData(parsed){');
-  const validationEnd = validationSource.indexOf('\nfunction restoreContainsOwner', validationStart);
-  if (validationStart < 0 || validationEnd < 0) throw new Error('validateDatabaseRestoreData implementation not found');
-  const validationFunction = validationSource.slice(validationStart, validationEnd);
+  const validationStart = validationSource.indexOf('function validateDatabaseRestoreData');
+  const validationEnd = validationSource.indexOf('function restoreContainsOwner', validationStart);
+  if (validationStart < 0 || validationEnd <= validationStart) throw new Error('validateDatabaseRestoreData implementation not found');
+  const validationFunction = validationSource.slice(validationStart, validationEnd).trim();
   const validationContext = { defaults: () => ({ users: {}, guests: {}, rooms: [], messages: [] }) };
   vm.createContext(validationContext);
   vm.runInContext(validationFunction + '\nglobalThis.validateRestoreData = validateDatabaseRestoreData;', validationContext);
