@@ -92,6 +92,7 @@ jobs:
           grep -qi '<html' /tmp/rimaz-home.html
           curl --fail --silent 'http://127.0.0.1:3000/socket.io/?EIO=4&transport=polling' -o /tmp/rimaz-socketio.txt
           grep -q '^0{' /tmp/rimaz-socketio.txt
+          node scripts/chat-integration-smoke.js
           # Exercise concurrent streamed media reads and ordinary HTTP/Socket.IO polling
           # while the container is constrained to the production memory and CPU limits.
           seq 1 8 | xargs -P 4 -I{} curl --fail --silent --show-error http://127.0.0.1:3000/uploads/load-test.bin -o /dev/null

@@ -140,11 +140,11 @@ async function main() {
     form.append('file', new Blob([png], { type: 'image/png' }), 'private-test.png');
     form.append('scope', 'private');
     form.append('to', 'integration-peer');
+    const privateMediaEvent = second.waitFor('private-media', value => value?.from === 'admin');
     const uploaded = await requestJson('/api/media', { method: 'POST', headers: { 'x-session': alpha.sid }, body: form });
     assert.match(uploaded.media.url, /^\/api\/private\/media\/[a-zA-Z0-9._-]+$/);
-    const privateMediaEvent = second.waitFor('private-media', value => value?.media?.url === uploaded.media.url);
-    // The upload route emits the media event before returning; the persisted transient record is verified below.
-    await privateMediaEvent.catch(() => null);
+    const deliveredMedia = await privateMediaEvent;
+    assert.equal(deliveredMedia.media.url, uploaded.media.url, 'private media must be delivered to the intended recipient');
 
     const denied = await fetch(baseUrl + uploaded.media.url, { headers: { 'x-session': intruder.sid } });
     assert.equal(denied.status, 404, 'unrelated account must not read private media');
