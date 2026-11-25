@@ -8,6 +8,7 @@
     "test": "node verify.js"
   },
   "dependencies": {
+    "@streamparser/json": "0.0.26",
     "bcryptjs": "^2.4.3",
     "express": "^5.1.0",
     "multer": "^2.0.2",
