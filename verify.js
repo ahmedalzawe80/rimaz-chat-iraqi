@@ -195,6 +195,21 @@ try {
   } finally { fs.rmSync(tempDir, { recursive: true, force: true }); }
 } catch (error) { fail('bounded-memory JSON writer regression checks', error.message); }
 
+// Database save must validate the candidate and preserve only a parseable previous generation.
+try{
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('const LAST_KNOWN_GOOD_INTERVAL_MS = 60 * 1000;');
+  const end=source.indexOf('// v46.82.0:',start);
+  const block=source.slice(start,end);
+  const checks=[
+    ['candidate JSON is parsed before atomic promotion',block.indexOf('const candidate=readJsonFile(tempFile)')<block.indexOf('fs.renameSync(tempFile, DB_FILE)')],
+    ['last-known-good copy is validated before replacing the recovery point',block.includes('const verified=readJsonFile(tempFile)')&&block.indexOf('const verified=readJsonFile(tempFile)')<block.indexOf('fs.renameSync(tempFile,LAST_KNOWN_GOOD_FILE)')],
+    ['last-known-good copy is restrictive, synced, and atomically replaced',block.includes("fs.chmodSync(tempFile,0o600)")&&block.includes('fs.fsyncSync(fd)')&&block.includes('fs.renameSync(tempFile,LAST_KNOWN_GOOD_FILE)')],
+    ['invalid startup database keeps a corrupt copy and never auto-applies an older recovery candidate',source.includes('const lastKnownGoodFile=')&&source.includes('It was NOT applied automatically')&&source.includes('COPYFILE_EXCL')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+}catch(error){fail('database integrity/recovery guard checks',error.message);}
+
 // Startup expiry cleanup must use the canonical atomic save path, which also keeps private DMs off disk.
 try {
   const source = fs.readFileSync(server, 'utf8');
@@ -2492,25 +2507,41 @@ try {
 } catch(error) { fail('room/avatar upload authorization ordering checks',error.message); }
 
 
-// A failed final database flush must not be reported as a clean process shutdown.
-try {
-  const source=fs.readFileSync(server,'utf8');
-  const start=source.indexOf('function gracefulShutdown(signal){');
-  const end=source.indexOf("\nprocess.once('SIGTERM'",start);
-  if(start<0||end<0)throw new Error('graceful shutdown function was not found');
-  const fn=source.slice(start,end);
-  const run=failSave=>{
-    const events=[];
-    const context={messageSaveTimer:null,pendingMessageWrites:[],flushMessageWrites:()=>true,clearTimeout:()=>{},save:()=>{if(failSave)throw new Error('disk failure');},
-      console:{error:()=>{}},io:{close:callback=>{events.push('close');callback();}},
-      process:{exit:code=>events.push(['exit',code])},setTimeout:()=>({unref(){}})};
-    vm.createContext(context);vm.runInContext(fn+";gracefulShutdown('SIGTERM');",context);return events;
-  };
-  const success=run(false),failure=run(true);
-  const ok=success.some(x=>Array.isArray(x)&&x[0]==='exit'&&x[1]===0)&&failure.some(x=>Array.isArray(x)&&x[0]==='exit'&&x[1]===1);
-  if(ok)pass('graceful shutdown exits nonzero when the final atomic database save fails');
-  else fail('graceful shutdown save-failure exit status',JSON.stringify({success,failure}));
-} catch(error) { fail('graceful shutdown save-failure exit status',error.message); }
+// Shutdown must retry a previously failed batch and must not exit successfully with queued messages.
+(async()=>{
+  try{
+    const source=fs.readFileSync(server,'utf8');
+    const helperStart=source.indexOf('async function persistPendingMessagesDuringShutdown(');
+    const helperEnd=source.indexOf('\nfunction gracefulShutdown',helperStart);
+    if(helperStart<0||helperEnd<0)throw new Error('shutdown persistence helper was not found');
+    const helper=source.slice(helperStart,helperEnd);
+    const makeContext=(failures)=>{
+      let left=failures,saved=[],resolved=0;
+      const context={
+        messageSaveTimer:null,pendingMessageWrites:[{message:{id:'queued'},resolve:()=>resolved++,reject:()=>{}}],
+        messageSaveAttempts:1,db:{messages:[{id:'existing'}]},
+        clearTimeout:()=>{},setTimeout:(fn)=>setTimeout(fn,1),
+        save(){if(left-->0)throw new Error('simulated transient disk failure');saved=this.db.messages.map(x=>x.id);},
+        console:{error(){}}
+      };
+      vm.createContext(context);
+      vm.runInContext(helper+';globalThis.flushAtShutdown=persistPendingMessagesDuringShutdown;',context);
+      return {context,get saved(){return saved;},get resolved(){return resolved;}};
+    };
+    const transient=makeContext(1);
+    const recovered=await transient.context.flushAtShutdown(3,1);
+    const retryWorks=recovered===true&&transient.context.pendingMessageWrites.length===0&&transient.saved.join(',')==='existing,queued'&&transient.resolved===1;
+    const permanent=makeContext(5);
+    const remainsPending=await permanent.context.flushAtShutdown(2,1)===false&&permanent.context.pendingMessageWrites.length===1&&permanent.context.db.messages.length===1;
+    if(retryWorks&&remainsPending)pass('shutdown retries transient message-save failures and retains uncommitted messages on persistent failure');
+    else fail('shutdown pending-message retry fixture',JSON.stringify({retryWorks,remainsPending}));
+    const shutdownStart=source.indexOf('function gracefulShutdown(signal){');
+    const shutdownEnd=source.indexOf("\nprocess.once('SIGTERM'",shutdownStart);
+    const shutdown=source.slice(shutdownStart,shutdownEnd);
+    if(shutdown.includes('shutdownStarted=true')&&shutdown.indexOf('io.close(')<shutdown.indexOf('persistPendingMessagesDuringShutdown')&&shutdown.includes('pendingMessageWrites.length===0?0:1'))pass('graceful shutdown stops new writes, closes transports, drains queued messages, and exits nonzero if any remain');
+    else fail('graceful shutdown lifecycle ordering');
+  }catch(error){fail('shutdown persistence regression checks',error.message);}
+})();
 
 // Repository hygiene and safe source-sync regression checks.
 try {
