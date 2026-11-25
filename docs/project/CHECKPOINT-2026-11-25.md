@@ -87,3 +87,35 @@ The reviewed source shows `points` as an administrator-editable member statistic
 - GitHub now reports PR #3 as mergeable/clean against the current safety head `67d162b9...`. PR #3 remains draft/open/unmerged; PR #1 remains draft/open/unmerged; PR #2 remains a separate overlapping draft and is not a promotion step.
 - Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No merge, Deplexo deployment/restart, ZIP sync, or live-data operation occurred.
 - The release blockers in this checkpoint remain unchanged: independent consistent live-volume backup, isolated restore drill, full staging chat/media/voice test, representative-load memory/provider telemetry under 128 MB and 0.25 vCPU, and provider IP-header sanitization evidence.
+
+
+## Root-fix continuation — 2026-11-25 19:45 UTC
+
+### Latest validated source and archive
+
+- PR #3 candidate source/test/workflow commit: `a2c2bacfc248258343aadb2d68ebc5da5c245b51`.
+- Exact source validation run [#45688138101](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45688138101) completed successfully on both jobs: `validate` and `refresh-release-archive`.
+- The validation job passed **635 checks with zero failures**, production Docker build, and `npm audit` reporting **0 vulnerabilities**.
+- The archive job rebuilt and verified the ZIP from the validated tracked-file tree, extracted it, reinstalled from the lockfile, and passed its independent checks and Docker build. The automation then created archive-only commit `63209beb99dab8a150b3b29d9196a3da9983a8ec`; PR #3 now points to that archive-only commit. Do not describe #45688138101 as a push-triggered run on the archive-only SHA.
+- PR #3 remains open/draft/unmerged with base `safety/validate-and-backup-before-sync`. PR #1 remains open/draft/unmerged. PR #2 remains a separate overlapping draft and is not a promotion path. Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
+
+### New root fixes and evidence
+
+- Added `lib/client-ip.js`: IP headers are ignored unless the direct socket peer matches an explicitly configured `TRUSTED_PROXY_CIDRS` CIDR. Trusted client-IP headers are syntax-validated. The existing global-IP-ban normalization path is preserved. No provider range is guessed.
+- Added a health-panel indicator for trusted-proxy readiness without exposing the configured ranges. If the setting is absent, the panel warns that the observed address may be the proxy itself.
+- Added `lib/cgroup-metrics.js` and extended the admin health API/UI to report cgroup memory current/peak/limit, OOM counters, and CPU throttling when cgroup v2 metrics are exposed. These live counters do not replace provider restart history.
+- Full-backup upload collection now only follows recognized media-reference fields, ignores arbitrary chat text, and fails closed on missing, unreadable, symlinked, or changing referenced files. The backup captures referenced public uploads as hard links before streaming, and cleanup is tested on success, failure, and cancellation. Transient private messages and their private media remain excluded from the full export by design.
+- Added an isolated TAR.GZ extraction drill: the test extracts the full archive and verifies the database envelope, cleared transient sessions/private messages, and byte-for-byte referenced public upload content.
+- The production-container smoke test now runs with **128 MiB memory and 0.25 CPU** limits, performs eight concurrent 12 MiB public-media downloads plus 24 homepage/Socket.IO polling pairs, and asserts the container remains running and not OOM-killed.
+- Added `scripts/chat-integration-smoke.js`, executed against the constrained production container. It registers two test accounts and verifies authenticated public chat, private text, private-media upload/delivery, unauthorized private-media denial, recipient playback-ticket streaming, voice-room offer/answer signaling, and video-call offer/answer signaling. This verifies server-side signaling and authorization, not actual browser microphone/camera capture, TURN connectivity, or a multi-device real-world session.
+- The current root listing has one release ZIP, no nested duplicate project directory, and the application source is grouped under `lib/`, `scripts/`, `docs/`, and `public/`.
+
+### Remaining hard blockers — not to be marked complete
+
+1. **Live Deplexo storage:** no independent backup of the actual persistent volume `/data/rimaz` has been made or verified. The repository ZIP is not a volume backup. The full application export contains the database and referenced public uploads; it intentionally omits transient private messages and their private-media files.
+2. **Actual restore/rollback:** the CI drill proves archive extraction and content parity in isolation, but it does not yet prove a restore against a cloned Deplexo volume, including permissions, owner login, existing uploads, and rollback after an induced restore failure.
+3. **Provider telemetry:** CI proves one controlled workload survives the configured 128 MiB / 0.25 CPU container limits. It does not prove historical Deplexo OOM/restart behavior is fixed under representative production concurrency. Provider usage, alerts, restart history, and runtime logs still need authorized read-only inspection.
+4. **Trusted proxy configuration:** the code now fails closed against spoofed headers, but `TRUSTED_PROXY_CIDRS` must be populated with Deplexo's documented direct proxy source ranges and the provider's client-IP header sanitization must be confirmed. Do not guess CIDRs or use `0.0.0.0/0` / `::/0`.
+5. **Real browser/device media:** the CI integration covers signaling and authorization, not actual browser WebRTC audio/video streams, camera/microphone permissions, TURN relay behavior, or multi-device network conditions. A controlled staging session remains required.
+
+**Promotion remains blocked. Do not merge PR #1/#3, close/rebase PR #2 as a promotion action, sync the ZIP to production, deploy/restart Deplexo, or modify the live volume until these external evidence gates are satisfied.**
