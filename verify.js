@@ -10,7 +10,7 @@ const { writeJsonSync } = require('./lib/json-writer');
 const { readJsonFile } = require('./lib/json-reader');
 const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
 const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
-const { createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
+const { normalizeTrustedProxyHeader, createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
 const { readCgroupMetrics } = require('./lib/cgroup-metrics');
 const { cleanupStaleBackupTemps } = require('./lib/backup-temp-cleanup');
 
@@ -2901,18 +2901,26 @@ try {
 try {
   const untrusted = createTrustedProxyTrust('');
   const trusted = createTrustedProxyTrust('127.0.0.1/32,::1/128');
-  const spoofed = resolveClientIp({'cf-connecting-ip':'203.0.113.9','x-real-ip':'203.0.113.10','x-forwarded-for':'203.0.113.11'},'198.51.100.7',untrusted);
-  const trustedCf = resolveClientIp({'cf-connecting-ip':'203.0.113.9'},'127.0.0.1',trusted);
-  const trustedReal = resolveClientIp({'x-real-ip':'203.0.113.10'},'::1',trusted);
-  const trustedForwarded = resolveClientIp({'x-forwarded-for':'203.0.113.12'},'127.0.0.1',trusted);
-  const invalidTrusted = resolveClientIp({'cf-connecting-ip':'not-an-ip','x-real-ip':'bad'},'127.0.0.1',trusted);
+  const spoofed = resolveClientIp({'cf-connecting-ip':'203.0.113.9','x-real-ip':'203.0.113.10','x-forwarded-for':'203.0.113.11'},'198.51.100.7',untrusted,'cf-connecting-ip');
+  const noHeaderConfigured = resolveClientIp({'cf-connecting-ip':'203.0.113.9'},'127.0.0.1',trusted);
+  const trustedCf = resolveClientIp({'cf-connecting-ip':'203.0.113.9','x-real-ip':'203.0.113.10'},'127.0.0.1',trusted,'cf-connecting-ip');
+  const trustedReal = resolveClientIp({'cf-connecting-ip':'203.0.113.9','x-real-ip':'203.0.113.10'},'::1',trusted,'x-real-ip');
+  const wrongHeaderOnly = resolveClientIp({'cf-connecting-ip':'203.0.113.9'},'127.0.0.1',trusted,'x-real-ip');
+  const invalidTrusted = resolveClientIp({'cf-connecting-ip':'not-an-ip'},'127.0.0.1',trusted,'cf-connecting-ip');
+  const multiValueTrusted = resolveClientIp({'cf-connecting-ip':'203.0.113.9, 203.0.113.10'},'127.0.0.1',trusted,'cf-connecting-ip');
+  const forwardedChain = resolveClientIp({'x-forwarded-for':'203.0.113.9, 127.0.0.1'},'127.0.0.1',trusted,'x-forwarded-for');
+  assert.equal(normalizeTrustedProxyHeader(' CF-Connecting-IP '),'cf-connecting-ip');
+  assert.equal(normalizeTrustedProxyHeader('x-arbitrary-ip'),'');
   assert.equal(spoofed,'198.51.100.7');
+  assert.equal(noHeaderConfigured,'127.0.0.1');
   assert.equal(trustedCf,'203.0.113.9');
   assert.equal(trustedReal,'203.0.113.10');
-  assert.equal(trustedForwarded,'203.0.113.12');
+  assert.equal(wrongHeaderOnly,'127.0.0.1');
   assert.equal(invalidTrusted,'127.0.0.1');
-  assert.equal(resolveClientIp({'cf-connecting-ip':'203.0.113.9'},'::ffff:198.51.100.7',untrusted),'198.51.100.7');
-  pass('client IP resolution ignores spoofed proxy headers and accepts validated client IP headers only from explicitly trusted proxy CIDRs');
+  assert.equal(multiValueTrusted,'127.0.0.1');
+  assert.equal(forwardedChain,'203.0.113.9');
+  assert.equal(resolveClientIp({'cf-connecting-ip':'203.0.113.9'},'::ffff:198.51.100.7',untrusted,'cf-connecting-ip'),'198.51.100.7');
+  pass('client IP resolution requires an explicit trusted proxy CIDR and one selected sanitized header, rejects ambiguous values, and safely resolves X-Forwarded-For chains');
 } catch(error) { fail('trusted proxy client IP regression checks',error.message); }
 
 // Full backup media must be captured with the database state and include only referenced public uploads.

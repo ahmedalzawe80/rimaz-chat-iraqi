@@ -47,7 +47,8 @@ If `/data` exists and `DATA_DIR` is not explicitly set, the server defaults to `
 - `PORT`: HTTP port; defaults to `3000`.
 - `DATA_DIR`: persistent runtime data directory.
 - `PUBLIC_SITE_URL`: canonical public origin used for SEO metadata, robots.txt, and sitemap.xml.
-- `TRUSTED_PROXY_CIDRS`: optional comma-separated IP/CIDR ranges for the hosting reverse proxies only. Forwarded client-IP headers are ignored unless the immediate peer matches one of these trusted ranges. Configure this from the hosting provider's documented proxy ranges; never trust all public IPs or guess a range. The admin health panel warns when this is not configured.
+- `TRUSTED_PROXY_CIDRS`: optional comma-separated IP/CIDR ranges for the hosting reverse proxies only.
+- `TRUSTED_PROXY_HEADER`: exactly one provider-sanitized header: `cf-connecting-ip`, `x-real-ip`, or `x-forwarded-for`. Forwarded client-IP values are ignored unless both this header and the immediate proxy's documented CIDR range are configured. The default is to trust no forwarding header. Configure both values only from the hosting provider's documentation; never trust all public IPs or guess a range. The admin health endpoint reports whether both trust-boundary settings are active.
 
 The admin health panel reports process RSS/heap plus cgroup memory current/peak/limit, OOM counters, and CPU throttling when the host exposes cgroup v2 metrics. These live counters do not replace provider restart history.
 
