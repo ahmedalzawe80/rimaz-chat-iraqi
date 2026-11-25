@@ -1293,6 +1293,20 @@ try{
     try{if(fs.statSync(orphan).isFile())fs.unlinkSync(orphan);}catch(_){}
   }
 }catch(error){console.error('Could not initialize private restore staging directory:',error.message);throw error;}
+function createRestoreUploadGate(maxConcurrent){
+ let active=0;
+ return function restoreUploadGate(req,res,next){
+  if(active>=maxConcurrent)return res.status(429).json({error:'يوجد رفع نسخة استعادة قيد التنفيذ؛ حاول بعد قليل'});
+  active++;
+  let released=false;
+  const release=()=>{if(released)return;released=true;active=Math.max(0,active-1);};
+  res.once('finish',release);
+  res.once('close',release);
+  req.once('aborted',release);
+  next();
+ };
+}
+const restoreUploadGate=createRestoreUploadGate(1);
 const restoreUpload=multer({storage:multer.diskStorage({destination:RESTORE_TMP_DIR,filename:(req,file,cb)=>cb(null,`restore-${process.pid}-${crypto.randomBytes(16).toString('hex')}.json`)}),limits:{fileSize:20*1024*1024,files:1,fields:0}});
 const pendingDatabaseRestores=new Map();
 const MAX_PENDING_DATABASE_RESTORES=2;
@@ -2015,7 +2029,7 @@ app.get('/api/admin/backup/database',requireAdmin,(req,res)=>{
  }
 });
 app.get('/api/admin/backup/full',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخة الاحتياطية الكاملة'});res.set('Cache-Control','no-store, no-cache, must-revalidate');res.set('Content-Type','application/gzip');res.set('Content-Disposition',`attachment; filename=\"rimaz-full-backup-${new Date().toISOString().slice(0,10)}.tar.gz\"`);const source=Readable.from(fullBackupTar()),archive=zlib.createGzip({level:6});pipeline(source,archive,res,error=>{if(error&&error.code!=='ERR_STREAM_PREMATURE_CLOSE')console.error('Full backup pipeline failed:',error);});});
-app.post('/api/admin/restore/database/preview',requireAdmin,(req,res)=>{
+app.post('/api/admin/restore/database/preview',requireAdmin,restoreUploadGate,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية استعادة النسخة'});
  restoreUpload.single('backup')(req,res,error=>{
   if(error)return res.status(400).json({error:error.code==='LIMIT_FILE_SIZE'?'حجم ملف النسخة أكبر من 20MB':(error.message||'تعذر قراءة ملف النسخة')});
