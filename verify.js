@@ -40,7 +40,7 @@ try {
     assert.throws(() => readJsonFile(file), SyntaxError);
     fs.writeFileSync(file, '');
     assert.throws(() => readJsonFile(file), SyntaxError);
-    fs.writeFileSync(file, '\\uFEFF{"bom":true}');
+    fs.writeFileSync(file, String.fromCharCode(0xfeff) + '{"bom":true}');
     assert.throws(() => readJsonFile(file), SyntaxError);
     fs.writeFileSync(file, '{"too":"large"}');
     assert.throws(() => readJsonFile(file, { maxBytes: 4 }), RangeError);
