@@ -155,3 +155,13 @@ The external release blockers are unchanged: independent live-volume backup, act
 - No merge, production source sync, Deplexo deployment/restart, or live-volume mutation occurred.
 - Release blockers are unchanged: independent persistent-volume backup, isolated full-volume restore drill (database plus uploads and private-media), full staging chat/media/voice tests, representative production memory/OOM telemetry, and provider-confirmed trusted proxy header behavior.
 - Do not treat the CI memory smoke as proof the historical Deplexo OOM incident is resolved. Do not merge or deploy until the operational release gate is evidenced.
+
+
+## Latest branch refresh — 2026-11-25
+
+- Latest source/test candidate: `96f8220df1ad5b1603bd36416fc75c84f3735507`. This commit changes only the diagnostic detail emitted by a JSON-writer regression assertion in `verify.js`; it does not change runtime application code.
+- Latest archive-only refresh: `7d49e4f79b18111bd6ce2eff9d2f74845e3c40c7`; its only changed file is `rimaz-final-deep-audit-46.93.72.zip`.
+- The previously recorded successful run `#45603823711` and its 627-check result belong to the earlier candidate `e943ee295afb94ff581daafb4a415a53c5984948` and archive refresh `54f042a2f6589ee0ee8022e21001767e5a5e15ba`. They do **not** validate the later `96f8220` / `7d49e4f` updates.
+- At this checkpoint, the connected GitHub status and PR-run lookups returned no checks or PR-triggered workflow runs for `7d49e4f`. Exact-head CI is therefore **unverified**, not failed and not passed.
+- PR #3 remains open/draft/unmerged. Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No merge, deployment, restart, source sync, or live-data change was performed.
+- The release blockers listed above remain unchanged. Do not promote based on the earlier green run.
