@@ -97,6 +97,16 @@ jobs:
           # while the container is constrained to the production memory and CPU limits.
           seq 1 8 | xargs -P 4 -I{} curl --fail --silent --show-error http://127.0.0.1:3000/uploads/load-test.bin -o /dev/null
           seq 1 24 | xargs -P 4 -I{} sh -c 'curl --fail --silent --show-error http://127.0.0.1:3000/ -o /dev/null && curl --fail --silent --show-error "http://127.0.0.1:3000/socket.io/?EIO=4&transport=polling" -o /dev/null'
+          # Read the container's own cgroup-v2 counters after the concurrent workload.
+          # Keep an 8 MiB safety margin below the configured 128 MiB hard limit.
+          MEMORY_LIMIT="$(docker exec rimaz-smoke cat /sys/fs/cgroup/memory.max)"
+          MEMORY_CURRENT="$(docker exec rimaz-smoke cat /sys/fs/cgroup/memory.current)"
+          MEMORY_PEAK="$(docker exec rimaz-smoke cat /sys/fs/cgroup/memory.peak)"
+          test "$MEMORY_LIMIT" = "134217728"
+          [[ "$MEMORY_CURRENT" =~ ^[0-9]+$ && "$MEMORY_PEAK" =~ ^[0-9]+$ ]]
+          test "$MEMORY_CURRENT" -le 125829120
+          test "$MEMORY_PEAK" -le 125829120
+          echo "Container cgroup-v2 memory after workload: current=$MEMORY_CURRENT bytes peak=$MEMORY_PEAK bytes limit=$MEMORY_LIMIT bytes"
           STATE="$(docker inspect --format '{{.State.OOMKilled}} {{.State.Running}} {{.HostConfig.Memory}} {{.HostConfig.NanoCpus}}' rimaz-smoke)"
           test "$STATE" = "false true 134217728 250000000"
 
