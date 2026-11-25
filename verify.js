@@ -93,6 +93,12 @@ try {
     assert.equal(inspectDatabaseRestoreFile(file, { ...options, configuredOwnerName: 'boss' }).members, 1);
     assert.throws(() => inspectDatabaseRestoreFile(file, { ...options, configuredOwnerName: 'missing' }), /النسخة لا تحتوي حساب صاحب الموقع/);
 
+    fs.writeFileSync(file, '{"format":"rimaz-database-backup","version":1,"database":{"users":{"admin":{"role":"owner"}},"guests":{},"rooms":[],"messages":[]}}');
+    assert.equal(inspectDatabaseRestoreFile(file, options).members, 1);
+
+    fs.writeFileSync(file, '{"format":"rimaz-database-backup","version":1,"database":{"users":{"owner":{"role":"owner"},"owner":{"role":"member"},"member":{}},"guests":{},"rooms":[],"messages":[]}}');
+    assert.equal(inspectDatabaseRestoreFile(file, options).members, 2);
+
     const invalidType = { ...backup, database: { ...backup.database, label: {} } };
     fs.writeFileSync(file, JSON.stringify(invalidType));
     assert.throws(() => inspectDatabaseRestoreFile(file, options), /نوع بيانات غير صالح داخل النسخة: label/);
