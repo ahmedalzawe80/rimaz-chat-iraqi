@@ -1496,6 +1496,40 @@ try {
   runtime?pass('restore upload gate runtime fixture serializes uploads and safely releases exactly once'):fail('restore upload gate runtime fixture');
 }catch(error){fail('restore upload gate checks',error.message);}
  
+// Restore preview admission: reject full queues before Multer writes or JSON parsing.
+try {
+  const serverText = fs.readFileSync(server, 'utf8');
+  const helperStart = serverText.indexOf('function restorePreviewCapacityAvailable(ownerName){');
+  const helperEnd = serverText.indexOf('\nconst databaseRestoreCleanupTimer', helperStart);
+  const helperSource = helperStart >= 0 && helperEnd > helperStart ? serverText.slice(helperStart, helperEnd) : '';
+  let runtimeCapacityChecks = false;
+  try {
+    const evaluate = vm.runInNewContext(
+      'const MAX_PENDING_DATABASE_RESTORES=2; const pendingDatabaseRestores=new Map(); const keyName=x=>String(x||"").trim().toLowerCase();' +
+      helperSource + '; restorePreviewCapacityAvailable;'
+    );
+    const capacity = evaluate();
+    const queue = vm.runInNewContext('pendingDatabaseRestores');
+    queue.set('a', {owner:'admin'});
+    queue.set('b', {owner:'other'});
+    const sameOwnerCanReplace = capacity('admin') === true;
+    queue.set('c', {owner:'third'});
+    const fullForNewOwner = capacity('admin') === false;
+    queue.clear();
+    queue.set('a', {owner:'admin'});
+    queue.set('b', {owner:'admin'});
+    const sameOwnerDuplicatesCanBeReplaced = capacity('admin') === true;
+    runtimeCapacityChecks = sameOwnerCanReplace && fullForNewOwner && sameOwnerDuplicatesCanBeReplaced;
+  } catch (_) { runtimeCapacityChecks = false; }
+  runtimeCapacityChecks ? pass('restore preview capacity preserves same-owner replacement and blocks a full queue') : fail('restore preview capacity runtime fixture');
+  const routeStart = serverText.indexOf("app.post('/api/admin/restore/database/preview',requireAdmin,restoreUploadGate");
+  const routeEnd = serverText.indexOf("\napp.post('/api/admin/restore/database/confirm'", routeStart);
+  const route = routeStart >= 0 && routeEnd > routeStart ? serverText.slice(routeStart, routeEnd) : '';
+  const preflightBeforeMulter = route.indexOf('restorePreviewCapacityAvailable(req.user.name)') >= 0 &&
+    route.indexOf('restorePreviewCapacityAvailable(req.user.name)') < route.indexOf("restoreUpload.single('backup')");
+  preflightBeforeMulter ? pass('restore queue capacity is checked before Multer upload and JSON parsing') : fail('restore queue capacity preflight ordering');
+} catch (error) { fail('restore preview capacity preflight checks', error.message); }
+
 // v46.93.72: bound transient session state, disk-stage restore previews, and index room presence.
 try {
   const serverText = fs.readFileSync(server, 'utf8');
