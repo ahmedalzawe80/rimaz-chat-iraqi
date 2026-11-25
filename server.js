@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 const { Readable, pipeline } = require('stream');
 const { writeJsonSync } = require('./lib/json-writer');
-const { readJsonFile } = require('./lib/json-reader');
+const { readJsonFile, validateJsonFile } = require('./lib/json-reader');
 const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
 const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
 const { normalizeIp, normalizeTrustedProxyHeader, createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
@@ -192,6 +192,10 @@ const defaults = () => ({
   wallLikes:{}, wallComments:{}, wallReadAt:{}, privateMessages:[], privateHidden:{}, privateRead:{}, ignored:{}
 });
 
+const LAST_KNOWN_GOOD_INTERVAL_MS = 60 * 1000;
+const LAST_KNOWN_GOOD_FILE = DB_FILE + '.previous';
+let lastKnownGoodDatabaseBackupAt = 0;
+
 let db;
 try {
   db = readJsonFile(DB_FILE);
@@ -206,6 +210,16 @@ try {
     try { fs.copyFileSync(DB_FILE, recoveryCopy, fs.constants.COPYFILE_EXCL); }
     catch (copyError) { console.error(`Could not create database recovery copy: ${copyError.message}`); }
     console.error(`FATAL: database JSON is invalid. Original file was preserved${fs.existsSync(recoveryCopy) ? ` at ${recoveryCopy}` : ''}. Repair or restore it before restarting.`);
+    const lastKnownGoodFile=`${DB_FILE}.previous`;
+    if(fs.existsSync(lastKnownGoodFile)){
+      try{
+        const previousDatabase=readJsonFile(lastKnownGoodFile);
+        if(!previousDatabase||typeof previousDatabase!=='object'||Array.isArray(previousDatabase))throw new Error('Recovery database root is invalid');
+        console.error(`A separately preserved, JSON-valid last-known-good candidate exists at ${lastKnownGoodFile}. It was NOT applied automatically; inspect/restore it deliberately to avoid silently rolling back newer data.`);
+      }catch(previousError){console.error(`Last-known-good candidate is not valid and must not be restored: ${previousError.message}`);}
+    }else{
+      console.error('No last-known-good database candidate exists; use an independently verified backup for recovery.');
+    }
     throw new Error('Refusing to start with an invalid database to prevent data loss.');
   } else {
     console.error(`FATAL: cannot read database ${DB_FILE}: ${error.message}`);
@@ -268,9 +282,33 @@ if(expiredAnnouncementIds.size){db.announcements=(db.announcements||[]).filter(a
 const RANK_PERMISSION_PROFILES=['admin-full','admin-shield','crown-gold','crown-silver','super-black','super-white','super-red'];
 const CORE_RANK_LEVELS=Object.freeze({'admin-full':1000,'admin-shield':900,'crown-gold':800,'crown-silver':700,'super-black':600,'super-white':500,'super-red':400});
 db.accountPermissions=db.accountPermissions&&typeof db.accountPermissions==='object'?db.accountPermissions:{};
+function refreshLastKnownGoodDatabase(){
+  if(!fs.existsSync(DB_FILE))return;
+  const now=Date.now();
+  if(now-lastKnownGoodDatabaseBackupAt<LAST_KNOWN_GOOD_INTERVAL_MS)return;
+  const tempFile=`${DB_FILE}.${process.pid}.database-backup.${crypto.randomBytes(8).toString('hex')}.tmp`;
+  let fd=null;
+  try{
+    // Copy the prior committed generation, then parse the copy before it can
+    // replace the last-known-good recovery point.
+    fs.copyFileSync(DB_FILE,tempFile,fs.constants.COPYFILE_EXCL);
+    fs.chmodSync(tempFile,0o600);
+    fd=fs.openSync(tempFile,'r+');
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);fd=null;
+    validateJsonFile(tempFile);
+    fs.renameSync(tempFile,LAST_KNOWN_GOOD_FILE);
+    try{const dirFd=fs.openSync(DATA_DIR,'r');try{fs.fsyncSync(dirFd);}finally{fs.closeSync(dirFd);}}
+    catch(syncError){console.error('Last-known-good database directory sync unavailable:',syncError.message);}
+    lastKnownGoodDatabaseBackupAt=now;
+  }catch(error){
+    if(fd!==null){try{fs.closeSync(fd);}catch(_){}}
+    try{fs.unlinkSync(tempFile);}catch(_){}
+    throw new Error('Could not refresh the verified last-known-good database copy: '+error.message);
+  }
+}
 function save(){
-  // Keep the existing synchronous/atomic contract for every route while writing
-  // JSON in bounded chunks instead of allocating a second full-database string.
+  // Keep the synchronous/atomic contract while serializing in bounded chunks.
   // Private messages are deliberately memory-only and are never written to disk.
   const snapshot = { ...db, privateMessages: [] };
   const tempFile = `${DB_FILE}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
@@ -281,6 +319,10 @@ function save(){
     writeJsonSync(fd, snapshot);
     fs.fsyncSync(fd);
     fs.closeSync(fd); fd = null;
+    // Refuse to promote a malformed candidate; keep the committed database intact.
+    validateJsonFile(tempFile);
+    // Preserve a verified previous generation before replacing the current file.
+    refreshLastKnownGoodDatabase();
     fs.renameSync(tempFile, DB_FILE);
     // Best-effort directory sync makes the atomic rename survive sudden power loss on supported filesystems.
     try { const dirFd=fs.openSync(DATA_DIR,'r'); try { fs.fsyncSync(dirFd); } finally { fs.closeSync(dirFd); } }
@@ -1236,6 +1278,7 @@ function flushMessageWrites(){
 }
 function addMessage(m){
   return new Promise((resolve,reject)=>{
+    if(typeof shutdownStarted!=='undefined'&&shutdownStarted)return reject(new Error('Server is shutting down'));
     pendingMessageWrites.push({message:m,resolve,reject});
     scheduleMessageSave();
   });
@@ -2517,13 +2560,46 @@ app.use((err,req,res,next)=>{
 });
 app.get(/.*/,(req,res)=>sendSeoIndex(req,res));
 server.listen(PORT,()=>console.log(`Rimaz server listening on ${PORT}`));
-function gracefulShutdown(signal){
+let shutdownStarted=false;
+async function persistPendingMessagesDuringShutdown(maxAttempts=8,retryDelayMs=250){
   if(messageSaveTimer){clearTimeout(messageSaveTimer);messageSaveTimer=null;}
-  let finalSaveSucceeded=true;
-  if(pendingMessageWrites.length){flushMessageWrites();if(pendingMessageWrites.length)finalSaveSucceeded=false;}
-  try{save();}catch(error){finalSaveSucceeded=false;console.error(`Final database save failed during ${signal}:`,error.message);}
-  io.close(()=>process.exit(finalSaveSucceeded?0:1));
-  const forceExit=setTimeout(()=>process.exit(1),10000);forceExit.unref?.();
+  for(let attempt=1;pendingMessageWrites.length&&attempt<=maxAttempts;attempt++){
+    const batch=pendingMessageWrites.slice();
+    const previousMessages=db.messages;
+    db.messages=[...previousMessages,...batch.map(entry=>entry.message)].slice(-1000);
+    try{
+      save();
+      pendingMessageWrites.splice(0,batch.length);
+      messageSaveAttempts=0;
+      for(const entry of batch)entry.resolve();
+    }catch(error){
+      db.messages=previousMessages;
+      console.error(`Shutdown message flush failed (attempt ${attempt}/${maxAttempts}):`,error.message);
+      if(attempt<maxAttempts)await new Promise(resolve=>setTimeout(resolve,retryDelayMs));
+    }
+  }
+  return pendingMessageWrites.length===0;
+}
+function gracefulShutdown(signal){
+  if(shutdownStarted)return;
+  shutdownStarted=true;
+  if(messageSaveTimer){clearTimeout(messageSaveTimer);messageSaveTimer=null;}
+  const forceExit=setTimeout(()=>process.exit(1),10000);
+  forceExit.unref?.();
+  // Stop accepting work first; only then drain the durable message queue.
+  io.close(()=>{
+    persistPendingMessagesDuringShutdown(8,250).then(messagesSaved=>{
+      let finalSaveSucceeded=messagesSaved;
+      try{save();}catch(error){finalSaveSucceeded=false;console.error(`Final database save failed during ${signal}:`,error.message);}
+      if(pendingMessageWrites.length)console.error(`Shutdown aborted with ${pendingMessageWrites.length} uncommitted chat message(s); process will exit nonzero.`);
+      clearTimeout(forceExit);
+      process.exit(finalSaveSucceeded&&pendingMessageWrites.length===0?0:1);
+    }).catch(error=>{
+      console.error(`Unexpected shutdown persistence failure during ${signal}:`,error.message);
+      clearTimeout(forceExit);
+      process.exit(1);
+    });
+  });
 }
 process.once('SIGTERM',()=>gracefulShutdown('SIGTERM'));
 process.once('SIGINT',()=>gracefulShutdown('SIGINT'));
