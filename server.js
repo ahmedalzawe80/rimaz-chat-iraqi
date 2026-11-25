@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 const { Readable, pipeline } = require('stream');
 const { writeJsonSync } = require('./lib/json-writer');
+const { readJsonFile } = require('./lib/json-reader');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { Server } = require('socket.io');
@@ -185,8 +186,7 @@ const defaults = () => ({
 
 let db;
 try {
-  const rawDatabase = fs.readFileSync(DB_FILE, 'utf8');
-  db = JSON.parse(rawDatabase);
+  db = readJsonFile(DB_FILE);
   if (!db || typeof db !== 'object' || Array.isArray(db)) throw new Error('Database root must be a JSON object');
 } catch (error) {
   if (error.code === 'ENOENT') {
@@ -1310,10 +1310,7 @@ const restoreUploadGate=createRestoreUploadGate(1);
 const restoreUpload=multer({storage:multer.diskStorage({destination:RESTORE_TMP_DIR,filename:(req,file,cb)=>cb(null,`restore-${process.pid}-${crypto.randomBytes(16).toString('hex')}.json`)}),limits:{fileSize:20*1024*1024,files:1,fields:0}});
 const pendingDatabaseRestores=new Map();
 const MAX_PENDING_DATABASE_RESTORES=2;
-function validateDatabaseRestoreFile(source){
-  const raw=Buffer.isBuffer(source)?source.toString('utf8'):typeof source==='string'?source:'';
-  if(!raw||Buffer.byteLength(raw,'utf8')>20*1024*1024)throw new Error('حجم ملف النسخة غير صالح');
-  let parsed;try{parsed=JSON.parse(raw);}catch(_){throw new Error('ملف النسخة ليس JSON صالحاً');}
+function validateDatabaseRestoreData(parsed){
   if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)||!['rimaz-database-backup','rimaz-full-backup'].includes(parsed.format)||parsed.version!==1||!parsed.database||typeof parsed.database!=='object'||Array.isArray(parsed.database))throw new Error('صيغة النسخة غير مدعومة أو تالفة');
   const template=defaults(),incoming=parsed.database,clean={};
   for(const [key,defaultValue] of Object.entries(template)){
@@ -2046,7 +2043,7 @@ app.post('/api/admin/restore/database/preview',requireAdmin,restoreUploadGate,(r
   try{
    try{fs.chmodSync(uploadedFile.path,0o600);}catch(_){}
    purgeExpiredDatabaseRestores();
-   const checked=validateDatabaseRestoreFile(fs.readFileSync(uploadedFile.path,'utf8'));
+   const checked=validateDatabaseRestoreData(readJsonFile(uploadedFile.path,{maxBytes:20*1024*1024}));
    const protectedOwnerName=process.env.OWNER_NAME||'owner';if(!restoreContainsOwner(checked.clean,protectedOwnerName))throw new Error('النسخة لا تحتوي حساب صاحب الموقع؛ رُفضت لحماية إمكانية الدخول للإدارة');
    for(const [oldToken,oldPreview] of pendingDatabaseRestores)if(oldPreview.owner===keyName(req.user.name))discardDatabaseRestorePreview(oldToken,oldPreview);
    if(pendingDatabaseRestores.size>=MAX_PENDING_DATABASE_RESTORES)throw new Error('توجد معاينات استعادة أخرى قيد الانتظار؛ أكمل إحداها أو انتظر انتهاء صلاحيتها');
@@ -2069,7 +2066,7 @@ app.post('/api/admin/restore/database/confirm',requireAdmin,(req,res)=>{
  let recoveryFile='';
  let recoveryReady=false;
  try{
-  const checked=validateDatabaseRestoreFile(fs.readFileSync(pending.filePath,'utf8'));
+  const checked=validateDatabaseRestoreData(readJsonFile(pending.filePath,{maxBytes:20*1024*1024}));
   const protectedOwnerName=process.env.OWNER_NAME||'owner';if(!restoreContainsOwner(checked.clean,protectedOwnerName))throw new Error('النسخة لا تحتوي حساب صاحب الموقع؛ رُفضت لحماية إمكانية الدخول للإدارة');
   if(fs.existsSync(DB_FILE)){
    recoveryFile=DB_FILE+'.pre-restore-'+Date.now()+'.json';
