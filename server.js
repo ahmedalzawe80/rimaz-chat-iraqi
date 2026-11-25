@@ -192,6 +192,10 @@ const defaults = () => ({
   wallLikes:{}, wallComments:{}, wallReadAt:{}, privateMessages:[], privateHidden:{}, privateRead:{}, ignored:{}
 });
 
+const LAST_KNOWN_GOOD_INTERVAL_MS = 60 * 1000;
+const LAST_KNOWN_GOOD_FILE = DB_FILE + '.previous';
+let lastKnownGoodDatabaseBackupAt = 0;
+
 let db;
 try {
   db = readJsonFile(DB_FILE);
@@ -278,9 +282,6 @@ if(expiredAnnouncementIds.size){db.announcements=(db.announcements||[]).filter(a
 const RANK_PERMISSION_PROFILES=['admin-full','admin-shield','crown-gold','crown-silver','super-black','super-white','super-red'];
 const CORE_RANK_LEVELS=Object.freeze({'admin-full':1000,'admin-shield':900,'crown-gold':800,'crown-silver':700,'super-black':600,'super-white':500,'super-red':400});
 db.accountPermissions=db.accountPermissions&&typeof db.accountPermissions==='object'?db.accountPermissions:{};
-const LAST_KNOWN_GOOD_INTERVAL_MS = 60 * 1000;
-const LAST_KNOWN_GOOD_FILE = DB_FILE + '.previous';
-let lastKnownGoodDatabaseBackupAt = 0;
 function refreshLastKnownGoodDatabase(){
   if(!fs.existsSync(DB_FILE))return;
   const now=Date.now();
