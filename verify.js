@@ -1718,8 +1718,19 @@ try {
     const context = {Buffer,fs,path,crypto,Date,writeJsonSync,createBackupMediaSnapshot,DB_FILE:path.join(temp,'data.json'),DATA_DIR:temp,process:{pid:process.pid},db:{users:{sample:{name:'sample'}},sessions:{secret:'must-not-export'},messages:[{media:{url:'/uploads/sample.txt'}}],privateMessages:[{media:{url:'/api/private/media/private.mp4'}}]},UP_DIR:path.join(temp,'uploads'),PRIVATE_MEDIA_DIR:path.join(temp,'private-media'),require:(id)=>id==='./package.json'?{version:'test'}:require(id)};
     vm.runInNewContext(serverText.slice(start,end)+"\nthis.make=async()=>{const parts=[];for await(const part of fullBackupTar())parts.push(part);return Buffer.concat(parts)};",context);
     context.make().then(buf=>{
-      const ok=buf.length%512===0&&buf.subarray(257,263).toString()==='ustar\0'&&buf.includes(Buffer.from('database/rimaz-database.json'))&&buf.includes(Buffer.from('uploads/sample.txt'))&&buf.includes(Buffer.from('rimaz backup sample'))&&!buf.includes(Buffer.from('private-media/private.mp4'))&&!buf.includes(Buffer.from('private chat media must not be included'))&&!buf.includes(Buffer.from('must-not-export'));
+      const ok=buf.length%512===0&&buf.subarray(257,263).toString()==='ustar\\0'&&buf.includes(Buffer.from('database/rimaz-database.json'))&&buf.includes(Buffer.from('uploads/sample.txt'))&&buf.includes(Buffer.from('rimaz backup sample'))&&!buf.includes(Buffer.from('private-media/private.mp4'))&&!buf.includes(Buffer.from('private chat media must not be included'))&&!buf.includes(Buffer.from('must-not-export'));
       ok?pass('full backup USTAR stream includes referenced public uploads and excludes private-chat media and active session tokens'):fail('full backup USTAR stream content and alignment');
+      let restoreDrillOk=false;
+      try{
+        const archivePath=path.join(temp,'full-backup.tar.gz'),extractDir=path.join(temp,'restore-drill');
+        fs.mkdirSync(extractDir);
+        fs.writeFileSync(archivePath,require('node:zlib').gzipSync(buf));
+        const listing=spawnSync('tar',['-tzf',archivePath],{encoding:'utf8'});
+        const extracted=spawnSync('tar',['-xzf',archivePath,'-C',extractDir],{encoding:'utf8'});
+        const restored=JSON.parse(fs.readFileSync(path.join(extractDir,'database','rimaz-database.json'),'utf8'));
+        restoreDrillOk=listing.status===0&&extracted.status===0&&listing.stdout.includes('database/rimaz-database.json')&&listing.stdout.includes('uploads/sample.txt')&&restored.users.sample.name==='sample'&&Object.keys(restored.sessions||{}).length===0&&(restored.privateMessages||[]).length===0&&fs.readFileSync(path.join(extractDir,'uploads','sample.txt'),'utf8')==='rimaz backup sample';
+      }catch(error){restoreDrillOk=false;}
+      if(restoreDrillOk)pass('isolated full-backup restore drill extracts the archive and verifies database plus referenced media parity');else fail('isolated full-backup restore drill');
       fs.rmSync(temp,{recursive:true,force:true});
       if(failures.length){console.error(`\n${failures.length} verification check(s) failed.`);process.exitCode=1;}else console.log('\nAll local static and archive checks passed. Live-server testing is still required.');
     }).catch(error=>{fail('full backup USTAR stream test',error.message);fs.rmSync(temp,{recursive:true,force:true});process.exitCode=1;});
