@@ -74,3 +74,15 @@ Keep PR #1 and PR #3 unmerged, leave `main` untouched, and do not deploy/restart
 - Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. The PR #3 working tree has 413 tracked tree entries, 22 root entries, no nested duplicate project directory, and one required release ZIP.
 - The source change prevents CPU-only cgroup data from being marked unavailable and prevents a missing cgroup memory counter from being rendered as a false `0.00 MB`. It does not establish that Deplexo's historical OOM issue is resolved.
 - No merge, production sync, Deplexo restart/deploy, or live-volume modification occurred. Independent live-volume backup/isolated restore, provider telemetry and proxy trust confirmation, and real browser/device WebRTC/TURN tests remain mandatory promotion blockers.
+
+
+## Restore-account integrity root fix — 2026-11-26
+
+- A further source review found that restore preview could count an account-map key as the site owner even when its value was malformed (for example, `null`, an array, string, or number). That could allow a structurally invalid owner record to pass the name-presence check.
+- Root fix: `lib/restore-inspector.js` now rejects non-object values for every `users` and `guests` account record during streaming preview. `server.js` repeats the same validation during confirmation and owner detection now requires a valid non-array object record. No chat UI or runtime chat feature was changed.
+- Regression coverage exercises malformed values (`null`, array, string, number) in preview and directly against the confirmation validator.
+- Final source/test commit: `ad0a9ace3974915d34693b660816bdad7965f029`. GitHub Actions run [#45708210437](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45708210437) completed successfully on both `validate` and `refresh-release-archive`; the validation job passed dependency install/tree verification, syntax, regression tests, Docker build, and HTTP + Socket.IO smoke tests. The archive job rebuilt, extracted, and validated the release ZIP.
+- The archive-only commit created by that successful run is `a8a9485fc48a4a450539af316684c74ac9e5d1ce`; it changes only `rimaz-final-deep-audit-46.93.72.zip`.
+- One earlier run on the first test-harness draft failed because the test could not locate the validator function; the harness locator was corrected, and the final exact-source run above passed. An intermediate validation run passed but its archive job was cancelled by the next push; the final run completed both jobs successfully.
+- PR #3 remains open/draft/unmerged with archive-only head `a8a9485...`; PR #1 remains open/draft/unmerged; PR #2 remains stale and not mergeable. Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
+- This source-level fix improves restore-file validation only. It does not remove the production blockers: independent Deplexo volume backup and isolated full restore, provider restart/OOM telemetry, trusted proxy CIDR/header confirmation, and real browser/device WebRTC/TURN testing. No merge, deployment, restart, or live-volume mutation occurred.
