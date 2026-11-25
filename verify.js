@@ -135,18 +135,23 @@ try {
 } catch (error) { fail('restore preview streaming inspector fixtures', error.message); }
 
 
+try {
   const validationSource = fs.readFileSync(server, 'utf8');
-  const validationFunction = validationSource.match(/function validateDatabaseRestoreData\\(parsed\\)\\{[\\s\\S]*?\\n\\}/);
-  if (!validationFunction) throw new Error('validateDatabaseRestoreData implementation not found');
+  const validationStart = validationSource.indexOf('function validateDatabaseRestoreData(parsed){');
+  const validationEnd = validationSource.indexOf('\nfunction restoreContainsOwner', validationStart);
+  if (validationStart < 0 || validationEnd < 0) throw new Error('validateDatabaseRestoreData implementation not found');
+  const validationFunction = validationSource.slice(validationStart, validationEnd);
   const validationContext = { defaults: () => ({ users: {}, guests: {}, rooms: [], messages: [] }) };
   vm.createContext(validationContext);
-  vm.runInContext(validationFunction[0] + '\\nglobalThis.validateRestoreData = validateDatabaseRestoreData;', validationContext);
+  vm.runInContext(validationFunction + '\nglobalThis.validateRestoreData = validateDatabaseRestoreData;', validationContext);
   for (const invalidAccount of [null, [], 'not-an-account', 17]) {
     assert.throws(() => validationContext.validateRestoreData({
       format: 'rimaz-database-backup', version: 1,
       database: { users: { owner: invalidAccount }, guests: {}, rooms: [], messages: [] }
     }), /سجل حساب غير صالح داخل النسخة/);
   }
+  pass('restore confirmation rejects malformed account records');
+} catch (error) { fail('restore confirmation account-record validation', error.message); }
 
 // The bounded-memory writer must preserve native JSON output for persisted values.
 try {
