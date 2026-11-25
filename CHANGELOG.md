@@ -1,3 +1,10 @@
+## Runtime and restore maintenance — 2026-11-25 (no application version change)
+
+- Coordinated full-backup streaming with Node.js pipeline teardown so client cancellation propagates through the gzip/source chain and the generator can run its temporary-file cleanup.
+- Added restore-preview capacity preflight before Multer upload and JSON parsing. A full queue is rejected early while same-admin preview replacement remains supported.
+- Added regression coverage for backup iterator cleanup, upload cancellation lifecycle, and restore preview queue capacity/order.
+- These source checks reduce avoidable work and improve cleanup guarantees; they do not establish that the 128 MB hosting memory issue is fixed or replace staging restore/load verification.
+
 ## Repository maintenance — 2026-11-24 (no application version change)
 
 - Organized project continuity notes, engineering audits, and operations records under `docs/project/`, `docs/audits/`, and `docs/operations/`; the root keeps the standard README, CHANGELOG, and CONTRIBUTING guides among Markdown files.
