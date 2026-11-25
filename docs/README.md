@@ -6,9 +6,10 @@ This directory contains maintained project records, engineering audits, and oper
 - [Repository structure](REPOSITORY-STRUCTURE.md) — root-file ownership, runtime asset layout, and safe cleanup rules.
 
 ## Project continuity
-- [Final continuation checkpoint](project/CHECKPOINT-FINAL-2026-11-24.md) — latest verified branch/CI state, release blockers, and safety boundaries.
-- [Detailed engineering checkpoint](project/CHECKPOINT-2026-11-24.md) — implementation history and earlier audit notes.
-- [Engineering handoff](project/HANDOFF-2026-11-24.md) — implementation context and ongoing repair work.
+- [Current continuation checkpoint](project/CHECKPOINT-2026-11-25.md) — latest branch head, verified CI, ongoing resource work, and release blockers.
+- [Previous final checkpoint](project/CHECKPOINT-FINAL-2026-11-24.md) — historical 2026-11-24 release baseline; superseded by the current checkpoint.
+- [Detailed engineering checkpoint](project/CHECKPOINT-2026-11-24.md) — historical implementation and audit record.
+- [Engineering handoff](project/HANDOFF-2026-11-24.md) — historical implementation context; use the current checkpoint for live status.
 
 ## Engineering audits
 - [Code audit](audits/CODE-AUDIT.md) — historical v46.93.37 audit; use the current transaction/runtime audits for the latest source state.
@@ -20,8 +21,7 @@ This directory contains maintained project records, engineering audits, and oper
 ## Operations
 - [Final release gate](operations/FINAL-RELEASE-GATE.md) — exact-head CI evidence, remaining staging requirements, and production promotion boundary.
 - [Deployment notes](operations/DEPLOYMENT-46.93.72.md) — historical package reference; not production authorization.
-- [Repair notes](operations/REPAIR-NOTES-46.93.72.md) — historical baseline repairs; current verification is in the final checkpoint and release gate.
-- [Repair notes](operations/REPAIR-NOTES-46.93.72.md) — recorded repair history and context.
+- [Repair notes](operations/REPAIR-NOTES-46.93.72.md) — historical baseline repairs; current verification is in the current checkpoint and release gate.
 
 ## Contributor guidance
 - [Contribution guide](../CONTRIBUTING.md) — branch policy, local checks, and data-safety requirements.
