@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const { writeJsonSync } = require('./lib/json-writer');
 const { readJsonFile } = require('./lib/json-reader');
+const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
 
 const root = __dirname;
 const failures = [];
@@ -56,6 +57,60 @@ try {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 } catch (error) { fail('streaming JSON reader regression fixtures', error.message); }
+
+// Restore preview inspection must validate the complete file while retaining no database object graph.
+try {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-restore-inspector-'));
+  try {
+    const file = path.join(tempDir, 'backup.json');
+    const template = {
+      users: {}, guests: {}, sessions: {}, privateMessages: [], rooms: [], messages: [],
+      wall: [], label: '', count: 0, enabled: false, nullable: null
+    };
+    const options = { template, ownerName: 'admin', normalizeName: value => String(value || '').trim().toLowerCase() };
+    const backup = {
+      format: 'rimaz-database-backup', version: 1, createdAt: '2026-11-25T12:00:00Z', appVersion: '46.93.72',
+      database: {
+        users: { owner: { role: 'owner' }, member: { role: 'member' } },
+        guests: { visitor: { role: 'guest' } },
+        sessions: { ignored: true }, privateMessages: [{ ignored: true }],
+        rooms: [{ id: 1 }, { id: 2 }], messages: [{ id: 1 }, { id: 2 }, { id: 3 }],
+        wall: [{ id: 1 }], label: 'ok', count: 7, enabled: true, nullable: null
+      }
+    };
+    fs.writeFileSync(file, JSON.stringify(backup));
+    const summary = inspectDatabaseRestoreFile(file, options);
+    assert.deepEqual(summary, {
+      members: 2, guests: 1, rooms: 2, messages: 3, wall: 1,
+      createdAt: '2026-11-25T12:00:00Z', appVersion: '46.93.72'
+    });
+
+    const configuredOwnerBackup = {
+      format: 'rimaz-full-backup', version: 1,
+      database: { users: { Boss: { role: 'member' } }, guests: {}, rooms: [], messages: [] }
+    };
+    fs.writeFileSync(file, JSON.stringify(configuredOwnerBackup));
+    assert.equal(inspectDatabaseRestoreFile(file, { ...options, configuredOwnerName: 'boss' }).members, 1);
+    assert.throws(() => inspectDatabaseRestoreFile(file, { ...options, configuredOwnerName: 'missing' }), /النسخة لا تحتوي حساب صاحب الموقع/);
+
+    const invalidType = { ...backup, database: { ...backup.database, label: {} } };
+    fs.writeFileSync(file, JSON.stringify(invalidType));
+    assert.throws(() => inspectDatabaseRestoreFile(file, options), /نوع بيانات غير صالح داخل النسخة: label/);
+
+    fs.writeFileSync(file, '{"format":"rimaz-database-backup","version":1,"database":{"users":{"owner":{"role":"owner"}},"users":{"member":{"role":"member"}},"guests":{},"rooms":[],"messages":[]}}');
+    assert.throws(() => inspectDatabaseRestoreFile(file, options), /النسخة لا تحتوي حساب صاحب الموقع/);
+
+    fs.writeFileSync(file, '{"format":"rimaz-database-backup","version":1,"database":{"users":{"administrator":{"role":"owner","role":"member"}},"guests":{},"rooms":[],"messages":[]}}');
+    assert.throws(() => inspectDatabaseRestoreFile(file, options), /النسخة لا تحتوي حساب صاحب الموقع/);
+
+    const largeMessages = '[' + Array.from({ length: 5000 }, (_, index) => JSON.stringify({ id: index, text: 'x'.repeat(256) })).join(',') + ']';
+    fs.writeFileSync(file, '{"format":"rimaz-database-backup","version":1,"database":{"users":{"owner":{}},"guests":{},"rooms":[],"messages":' + largeMessages + '}}');
+    assert.equal(inspectDatabaseRestoreFile(file, options).messages, 5000);
+    pass('restore preview inspector validates schema, owner, duplicate-key semantics, counts, metadata and large streams');
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+} catch (error) { fail('restore preview streaming inspector fixtures', error.message); }
 
 // The bounded-memory writer must preserve native JSON output for persisted values.
 try {
@@ -1558,6 +1613,17 @@ try {
   runtime?pass('restore upload gate runtime fixture serializes uploads and safely releases exactly once'):fail('restore upload gate runtime fixture');
 }catch(error){fail('restore upload gate checks',error.message);}
  
+// Restore preview must use the streaming inspector, not materialize the replacement database graph.
+try {
+  const serverText = fs.readFileSync(server, 'utf8');
+  const start = serverText.indexOf("app.post('/api/admin/restore/database/preview'");
+  const end = serverText.indexOf("\\napp.post('/api/admin/restore/database/confirm'", start);
+  const route = start >= 0 && end > start ? serverText.slice(start, end) : '';
+  const usesInspector = route.includes('inspectDatabaseRestoreFile(uploadedFile.path') &&
+    route.includes('template:defaults()') && !route.includes('readJsonFile(uploadedFile.path');
+  usesInspector ? pass('restore preview validates backup without materializing the replacement database') : fail('restore preview streaming inspection route');
+} catch (error) { fail('restore preview streaming inspection route', error.message); }
+
 // Restore preview admission: reject full queues before Multer writes or JSON parsing.
 try {
   const serverText = fs.readFileSync(server, 'utf8');
