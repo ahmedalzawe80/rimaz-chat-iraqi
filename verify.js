@@ -1617,7 +1617,7 @@ try {
 try {
   const serverText = fs.readFileSync(server, 'utf8');
   const start = serverText.indexOf("app.post('/api/admin/restore/database/preview'");
-  const end = serverText.indexOf("\\napp.post('/api/admin/restore/database/confirm'", start);
+  const end = serverText.indexOf("\napp.post('/api/admin/restore/database/confirm'", start);
   const route = start >= 0 && end > start ? serverText.slice(start, end) : '';
   const usesInspector = route.includes('inspectDatabaseRestoreFile(uploadedFile.path') &&
     route.includes('template:defaults()') && !route.includes('readJsonFile(uploadedFile.path');
