@@ -41,3 +41,13 @@
 The reviewed source shows `points` as an administrator-editable member statistic; no points debit, wallet, or balance transaction path was found. Do not invent a deduction fix. Identify the exact affected feature/route before changing behavior.
 
 **Do not merge PR #3, change `main`, deploy/restart Deplexo, run production ZIP sync, or modify live data until every release blocker is verified.** The user has authorized publication once the work is genuinely ready; that authorization does not waive the safety gates above.
+
+## Continuation update — 2026-11-25 (latest observed repository state)
+
+- Latest source/test/workflow commit before this checkpoint refresh: `543d011fe785cd9118bc8fad6525ca28b1ff5a04`.
+- The archive automation then created `0d0bcf354b973600b13ece298fd5ee51b8d36275`; GitHub confirms this commit changes only `rimaz-final-deep-audit-46.93.72.zip`.
+- Actions run [#800](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45629027188) completed successfully: both `validate` and `refresh-release-archive` jobs passed. The job records show they executed against source SHA `543d011fe785cd9118bc8fad6525ca28b1ff5a04`; the archive job then committed `0d0bcf3`.
+- Therefore, do not describe run #800 as a fresh independent workflow run on archive-only SHA `0d0bcf3`. The archive job did validate the rebuilt ZIP contents itself (locked install, dependency tree, syntax, regression suite, HTML parity, and Docker build).
+- Current branch tree contains 406 entries. The tracked archive is the sole ZIP at repository root; no nested duplicate project directory was found.
+- PR #3 remains open and draft, targeting `safety/validate-and-backup-before-sync`. Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
+- Production promotion remains blocked by the independent live-volume backup, isolated restore drill, full staging chat/media/voice test, representative-load memory and provider restart/OOM evidence, and provider IP-header sanitization confirmation. These are not GitHub CI checks and cannot be truthfully marked complete from repository access alone.
