@@ -1346,6 +1346,12 @@ function discardDatabaseRestorePreview(token,item=pendingDatabaseRestores.get(to
  if(item?.filePath){try{fs.unlinkSync(item.filePath);}catch(error){if(error.code!=='ENOENT')console.warn('Restore preview file cleanup failed:',error.message);}}
 }
 function purgeExpiredDatabaseRestores(){const now=Date.now();for(const [token,item] of pendingDatabaseRestores)if(item.expiresAt<=now)discardDatabaseRestorePreview(token,item);}
+function restorePreviewCapacityAvailable(ownerName){
+ const owner=keyName(ownerName);
+ let occupied=0;
+ for(const item of pendingDatabaseRestores.values())if(item.owner!==owner)occupied++;
+ return occupied<MAX_PENDING_DATABASE_RESTORES;
+}
 const databaseRestoreCleanupTimer=setInterval(purgeExpiredDatabaseRestores,30*1000);
 databaseRestoreCleanupTimer.unref?.();
 
@@ -2031,6 +2037,8 @@ app.get('/api/admin/backup/database',requireAdmin,(req,res)=>{
 app.get('/api/admin/backup/full',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخة الاحتياطية الكاملة'});res.set('Cache-Control','no-store, no-cache, must-revalidate');res.set('Content-Type','application/gzip');res.set('Content-Disposition',`attachment; filename=\"rimaz-full-backup-${new Date().toISOString().slice(0,10)}.tar.gz\"`);const source=Readable.from(fullBackupTar()),archive=zlib.createGzip({level:6});pipeline(source,archive,res,error=>{if(error&&error.code!=='ERR_STREAM_PREMATURE_CLOSE')console.error('Full backup pipeline failed:',error);});});
 app.post('/api/admin/restore/database/preview',requireAdmin,restoreUploadGate,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية استعادة النسخة'});
+ purgeExpiredDatabaseRestores();
+ if(!restorePreviewCapacityAvailable(req.user.name))return res.status(400).json({error:'توجد معاينات استعادة أخرى قيد الانتظار؛ أكمل إحداها أو انتظر انتهاء صلاحيتها'});
  restoreUpload.single('backup')(req,res,error=>{
   if(error)return res.status(400).json({error:error.code==='LIMIT_FILE_SIZE'?'حجم ملف النسخة أكبر من 20MB':(error.message||'تعذر قراءة ملف النسخة')});
   if(!req.file)return res.status(400).json({error:'اختر ملف نسخة JSON أولاً'});
