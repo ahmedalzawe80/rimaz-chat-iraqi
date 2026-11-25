@@ -1247,8 +1247,9 @@ function removeFromChat(name, banned){ const n=keyName(name); for(const so of io
 let messageSaveTimer=null;
 let pendingMessageWrites=[];
 let messageSaveAttempts=0;
+const MAX_PENDING_MESSAGE_WRITES=1000;
 function scheduleMessageSave(delay=100){
-  if(messageSaveTimer)return;
+  if(messageSaveTimer||shutdownStarted)return;
   messageSaveTimer=setTimeout(()=>{messageSaveTimer=null;flushMessageWrites();},delay);
   messageSaveTimer.unref?.();
 }
@@ -1267,18 +1268,17 @@ function flushMessageWrites(){
     return true;
   }catch(error){
     db.messages=previousMessages;
-    messageSaveAttempts++;
-    console.error(`Batched chat-message save failed (attempt ${messageSaveAttempts}/3):`,error.message);
-    if(messageSaveAttempts<3){scheduleMessageSave(1000*messageSaveAttempts);return false;}
-    const failed=pendingMessageWrites.splice(0);
-    messageSaveAttempts=0;
-    for(const entry of failed)entry.reject(error);
+    messageSaveAttempts=Math.min(messageSaveAttempts+1,32);
+    const retryDelay=Math.min(30000,1000*2**Math.min(messageSaveAttempts-1,5));
+    console.error(`Batched chat-message save failed (attempt ${messageSaveAttempts}); retaining ${pendingMessageWrites.length} pending message(s) and retrying in ${retryDelay}ms:`,error.message);
+    scheduleMessageSave(retryDelay);
     return false;
   }
 }
 function addMessage(m){
   return new Promise((resolve,reject)=>{
-    if(typeof shutdownStarted!=='undefined'&&shutdownStarted)return reject(new Error('Server is shutting down'));
+    if(shutdownStarted)return reject(new Error('Server is shutting down'));
+    if(pendingMessageWrites.length>=MAX_PENDING_MESSAGE_WRITES)return reject(new Error('Message persistence queue is full; message was not accepted'));
     pendingMessageWrites.push({message:m,resolve,reject});
     scheduleMessageSave();
   });
