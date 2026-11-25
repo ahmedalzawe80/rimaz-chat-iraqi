@@ -47,7 +47,9 @@ If `/data` exists and `DATA_DIR` is not explicitly set, the server defaults to `
 - `PORT`: HTTP port; defaults to `3000`.
 - `DATA_DIR`: persistent runtime data directory.
 - `PUBLIC_SITE_URL`: canonical public origin used for SEO metadata, robots.txt, and sitemap.xml.
-- `TRUSTED_PROXY_CIDRS`: optional comma-separated IP/CIDR ranges for the hosting reverse proxies only. Forwarded client-IP headers are ignored unless the immediate peer matches one of these trusted ranges. Configure this from the hosting provider's documented proxy ranges; never trust all public IPs or guess a range. The current deployment origin is used as the fallback.
+- `TRUSTED_PROXY_CIDRS`: optional comma-separated IP/CIDR ranges for the hosting reverse proxies only. Forwarded client-IP headers are ignored unless the immediate peer matches one of these trusted ranges. Configure this from the hosting provider's documented proxy ranges; never trust all public IPs or guess a range. The admin health panel warns when this is not configured.
+
+The admin health panel reports process RSS/heap plus cgroup memory current/peak/limit, OOM counters, and CPU throttling when the host exposes cgroup v2 metrics. These live counters do not replace provider restart history.
 
 ## Repository layout
 
@@ -56,6 +58,8 @@ If `/data` exists and `DATA_DIR` is not explicitly set, the server defaults to `
 - `public/index.html`: synchronized fallback copy; keep it byte-identical to the root entry file.
 - `public/gifts/`, `public/smileys/`, `public/vip-gifts/`: built-in media served from disk.
 - `verify.js`: regression checks.
+- `lib/`: isolated persistence, backup snapshot/cleanup, trusted client-IP, and cgroup health helpers.
+- `scripts/chat-integration-smoke.js`: CI-only authenticated integration checks against the running container (public/private chat, private-media authorization/playback, voice and call signaling).
 - `.github/workflows/`: pull-request validation, archive audit, and guarded manual source synchronization.
 - `.github/dependabot.yml`: scheduled dependency update proposals for GitHub Actions and npm.
 - `package-lock.json`: exact npm dependency tree used by local, CI, and Docker clean installs.

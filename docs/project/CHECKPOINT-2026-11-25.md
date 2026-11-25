@@ -119,3 +119,18 @@ The reviewed source shows `points` as an administrator-editable member statistic
 5. **Real browser/device media:** the CI integration covers signaling and authorization, not actual browser WebRTC audio/video streams, camera/microphone permissions, TURN relay behavior, or multi-device network conditions. A controlled staging session remains required.
 
 **Promotion remains blocked. Do not merge PR #1/#3, close/rebase PR #2 as a promotion action, sync the ZIP to production, deploy/restart Deplexo, or modify the live volume until these external evidence gates are satisfied.**
+
+
+## Exact latest validation and backup-temp hardening — 2026-11-25 19:50 UTC
+
+- Source/test/workflow commit: `44db9cf9fb1d244d5e91e7073b5b2b86c2976d5b`.
+- Actions run [#45688954104](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45688954104) completed successfully on both `validate` and `refresh-release-archive`. The source validation passed **636 checks with zero failures**, Docker build, and npm audit with **0 vulnerabilities**.
+- The constrained production-container smoke passed at 128 MiB RAM / 0.25 CPU, including authenticated public/private chat, private-media authorization and playback, voice negotiation, video-call signaling, 8 concurrent 12 MiB media downloads, and 24 homepage/Socket.IO polling pairs. The container remained running and `OOMKilled=false`.
+- The full-backup extraction drill passed; cgroup metric parsing and trusted-proxy readiness checks passed.
+- Added `lib/backup-temp-cleanup.js`: after startup, only recognized backup temporary files and hard-link snapshot directories older than seven days are removed. Fresh backup files, unrelated files, and symlinks are preserved. The cleanup regression test passed.
+- The archive job rebuilt and tested the exact tracked-file archive, then created archive-only commit `9d1395e3fdfb125a499bcb99c0a7c60306f33070`; PR #3 now points to that archive-only SHA. Run #45688954104 validated source SHA `44db9cf...`, not the later archive-only SHA.
+- Updated the repository map and README to list the helper modules and CI integration script.
+
+No production state changed. PR #1 and #3 remain open/draft/unmerged; PR #2 remains a separate overlapping draft. PR #3 still targets the safety branch, and production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
+
+The external release blockers are unchanged: independent live-volume backup, actual isolated restore/rollback against a cloned volume, provider OOM/restart telemetry, exact trusted proxy CIDRs and header-sanitization confirmation, and browser/device WebRTC/TURN testing. The CI integration validates server-side chat and signaling only; it does not prove real microphone/camera streams or production behavior.

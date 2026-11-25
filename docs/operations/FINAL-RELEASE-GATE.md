@@ -62,3 +62,22 @@ The user has authorized publication after completion, but that authorization doe
 - The rebuilt release ZIP was verified as **394 files / 16,344,754 bytes** and already matched the validated source, so no archive-only commit was needed.
 - PR #1 and PR #3 remain open/draft/unmerged. PR #2 remains a separate overlapping draft and must not be merged as a parallel cleanup path. Production `main` is still `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
 - These results validate source, archive, and isolated container startup only. They do **not** clear the independent Deplexo backup, isolated restore, full staging chat/media/voice, representative-load memory/provider telemetry, or proxy IP-header trust blockers. Do not merge to production or deploy until those are evidenced.
+
+
+## Latest root-fix evidence — 2026-11-25 19:50 UTC
+
+- Source candidate `44db9cf9fb1d244d5e91e7073b5b2b86c2976d5b` passed Actions run [#45688954104](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45688954104): 636 regression checks, zero failures, production Docker build, and 0 npm audit vulnerabilities. The archive job independently rebuilt, extracted, and validated the release ZIP; archive-only commit `9d1395e3fdfb125a499bcb99c0a7c60306f33070` then updated the PR head.
+- The constrained production-container smoke test ran with 128 MiB RAM and 0.25 CPU. It verified authenticated public/private chat, private-media authorization and ticket playback, voice-room offer/answer signaling, video-call offer/answer signaling, concurrent media downloads, and homepage/Socket.IO polling. Docker inspection confirmed the container remained running and was not OOM-killed.
+- The full-backup extraction drill verified the archive's database envelope and referenced public upload content. It is not a live-volume restore or an application rollback drill.
+- Backup snapshots now fail closed on missing/symlinked/changing referenced uploads; startup removes only recognized backup temp artifacts older than seven days.
+- Admin health now reports cgroup v2 memory/peak/limit/OOM/CPU-throttling metrics when available, and indicates whether trusted proxy ranges are configured.
+
+### Still blocking production promotion
+
+1. Independent backup of the live Deplexo persistent volume and a real restore/rollback drill on a cloned volume.
+2. Read-only Deplexo usage, alerts, runtime logs, restart history, and OOM evidence; the CI container test is not proof that historical production OOM is resolved.
+3. Exact Deplexo proxy source CIDRs and confirmation of sanitized client-IP headers. Do not guess or use all-public ranges.
+4. Browser/device WebRTC microphone/camera and TURN relay tests. CI validates server signaling only.
+5. Final exact-diff and PR-chain review before promotion.
+
+PR #3 remains open/draft against the safety branch; PR #1 remains the safety prerequisite; PR #2 is an overlapping draft and is not to be merged separately. Main is unchanged. No Deplexo deploy/restart, production ZIP sync, or live-volume mutation has occurred.

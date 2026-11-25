@@ -15,6 +15,10 @@ This guide explains why each top-level area exists and which files must remain i
 │   ├── operations/
 │   └── project/
 ├── lib/
+│   ├── backup-media-snapshot.js
+│   ├── backup-temp-cleanup.js
+│   ├── cgroup-metrics.js
+│   ├── client-ip.js
 │   ├── json-reader.js
 │   ├── json-writer.js
 │   └── restore-inspector.js
@@ -22,6 +26,8 @@ This guide explains why each top-level area exists and which files must remain i
 │   ├── gifts/
 │   ├── smileys/
 │   └── vip-gifts/
+├── scripts/
+│   └── chat-integration-smoke.js
 ├── .dockerignore
 ├── .editorconfig
 ├── .gitattributes
@@ -41,7 +47,7 @@ This guide explains why each top-level area exists and which files must remain i
 └── verify.js
 ```
 
-The root also contains a small tracked data placeholder, the domain-verification file, Docker/Git configuration, a Node.js version pin, the npm lockfile, and the audited ZIP required by the current workflows.
+The root also contains a small tracked data placeholder, the domain-verification file, Docker/Git configuration, a Node.js version pin, the npm lockfile, and the single audited ZIP required by the current workflows.
 
 ## Root files that must not be moved casually
 
@@ -69,6 +75,11 @@ The root also contains a small tracked data placeholder, the domain-verification
 - `lib/json-reader.js` incrementally parses the live database and restore-confirmation file in bounded chunks, with a nesting limit and without allocating a full source-text string.
 - `lib/json-writer.js` serializes database snapshots in bounded chunks for durable atomic writes and backup staging.
 - `lib/restore-inspector.js` validates staged restore previews from JSON tokens without retaining the full replacement database graph.
+- `lib/backup-media-snapshot.js` snapshots only structured references to public uploads using hard links, and fails closed if a referenced file is missing or unsafe.
+- `lib/backup-temp-cleanup.js` removes only recognized backup temp artifacts older than seven days after an interrupted export; fresh and unrelated files are preserved.
+- `lib/client-ip.js` accepts forwarding headers only when the immediate peer matches explicitly configured trusted proxy CIDRs.
+- `lib/cgroup-metrics.js` reads optional cgroup v2 memory/OOM/CPU counters for the owner health panel.
+- `scripts/chat-integration-smoke.js` runs authenticated server-side integration checks from CI against the constrained production container.
 - Keep persistence helpers separate from `server.js` so file-format and failure behavior can be regression-tested independently.
 
 ## Runtime assets
@@ -87,5 +98,7 @@ Some files have identical contents but distinct names. Two duplicate pairs are i
 Keep implementation entry points in the root, application media in `public/`, and non-runtime reports in the appropriate `docs/` category.
 
 ## Data and release safety
+
+The full application export contains the database and structured references to public uploads. Transient private messages and their private-media files are intentionally excluded because private conversations are not persisted. An independent persistent-volume backup must be planned separately.
 
 Git history and rollback branches cover tracked repository files only. They do not back up the live Deplexo persistent volume, database, uploads, or private media. Never replace live data with the tracked placeholder or a source archive. Production promotion requires a separately verified volume backup, a restore test, staging smoke tests, and explicit approval.
