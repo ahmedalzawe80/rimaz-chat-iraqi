@@ -1,6 +1,6 @@
 # Final release gate — Rimaz
 
-**Review date:** 2026-11-24  
+**Review date:** 2026-11-25  
 **Release candidate:** `fix/bound-private-media-ticket-cache`  
 **Production branch:** `main`
 
@@ -18,7 +18,7 @@ This record separates verified source/archive work from hosting operations that 
 
 - `package.json` requires Node.js `>=24 <25`; `.nvmrc` pins major version 24.
 - A genuine npm lockfile v3 was generated on Node.js 24 and committed in [`ed4ef756`](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/commit/ed4ef756a96351f6f368dba7295420cc0f6ebbd1).
-- The lockfile root package identity and dependency declarations match `package.json`; it records 96 package entries.
+- The lockfile root package identity and dependency declarations match `package.json`; it records 97 package entries (96 installed packages plus the root project).
 - The production Dockerfile uses `npm ci --omit=dev`.
 - The permanent validation workflow requires `npm ci`, `npm ls --depth=0`, JavaScript syntax checks, `npm test`, and the production Docker build. It has no fallback to floating `npm install`.
 - Regression checks assert lockfile identity/dependency consistency, Docker's locked production install, and the permanent CI install contract.
@@ -33,7 +33,7 @@ This record separates verified source/archive work from hosting operations that 
 - The manual source-sync workflow refuses an archive that differs from current `main`; it validates locked install, dependency tree, regression suite, and Docker build before and after sync. It remains manual-only, requires explicit confirmation on `main`, and is not a Deplexo deployment command.
 - The one-time archive builder workflow was removed after the ZIP was regenerated and tested.
 
-## Exact-head CI evidence
+## Historical exact-head CI evidence — 2026-11-24
 
 Final post-cleanup candidate commit `5ec794813d0a0fc1b8eb2376182e1749ec933fa2` passed both workflows:
 - [Validation run 45409969779](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45409969779): `npm ci`, `npm ls --depth=0`, syntax checks, 567 regression pass markers, zero failures, and production Docker build.
@@ -180,7 +180,7 @@ Platform references: [Deplexo storage and filesystem](https://docs.deplexo.com/o
 - The current full-backup generator snapshots the in-memory database, then walks and streams media files. It does not establish one atomic lock across database changes and concurrent upload/delete operations. For a consistency-sensitive backup, use a quiet/maintenance window that prevents uploads and media deletion while exporting, or obtain an offline consistent volume snapshot through the hosting provider. Do not describe a downloaded archive alone as a verified backup.
 - Before staging restore, calculate and store an external SHA-256 for the downloaded archive. After extraction, verify the database format/owner record, file counts and hashes for uploads/private-media, then run application smoke tests against the isolated copy. Keep the original production volume untouched.
 
-## Current verified candidate — 2026-11-24 19:40 UTC
+## Historical candidate verification — 2026-11-24 19:40 UTC
 
 - Source/documentation update: `ce7802f4d07d863c0b264c74d97af29b206081eb` refreshed the transaction-safety audit so it no longer repeats superseded lockfile and dependency-install findings.
 - [GitHub Actions run #707](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45472361362) completed successfully on that source/documentation candidate. Both `validate` and `refresh-release-archive` jobs succeeded.
@@ -190,7 +190,7 @@ Platform references: [Deplexo storage and filesystem](https://docs.deplexo.com/o
 - Current PR #3 head is `81d99d39b78044eed4ea8557240b51acc53173e6`, still **Draft / Open / Unmerged**. `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
 - No deployment, restart, ZIP synchronization to production, or live-volume/data change has occurred. The operational release blockers below remain mandatory.
  
-## Final candidate re-audit — 2026-11-24 19:42 UTC
+## Historical candidate re-audit — 2026-11-24 19:42 UTC
 
 - Exact source/documentation candidate `7b47b00f662867b89e17ef1597337eb697166eba` passed [Actions run #708](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45472720285). Both source validation and post-validation archive refresh/extraction jobs succeeded.
 - Source: locked npm install, dependency-tree verification, JavaScript syntax, **603 regression checks / 0 failures**, production Docker build.
@@ -212,24 +212,14 @@ Platform references: [Deplexo storage and filesystem](https://docs.deplexo.com/o
 
 The available GitHub connection cannot access Deplexo's live dashboard or persistent volume. Do not mark this gate complete, merge to production, run the main-only sync workflow, or deploy/restart based on CI success alone.
 
-## Final candidate re-audit — 2026-11-24 19:42 UTC
+## Current continuation status — 2026-11-25
 
-- Exact source/documentation candidate `7b47b00f662867b89e17ef1597337eb697166eba` passed [Actions run #708](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45472720285). Both source validation and post-validation archive refresh/extraction jobs succeeded.
-- Source: locked npm install, dependency-tree verification, JavaScript syntax, **603 regression checks / 0 failures**, production Docker build.
-- Extracted archive: safe archive and tracked-file parity checks, locked install, dependency-tree verification, syntax, **603 regression checks / 0 failures**, synchronized HTML, production Docker build, and **0 vulnerabilities** in the production dependency install.
-- Archive-only head: `50c61f0d55513e3840ea71fdff14e609042fa2ed`; only the ZIP changed. Size: **16,359,829 bytes**.
-- The current tree has one release ZIP and no nested duplicate project directory. Before the nested directory was removed, its database placeholder and Google verification file were verified byte-identical to the retained root/public copies. Root `data.json`, root Google verification, and `public/google1a84d9d1dec7b85d.html` remain preserved.
-- No browser entry file is part of the PR diff; current visual UI markup was not changed in this repair candidate.
-- Manual sync workflow review: dispatch-only, must run from `main`, requires explicit boolean confirmation, checks archive safety/version/exact source parity, validates dependencies/tests/Docker before and after sync, and creates a repository rollback branch. The only `rsync --delete` is restricted to `public/` after exact archive-to-main parity; it explicitly excludes the Google verification file. Root placeholder data and the external Deplexo persistent volume are not synchronized by this workflow.
-- Current PR #3 head: `50c61f0d55513e3840ea71fdff14e609042fa2ed`; open/draft/unmerged; base `safety/validate-and-backup-before-sync`. The safety base is 12 commits ahead of production `main`. `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
+- Source/test candidate `c0df4b36762adf52eef03eb50e4d26d0c6344944` passed [Actions run #45599503224](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45599503224), including the streaming reader and disk-backed rollback regression tests. Both source validation and extracted-archive validation passed.
+- The subsequent checkpoint and repository-structure documentation updates passed exact-head [Actions run #45599926272](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45599926272). Both jobs passed: locked install, dependency tree, syntax, regression tests, production Docker build, archive integrity/path/parity, and extracted-archive install/tests/HTML parity/Docker build.
+- Archive-only commit `e65b85ce0d58f6f6ff1d4050c1b9a07117a00962` changes only `rimaz-final-deep-audit-46.93.72.zip`.
+- `@streamparser/json` is pinned at 0.0.26 in the lockfile (97 package entries including the root project). `lib/json-reader.js` reads JSON incrementally for startup and restore preview/confirmation; restore uploads remain limited to 20 MiB and nesting to 512 levels.
+- Restore confirmation now saves the current database, creates and syncs a disk recovery copy, releases the old database object before parsing the replacement, and reloads the preserved snapshot on failure. If the replacement was already persisted, the database file is atomically rolled back. Transient private messages are retained in memory for failed-restore rollback.
+- Remaining memory caveat: restore preview still holds the live database and the parsed replacement graph together. No representative-load memory measurements, Deplexo restart/OOM evidence, or staging restore/smoke test has been collected. The historical 128 MB issue is therefore not declared resolved.
+- Current PR #3 head `e65b85ce0d58f6f6ff1d4050c1b9a07117a00962` remains open/draft/unmerged against `safety/validate-and-backup-before-sync`; production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No deployment, restart, live-volume change, or production sync occurred.
 
-### Non-negotiable production blockers
-
-1. Independent consistent backup of live `/data/rimaz` to storage outside the app/volume.
-2. Isolated restore of database JSON plus `uploads/` and `private-media/`, with database validity, owner record, file counts, hashes, paths and permissions verified.
-3. Staging smoke tests for login/reconnect, public/private chat, rooms, voice/video, moderation/member-card actions, uploads, backup/restore, and multiple devices.
-4. Runtime evidence for restart reasons, exit/OOM status, memory/RSS and controlled-load behavior.
-5. Provider-side confirmation that `cf-connecting-ip` and `x-real-ip` are sanitized by Deplexo before IP-based trust.
-6. Fresh exact-candidate validation and explicit user approval before any promotion.
-
-The available GitHub connection cannot access Deplexo's live dashboard or persistent volume. Do not mark this gate complete, merge to production, run the main-only sync workflow, or deploy/restart based on CI success alone.
+The non-negotiable production blockers above remain mandatory. This release-gate documentation cleanup is doc-only; the exact updated PR head must pass its own CI/archive run before any promotion.
