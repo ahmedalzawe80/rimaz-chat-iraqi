@@ -2900,6 +2900,9 @@ try {
   assert.equal(cpuOnly.memory.currentBytes,null);
   assert.equal(cpuOnly.cpu.usageMicros,9000);
   assert.equal(cpuOnly.cpu.throttledPeriods,3);
+  const healthHtml=fs.readFileSync(path.join(root,'index.html'),'utf8');
+  assert.ok(healthHtml.includes("${cm.currentBytes!==null&&cm.currentBytes!==undefined?mb(cm.currentBytes):'غير متاح'}"));
+  assert.ok(!healthHtml.includes("${cg.available?mb(cm.currentBytes):'غير متاح'}"));
   const unavailable=readCgroupMetrics('/missing',file=>{const error=new Error('missing');error.code='ENOENT';throw error;});
   assert.equal(unavailable.available,false);
   pass('cgroup health metrics report memory limits, peaks, OOM kills and CPU throttling, including CPU-only and unavailable environments');
