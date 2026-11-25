@@ -2679,6 +2679,7 @@ try {
       let failuresLeft=initialFailures, activeTimer=null, saved=[];
       let context;
       context={
+        shutdownStarted:false,
         db:{messages:[{id:'committed'}]},
         console:{error(){}},
         save(){
