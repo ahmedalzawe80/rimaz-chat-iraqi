@@ -10,6 +10,7 @@ const { writeJsonSync } = require('./lib/json-writer');
 const { readJsonFile } = require('./lib/json-reader');
 const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
 const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
+const { createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
 
 const root = __dirname;
 const failures = [];
@@ -2825,6 +2826,22 @@ try {
 } catch(error) { fail('private-media playback ticket regression checks',error.message); }
 
  
+// Client IP attribution must ignore all forwarding headers unless the immediate peer is trusted.
+try {
+  const untrusted = createTrustedProxyTrust('');
+  const trusted = createTrustedProxyTrust('127.0.0.1/32,::1/128');
+  const spoofed = resolveClientIp({'cf-connecting-ip':'203.0.113.9','x-real-ip':'203.0.113.10','x-forwarded-for':'203.0.113.11'},'198.51.100.7',untrusted);
+  const trustedCf = resolveClientIp({'cf-connecting-ip':'203.0.113.9'},'127.0.0.1',trusted);
+  const trustedReal = resolveClientIp({'x-real-ip':'203.0.113.10'},'::1',trusted);
+  const invalidTrusted = resolveClientIp({'cf-connecting-ip':'not-an-ip','x-real-ip':'bad'},'127.0.0.1',trusted);
+  assert.equal(spoofed,'198.51.100.7');
+  assert.equal(trustedCf,'203.0.113.9');
+  assert.equal(trustedReal,'203.0.113.10');
+  assert.equal(invalidTrusted,'127.0.0.1');
+  assert.equal(resolveClientIp({'cf-connecting-ip':'203.0.113.9'},'::ffff:198.51.100.7',untrusted),'198.51.100.7');
+  pass('client IP resolution ignores spoofed proxy headers and accepts validated client IP headers only from explicitly trusted proxy CIDRs');
+} catch(error) { fail('trusted proxy client IP regression checks',error.message); }
+
 // Full backup media must be captured with the database state and include only referenced public uploads.
 try {
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-backup-media-snapshot-'));
@@ -2845,6 +2862,21 @@ try {
   else fail('backup media snapshot cleanup');
   fs.rmSync(temp,{recursive:true,force:true});
 } catch(error) { fail('backup media snapshot regression checks',error.message); }
+
+// Backup snapshot collection must ignore chat text and fail closed for broken media references.
+try {
+  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-backup-media-integrity-'));
+  const uploads=path.join(temp,'uploads');fs.mkdirSync(uploads);
+  fs.writeFileSync(path.join(uploads,'present.png'),'ok');
+  const refs=createBackupMediaSnapshot({database:{messages:[{text:'/uploads/not-a-file.png',media:{url:'/uploads/present.png'}}]},uploadDirectory:uploads,dataDirectory:temp});
+  try { assert.equal(refs.entries.length,1); } finally { refs.cleanup(); }
+  assert.throws(()=>createBackupMediaSnapshot({database:{profiles:{alice:{avatar:'/uploads/missing.png'}}},uploadDirectory:uploads,dataDirectory:temp}),/Referenced public upload is missing/);
+  fs.symlinkSync(path.join(uploads,'present.png'),path.join(uploads,'link.png'));
+  assert.throws(()=>createBackupMediaSnapshot({database:{profiles:{alice:{avatar:'/uploads/link.png'}}},uploadDirectory:uploads,dataDirectory:temp}),/not a regular file/);
+  assert.equal(fs.readdirSync(temp).filter(name=>name.startsWith('.rimaz-backup-media-')).length,0);
+  pass('backup ignores ordinary chat text, rejects missing or symlinked referenced media, and cleans failed snapshots');
+  fs.rmSync(temp,{recursive:true,force:true});
+} catch(error) { fail('backup media integrity regression checks',error.message); }
 
 // Database backups must serialize to a restrictive temporary file and stream from disk,
 // never build a database-sized JSON string or Buffer in the live request path.

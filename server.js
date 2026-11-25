@@ -9,6 +9,7 @@ const { writeJsonSync } = require('./lib/json-writer');
 const { readJsonFile } = require('./lib/json-reader');
 const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
 const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
+const { createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { Server } = require('socket.io');
@@ -1169,15 +1170,15 @@ function roomBanned(name,room){
   return active.some(item=>typeof item==='string'?keyName(item)===n:(item&&keyName(item.name)===n));
 }
 function roomMuted(name,room){ return Array.isArray(db.roomMutes[room]) && db.roomMutes[room].includes(keyName(name)); }
-function normalizeIp(value){ let ip=String(value||'').trim(); if(ip.includes(','))ip=ip.split(',')[0].trim(); if(ip.startsWith('::ffff:'))ip=ip.slice(7); if(ip.startsWith('[')&&ip.includes(']'))ip=ip.slice(1,ip.indexOf(']')); if(/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(ip))ip=ip.replace(/:\d+$/,''); return ip.toLowerCase(); }
-function requestClientIp(req){ return normalizeIp(req.get('cf-connecting-ip')||req.get('x-real-ip')||req.ip||req.socket?.remoteAddress||''); }
+const trustProxyForClientIp=createTrustedProxyTrust(process.env.TRUSTED_PROXY_CIDRS||'');
+function requestClientIp(req){ return resolveClientIp(req.headers,req.socket?.remoteAddress||req.connection?.remoteAddress||'',trustProxyForClientIp); }
 function recordLoginEvent(req,name,type,mode='normal'){
   const previous=db.loginHistory;
   try{const rawIp=requestClientIp(req);let ip=rawIp;if(/^\d{1,3}(?:\.\d{1,3}){3}$/.test(rawIp))ip=rawIp.split('.').slice(0,3).join('.')+'.0';else if(rawIp.includes(':'))ip=rawIp.split(':').slice(0,4).join(':')+'::';
     db.loginHistory=[{id:crypto.randomUUID(),at:Date.now(),name:String(name||'').slice(0,32),type:String(type||'member'),mode:String(mode||'normal'),ip,agent:String(req.get('user-agent')||'').slice(0,180)},...(Array.isArray(previous)?previous:[])].slice(0,1000);save();
   }catch(error){if(previous===undefined)delete db.loginHistory;else db.loginHistory=previous;console.error('Login history save failed:',error.message);}
 }
-function socketClientIp(socket){ const h=socket.handshake?.headers||{}; return normalizeIp(h['cf-connecting-ip']||h['x-real-ip']||socket.handshake?.address||''); }
+function socketClientIp(socket){ const h=socket.handshake?.headers||{}; const remote=socket.handshake?.address||socket.conn?.remoteAddress||socket.request?.socket?.remoteAddress||''; return resolveClientIp(h,remote,trustProxyForClientIp); }
 function globalBanStatus(name,ip,now=Date.now()){
   const n=keyName(name);let until=0,changed=false;
   const expiredNames=[],expiredIps=[];

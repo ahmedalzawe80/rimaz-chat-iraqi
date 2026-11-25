@@ -46,7 +46,8 @@ If `/data` exists and `DATA_DIR` is not explicitly set, the server defaults to `
 
 - `PORT`: HTTP port; defaults to `3000`.
 - `DATA_DIR`: persistent runtime data directory.
-- `PUBLIC_SITE_URL`: canonical public origin used for SEO metadata, robots.txt, and sitemap.xml. The current deployment origin is used as the fallback.
+- `PUBLIC_SITE_URL`: canonical public origin used for SEO metadata, robots.txt, and sitemap.xml.
+- `TRUSTED_PROXY_CIDRS`: optional comma-separated IP/CIDR ranges for the hosting reverse proxies only. Forwarded client-IP headers are ignored unless the immediate peer matches one of these trusted ranges. Configure this from the hosting provider's documented proxy ranges; never trust all public IPs or guess a range. The current deployment origin is used as the fallback.
 
 ## Repository layout
 
