@@ -1,96 +1,192 @@
-
-name: Clean Replace Project Upload
+name: Validate and Clean Replace Project Upload
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm_main_replacement:
+        description: "I reviewed the archive and approve syncing the exact validated application source to main."
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: write
 
+concurrency:
+  group: rimaz-clean-replace
+  cancel-in-progress: false
+
 jobs:
   replace-project:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_main_replacement == true
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
-      - name: Extract and validate ZIP
+      - name: Set up Node.js from .nvmrc
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Validate ZIP integrity and safe paths
         shell: bash
         run: |
           set -euo pipefail
-
           ARCHIVE="rimaz-final-deep-audit-46.93.72.zip"
-          STAGING="$RUNNER_TEMP/rimaz-upload"
-
           if [ ! -f "$ARCHIVE" ]; then
             echo "ERROR: $ARCHIVE not found"
             exit 1
           fi
-
           unzip -tq "$ARCHIVE"
+          python3 - "$ARCHIVE" <<'PY'
+          import re, stat, sys, zipfile
+          archive = sys.argv[1]
+          seen = set()
+          with zipfile.ZipFile(archive) as z:
+              infos = z.infolist()
+              if len(infos) > 30000:
+                  raise SystemExit(f"Too many archive entries: {len(infos)}")
+              total_size = 0
+              for item in infos:
+                  name = item.filename.replace("\\", "/")
+                  parts = name.split("/")
+                  if name.startswith("/") or re.match(r"^[A-Za-z]:", name) or any(part in (".", "..") for part in parts):
+                      raise SystemExit(f"Unsafe archive path: {item.filename}")
+                  mode = (item.external_attr >> 16) & 0o170000
+                  if mode == stat.S_IFLNK:
+                      raise SystemExit(f"Archive symlink is not allowed: {item.filename}")
+                  if not item.is_dir():
+                      if name in seen:
+                          raise SystemExit(f"Duplicate archive file path: {name}")
+                      seen.add(name)
+                  total_size += item.file_size
+                  if item.file_size > 0 and item.compress_size == 0:
+                      raise SystemExit(f"Invalid compressed size for: {item.filename}")
+                  if item.compress_size > 0 and item.file_size / item.compress_size > 250:
+                      raise SystemExit(f"Suspicious compression ratio for: {item.filename}")
+              if total_size > 500 * 1024 * 1024:
+                  raise SystemExit(f"Archive expands beyond 500 MiB: {total_size}")
+          print(f"Archive paths validated: {len(seen)} files; expanded bytes: {total_size}")
+          PY
 
+      - name: Extract and validate application root
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="rimaz-final-deep-audit-46.93.72.zip"
+          STAGING="$RUNNER_TEMP/rimaz-upload"
           mkdir -p "$STAGING"
           unzip -q "$ARCHIVE" -d "$STAGING"
 
           SOURCE=""
           MATCHES=0
-
           if [ -f "$STAGING/package.json" ] && [ -f "$STAGING/server.js" ]; then
             SOURCE="$STAGING"
             MATCHES=1
           else
-            while IFS= read -r file; do
+            while IFS= read -r -d '' file; do
               dir="$(dirname "$file")"
-
               if [ -f "$dir/server.js" ]; then
                 SOURCE="$dir"
                 MATCHES=$((MATCHES + 1))
               fi
-            done < <(find "$STAGING" -type f -name package.json)
+            done < <(find "$STAGING" -type f -name package.json -print0)
           fi
 
           if [ "$MATCHES" -ne 1 ]; then
-            echo "ERROR: Expected exactly one valid project root"
+            echo "ERROR: Expected exactly one valid project root; found $MATCHES"
             exit 1
           fi
 
+          for file in package.json package-lock.json Dockerfile server.js index.html verify.js; do
+            test -f "$SOURCE/$file"
+          done
+          test -d "$SOURCE/public"
+          test -d "$SOURCE/lib"
+          for file in json-reader.js json-writer.js restore-inspector.js; do test -f "$SOURCE/lib/$file"; done
+          ARCHIVE_VERSION="${ARCHIVE#rimaz-final-deep-audit-}"
+          ARCHIVE_VERSION="${ARCHIVE_VERSION%.zip}"
+          ACTUAL_VERSION="$(cd "$SOURCE" && node -p "require('./package.json').version")"
+          if [ "$ACTUAL_VERSION" != "$ARCHIVE_VERSION" ]; then
+            echo "ERROR: Archive filename version $ARCHIVE_VERSION does not match package version $ACTUAL_VERSION"
+            exit 1
+          fi
           echo "PROJECT_SOURCE=$SOURCE" >> "$GITHUB_ENV"
-          echo "Project validated successfully"
+          echo "Project root validated: $SOURCE (version $ACTUAL_VERSION)"
 
-      - name: Clean and replace old files
+      - name: Require archive to match current main source
         shell: bash
         run: |
           set -euo pipefail
+          for file in package.json package-lock.json Dockerfile server.js index.html verify.js; do
+            if ! cmp -s "$PROJECT_SOURCE/$file" "$file"; then
+              echo "ERROR: Archived $file differs from the reviewed main branch."
+              echo "Refusing to replace newer repository code with a stale archive."
+              exit 1
+            fi
+          done
+          diff -qr --no-dereference "$PROJECT_SOURCE/public" ./public
+          diff -qr --no-dereference "$PROJECT_SOURCE/lib" ./lib
+          echo "Archive exactly matches the current main application source."
 
-          if [ ! -f "$PROJECT_SOURCE/package.json" ] || [ ! -f "$PROJECT_SOURCE/server.js" ]; then
-            echo "ERROR: Project validation failed"
-            exit 1
-          fi
-
-          rsync -a --delete \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='data.json' \
-            --exclude='google1a84d9d1dec7b85d.html' \
-            --exclude='rimaz-final-deep-audit-46.93.72.zip' \
-            "$PROJECT_SOURCE/" ./
-
-          echo "Project files replaced successfully"
-
-      - name: Commit clean project
+      - name: Run clean install, regression tests, and production build before sync
         shell: bash
         run: |
           set -euo pipefail
+          cd "$PROJECT_SOURCE"
+          npm ci --no-audit --no-fund
+          npm ls --depth=0
+          node --check server.js
+          node --check verify.js
+          npm test
+          docker build --pull -t rimaz-chat-iraqi:archive-pre-sync .
 
+      - name: Create repository rollback branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          BACKUP_BRANCH="backups/pre-zip-sync-${GITHUB_RUN_ID}"
+          git push origin "HEAD:refs/heads/$BACKUP_BRANCH"
+          echo "Repository rollback branch created: $BACKUP_BRANCH"
+          echo "This branch does not back up the external hosting volume."
+
+      - name: Synchronize validated application and build files
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in server.js index.html package.json package-lock.json Dockerfile verify.js; do
+            install -m 0644 "$PROJECT_SOURCE/$file" "./$file"
+          done
+          mkdir -p ./public ./lib
+          rsync -a --delete --exclude='/google1a84d9d1dec7b85d.html' "$PROJECT_SOURCE/public/" ./public/
+          rsync -a --delete "$PROJECT_SOURCE/lib/" ./lib/
+
+      - name: Verify synchronized repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm ls --depth=0
+          node --check server.js
+          node --check verify.js
+          npm test
+          cmp -s index.html public/index.html
+          docker build --pull -t rimaz-chat-iraqi:post-sync .
+
+      - name: Commit validated application replacement
+        shell: bash
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           git add -A
-
           if ! git diff --cached --quiet; then
-            git commit -m "Clean replace project from audited ZIP"
-            git push
+            git commit -m "Validated application source sync from audited ZIP"
+            git push origin HEAD:main
           else
-            echo "No changes to commit"
+            echo "No application changes to commit; main already matches the audited archive."
           fi

@@ -1,0 +1,49 @@
+# Node.js dependencies and generated test output
+/node_modules/
+/coverage/
+
+# Runtime state (the live database and uploads belong in DATA_DIR)
+/data/
+/uploads/
+/private-media/
+/.restore-tmp/
+**/.restore-tmp/
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+
+# Temporary files, logs, and database recovery copies
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+*.tmp
+*.corrupt-*
+*.pre-restore-*
+*.bak
+*.backup
+
+# Operating-system and editor artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local package-manager credentials
+.npmrc
+!.npmrc.example
+
+# Local database exports, credentials, and backups
+*.sqlite
+*.sqlite3
+*.db
+*.sql
+*.dump
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+backups/

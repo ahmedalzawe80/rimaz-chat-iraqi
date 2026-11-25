@@ -1,0 +1,23 @@
+# Normalize text files to LF across local development and CI.
+* text=auto eol=lf
+
+# Archives and media must remain byte-for-byte binary.
+*.zip binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.mp3 binary
+*.mp4 binary
+*.wav binary
+*.ogg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+*.sqlite binary
+*.sqlite3 binary
+*.db binary
