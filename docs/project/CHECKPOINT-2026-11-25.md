@@ -134,3 +134,24 @@ The reviewed source shows `points` as an administrator-editable member statistic
 No production state changed. PR #1 and #3 remain open/draft/unmerged; PR #2 remains a separate overlapping draft. PR #3 still targets the safety branch, and production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
 
 The external release blockers are unchanged: independent live-volume backup, actual isolated restore/rollback against a cloned volume, provider OOM/restart telemetry, exact trusted proxy CIDRs and header-sanitization confirmation, and browser/device WebRTC/TURN testing. The CI integration validates server-side chat and signaling only; it does not prove real microphone/camera streams or production behavior.
+
+
+## Continuation update — 2026-11-25 20:10 UTC
+
+### Exact candidate and CI
+
+- Current PR #3 head before this checkpoint-only update: `67aa09ac74cb972028ac17f7725c5e20052c90c8`.
+- Runtime source/test/workflow candidate: `87fea24082765a08721238c8dd025c36c93ad922`.
+- Archive-only refresh commit: `246d3c4ccadb7aadc81ec68d8a7d1d5ad13aeb55`.
+- Exact-head Actions run [#45692013572](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45692013572) passed both `validate` and `refresh-release-archive`. Source job: 636 checks, locked dependency install/tree, syntax, Docker build, production-container smoke; npm audit 0 vulnerabilities. Archive job rebuilt and extracted 399 files / 16,362,356 bytes, then passed its own checks and Docker build.
+- CI cgroup-v2 after the constrained 24-request HTTP/Socket.IO workload: current 74,211,328 bytes; peak 78,151,680 bytes; limit 134,217,728 bytes. Container remained running and Docker reported OOMKilled=false. This is isolated CI evidence, not Deplexo telemetry.
+- Backup media reference discovery now includes `rankDefinitions[].artUrl`; the test fixture verifies the referenced uploaded rank-art file is included. Other supported reference keys include `url`, `image`, `avatar`, `banner`, `bannerUrl`, `icon`, `cover`, `background`, and `giftImage`. Missing or symlinked referenced public uploads fail backup creation instead of silently producing an incomplete archive.
+- Root layout rechecked: no nested `rimaz-chat-iraqi-main/`; only intentional root entry points/config/docs/assets and the workflow-required audited ZIP remain. Root/public HTML and Google verification copies are byte-identical. Root `data.json` is a 138-byte warning placeholder only.
+
+### Current promotion state
+
+- PR #3 remains open/draft/unmerged; base is `safety/validate-and-backup-before-sync`.
+- Production main remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
+- No merge, production source sync, Deplexo deployment/restart, or live-volume mutation occurred.
+- Release blockers are unchanged: independent persistent-volume backup, isolated full-volume restore drill (database plus uploads and private-media), full staging chat/media/voice tests, representative production memory/OOM telemetry, and provider-confirmed trusted proxy header behavior.
+- Do not treat the CI memory smoke as proof the historical Deplexo OOM incident is resolved. Do not merge or deploy until the operational release gate is evidenced.
