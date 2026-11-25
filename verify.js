@@ -12,6 +12,7 @@ const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
 const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
 const { createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
 const { readCgroupMetrics } = require('./lib/cgroup-metrics');
+const { cleanupStaleBackupTemps } = require('./lib/backup-temp-cleanup');
 
 const root = __dirname;
 const failures = [];
@@ -2845,6 +2846,35 @@ try {
 
  
 try { const healthServerText=fs.readFileSync(server,'utf8'),healthHtmlText=fs.readFileSync(mainPath,'utf8');const health=healthServerText.slice(healthServerText.indexOf("app.get('/api/admin/health'"),healthServerText.indexOf("app.get('/api/admin/backup/database'")); if(health.includes('ipAttribution:{trustedProxyConfigured:!!process.env.TRUSTED_PROXY_CIDRS')&&healthHtmlText.includes('توثيق بروكسي IP')&&healthHtmlText.includes('نطاقات البروكسي الموثوقة غير مهيأة'))pass('admin health panel exposes trusted-proxy readiness without disclosing configured CIDRs');else fail('trusted-proxy readiness health indicator'); } catch(error){fail('trusted-proxy readiness health indicator',error.message);}
+
+// Startup cleanup removes only old Rimaz backup temporaries and preserves unrelated/fresh paths.
+try {
+  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-backup-temp-cleanup-'));
+  const staleAt=new Date(Date.now()-8*24*60*60*1000);
+  const staleMedia=path.join(temp,'.rimaz-backup-media-stale');
+  const freshMedia=path.join(temp,'.rimaz-backup-media-fresh');
+  fs.mkdirSync(staleMedia);fs.writeFileSync(path.join(staleMedia,'upload.bin'),'stale');
+  fs.mkdirSync(freshMedia);
+  fs.utimesSync(staleMedia,staleAt,staleAt);
+  const staleDb=path.join(temp,'data.json.123.full-backup.0123456789abcdef.tmp');
+  const freshDb=path.join(temp,'data.json.123.database-backup.abcdef0123456789.tmp');
+  const unrelated=path.join(temp,'data.json.123.other.0123456789abcdef.tmp');
+  fs.writeFileSync(staleDb,'stale');fs.writeFileSync(freshDb,'fresh');fs.writeFileSync(unrelated,'keep');
+  fs.utimesSync(staleDb,staleAt,staleAt);
+  const linked=path.join(temp,'.rimaz-backup-media-link');
+  fs.symlinkSync(staleMedia,linked);
+  const cleaned=cleanupStaleBackupTemps(temp,path.join(temp,'data.json'));
+  assert.equal(cleaned.removedDirectories,1);
+  assert.equal(cleaned.removedFiles,1);
+  assert.equal(fs.existsSync(staleMedia),false);
+  assert.equal(fs.existsSync(staleDb),false);
+  assert.equal(fs.existsSync(freshMedia),true);
+  assert.equal(fs.existsSync(freshDb),true);
+  assert.equal(fs.existsSync(unrelated),true);
+  assert.equal(fs.lstatSync(linked).isSymbolicLink(),true);
+  fs.rmSync(temp,{recursive:true,force:true});
+  pass('startup cleanup removes only stale backup temp directories/files and preserves fresh or unrelated data');
+} catch(error) { fail('stale backup temp cleanup regression checks',error.message); }
 
 // Container health metrics must parse cgroup v2 counters without failing when the host does not expose them.
 try {

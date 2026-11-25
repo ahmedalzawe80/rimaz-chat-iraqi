@@ -11,6 +11,7 @@ const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
 const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
 const { normalizeIp, createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
 const { readCgroupMetrics } = require('./lib/cgroup-metrics');
+const { cleanupStaleBackupTemps } = require('./lib/backup-temp-cleanup');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { Server } = require('socket.io');
@@ -92,6 +93,9 @@ catch (err) {
 let PRIVATE_MEDIA_DIR = path.join(DATA_DIR, 'private-media');
 try { fs.mkdirSync(PRIVATE_MEDIA_DIR, { recursive: true }); }
 catch (error) { console.error(`Cannot initialize private media directory ${PRIVATE_MEDIA_DIR}: ${error.message}`); throw error; }
+const staleBackupTemps=cleanupStaleBackupTemps(DATA_DIR,DB_FILE);
+if(staleBackupTemps.removedDirectories||staleBackupTemps.removedFiles)console.log(`Removed stale backup temp data: ${staleBackupTemps.removedDirectories} media snapshot directories, ${staleBackupTemps.removedFiles} database temp files.`);
+for(const item of staleBackupTemps.errors)console.warn(`Could not remove stale backup temp ${item.path}: ${item.message}`);
 
 app.disable('x-powered-by');
 app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','SAMEORIGIN');res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');res.setHeader('Permissions-Policy','camera=(self), microphone=(self), geolocation=()');if(req.path.startsWith('/api/'))res.setHeader('Cache-Control','no-store');next();});
