@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const { writeJsonSync } = require('./lib/json-writer');
-const { readJsonFile } = require('./lib/json-reader');
+const { readJsonFile, validateJsonFile } = require('./lib/json-reader');
 const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
 const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
 const { normalizeTrustedProxyHeader, createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
@@ -61,6 +61,21 @@ try {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 } catch (error) { fail('streaming JSON reader regression fixtures', error.message); }
+
+// JSON integrity validation must reject malformed/non-object roots without building a second database graph.
+try{
+  const tempDir=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-json-validator-'));
+  try{
+    const file=path.join(tempDir,'candidate.json');
+    fs.writeFileSync(file,'{"users":{},"messages":[]}');
+    assert.deepEqual(validateJsonFile(file),{bytes:Buffer.byteLength('{"users":{},"messages":[]}')});
+    for(const invalid of ['','{broken','[]','null','{"unfinished":']){
+      fs.writeFileSync(file,invalid);
+      assert.throws(()=>validateJsonFile(file));
+    }
+    pass('streaming JSON integrity validator accepts complete object roots and rejects malformed, empty, and non-object files');
+  }finally{fs.rmSync(tempDir,{recursive:true,force:true});}
+}catch(error){fail('streaming JSON integrity validator fixtures',error.message);}
 
 // Restore preview inspection must validate the complete file while retaining no database object graph.
 try {
