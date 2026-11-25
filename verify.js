@@ -1483,7 +1483,7 @@ try {
     ['expired restore previews delete their staged files on a recurring unref timer', serverText.includes('function discardDatabaseRestorePreview') && serverText.includes('fs.unlinkSync(item.filePath)') && serverText.includes('setInterval(purgeExpiredDatabaseRestores,30*1000)') && serverText.includes('databaseRestoreCleanupTimer.unref?.()')],
     ['restore accepts only known versioned Rimaz JSON formats and validates schema', serverText.includes("['rimaz-database-backup','rimaz-full-backup']") && serverText.includes('function validateDatabaseRestoreData') && serverText.includes('readJsonFile(uploadedFile.path,{maxBytes:20*1024*1024})') && serverText.includes('db = readJsonFile(DB_FILE);') && serverText.includes('النسخة لا تحتوي البنية الأساسية لقاعدة بيانات ريماز') && serverText.includes('function restoreContainsOwner') && serverText.includes('النسخة لا تحتوي حساب صاحب الموقع')],
     ['restore preview uses a short-lived random token bound to the requesting admin', serverText.includes('crypto.randomBytes(32).toString(\'hex\')') && serverText.includes('expiresAt:Date.now()+5*60*1000') && serverText.includes('pending.owner!==keyName(req.user.name)')],
-    ['restore confirmation revalidates the staged file and commits the audited replacement before disconnecting sessions', serverText.includes("confirmation!=='استعادة ريماز'") && serverText.includes(".pre-restore-") && serverText.includes('validateDatabaseRestoreData(readJsonFile(pending.filePath,{maxBytes:20*1024*1024}))') && serverText.includes("fs.copyFileSync(DB_FILE,recoveryFile,fs.constants.COPYFILE_EXCL)") && serverText.includes("fs.chmodSync(recoveryFile,0o600)") && serverText.includes("fs.openSync(recoveryFile,'r+')") && !serverText.includes('const recoveryData=fs.readFileSync(DB_FILE)') && serverText.includes('fs.fsyncSync(recoveryFd)') && serverText.includes('recoveryReady=true') && serverText.includes('if(recoveryFile&&!recoveryReady)') && serverText.includes('db=checked.clean') && serverText.includes('db=previous')],
+    ['restore confirmation revalidates the staged file and commits the audited replacement before disconnecting sessions', serverText.includes("confirmation!=='استعادة ريماز'") && serverText.includes(".pre-restore-") && serverText.includes('validateDatabaseRestoreData(readJsonFile(pending.filePath,{maxBytes:20*1024*1024}))') && serverText.includes("fs.copyFileSync(DB_FILE,recoveryFile,fs.constants.COPYFILE_EXCL)") && serverText.includes("fs.chmodSync(recoveryFile,0o600)") && serverText.includes("fs.openSync(recoveryFile,'r+')") && !serverText.includes('const recoveryData=fs.readFileSync(DB_FILE)') && serverText.includes('fs.fsyncSync(recoveryFd)') && serverText.includes('recoveryReady=true') && serverText.includes('if(recoveryFile&&!recoveryReady)') && serverText.includes('db=checked.clean') && serverText.includes('db=previous') && serverText.includes('previousPrivateMessages=previous.privateMessages;') && serverText.includes('previous=null;') && serverText.includes('db=null;') && serverText.includes('if(databasePersisted)restoreDatabaseFileFromRecovery(recoveryFile);') && serverText.includes('db=readJsonFile(recoveryFile);') && serverText.includes('db.privateMessages=previousPrivateMessages||[];') && serverText.indexOf('save();')<serverText.indexOf('fs.copyFileSync(DB_FILE,recoveryFile,fs.constants.COPYFILE_EXCL'))],
     ['restore clears sessions and disconnects active sockets', serverText.includes('db.sessions={};db.privateMessages=[];') && serverText.includes('io.disconnectSockets(true)')],
     ['restore invalidates in-memory sessions, room membership, and pending cleanup timers before disconnect callbacks', (()=>{const start=serverText.indexOf("app.post('/api/admin/restore/database/confirm',requireAdmin");const end=serverText.indexOf("\napp.get('/api/admin/data'",start);const block=serverText.slice(start,end);const invalidate=block.indexOf('sessions.clear();');const disconnect=block.indexOf('io.disconnectSockets(true)');return invalidate>=0&&disconnect>invalidate&&block.includes('socketUsers.clear();')&&block.includes('roomSockets.clear();')&&block.includes('activeCallPairs.clear();')&&block.includes('activeVoicePairs.clear();')&&block.includes('privateDisconnectTimers.clear();')&&block.includes('privateMessageWindows.clear();')&&block.includes('sessionDisconnectTimers.clear();')&&block.includes('voiceSpeakers.clear();')&&block.includes('privateMediaPlaybackTickets.clear();');})()],
     ['admin UI previews counts and requires typed confirmation before restore', htmlText.includes('previewDatabaseRestore()') && htmlText.includes('confirmDatabaseRestore()') && htmlText.includes('استعادة ريماز') && htmlText.includes('accept=".json,application/json"')],
@@ -1505,6 +1505,30 @@ try {
   }catch(_){runtimeRestoreChecks=false;}
   runtimeRestoreChecks?pass('restore validator runtime fixtures accept valid backup, clear sessions, and reject bad format/schema'):fail('restore validator runtime fixtures');
 } catch (error) { fail('v46.71.0 database restore checks', error.message); }
+
+// Disk rollback must restore the previous database atomically without retaining its old object graph.
+try {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-restore-rollback-'));
+  try {
+    const liveFile = path.join(tempDir, 'live.json');
+    const recoveryFile = path.join(tempDir, 'recovery.json');
+    fs.writeFileSync(liveFile, '{"state":"new"}');
+    fs.writeFileSync(recoveryFile, '{"state":"previous"}', { mode: 0o600 });
+    const serverText = fs.readFileSync(server, 'utf8');
+    const helperStart = serverText.indexOf('function restoreDatabaseFileFromRecovery(recoveryFile){');
+    const helperEnd = serverText.indexOf('\n}\n', helperStart);
+    if (helperStart < 0 || helperEnd < 0) throw new Error('rollback helper not found');
+    const helperSource = serverText.slice(helperStart, helperEnd + 2);
+    const restore = vm.runInNewContext(helperSource + ';restoreDatabaseFileFromRecovery;', { fs, crypto, process, DB_FILE: liveFile, DATA_DIR: tempDir });
+    restore(recoveryFile);
+    assert.equal(fs.readFileSync(liveFile, 'utf8'), '{"state":"previous"}');
+    assert.equal(fs.readFileSync(recoveryFile, 'utf8'), '{"state":"previous"}');
+    assert.equal(fs.statSync(liveFile).mode & 0o777, 0o600);
+    pass('restore rollback atomically reinstates the preserved file with restrictive permissions');
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+} catch (error) { fail('restore disk rollback runtime fixture', error.message); }
 
 // Restore upload gate: serialize expensive uploads/parsing and release on every terminal request event.
 try {
