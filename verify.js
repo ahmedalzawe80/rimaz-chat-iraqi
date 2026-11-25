@@ -2892,9 +2892,17 @@ try {
   assert.equal(metrics.memory.peakBytes,94371840);
   assert.equal(metrics.memory.oomKillEvents,1);
   assert.equal(metrics.cpu.throttledPeriods,4);
+  const cpuOnly=readCgroupMetrics('/cpu-only',file=>{
+    if(file==='/cpu-only/cpu.stat')return 'usage_usec 9000\\nnr_periods 12\\nnr_throttled 3';
+    const error=new Error('missing');error.code='ENOENT';throw error;
+  });
+  assert.equal(cpuOnly.available,true);
+  assert.equal(cpuOnly.memory.currentBytes,null);
+  assert.equal(cpuOnly.cpu.usageMicros,9000);
+  assert.equal(cpuOnly.cpu.throttledPeriods,3);
   const unavailable=readCgroupMetrics('/missing',file=>{const error=new Error('missing');error.code='ENOENT';throw error;});
   assert.equal(unavailable.available,false);
-  pass('cgroup health metrics report memory limits, peaks, OOM kills and CPU throttling, with a safe unavailable fallback');
+  pass('cgroup health metrics report memory limits, peaks, OOM kills and CPU throttling, including CPU-only and unavailable environments');
 } catch(error) { fail('cgroup health metrics regression checks',error.message); }
 
 // Client IP attribution must ignore all forwarding headers unless the immediate peer is trusted.
