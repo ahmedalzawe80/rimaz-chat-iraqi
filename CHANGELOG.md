@@ -667,3 +667,5 @@
 - Added a bounded-chunk JSON reader/writer, restore upload admission control, and cancellable full-backup stream cleanup.
 - Exact source/test commit `cbf0f15119ff0be6eee6bd8fa7fc76c019c82841` passed [Actions run #45602868789](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45602868789): 626 regression checks, syntax, locked install, dependency tree, and Docker build. The refreshed archive was extracted and independently passed install, tests, HTML parity, and Docker build.
 - This does not prove the historical 128 MB Deplexo memory issue is fixed; staging restore and representative-load memory evidence remain mandatory.
+
+- Added a CI runtime smoke step that starts the production Docker image and verifies both the homepage HTTP response and Socket.IO polling handshake. This checks isolated startup, not staging or production memory behavior.
