@@ -2833,10 +2833,12 @@ try {
   const spoofed = resolveClientIp({'cf-connecting-ip':'203.0.113.9','x-real-ip':'203.0.113.10','x-forwarded-for':'203.0.113.11'},'198.51.100.7',untrusted);
   const trustedCf = resolveClientIp({'cf-connecting-ip':'203.0.113.9'},'127.0.0.1',trusted);
   const trustedReal = resolveClientIp({'x-real-ip':'203.0.113.10'},'::1',trusted);
+  const trustedForwarded = resolveClientIp({'x-forwarded-for':'203.0.113.12'},'127.0.0.1',trusted);
   const invalidTrusted = resolveClientIp({'cf-connecting-ip':'not-an-ip','x-real-ip':'bad'},'127.0.0.1',trusted);
   assert.equal(spoofed,'198.51.100.7');
   assert.equal(trustedCf,'203.0.113.9');
   assert.equal(trustedReal,'203.0.113.10');
+  assert.equal(trustedForwarded,'203.0.113.12');
   assert.equal(invalidTrusted,'127.0.0.1');
   assert.equal(resolveClientIp({'cf-connecting-ip':'203.0.113.9'},'::ffff:198.51.100.7',untrusted),'198.51.100.7');
   pass('client IP resolution ignores spoofed proxy headers and accepts validated client IP headers only from explicitly trusted proxy CIDRs');
