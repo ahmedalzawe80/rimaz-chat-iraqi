@@ -1731,8 +1731,8 @@ try {
         const extracted=spawnSync('tar',['-xzf',archivePath,'-C',extractDir],{encoding:'utf8'});
         if(extracted.error||extracted.status!==0)throw new Error('tar extraction failed: '+(extracted.error?.message||extracted.stderr||extracted.status));
         const restored=JSON.parse(fs.readFileSync(path.join(extractDir,'database','rimaz-database.json'),'utf8'));
-        if(restored.users.sample.name!=='sample')throw new Error('restored database content mismatch');
-        if(Object.keys(restored.sessions||{}).length!==0||(restored.privateMessages||[]).length!==0)throw new Error('transient sessions/private messages were not excluded');
+        if(restored.database.users.sample.name!=='sample')throw new Error('restored database content mismatch');
+        if(Object.keys(restored.database.sessions||{}).length!==0||(restored.database.privateMessages||[]).length!==0)throw new Error('transient sessions/private messages were not excluded');
         if(fs.readFileSync(path.join(extractDir,'uploads','sample.txt'),'utf8')!=='rimaz backup sample')throw new Error('restored media content mismatch');
         restoreDrillOk=true;
       }catch(error){restoreDrillDetail=error.message;}
