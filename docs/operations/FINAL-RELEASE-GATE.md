@@ -8,10 +8,10 @@
 - Repository: `ahmedalzawe80/rimaz-chat-iraqi`
 - Branch: `fix/bound-private-media-ticket-cache`
 - PR #3: open, draft, unmerged; base `safety/validate-and-backup-before-sync`.
-- Exact source/test/workflow candidate: `e943ee295afb94ff581daafb4a415a53c5984948`.
-- Archive-only refresh commit: `54f042a2f6589ee0ee8022e21001767e5a5e15ba`; it changes only `rimaz-final-deep-audit-46.93.72.zip`.
-- [GitHub Actions run #45603823711](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45603823711) completed successfully. Source validation passed locked installation, dependency-tree verification, JavaScript syntax, **627 regression checks / 0 failures**, and production Docker build. The production container was then started in isolation; HTTP homepage response and Socket.IO polling handshake both passed.
-- Archive validation rebuilt the ZIP, checked integrity/path/tracked-file parity, extracted it, and passed locked installation, dependency-tree verification, syntax, regression tests, root/public HTML parity, and Docker build.
+- Exact source/test/workflow candidate: `2651907f91b4af3add3d88a8b4a83e2ec61f3ee7`.
+- Archive-only refresh commit: `084a96bcd27a28169f251ff9047d9c2fc7efc5a9`; it changes only `rimaz-final-deep-audit-46.93.72.zip`.
+- [GitHub Actions run #45631604365 (run #801)](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45631604365) completed successfully on both `validate` and `refresh-release-archive`. The source job passed locked installation/tree verification, syntax, regression tests, production Docker build, and an isolated production-container homepage + Socket.IO polling smoke test. Docker dependency audit reported **0 vulnerabilities**.
+- The archive job rebuilt the ZIP from tracked files, checked CRC/safe paths/exact tracked-file parity, extracted it, and passed locked install, dependency-tree verification, syntax, regression tests, root/public HTML parity, and Docker build. Run #801 validated source SHA `2651907...`; its archive job then created archive-only commit `084a96b...`.
 - Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No deployment, restart, production sync, or live-data modification occurred.
 
 ## Resource and restore work included
@@ -25,7 +25,7 @@
 
 ## Non-negotiable production blockers
 
-1. **Independent live-volume backup:** create a consistent backup of `/data/rimaz` outside the app/container/volume.
+1. **Independent live-volume backup:** create a consistent backup of `/data/rimaz` outside the app/container/volume. The current full-backup generator does not lock the database and media tree into one atomic snapshot while uploads/deletes may continue. Use an offline consistent volume snapshot or a controlled maintenance window that prevents media mutations for the entire export; then verify the copy by restoring it in isolation.
 2. **Isolated full restore:** restore database JSON, `uploads/`, and `private-media/`; verify the owner account, file counts, hashes, paths, and permissions.
 3. **Staging smoke test:** login/reconnect, public/private chat, rooms, voice/video, moderation/member-card actions, uploads, backup/restore, and multiple devices.
 4. **Runtime resource evidence:** measure RSS, heap, external memory, and array buffers under representative load; collect restart, exit, and OOM reasons against the 128 MB memory and 0.25 vCPU limits.
