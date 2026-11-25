@@ -2951,8 +2951,10 @@ try {
   fs.writeFileSync(path.join(uploads,'present.png'),'ok');
   fs.writeFileSync(path.join(uploads,'gift.png'),'gift');
   const sharedGift={giftImage:'/uploads/gift.png'};
-  const refs=createBackupMediaSnapshot({database:{messages:[{text:'/uploads/not-a-file.png',media:{url:'/uploads/present.png'}}],profiles:{alice:{gifts:[sharedGift]}},giftCatalog:[{image:'/uploads/gift.png'}]},uploadDirectory:uploads,dataDirectory:temp});
-  try { assert.deepEqual(refs.entries.map(entry=>entry.name),['uploads/gift.png','uploads/present.png']); } finally { refs.cleanup(); }
+  fs.writeFileSync(path.join(uploads,'rank-art.png'),'rank art');
+  const rankDefinition={artUrl:'/uploads/rank-art.png'};
+  const refs=createBackupMediaSnapshot({database:{messages:[{text:'/uploads/not-a-file.png',media:{url:'/uploads/present.png'}}],profiles:{alice:{gifts:[sharedGift]}},rankDefinitions:[rankDefinition],giftCatalog:[{image:'/uploads/gift.png'}]},uploadDirectory:uploads,dataDirectory:temp});
+  try { assert.deepEqual(refs.entries.map(entry=>entry.name),['uploads/gift.png','uploads/present.png','uploads/rank-art.png']); } finally { refs.cleanup(); }
   assert.throws(()=>createBackupMediaSnapshot({database:{profiles:{alice:{avatar:'/uploads/missing.png'}}},uploadDirectory:uploads,dataDirectory:temp}),/Referenced public upload is missing/);
   fs.symlinkSync(path.join(uploads,'present.png'),path.join(uploads,'link.png'));
   assert.throws(()=>createBackupMediaSnapshot({database:{profiles:{alice:{avatar:'/uploads/link.png'}}},uploadDirectory:uploads,dataDirectory:temp}),/not a regular file/);
