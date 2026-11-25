@@ -3,7 +3,10 @@
 - Coordinated full-backup streaming with Node.js pipeline teardown so client cancellation propagates through the gzip/source chain and the generator can run its temporary-file cleanup.
 - Added restore-preview capacity preflight before Multer upload and JSON parsing. A full queue is rejected early while same-admin preview replacement remains supported.
 - Added regression coverage for backup iterator cleanup, upload cancellation lifecycle, and restore preview queue capacity/order.
-- These source checks reduce avoidable work and improve cleanup guarantees; they do not establish that the 128 MB hosting memory issue is fixed or replace staging restore/load verification.
+- Added a pinned, zero-dependency streaming JSON reader for startup database loading and restore preview/confirmation, avoiding a full UTF-16 source-string copy while parsing.
+- During restore confirmation, the current database is durably saved and copied to a restrictive recovery file, then its in-memory object graph is released before the replacement is parsed. Failed restores reload the previous snapshot from disk and reattach transient private messages; if the replacement had been persisted, the database file is atomically rolled back.
+- Regression coverage now includes chunk-split Unicode, duplicate keys, prototype-safe __proto__ handling, malformed/BOM/deep/oversized files, multi-megabyte input, and disk-backed rollback.
+- These changes reduce peak-memory duplication but do not establish that the 128 MB hosting memory issue is fixed; restore preview still holds the live database and replacement object graph together, and staging/load verification remains required.
 
 ## Repository maintenance — 2026-11-24 (no application version change)
 
