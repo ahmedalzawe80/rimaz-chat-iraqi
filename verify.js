@@ -11,6 +11,7 @@ const { readJsonFile } = require('./lib/json-reader');
 const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
 const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
 const { createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
+const { readCgroupMetrics } = require('./lib/cgroup-metrics');
 
 const root = __dirname;
 const failures = [];
@@ -2843,6 +2844,27 @@ try {
 } catch(error) { fail('private-media playback ticket regression checks',error.message); }
 
  
+// Container health metrics must parse cgroup v2 counters without failing when the host does not expose them.
+try {
+  const fixture = {
+    '/fake/memory.current':'67108864',
+    '/fake/memory.peak':'94371840',
+    '/fake/memory.max':'134217728',
+    '/fake/memory.events':'low 0\\nhigh 2\\nmax 3\\noom 1\\noom_kill 1',
+    '/fake/cpu.stat':'usage_usec 123456\\nuser_usec 100000\\nsystem_usec 23456\\nnr_periods 20\\nnr_throttled 4\\nthrottled_usec 8000'
+  };
+  const metrics=readCgroupMetrics('/fake',file=>{if(!(file in fixture)){const error=new Error('missing');error.code='ENOENT';throw error;}return fixture[file];});
+  assert.equal(metrics.available,true);
+  assert.equal(metrics.memory.currentBytes,67108864);
+  assert.equal(metrics.memory.limitBytes,134217728);
+  assert.equal(metrics.memory.peakBytes,94371840);
+  assert.equal(metrics.memory.oomKillEvents,1);
+  assert.equal(metrics.cpu.throttledPeriods,4);
+  const unavailable=readCgroupMetrics('/missing',file=>{const error=new Error('missing');error.code='ENOENT';throw error;});
+  assert.equal(unavailable.available,false);
+  pass('cgroup health metrics report memory limits, peaks, OOM kills and CPU throttling, with a safe unavailable fallback');
+} catch(error) { fail('cgroup health metrics regression checks',error.message); }
+
 // Client IP attribution must ignore all forwarding headers unless the immediate peer is trusted.
 try {
   const untrusted = createTrustedProxyTrust('');
