@@ -5,7 +5,7 @@
 - Working branch: `fix/bound-private-media-ticket-cache`
 - Integrated review: PR #3, still open/draft/unmerged.
 - Production `main`: `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`; no production merge, Deplexo deployment/restart, ZIP sync, or live-volume/data operation was performed.
-- Latest source/test candidate: `cade62bb05edc7cfece5f879151ef65b300d548c`; archive-only refresh commit: `f7d1f0d7d877851d58a227554543ef96cc1bbab5`. Earlier backup-stream source change: `98faac0a91c4820d7f18103710a505d07d3242ae`.
+- Latest validated source/test candidate: `c0df4b36762adf52eef03eb50e4d26d0c6344944`; archive-only refresh commit: `8ba0a1573922065cd206c576c795988a9eb9fc6a`. Earlier backup-stream source change: `98faac0a91c4820d7f18103710a505d07d3242ae`.
 
 ## New backup lifecycle work
 - Added dynamic isolated regression coverage in `verify.js` for `fullBackupTarEntries()`: explicit iterator cancellation, normal exhaustion, and media enumeration failure must all remove the temporary database snapshot file.
@@ -26,11 +26,21 @@
 - Archive-only commit f7d1f0d7d877851d58a227554543ef96cc1bbab5 changes only rimaz-final-deep-audit-46.93.72.zip.
 - Current branch head is f7d1f0d7d877851d58a227554543ef96cc1bbab5; PR #3 remains open/draft/unmerged. Production main remains a2c74fded15ea5cfde38d310a84c3c8edfe994b3.
 
+
+## Streaming JSON and disk-backed restore rollback — 2026-11-25
+- Added exact-pinned `@streamparser/json` 0.0.26 and `lib/json-reader.js`. It reads files in 64 KiB chunks, enforces a 512-level nesting ceiling, rejects a UTF-8 BOM to preserve `JSON.parse` behavior, and avoids materializing the entire source JSON string.
+- Replaced startup database loading and restore preview/confirmation parsing with the streaming reader. Restore files remain capped at 20 MiB; schema, format, owner-account, and data-count validation remain in place.
+- Confirmation now durably saves the current database before making the disk-to-disk recovery copy. Once the copy is synced, the old database object is released before the replacement is parsed; only transient in-memory private messages are retained for rollback.
+- If confirmation fails before the replacement is saved, the old database is reloaded from the recovery copy. If the replacement was already saved, the recovery copy is atomically restored to the live database path first. Failure to reload the preserved snapshot fails closed by terminating the process rather than serving with an invalid in-memory database.
+- Regression tests cover Unicode split across chunks, duplicate keys, prototype-safe `__proto__`, invalid JSON, BOM, nesting/size limits, multi-megabyte input, and atomic disk rollback.
+- GitHub Actions run [45599503224](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45599503224) passed both jobs on source/test candidate `c0df4b36762adf52eef03eb50e4d26d0c6344944`: locked install, dependency tree, syntax, tests, Docker build, archive parity/integrity/path checks, extracted-archive install/tests/HTML parity/Docker build. Archive-only commit `8ba0a1573922065cd206c576c795988a9eb9fc6a` changes only the ZIP.
+- The PR remains open/draft/unmerged; `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No staging or production data operation occurred.
+
 ## Remaining memory risks
 - Routine database save uses the bounded-memory `lib/json-writer.js`.
 - Restore recovery copy is disk-to-disk with exclusive creation, mode 0600 and fsync.
 - Full/database-only backup serialize snapshots to temporary disk files; full backup now has coordinated stream cancellation.
-- Restore preview and confirmation still read the full uploaded JSON as a string and parse a replacement object graph. The new capacity preflight avoids parsing uploads that cannot be queued, but it does not reduce the peak memory of one accepted restore. This remains a material risk under a 128 MB container limit. Do not claim the historical 128 MB violation is fixed.
+- Startup and restore paths no longer materialize a full UTF-16 source string. Confirmation also releases the previous database object after a durable disk recovery copy, so it does not retain both complete database graphs during replacement parsing. Preview still holds the live database and the parsed restore graph together; the final replacement object graph must still reside in memory. No representative-load RSS/heap/external/arrayBuffers or Deplexo OOM/exit evidence has been collected, so the historical 128 MB violation is not yet proven fixed.
 - Staging must cover cancellation, concurrent backups, disk-full/permission errors, TAR/GZIP integrity, backup/restore round-trip, and representative-load RSS/heap/external/arrayBuffers plus provider exit/OOM evidence.
 
 ## Points / deduction investigation
