@@ -1119,8 +1119,8 @@ try {
   const add=source.match(/function addMessage\(m\)\s*\{[\s\S]*?\n\}/);
   const batch=source.match(/function scheduleMessageSave\(delay=100\)\s*\{[\s\S]*?\n\}/);
   const flush=source.match(/function flushMessageWrites\(\)\s*\{[\s\S]*?\n\}/);
-  if(add&&batch&&flush&&add[0].includes('pendingMessageWrites.push({message:m,resolve,reject})')&&batch[0].includes('flushMessageWrites()')&&flush[0].includes('save()')&&flush[0].includes('db.messages=previousMessages')&&flush[0].includes('entry.reject(error)')&&source.includes('function gracefulShutdown(signal)')) pass('chat message writes are batched, rollback-safe, retried, and flushed during graceful shutdown');
-  else fail('chat message write batching and shutdown flush');
+  if(add&&batch&&flush&&add[0].includes('pendingMessageWrites.push({message:m,resolve,reject})')&&add[0].includes('MAX_PENDING_MESSAGE_WRITES')&&batch[0].includes('flushMessageWrites()')&&flush[0].includes('save()')&&flush[0].includes('db.messages=previousMessages')&&flush[0].includes('pendingMessageWrites.splice(0,batch.length)')&&flush[0].includes('scheduleMessageSave(retryDelay)')&&!flush[0].includes('pendingMessageWrites.splice(0)')&&!flush[0].includes('entry.reject(error)')&&source.includes('function gracefulShutdown(signal)')) pass('chat message writes retain the pending queue across repeated save failures, use capped backoff and a bounded admission limit, and flush during graceful shutdown');
+  else fail('chat message write batching, durable retry queue, and shutdown flush');
 } catch(error){fail('chat write batching checks',error.message);}
 
 // Public room and wall content have a 24-hour retention policy with media cleanup.
