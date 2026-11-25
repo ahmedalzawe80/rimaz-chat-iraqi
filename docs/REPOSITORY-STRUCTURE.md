@@ -14,6 +14,9 @@ This guide explains why each top-level area exists and which files must remain i
 │   ├── audits/
 │   ├── operations/
 │   └── project/
+├── lib/
+│   ├── json-reader.js
+│   └── json-writer.js
 ├── public/
 │   ├── gifts/
 │   ├── smileys/
@@ -59,6 +62,12 @@ The root also contains a small tracked data placeholder, the domain-verification
 ## Tooling consistency
 
 `.nvmrc` is the single Node.js major-version source for local development and GitHub Actions. `package.json` constrains supported runtime versions, while the Dockerfile uses the matching Node 24 base image. `package-lock.json` records the resolved dependency tree; local development, CI, and Docker use `npm ci` to install it without re-resolving version ranges. The validation workflow reads `.nvmrc` instead of duplicating a version literal and cancels superseded runs for the same branch or pull request.
+
+## Persistence and JSON helpers
+
+- `lib/json-reader.js` incrementally parses the live database and staged restore files in bounded chunks; it applies a nesting limit and avoids a full source-text allocation.
+- `lib/json-writer.js` serializes database snapshots in bounded chunks for durable atomic writes and backup staging.
+- Keep these helpers separate from `server.js` so file-format and persistence behavior can be regression-tested independently.
 
 ## Runtime assets
 
