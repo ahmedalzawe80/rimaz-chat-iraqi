@@ -97,6 +97,10 @@ jobs:
             echo "ERROR: archived public assets differ from the reviewed repository candidate."
             exit 1
           fi
+          if ! diff -qr --no-dereference "$PROJECT/lib" lib; then
+            echo "ERROR: archived server library modules differ from the reviewed repository candidate."
+            exit 1
+          fi
           cp package-lock.json "$PROJECT/package-lock.json"
           cp Dockerfile "$PROJECT/Dockerfile"
           echo "Archive application source and public assets exactly match the candidate."
