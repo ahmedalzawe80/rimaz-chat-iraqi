@@ -1353,6 +1353,24 @@ const databaseRestoreCleanupTimer=setInterval(purgeExpiredDatabaseRestores,30*10
 databaseRestoreCleanupTimer.unref?.();
 
 function removeUploadedFile(file){if(file?.path){try{fs.unlinkSync(file.path)}catch(e){if(e.code!=='ENOENT')console.warn('Upload cleanup failed:',e.message)}}}
+function restoreDatabaseFileFromRecovery(recoveryFile){
+ const rollbackTemp=`${DB_FILE}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.rollback.tmp`;
+ let fd=null;
+ try{
+  fs.copyFileSync(recoveryFile,rollbackTemp,fs.constants.COPYFILE_EXCL);
+  fs.chmodSync(rollbackTemp,0o600);
+  fd=fs.openSync(rollbackTemp,'r+');
+  fs.fsyncSync(fd);
+  fs.closeSync(fd);fd=null;
+  fs.renameSync(rollbackTemp,DB_FILE);
+  try{const dirFd=fs.openSync(DATA_DIR,'r');try{fs.fsyncSync(dirFd);}finally{fs.closeSync(dirFd);}}
+  catch(syncError){console.error('Database rollback directory sync unavailable:',syncError.message);}
+ }catch(error){
+  if(fd!==null){try{fs.closeSync(fd);}catch(_){}}
+  try{fs.unlinkSync(rollbackTemp);}catch(_){}
+  throw error;
+ }
+}
 
 // MIME headers are supplied by the client, so verify the file's actual container
 // signature before the file can be referenced by a profile, room, wall or message.
@@ -2062,13 +2080,17 @@ app.post('/api/admin/restore/database/confirm',requireAdmin,(req,res)=>{
  const pending=pendingDatabaseRestores.get(token);
  if(!pending||pending.owner!==keyName(req.user.name))return res.status(400).json({error:'انتهت صلاحية المعاينة؛ ارفع الملف مرة ثانية'});
  if(confirmation!=='استعادة ريماز')return res.status(400).json({error:'اكتب عبارة استعادة ريماز للتأكيد'});
- const previous=db;
+ let previous=db;
+ let previousPrivateMessages=null;
+ let databaseReleased=false;
+ let databasePersisted=false;
  let recoveryFile='';
  let recoveryReady=false;
+ const hadDatabaseFile=fs.existsSync(DB_FILE);
  try{
-  const checked=validateDatabaseRestoreData(readJsonFile(pending.filePath,{maxBytes:20*1024*1024}));
-  const protectedOwnerName=process.env.OWNER_NAME||'owner';if(!restoreContainsOwner(checked.clean,protectedOwnerName))throw new Error('النسخة لا تحتوي حساب صاحب الموقع؛ رُفضت لحماية إمكانية الدخول للإدارة');
-  if(fs.existsSync(DB_FILE)){
+  if(hadDatabaseFile){
+   // Flush the current in-memory snapshot before making the rollback copy.
+   save();
    recoveryFile=DB_FILE+'.pre-restore-'+Date.now()+'.json';
    // Copy disk-to-disk so the live database is never duplicated into a full RAM Buffer.
    try{
@@ -2079,13 +2101,22 @@ app.post('/api/admin/restore/database/confirm',requireAdmin,(req,res)=>{
    }catch(recoveryError){try{fs.unlinkSync(recoveryFile);}catch(_){}throw recoveryError;}
    try{const recoveryDirFd=fs.openSync(DATA_DIR,'r');try{fs.fsyncSync(recoveryDirFd);}finally{fs.closeSync(recoveryDirFd);}}catch(syncError){console.error('Recovery database directory sync unavailable:',syncError.message);}
    recoveryReady=true;
+   // Keep only intentionally transient private messages in RAM; the full prior
+   // database is now recoverable from disk and can be released before parsing.
+   previousPrivateMessages=previous.privateMessages;
+   previous=null;
+   db=null;
+   databaseReleased=true;
   }
+  const checked=validateDatabaseRestoreData(readJsonFile(pending.filePath,{maxBytes:20*1024*1024}));
+  const protectedOwnerName=process.env.OWNER_NAME||'owner';if(!restoreContainsOwner(checked.clean,protectedOwnerName))throw new Error('النسخة لا تحتوي حساب صاحب الموقع؛ رُفضت لحماية إمكانية الدخول للإدارة');
   db=checked.clean;
   db.sessions={};db.privateMessages=[];
   db.adminAuditLogs=Array.isArray(db.adminAuditLogs)?db.adminAuditLogs:[];
   db.adminAuditLogs.unshift({id:crypto.randomUUID(),at:Date.now(),actor:String(req.user.name||'المالك').slice(0,32),method:'POST',path:'/api/admin/restore/database/confirm',status:200});
   db.adminAuditLogs=db.adminAuditLogs.slice(0,500);
   save();
+  databasePersisted=true;
   discardDatabaseRestorePreview(token,pending);
   // Invalidate every pre-restore in-memory identity before disconnect callbacks run.
   // Otherwise the old sessions Map can continue authenticating stale session IDs during
@@ -2106,8 +2137,19 @@ app.post('/api/admin/restore/database/confirm',requireAdmin,(req,res)=>{
   res.json({ok:true,message:'تمت استعادة قاعدة البيانات. تم إنهاء الجلسات النشطة.',recoveryFile:path.basename(recoveryFile||DB_FILE)});
  }catch(e){
   if(recoveryFile&&!recoveryReady){try{fs.unlinkSync(recoveryFile);}catch(_){}}
-  db=previous;
-  try{save();}catch(rollbackError){console.error('Database restore rollback failed:',rollbackError);}
+  try{
+   if(databaseReleased){
+    if(databasePersisted)restoreDatabaseFileFromRecovery(recoveryFile);
+    db=readJsonFile(recoveryFile);
+    db.privateMessages=previousPrivateMessages||[];
+   }else{
+    db=previous;
+    if(!hadDatabaseFile&&databasePersisted){try{fs.unlinkSync(DB_FILE);}catch(unlinkError){if(unlinkError.code!=='ENOENT')throw unlinkError;}}
+   }
+  }catch(rollbackError){
+   console.error('FATAL: database restore rollback could not reload the preserved snapshot:',rollbackError);
+   process.exit(1);
+  }
   res.status(500).json({error:'فشلت الاستعادة وتمت محاولة الرجوع للبيانات السابقة. احتفظ بنسخة الاسترداد قبل أي محاولة أخرى.'});
  }
 });
