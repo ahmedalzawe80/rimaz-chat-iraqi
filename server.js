@@ -1331,20 +1331,22 @@ function validateDatabaseRestoreData(parsed){
     clean[key]=value;
   }
   if(!clean.users||!clean.guests||!Array.isArray(clean.rooms)||!Array.isArray(clean.messages))throw new Error('النسخة لا تحتوي البنية الأساسية لقاعدة بيانات ريماز');
+  for(const collection of ['users','guests'])for(const [name,account] of Object.entries(clean[collection]))if(!account||typeof account!=='object'||Array.isArray(account))throw new Error('سجل حساب غير صالح داخل النسخة: '+name);
   if(Object.keys(clean.users).length>100000||Object.keys(clean.guests).length>100000||clean.rooms.length>10000||clean.messages.length>2000000)throw new Error('حجم البيانات داخل النسخة يتجاوز الحدود الآمنة');
   return {clean,summary:{members:Object.keys(clean.users).length,guests:Object.keys(clean.guests).length,rooms:clean.rooms.length,messages:clean.messages.length,wall:Array.isArray(clean.wall)?clean.wall.length:0,createdAt:parsed.createdAt||null,appVersion:parsed.appVersion||'غير معروف'}};
 }
 function restoreContainsOwner(candidate,ownerName){
  const users=candidate.users||{},guests=candidate.guests||{};
+ const validAccount=account=>!!account&&typeof account==='object'&&!Array.isArray(account);
  const configured=String(process.env.OWNER_NAME||'').trim();
- if(configured){const wanted=keyName(configured);return Object.keys(users).some(name=>keyName(name)===wanted)||Object.keys(guests).some(name=>keyName(name)===wanted);}
+ if(configured){const wanted=keyName(configured);return Object.entries(users).some(([name,account])=>validAccount(account)&&keyName(name)===wanted)||Object.entries(guests).some(([name,account])=>validAccount(account)&&keyName(name)===wanted);}
  const wanted=keyName(ownerName);
  if(wanted&&wanted!=='owner'){
-  for(const [name,account] of Object.entries(users))if(keyName(name)===wanted&&String(account?.role||'')==='owner')return true;
-  for(const [name,account] of Object.entries(guests))if(keyName(name)===wanted&&String(account?.role||'')==='owner')return true;
+  for(const [name,account] of Object.entries(users))if(validAccount(account)&&keyName(name)===wanted&&String(account.role||'')==='owner')return true;
+  for(const [name,account] of Object.entries(guests))if(validAccount(account)&&keyName(name)===wanted&&String(account.role||'')==='owner')return true;
  }
- for(const [name,account] of Object.entries(users))if(keyName(name)==='owner'||String(account?.role||'')==='owner')return true;
- for(const [name,account] of Object.entries(guests))if(keyName(name)==='owner'||String(account?.role||'')==='owner')return true;
+ for(const [name,account] of Object.entries(users))if(validAccount(account)&&(keyName(name)==='owner'||String(account.role||'')==='owner'))return true;
+ for(const [name,account] of Object.entries(guests))if(validAccount(account)&&(keyName(name)==='owner'||String(account.role||'')==='owner'))return true;
  return false;
 }
 function discardDatabaseRestorePreview(token,item=pendingDatabaseRestores.get(token)){
