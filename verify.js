@@ -1468,6 +1468,34 @@ try {
   runtimeRestoreChecks?pass('restore validator runtime fixtures accept valid backup, clear sessions, and reject bad format/schema'):fail('restore validator runtime fixtures');
 } catch (error) { fail('v46.71.0 database restore checks', error.message); }
 
+// Restore upload gate: serialize expensive uploads/parsing and release on every terminal request event.
+try {
+  const serverText=fs.readFileSync(server,'utf8');
+  const checks=[
+    ['restore preview is guarded before Multer receives the upload',serverText.includes("app.post('/api/admin/restore/database/preview',requireAdmin,restoreUploadGate,(req,res)=>{")],
+    ['restore upload gate caps in-flight uploads at one and releases on finish, close, or abort',serverText.includes('const restoreUploadGate=createRestoreUploadGate(1)')&&serverText.includes("res.once('finish',release)")&&serverText.includes("res.once('close',release)")&&serverText.includes("req.once('aborted',release)")]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+  const start=serverText.indexOf('function createRestoreUploadGate(maxConcurrent){');
+  const end=serverText.indexOf('const restoreUploadGate=createRestoreUploadGate(1);',start);
+  let runtime=false;
+  try{
+    const create=vm.runInNewContext(serverText.slice(start,end)+';createRestoreUploadGate;');
+    const gate=create(1);
+    const response=()=>{const events={};return {events,statusCode:200,payload:null,once(name,fn){events[name]=fn;},status(code){this.statusCode=code;return this;},json(payload){this.payload=payload;return this;},emit(name){events[name]?.();}};};
+    const request=()=>({events:{},once(name,fn){this.events[name]=fn;},emit(name){this.events[name]?.();}});
+    const req1=request(),res1=response();let next1=0;gate(req1,res1,()=>next1++);
+    const req2=request(),res2=response();let next2=0;gate(req2,res2,()=>next2++);
+    const blocked=next1===1&&next2===0&&res2.statusCode===429&&!!res2.payload;
+    res1.emit('finish');
+    const req3=request(),res3=response();let next3=0;gate(req3,res3,()=>next3++);
+    res3.emit('close');res3.emit('finish');
+    const req4=request(),res4=response();let next4=0;gate(req4,res4,()=>next4++);
+    runtime=blocked&&next3===1&&next4===1;
+  }catch(_){runtime=false;}
+  runtime?pass('restore upload gate runtime fixture serializes uploads and safely releases exactly once'):fail('restore upload gate runtime fixture');
+}catch(error){fail('restore upload gate checks',error.message);}
+ 
 // v46.93.72: bound transient session state, disk-stage restore previews, and index room presence.
 try {
   const serverText = fs.readFileSync(server, 'utf8');
