@@ -2963,7 +2963,7 @@ try {
     context.UP_DIR=blockedUploads;
     const failed=context.createEntries();
     let rejected=false;
-    try{await failed.next();}catch(error){rejected=error.code==='ENOTDIR';}
+    try{await failed.next();}catch(error){rejected=error.message.includes('Referenced public upload is missing or unreadable')&&error.cause?.code==='ENOTDIR';}
     const leftover=fs.readdirSync(temp).filter(name=>name.startsWith('data.json.')||name.startsWith('.rimaz-backup-media-'));
     checks.push(['full-backup TAR generator cleans database and media snapshots when snapshot creation fails',rejected&&leftover.length===0]);
   }finally{
