@@ -4,8 +4,10 @@ const path = require('node:path');
 const vm = require('node:vm');
 const os = require('node:os');
 const crypto = require('node:crypto');
+const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const { writeJsonSync } = require('./lib/json-writer');
+const { readJsonFile } = require('./lib/json-reader');
 
 const root = __dirname;
 const failures = [];
@@ -16,6 +18,44 @@ const server = path.join(root, 'server.js');
 const serverCheck = spawnSync(process.execPath, ['--check', server], { encoding: 'utf8' });
 if (serverCheck.status === 0) pass('server.js syntax');
 else fail('server.js syntax', serverCheck.stderr || serverCheck.stdout);
+
+// The streaming JSON reader must match JSON.parse semantics without materializing the source text.
+try {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-json-reader-'));
+  try {
+    const file = path.join(tempDir, 'database.json');
+    const value = { text: 'x'.repeat(1013) + '💚' + 'ع'.repeat(2048), nested: [{ok:true}, null, 42] };
+    Object.defineProperty(value, '__proto__', { value: { safe: true }, enumerable: true, configurable: true, writable: true });
+    const source = JSON.stringify(value);
+    fs.writeFileSync(file, source);
+    const parsed = readJsonFile(file, { chunkSize: 1024, maxBytes: Buffer.byteLength(source) });
+    assert.equal(JSON.stringify(parsed), source);
+    assert.equal(Object.getPrototypeOf(parsed), Object.prototype);
+    assert.equal(Object.prototype.hasOwnProperty.call(parsed, '__proto__'), true);
+    assert.equal(parsed.__proto__.safe, true);
+
+    fs.writeFileSync(file, '{"duplicate":1,"duplicate":2}');
+    assert.equal(readJsonFile(file).duplicate, 2);
+    fs.writeFileSync(file, '{"broken":');
+    assert.throws(() => readJsonFile(file), SyntaxError);
+    fs.writeFileSync(file, '');
+    assert.throws(() => readJsonFile(file), SyntaxError);
+    fs.writeFileSync(file, '\\uFEFF{"bom":true}');
+    assert.throws(() => readJsonFile(file), SyntaxError);
+    fs.writeFileSync(file, '{"too":"large"}');
+    assert.throws(() => readJsonFile(file, { maxBytes: 4 }), RangeError);
+    fs.writeFileSync(file, '['.repeat(6) + '0' + ']'.repeat(6));
+    assert.throws(() => readJsonFile(file, { maxDepth: 5 }), SyntaxError);
+
+    const largeFile = path.join(tempDir, 'large.json');
+    const largeValue = 'R'.repeat(4 * 1024 * 1024);
+    fs.writeFileSync(largeFile, JSON.stringify({ payload: largeValue }));
+    assert.equal(readJsonFile(largeFile).payload.length, largeValue.length);
+    pass('streaming JSON reader handles chunk boundaries, Unicode, __proto__, duplicate keys, limits, invalid input, and multi-megabyte files');
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+} catch (error) { fail('streaming JSON reader regression fixtures', error.message); }
 
 // The bounded-memory writer must preserve native JSON output for persisted values.
 try {
@@ -1441,29 +1481,27 @@ try {
     ['restore upload is disk-backed in a private staging directory and capped at 20MB', serverText.includes('multer.diskStorage({destination:RESTORE_TMP_DIR') && serverText.includes('mode:0o700') && serverText.includes('fileSize:20*1024*1024') && !serverText.includes('multer.memoryStorage()')],
     ['pending restore previews retain only staged-file metadata, not a parsed database object', serverText.includes('filePath:uploadedFile.path,summary:checked.summary') && !serverText.includes('pendingDatabaseRestores.set(token,{database:checked.clean') && serverText.includes('MAX_PENDING_DATABASE_RESTORES=2')],
     ['expired restore previews delete their staged files on a recurring unref timer', serverText.includes('function discardDatabaseRestorePreview') && serverText.includes('fs.unlinkSync(item.filePath)') && serverText.includes('setInterval(purgeExpiredDatabaseRestores,30*1000)') && serverText.includes('databaseRestoreCleanupTimer.unref?.()')],
-    ['restore accepts only known versioned Rimaz JSON formats and validates schema', serverText.includes("['rimaz-database-backup','rimaz-full-backup']") && serverText.includes('function validateDatabaseRestoreFile') && serverText.includes('النسخة لا تحتوي البنية الأساسية لقاعدة بيانات ريماز') && serverText.includes('function restoreContainsOwner') && serverText.includes('النسخة لا تحتوي حساب صاحب الموقع')],
+    ['restore accepts only known versioned Rimaz JSON formats and validates schema', serverText.includes("['rimaz-database-backup','rimaz-full-backup']") && serverText.includes('function validateDatabaseRestoreData') && serverText.includes('readJsonFile(uploadedFile.path,{maxBytes:20*1024*1024})') && serverText.includes('db = readJsonFile(DB_FILE);') && serverText.includes('النسخة لا تحتوي البنية الأساسية لقاعدة بيانات ريماز') && serverText.includes('function restoreContainsOwner') && serverText.includes('النسخة لا تحتوي حساب صاحب الموقع')],
     ['restore preview uses a short-lived random token bound to the requesting admin', serverText.includes('crypto.randomBytes(32).toString(\'hex\')') && serverText.includes('expiresAt:Date.now()+5*60*1000') && serverText.includes('pending.owner!==keyName(req.user.name)')],
-    ['restore confirmation revalidates the staged file and commits the audited replacement before disconnecting sessions', serverText.includes("confirmation!=='استعادة ريماز'") && serverText.includes(".pre-restore-") && serverText.includes("validateDatabaseRestoreFile(fs.readFileSync(pending.filePath,'utf8'))") && serverText.includes("fs.copyFileSync(DB_FILE,recoveryFile,fs.constants.COPYFILE_EXCL)") && serverText.includes("fs.chmodSync(recoveryFile,0o600)") && serverText.includes("fs.openSync(recoveryFile,'r+')") && !serverText.includes('const recoveryData=fs.readFileSync(DB_FILE)') && serverText.includes('fs.fsyncSync(recoveryFd)') && serverText.includes('recoveryReady=true') && serverText.includes('if(recoveryFile&&!recoveryReady)') && serverText.includes('db=checked.clean') && serverText.includes('db=previous')],
+    ['restore confirmation revalidates the staged file and commits the audited replacement before disconnecting sessions', serverText.includes("confirmation!=='استعادة ريماز'") && serverText.includes(".pre-restore-") && serverText.includes('validateDatabaseRestoreData(readJsonFile(pending.filePath,{maxBytes:20*1024*1024}))') && serverText.includes("fs.copyFileSync(DB_FILE,recoveryFile,fs.constants.COPYFILE_EXCL)") && serverText.includes("fs.chmodSync(recoveryFile,0o600)") && serverText.includes("fs.openSync(recoveryFile,'r+')") && !serverText.includes('const recoveryData=fs.readFileSync(DB_FILE)') && serverText.includes('fs.fsyncSync(recoveryFd)') && serverText.includes('recoveryReady=true') && serverText.includes('if(recoveryFile&&!recoveryReady)') && serverText.includes('db=checked.clean') && serverText.includes('db=previous')],
     ['restore clears sessions and disconnects active sockets', serverText.includes('db.sessions={};db.privateMessages=[];') && serverText.includes('io.disconnectSockets(true)')],
     ['restore invalidates in-memory sessions, room membership, and pending cleanup timers before disconnect callbacks', (()=>{const start=serverText.indexOf("app.post('/api/admin/restore/database/confirm',requireAdmin");const end=serverText.indexOf("\napp.get('/api/admin/data'",start);const block=serverText.slice(start,end);const invalidate=block.indexOf('sessions.clear();');const disconnect=block.indexOf('io.disconnectSockets(true)');return invalidate>=0&&disconnect>invalidate&&block.includes('socketUsers.clear();')&&block.includes('roomSockets.clear();')&&block.includes('activeCallPairs.clear();')&&block.includes('activeVoicePairs.clear();')&&block.includes('privateDisconnectTimers.clear();')&&block.includes('privateMessageWindows.clear();')&&block.includes('sessionDisconnectTimers.clear();')&&block.includes('voiceSpeakers.clear();')&&block.includes('privateMediaPlaybackTickets.clear();');})()],
     ['admin UI previews counts and requires typed confirmation before restore', htmlText.includes('previewDatabaseRestore()') && htmlText.includes('confirmDatabaseRestore()') && htmlText.includes('استعادة ريماز') && htmlText.includes('accept=".json,application/json"')],
     ['browser entry files remain identical after restore UI update', fs.readFileSync(mainPath,'utf8')===fs.readFileSync(publicPath,'utf8')]
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
-  const helperStart=serverText.indexOf('function validateDatabaseRestoreFile(source){');
+  const helperStart=serverText.indexOf('function validateDatabaseRestoreData(parsed){');
   const helperEnd=serverText.indexOf('function restoreContainsOwner(',helperStart);
   let runtimeRestoreChecks=false;
   try{
     const helperSource=serverText.slice(helperStart,helperEnd);
     const defaultsFixture=()=>({users:{},guests:{},sessions:{old:'session'},messages:[],wall:[],wallEnabled:true,notifications:{},announcements:[],adminAuditLogs:[],loginHistory:[],ownerSetupCompleted:false,giftCatalogV3Initialized:false,smileysSeedVersion:0,smileysSeeded:false,rankDefinitions:[],siteSettings:{},chatFilter:{},welcomeMessages:[],profiles:{},lastLike:{},accountPermissions:{},rankAudit:[],giftCatalog:[],chatShortcuts:[],customSmileys:[],rooms:[],roomBans:{},roomMutes:{},roomKicks:{},globalBans:{},globalIpBans:{},wallLikes:{},wallComments:{},privateMessages:[{text:'ephemeral'}],privateHidden:{},privateRead:{},ignored:{}});
-    const validate=vm.runInNewContext(helperSource+';validateDatabaseRestoreFile;',{Buffer,defaults:defaultsFixture});
+    const validate=vm.runInNewContext(helperSource+';validateDatabaseRestoreData;',{defaults:defaultsFixture});
     const database=defaultsFixture();database.users={Ali:{role:'owner'}};database.guests={Guest:{}};database.rooms=[{id:'public'}];database.messages=[{text:'hello'}];database.sessions={secret:'must-not-restore'};database.privateMessages=[{text:'not-persisted'}];
-    const validJson=JSON.stringify({format:'rimaz-database-backup',version:1,createdAt:'2026-01-01T00:00:00Z',appVersion:'test',database});
-    const valid=validate(Buffer.from(validJson));
-    const validString=validate(validJson);
-    const badFormat=(()=>{try{validate(Buffer.from(JSON.stringify({format:'unknown',version:1,database})));return false;}catch(_){return true;}})();
-    const badSchema=(()=>{try{validate(Buffer.from(JSON.stringify({format:'rimaz-database-backup',version:1,database:{users:[],guests:{},rooms:[],messages:[]}})));return false;}catch(_){return true;}})();
-    runtimeRestoreChecks=valid.summary.members===1&&valid.summary.guests===1&&valid.summary.rooms===1&&valid.summary.messages===1&&Object.keys(valid.clean.sessions).length===0&&valid.clean.privateMessages.length===0&&validString.summary.members===1&&badFormat&&badSchema;
+    const valid=validate({format:'rimaz-database-backup',version:1,createdAt:'2026-01-01T00:00:00Z',appVersion:'test',database});
+    const badFormat=(()=>{try{validate({format:'unknown',version:1,database});return false;}catch(_){return true;}})();
+    const badSchema=(()=>{try{validate({format:'rimaz-database-backup',version:1,database:{users:[],guests:{},rooms:[],messages:[]}});return false;}catch(_){return true;}})();
+    runtimeRestoreChecks=valid.summary.members===1&&valid.summary.guests===1&&valid.summary.rooms===1&&valid.summary.messages===1&&Object.keys(valid.clean.sessions).length===0&&valid.clean.privateMessages.length===0&&badFormat&&badSchema;
   }catch(_){runtimeRestoreChecks=false;}
   runtimeRestoreChecks?pass('restore validator runtime fixtures accept valid backup, clear sessions, and reject bad format/schema'):fail('restore validator runtime fixtures');
 } catch (error) { fail('v46.71.0 database restore checks', error.message); }
