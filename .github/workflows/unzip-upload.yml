@@ -106,6 +106,8 @@ jobs:
             test -f "$SOURCE/$file"
           done
           test -d "$SOURCE/public"
+          test -d "$SOURCE/lib"
+          for file in json-reader.js json-writer.js restore-inspector.js; do test -f "$SOURCE/lib/$file"; done
           ARCHIVE_VERSION="${ARCHIVE#rimaz-final-deep-audit-}"
           ARCHIVE_VERSION="${ARCHIVE_VERSION%.zip}"
           ACTUAL_VERSION="$(cd "$SOURCE" && node -p "require('./package.json').version")"
@@ -128,6 +130,7 @@ jobs:
             fi
           done
           diff -qr --no-dereference "$PROJECT_SOURCE/public" ./public
+          diff -qr --no-dereference "$PROJECT_SOURCE/lib" ./lib
           echo "Archive exactly matches the current main application source."
 
       - name: Run clean install, regression tests, and production build before sync
@@ -158,8 +161,9 @@ jobs:
           for file in server.js index.html package.json package-lock.json Dockerfile verify.js; do
             install -m 0644 "$PROJECT_SOURCE/$file" "./$file"
           done
-          mkdir -p ./public
+          mkdir -p ./public ./lib
           rsync -a --delete --exclude='/google1a84d9d1dec7b85d.html' "$PROJECT_SOURCE/public/" ./public/
+          rsync -a --delete "$PROJECT_SOURCE/lib/" ./lib/
 
       - name: Verify synchronized repository
         shell: bash
