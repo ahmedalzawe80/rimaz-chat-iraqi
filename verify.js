@@ -109,6 +109,9 @@ try {
     fs.writeFileSync(file, '{"format":"rimaz-database-backup","version":1,"database":{"users":{"administrator":{"role":"owner","role":"member"}},"guests":{},"rooms":[],"messages":[]}}');
     assert.throws(() => inspectDatabaseRestoreFile(file, options), /النسخة لا تحتوي حساب صاحب الموقع/);
 
+    fs.writeFileSync(file, '{"format":"rimaz-database-backup","version":1,"database":{"users":{"administrator":{"role":"OWNER"}},"guests":{},"rooms":[],"messages":[]}}');
+    assert.throws(() => inspectDatabaseRestoreFile(file, options), /النسخة لا تحتوي حساب صاحب الموقع/);
+
     const largeMessages = '[' + Array.from({ length: 5000 }, (_, index) => JSON.stringify({ id: index, text: 'x'.repeat(256) })).join(',') + ']';
     fs.writeFileSync(file, '{"format":"rimaz-database-backup","version":1,"database":{"users":{"owner":{}},"guests":{},"rooms":[],"messages":' + largeMessages + '}}');
     assert.equal(inspectDatabaseRestoreFile(file, options).messages, 5000);
