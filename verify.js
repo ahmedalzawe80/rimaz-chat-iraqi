@@ -1504,12 +1504,12 @@ try {
   const helperSource = helperStart >= 0 && helperEnd > helperStart ? serverText.slice(helperStart, helperEnd) : '';
   let runtimeCapacityChecks = false;
   try {
-    const evaluate = vm.runInNewContext(
+    const fixture = vm.runInNewContext(
       'const MAX_PENDING_DATABASE_RESTORES=2; const pendingDatabaseRestores=new Map(); const keyName=x=>String(x||"").trim().toLowerCase();' +
-      helperSource + '; restorePreviewCapacityAvailable;'
+      helperSource + '; ({capacity:restorePreviewCapacityAvailable, queue:pendingDatabaseRestores});'
     );
-    const capacity = evaluate();
-    const queue = vm.runInNewContext('pendingDatabaseRestores');
+    const capacity = fixture.capacity;
+    const queue = fixture.queue;
     queue.set('a', {owner:'admin'});
     queue.set('b', {owner:'other'});
     const sameOwnerCanReplace = capacity('admin') === true;
