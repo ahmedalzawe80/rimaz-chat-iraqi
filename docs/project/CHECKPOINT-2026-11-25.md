@@ -157,11 +157,13 @@ The external release blockers are unchanged: independent live-volume backup, act
 - Do not treat the CI memory smoke as proof the historical Deplexo OOM incident is resolved. Do not merge or deploy until the operational release gate is evidenced.
 
 
-## Latest branch refresh — 2026-11-25
+## Latest verified source candidate and documentation follow-up — 2026-11-25
 
-- Latest source/test candidate: `96f8220df1ad5b1603bd36416fc75c84f3735507`. This commit changes only the diagnostic detail emitted by a JSON-writer regression assertion in `verify.js`; it does not change runtime application code.
-- Latest archive-only refresh: `7d49e4f79b18111bd6ce2eff9d2f74845e3c40c7`; its only changed file is `rimaz-final-deep-audit-46.93.72.zip`.
-- The previously recorded successful run `#45603823711` and its 627-check result belong to the earlier candidate `e943ee295afb94ff581daafb4a415a53c5984948` and archive refresh `54f042a2f6589ee0ee8022e21001767e5a5e15ba`. They do **not** validate the later `96f8220` / `7d49e4f` updates.
-- At this checkpoint, the connected GitHub status and PR-run lookups returned no checks or PR-triggered workflow runs for `7d49e4f`. Exact-head CI is therefore **unverified**, not failed and not passed.
-- PR #3 remains open/draft/unmerged. Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No merge, deployment, restart, source sync, or live-data change was performed.
-- The release blockers listed above remain unchanged. Do not promote based on the earlier green run.
+- Latest validated source/test/workflow candidate: `87fea24082765a08721238c8dd025c36c93ad922`.
+- Exact Actions run [#45692013572](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45692013572) completed successfully: both `validate` and `refresh-release-archive` jobs succeeded. Source validation recorded 636 regression checks with zero failures, locked dependency installation/tree verification, syntax checks, production Docker build, isolated HTTP/Socket.IO startup, and npm audit with 0 vulnerabilities.
+- The constrained CI container ran at 128 MiB RAM / 0.25 CPU. After the recorded HTTP/Socket.IO workload, cgroup-v2 reported 74,211,328 bytes current and 78,151,680 bytes peak against 134,217,728 bytes; the container remained running and Docker reported `OOMKilled=false`. This is isolated CI evidence, not Deplexo production telemetry.
+- The archive job rebuilt and extracted the tracked-file ZIP, validated 399 files / 16,362,356 bytes, and passed its own checks and Docker build. Archive-only refresh commit: `246d3c4ccadb7aadc81ec68d8a7d1d5ad13aeb55`.
+- The latest source candidate includes the backup-media reference correction for `rankDefinitions[].artUrl`, plus the already documented backup snapshot/cleanup, cgroup metrics, trusted-proxy IP resolution, and authenticated chat/media/voice/call integration smoke coverage.
+- Documentation-only follow-ups were then committed as `cc7c6ae460069df2eedd3fe12fc5d318ba1c616a` and `643a7867ea19f75814d91b8d5ffab863334ecce5` to reconcile stale candidate/CI notes. They do not alter application runtime code. The connected status endpoint returned no status contexts for the documentation head, and the workflow-run lookup only returns PR-triggered runs; therefore no exact-head check result for the documentation-only head is claimed here.
+- PR #3 remains open/draft/unmerged and targets `safety/validate-and-backup-before-sync`. Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No production merge, deployment, restart, ZIP sync, or live-volume operation has occurred.
+- The external release blockers remain: independent consistent Deplexo volume backup, isolated full restore/rollback against a clone, provider restart/OOM telemetry, exact provider proxy CIDRs and header-sanitization confirmation, and real browser/device WebRTC/TURN testing. CI success does not waive these gates.
