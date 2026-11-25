@@ -107,6 +107,15 @@ try {
     fs.writeFileSync(file, JSON.stringify(invalidType));
     assert.throws(() => inspectDatabaseRestoreFile(file, options), /نوع بيانات غير صالح داخل النسخة: label/);
 
+    for (const invalidAccount of [null, [], 'not-an-account', 17]) {
+      const malformedAccountBackup = {
+        format: 'rimaz-database-backup', version: 1,
+        database: { users: { owner: invalidAccount }, guests: {}, rooms: [], messages: [] }
+      };
+      fs.writeFileSync(file, JSON.stringify(malformedAccountBackup));
+      assert.throws(() => inspectDatabaseRestoreFile(file, options), /سجل حساب غير صالح داخل النسخة/);
+    }
+
     fs.writeFileSync(file, '{"format":"rimaz-database-backup","version":1,"database":{"users":{"owner":{"role":"owner"}},"users":{"member":{"role":"member"}},"guests":{},"rooms":[],"messages":[]}}');
     assert.throws(() => inspectDatabaseRestoreFile(file, options), /النسخة لا تحتوي حساب صاحب الموقع/);
 
@@ -124,6 +133,20 @@ try {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 } catch (error) { fail('restore preview streaming inspector fixtures', error.message); }
+
+
+  const validationSource = fs.readFileSync(server, 'utf8');
+  const validationFunction = validationSource.match(/function validateDatabaseRestoreData\\(parsed\\)\\{[\\s\\S]*?\\n\\}/);
+  if (!validationFunction) throw new Error('validateDatabaseRestoreData implementation not found');
+  const validationContext = { defaults: () => ({ users: {}, guests: {}, rooms: [], messages: [] }) };
+  vm.createContext(validationContext);
+  vm.runInContext(validationFunction[0] + '\\nglobalThis.validateRestoreData = validateDatabaseRestoreData;', validationContext);
+  for (const invalidAccount of [null, [], 'not-an-account', 17]) {
+    assert.throws(() => validationContext.validateRestoreData({
+      format: 'rimaz-database-backup', version: 1,
+      database: { users: { owner: invalidAccount }, guests: {}, rooms: [], messages: [] }
+    }), /سجل حساب غير صالح داخل النسخة/);
+  }
 
 // The bounded-memory writer must preserve native JSON output for persisted values.
 try {
