@@ -1720,17 +1720,23 @@ try {
     context.make().then(buf=>{
       const ok=buf.length%512===0&&buf.subarray(257,263).toString()==='ustar\0'&&buf.includes(Buffer.from('database/rimaz-database.json'))&&buf.includes(Buffer.from('uploads/sample.txt'))&&buf.includes(Buffer.from('rimaz backup sample'))&&!buf.includes(Buffer.from('private-media/private.mp4'))&&!buf.includes(Buffer.from('private chat media must not be included'))&&!buf.includes(Buffer.from('must-not-export'));
       ok?pass('full backup USTAR stream includes referenced public uploads and excludes private-chat media and active session tokens'):fail('full backup USTAR stream content and alignment');
-      let restoreDrillOk=false;
+      let restoreDrillOk=false,restoreDrillDetail='';
       try{
         const archivePath=path.join(temp,'full-backup.tar.gz'),extractDir=path.join(temp,'restore-drill');
         fs.mkdirSync(extractDir);
         fs.writeFileSync(archivePath,require('node:zlib').gzipSync(buf));
         const listing=spawnSync('tar',['-tzf',archivePath],{encoding:'utf8'});
+        if(listing.error||listing.status!==0)throw new Error('tar listing failed: '+(listing.error?.message||listing.stderr||listing.status));
+        if(!listing.stdout.includes('database/rimaz-database.json')||!listing.stdout.includes('uploads/sample.txt'))throw new Error('archive entry listing is incomplete: '+listing.stdout);
         const extracted=spawnSync('tar',['-xzf',archivePath,'-C',extractDir],{encoding:'utf8'});
+        if(extracted.error||extracted.status!==0)throw new Error('tar extraction failed: '+(extracted.error?.message||extracted.stderr||extracted.status));
         const restored=JSON.parse(fs.readFileSync(path.join(extractDir,'database','rimaz-database.json'),'utf8'));
-        restoreDrillOk=listing.status===0&&extracted.status===0&&listing.stdout.includes('database/rimaz-database.json')&&listing.stdout.includes('uploads/sample.txt')&&restored.users.sample.name==='sample'&&Object.keys(restored.sessions||{}).length===0&&(restored.privateMessages||[]).length===0&&fs.readFileSync(path.join(extractDir,'uploads','sample.txt'),'utf8')==='rimaz backup sample';
-      }catch(error){restoreDrillOk=false;}
-      if(restoreDrillOk)pass('isolated full-backup restore drill extracts the archive and verifies database plus referenced media parity');else fail('isolated full-backup restore drill');
+        if(restored.users.sample.name!=='sample')throw new Error('restored database content mismatch');
+        if(Object.keys(restored.sessions||{}).length!==0||(restored.privateMessages||[]).length!==0)throw new Error('transient sessions/private messages were not excluded');
+        if(fs.readFileSync(path.join(extractDir,'uploads','sample.txt'),'utf8')!=='rimaz backup sample')throw new Error('restored media content mismatch');
+        restoreDrillOk=true;
+      }catch(error){restoreDrillDetail=error.message;}
+      if(restoreDrillOk)pass('isolated full-backup restore drill extracts the archive and verifies database plus referenced media parity');else fail('isolated full-backup restore drill',restoreDrillDetail);
       fs.rmSync(temp,{recursive:true,force:true});
       if(failures.length){console.error(`\n${failures.length} verification check(s) failed.`);process.exitCode=1;}else console.log('\nAll local static and archive checks passed. Live-server testing is still required.');
     }).catch(error=>{fail('full backup USTAR stream test',error.message);fs.rmSync(temp,{recursive:true,force:true});process.exitCode=1;});
