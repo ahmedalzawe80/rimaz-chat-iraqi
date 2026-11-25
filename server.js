@@ -8,6 +8,7 @@ const { Readable, pipeline } = require('stream');
 const { writeJsonSync } = require('./lib/json-writer');
 const { readJsonFile } = require('./lib/json-reader');
 const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
+const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { Server } = require('socket.io');
@@ -1974,19 +1975,18 @@ function createDatabaseBackupTempFile(snapshot,purpose){
 }
 async function* fullBackupTarEntries(){
  let databaseBackupFile='';
+ let mediaSnapshot=null;
  try{
   const snapshot={format:'rimaz-full-backup',version:1,createdAt:new Date().toISOString(),appVersion:require('./package.json').version||'unknown',database:{...db,sessions:{},privateMessages:[]}};
+  // Capture the database and referenced public uploads before yielding to the response stream.
+  // Hard links preserve each file if normal retention/deletion removes its original path later.
   databaseBackupFile=createDatabaseBackupTempFile(snapshot,'full-backup');
+  mediaSnapshot=createBackupMediaSnapshot({database:snapshot.database,uploadDirectory:UP_DIR,dataDirectory:DATA_DIR});
   const databaseStat=fs.statSync(databaseBackupFile);
   yield {name:'database/rimaz-database.json',disk:databaseBackupFile,size:databaseStat.size,mtime:databaseStat.mtimeMs};
-  const roots=[['uploads',UP_DIR],['private-media',PRIVATE_MEDIA_DIR]];
-  for(const [archiveRoot,diskRoot] of roots){
-   const pending=[{disk:diskRoot,archive:archiveRoot}];
-   while(pending.length){const current=pending.pop();let items=[];try{items=fs.readdirSync(current.disk,{withFileTypes:true});}catch(error){if(error.code!=='ENOENT')throw error;continue;}
-    for(const item of items){const disk=path.join(current.disk,item.name),archive=current.archive+'/'+item.name;if(item.isSymbolicLink())continue;if(item.isDirectory()){pending.push({disk,archive});continue;}if(!item.isFile())continue;const stat=fs.statSync(disk);yield {name:archive,disk,size:stat.size,mtime:stat.mtimeMs};}
-   }
-  }
+  for(const entry of mediaSnapshot.entries)yield entry;
  }finally{
+  if(mediaSnapshot){try{mediaSnapshot.cleanup();}catch(error){console.error('Full backup media snapshot cleanup failed:',error.message);}}
   if(databaseBackupFile){try{fs.unlinkSync(databaseBackupFile);}catch(error){if(error.code!=='ENOENT')console.error('Full backup temporary database cleanup failed:',error.message);}}
  }
 }

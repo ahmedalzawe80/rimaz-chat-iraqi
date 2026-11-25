@@ -9,6 +9,7 @@ const { spawnSync } = require('node:child_process');
 const { writeJsonSync } = require('./lib/json-writer');
 const { readJsonFile } = require('./lib/json-reader');
 const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
+const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
 
 const root = __dirname;
 const failures = [];
@@ -1700,7 +1701,7 @@ try {
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const checks = [
     ['full backup route supports delegated site_admin and uses pipeline to cancel streams on response close', serverText.includes("app.get('/api/admin/backup/full',requireAdmin") && serverText.includes('source=Readable.from(fullBackupTar()),archive=zlib.createGzip') && serverText.includes('pipeline(source,archive,res') && serverText.includes("const { Readable, pipeline } = require('stream')")],
-    ['full backup includes sanitized database snapshot, uploads, and private-media but excludes transient private messages', serverText.includes("name:'database/rimaz-database.json'") && serverText.includes("['uploads',UP_DIR],['private-media',PRIVATE_MEDIA_DIR]") && (serverText.match(/database:\{\.\.\.db,sessions:\{\},privateMessages:\[\]\}/g)||[]).length===2],
+    ['full backup snapshots referenced public uploads before streaming and omits private media with excluded private conversations', serverText.includes("name:'database/rimaz-database.json'") && serverText.includes('createBackupMediaSnapshot({database:snapshot.database,uploadDirectory:UP_DIR,dataDirectory:DATA_DIR})') && serverText.includes('for(const entry of mediaSnapshot.entries)yield entry') && !serverText.includes("['uploads',UP_DIR],['private-media',PRIVATE_MEDIA_DIR]") && (serverText.match(/database:\{\.\.\.db,sessions:\{\},privateMessages:\[\]\}/g)||[]).length===2],
      ['database-only backup excludes transient private conversations', serverText.includes("app.get('/api/admin/backup/database',requireAdmin") && serverText.includes('database:{...db,sessions:{},privateMessages:[]}')],
     ['archive traversal skips symbolic links and streams file data instead of loading all media into RAM', serverText.includes('if(item.isSymbolicLink())continue') && serverText.includes('fs.createReadStream(entry.disk)')],
     ['admin page offers both database-only and full media backup downloads', htmlText.includes("downloadFullBackup()") && htmlText.includes("'/api/admin/backup/full'") && htmlText.includes('نسخة كاملة مع الصور والوسائط')],
@@ -1712,11 +1713,12 @@ try {
   try {
     fs.mkdirSync(path.join(temp, 'uploads')); fs.mkdirSync(path.join(temp, 'private-media'));
     fs.writeFileSync(path.join(temp, 'uploads', 'sample.txt'), 'rimaz backup sample');
-    const context = {Buffer,fs,path,crypto,Date,writeJsonSync,DB_FILE:path.join(temp,'data.json'),process:{pid:process.pid},db:{users:{sample:{name:'sample'}},sessions:{secret:'must-not-export'}},UP_DIR:path.join(temp,'uploads'),PRIVATE_MEDIA_DIR:path.join(temp,'private-media'),require:(id)=>id==='./package.json'?{version:'test'}:require(id)};
+    fs.writeFileSync(path.join(temp, 'private-media', 'private.mp4'), 'private chat media must not be included');
+    const context = {Buffer,fs,path,crypto,Date,writeJsonSync,createBackupMediaSnapshot,DB_FILE:path.join(temp,'data.json'),DATA_DIR:temp,process:{pid:process.pid},db:{users:{sample:{name:'sample'}},sessions:{secret:'must-not-export'},messages:[{media:{url:'/uploads/sample.txt'}}],privateMessages:[{media:{url:'/api/private/media/private.mp4'}}]},UP_DIR:path.join(temp,'uploads'),PRIVATE_MEDIA_DIR:path.join(temp,'private-media'),require:(id)=>id==='./package.json'?{version:'test'}:require(id)};
     vm.runInNewContext(serverText.slice(start,end)+"\nthis.make=async()=>{const parts=[];for await(const part of fullBackupTar())parts.push(part);return Buffer.concat(parts)};",context);
     context.make().then(buf=>{
-      const ok=buf.length%512===0&&buf.subarray(257,263).toString()==='ustar\0'&&buf.includes(Buffer.from('database/rimaz-database.json'))&&buf.includes(Buffer.from('uploads/sample.txt'))&&buf.includes(Buffer.from('rimaz backup sample'))&&!buf.includes(Buffer.from('must-not-export'));
-      ok?pass('full backup USTAR stream includes media and excludes active session tokens'):fail('full backup USTAR stream content and alignment');
+      const ok=buf.length%512===0&&buf.subarray(257,263).toString()==='ustar\0'&&buf.includes(Buffer.from('database/rimaz-database.json'))&&buf.includes(Buffer.from('uploads/sample.txt'))&&buf.includes(Buffer.from('rimaz backup sample'))&&!buf.includes(Buffer.from('private-media/private.mp4'))&&!buf.includes(Buffer.from('private chat media must not be included'))&&!buf.includes(Buffer.from('must-not-export'));
+      ok?pass('full backup USTAR stream includes referenced public uploads and excludes private-chat media and active session tokens'):fail('full backup USTAR stream content and alignment');
       fs.rmSync(temp,{recursive:true,force:true});
       if(failures.length){console.error(`\n${failures.length} verification check(s) failed.`);process.exitCode=1;}else console.log('\nAll local static and archive checks passed. Live-server testing is still required.');
     }).catch(error=>{fail('full backup USTAR stream test',error.message);fs.rmSync(temp,{recursive:true,force:true});process.exitCode=1;});
@@ -2823,6 +2825,27 @@ try {
 } catch(error) { fail('private-media playback ticket regression checks',error.message); }
 
  
+// Full backup media must be captured with the database state and include only referenced public uploads.
+try {
+  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-backup-media-snapshot-'));
+  const uploads=path.join(temp,'uploads');fs.mkdirSync(uploads);
+  const publicFile=path.join(uploads,'public.png'),orphanFile=path.join(uploads,'orphan.png');
+  fs.writeFileSync(publicFile,'public bytes');fs.writeFileSync(orphanFile,'orphan bytes');
+  const snapshot=createBackupMediaSnapshot({database:{messages:[{media:{url:'/uploads/public.png'}}],privateMessages:[{media:{url:'/api/private/media/private.mp4'}}]},uploadDirectory:uploads,dataDirectory:temp});
+  try {
+    const entry=snapshot.entries.find(item=>item.name==='uploads/public.png');
+    const orphanIncluded=snapshot.entries.some(item=>item.name==='uploads/orphan.png');
+    const sameInode=!!entry&&fs.statSync(entry.disk).ino===fs.statSync(publicFile).ino;
+    fs.unlinkSync(publicFile);
+    const survivesOriginalRemoval=!!entry&&fs.existsSync(entry.disk)&&fs.readFileSync(entry.disk,'utf8')==='public bytes';
+    if(entry&&!orphanIncluded&&sameInode&&survivesOriginalRemoval)pass('backup hard-links referenced public uploads and preserves them across later deletion');
+    else fail('backup referenced public-media snapshot consistency');
+  } finally { snapshot.cleanup(); }
+  if(fs.readdirSync(temp).every(name=>name==='uploads'))pass('backup media snapshot cleanup removes its temporary directory');
+  else fail('backup media snapshot cleanup');
+  fs.rmSync(temp,{recursive:true,force:true});
+} catch(error) { fail('backup media snapshot regression checks',error.message); }
+
 // Database backups must serialize to a restrictive temporary file and stream from disk,
 // never build a database-sized JSON string or Buffer in the live request path.
 try {
@@ -2875,8 +2898,10 @@ try {
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-tar-generator-cleanup-'));
   const uploads=path.join(temp,'uploads'),privateMedia=path.join(temp,'private-media');
   fs.mkdirSync(uploads);fs.mkdirSync(privateMedia);
+  fs.writeFileSync(path.join(uploads,'sample.txt'),'public snapshot content');
+  fs.writeFileSync(path.join(privateMedia,'private.mp4'),'private media excluded');
   const context={
-    fs,path,crypto,writeJsonSync,DB_FILE:path.join(temp,'data.json'),db:{users:{alice:{name:'أحمد'}},sessions:{old:{name:'stale'}},privateMessages:[{text:'excluded'}]},
+    fs,path,crypto,writeJsonSync,createBackupMediaSnapshot,DB_FILE:path.join(temp,'data.json'),DATA_DIR:temp,db:{users:{alice:{name:'أحمد'}},sessions:{old:{name:'stale'}},messages:[{media:{url:'/uploads/sample.txt'}}],privateMessages:[{media:{url:'/api/private/media/private.mp4'}}]},
     UP_DIR:uploads,PRIVATE_MEDIA_DIR:privateMedia,process:{pid:process.pid},
     require:(name)=>name==='./package.json'?{version:'test'}:require(name),console
   };
@@ -2888,25 +2913,27 @@ try {
     const first=await cancelled.next();
     const cancelledFile=first.value?.disk;
     const cancelledValid=!first.done&&first.value?.name==='database/rimaz-database.json'&&cancelledFile&&fs.existsSync(cancelledFile)&&JSON.parse(fs.readFileSync(cancelledFile,'utf8')).database.users.alice.name==='أحمد';
+    const snapshotDirectory=fs.readdirSync(temp).find(name=>name.startsWith('.rimaz-backup-media-'));
     await cancelled.return();
-    checks.push(['full-backup TAR generator removes its database temp file when the consumer cancels',cancelledValid&&!fs.existsSync(cancelledFile)]);
+    checks.push(['full-backup TAR generator removes database and hard-link media snapshots when the consumer cancels',cancelledValid&&!fs.existsSync(cancelledFile)&&(!snapshotDirectory||!fs.existsSync(path.join(temp,snapshotDirectory)))]);
 
     const completed=context.createEntries();
     const normalFirst=await completed.next();
     const normalFile=normalFirst.value?.disk;
+    const mediaEntry=await completed.next();
+    const mediaFile=mediaEntry.value?.disk;
     let normalExhausted=false;
     while(!normalExhausted){const item=await completed.next();normalExhausted=item.done;}
-    checks.push(['full-backup TAR generator removes its database temp file after normal exhaustion',!normalFirst.done&&normalFile&&normalExhausted&&!fs.existsSync(normalFile)]);
+    checks.push(['full-backup TAR generator snapshots referenced public media and cleans all files after normal exhaustion',!normalFirst.done&&normalFile&&mediaEntry.value?.name==='uploads/sample.txt'&&mediaFile&&normalExhausted&&!fs.existsSync(normalFile)&&!fs.existsSync(mediaFile)]);
 
     const blockedUploads=path.join(temp,'uploads-is-file');
     fs.writeFileSync(blockedUploads,'not a directory');
     context.UP_DIR=blockedUploads;
     const failed=context.createEntries();
-    const failureFirst=await failed.next();
-    const failedFile=failureFirst.value?.disk;
     let rejected=false;
     try{await failed.next();}catch(error){rejected=error.code==='ENOTDIR';}
-    checks.push(['full-backup TAR generator removes its database temp file when media enumeration fails',rejected&&failedFile&&!fs.existsSync(failedFile)]);
+    const leftover=fs.readdirSync(temp).filter(name=>name.startsWith('data.json.')||name.startsWith('.rimaz-backup-media-'));
+    checks.push(['full-backup TAR generator cleans database and media snapshots when snapshot creation fails',rejected&&leftover.length===0]);
   }finally{
     fs.rmSync(temp,{recursive:true,force:true});
   }
