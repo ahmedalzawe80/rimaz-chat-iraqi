@@ -150,3 +150,27 @@ The candidate now:
 New regression coverage dynamically exercises the temp-file serializer with Arabic and large Unicode content, compares its exact output with native `JSON.stringify(value, null, 2)`, verifies restrictive 0600 permissions, rejects circular values, and verifies cleanup after failure. Additional assertions ensure both backup routes stream disk files and do not call `JSON.stringify` or create a database-sized Buffer.
 
 This removes the two confirmed full-output serialization allocations from the backup endpoints. It does **not** prove the 128 MB hosting issue is fixed: the live database remains resident, temporary disk capacity must be sufficient, concurrent backup requests can still consume disk and I/O, and restore preview/confirmation still parse a full JSON text/object graph. Staging tests must cover backup cancellation, concurrent downloads, disk-full/permission failures, archive integrity, restore round-trip, and representative-load RSS/heap/external measurements. No live Deplexo deployment or data-volume operation is implied by these source changes.
+
+
+
+## Follow-up correction — current candidate as of 2026-11-25
+
+Several memory-amplification paths listed above as remaining work have since been addressed in the current candidate. The historical findings above are retained as audit history, but they must not be read as a description of the current source:
+
+- Routine database persistence now uses the bounded-chunk JSON writer rather than constructing a second complete JSON string.
+- Full backup writes the database snapshot to a restrictive temporary file and adds it to the TAR stream as a disk-backed entry; the temporary file is removed on normal completion, iterator cancellation, or media-enumeration failure.
+- Database-only backup streams the restrictive temporary file and removes it after completion, stream error, or client disconnect.
+- Restore preview now scans JSON tokens with `keepStack:false`, validates the envelope/schema metadata and owner presence, and retains summary counters rather than a replacement database graph.
+- Startup and restore confirmation parse through the bounded-chunk JSON reader. Restore confirmation creates a disk-to-disk restrictive recovery copy, releases the previous in-memory database graph before parsing the replacement, and retains rollback behavior if persistence fails.
+- Restore upload is disk-backed and capped at 20 MiB; only one upload is processed at a time and pending preview capacity is checked before accepting the body.
+
+### Remaining memory and consistency boundaries
+
+- Restore confirmation must still materialize the replacement database object graph; the live database itself remains resident after a successful restore. The parser also needs to hold the largest individual JSON token/string, bounded by the restore file limit but not eliminated by chunked I/O.
+- Temporary backup snapshots consume disk space and I/O. Concurrent backup requests and disk-full/permission failures still require controlled staging tests.
+- A full backup's database snapshot and media-file enumeration are not one atomic point-in-time snapshot while uploads/deletes can continue. For a trustworthy full-volume backup, use an offline consistent filesystem/volume snapshot or a maintenance window that prevents writes for the entire export, then verify by isolated restore. A Git rollback branch or repository ZIP does not protect the live volume.
+- The 128 MB / 0.25 vCPU production limit is still not proven safe. No current representative-load RSS/heap/external/arrayBuffers profile, Deplexo restart/OOM evidence, or isolated restore drill is available. Do not declare the historical incident resolved until those measurements exist.
+
+### Latest exact CI evidence
+
+Actions run [#803](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45632558265) passed both `validate` and `refresh-release-archive` on source SHA `7e98b6d1c4d3decffcebfe4713866cf6024d8c41`. Source and extracted archive each passed **627 regression checks with zero failures**; both Docker builds succeeded; the isolated container homepage and Socket.IO polling handshake passed; npm audit reported **0 vulnerabilities**. The archive job verified exact tracked-file parity for **394 files / 16,342,196 bytes** and created archive-only commit `56f706c6f83891172b692e2045df98e607d98d9f`.
