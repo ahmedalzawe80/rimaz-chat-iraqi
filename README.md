@@ -59,7 +59,7 @@ The admin health panel reports process RSS/heap plus cgroup memory current/peak/
 - `public/index.html`: synchronized fallback copy; keep it byte-identical to the root entry file.
 - `public/gifts/`, `public/smileys/`, `public/vip-gifts/`: built-in media served from disk.
 - `verify.js`: regression checks.
-- `lib/`: isolated persistence, backup snapshot/cleanup, trusted client-IP, and cgroup health helpers.
+- `lib/`: isolated persistent-data path enforcement, streaming JSON read/write and restore inspection, backup snapshot/cleanup, trusted client-IP, and cgroup health helpers.
 - `scripts/chat-integration-smoke.js`: CI-only authenticated integration checks against the running container (public/private chat, private-media authorization/playback, voice and call signaling).
 - `.github/workflows/`: pull-request validation, archive audit, and guarded manual source synchronization.
 - `.github/dependabot.yml`: scheduled dependency update proposals for GitHub Actions and npm.
