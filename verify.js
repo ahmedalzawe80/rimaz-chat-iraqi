@@ -3309,7 +3309,7 @@ try {
 try {
   const source=fs.readFileSync(server,'utf8');
   const start=source.indexOf('function removeUploadedFile(file){');
-  const end=source.indexOf('\\nfunction restoreDatabaseFileFromRecovery',start);
+  const end=source.indexOf('\nfunction restoreDatabaseFileFromRecovery',start);
   if(start<0||end<0)throw new Error('upload cleanup helper not found');
   const deleted=[];
   const warnings=[];
@@ -3326,7 +3326,7 @@ try {
     },
     console:{warn(...args){warnings.push(args);}}
   };
-  vm.runInNewContext(source.slice(start,end)+'\\nthis.removeUploadedFile=removeUploadedFile;',context);
+  vm.runInNewContext(source.slice(start,end)+'\nthis.removeUploadedFile=removeUploadedFile;',context);
   context.removeUploadedFile({path:path.join(context.UP_DIR,'keep.jpg')});
   context.removeUploadedFile({path:path.join(context.UP_DIR,'orphan.jpg')});
   context.removeUploadedFile({path:'/tmp/rimaz-restore-preview.tmp'});
