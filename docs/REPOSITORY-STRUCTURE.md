@@ -48,22 +48,31 @@ This guide explains why each top-level area exists and which files must remain i
 └── verify.js
 ```
 
-The root also contains a small tracked data placeholder, the domain-verification file, Docker/Git configuration, a Node.js version pin, the npm lockfile, and the single audited ZIP required by the current workflows.
+The repository root currently has 16 tracked files. Each has an identified runtime, dependency, editor/Git, documentation, domain-verification, build, test, or audited-release role; the root is intentionally not a dumping ground. Keep these entry points at the root rather than moving them merely to reduce the visible file count. The two HTML entry copies and two domain-verification copies have separate serving/verification roles and must remain synchronized.
 
 ## Root files that must not be moved casually
 
 | File | Why it stays at the root |
 |---|---|
+| `.dockerignore` | Defines the build-context boundary; keeps runtime data, local dependencies, archives, and repository-only files out of Docker builds |
+| `.editorconfig` | Shared editor formatting defaults for contributors and tooling |
+| `.gitattributes` | Git text/binary and line-ending normalization rules |
+| `.gitignore` | Excludes local dependencies, runtime data, secrets, backups, and generated artifacts from Git |
+| `.nvmrc` | Canonical Node.js major-version pin consumed by local nvm and CI |
+| `CHANGELOG.md` | Chronological record of application and repository changes |
+| `CONTRIBUTING.md` | Required branch, validation, review, and data-safety process |
+| `README.md` | Project entry point: setup, runtime configuration, layout, and safe workflow |
 | `server.js` | Application start command and Docker image expect this path |
 | `package.json` | npm and Docker build resolve dependencies from the project root |
 | `package-lock.json` | `npm ci` and the production Docker build use this exact dependency graph |
 | `index.html` | Main browser entry file and server SEO integration |
 | `Dockerfile` | Hosting and CI build from the repository root |
 | `verify.js` | Current npm test script runs this file |
+| `rimaz-final-deep-audit-46.93.72.zip` | Exact reviewed source archive rebuilt and parity-checked by CI; required input to the guarded manual synchronization workflow |
 | `.nvmrc` | Canonical Node.js major version used by local nvm setup and CI |
 | `data.json` | Tracked warning placeholder retained for repository/workflow compatibility; it is not production data |
 | `google1a84d9d1dec7b85d.html` | Domain verification endpoint; keep it byte-identical to the copy under `public/` |
-| `rimaz-final-deep-audit-46.93.72.zip` | Exact input path for archive audit and guarded manual synchronization workflows |
+
 
 `public/index.html` is a synchronized fallback copy of the root `index.html`. The regression suite checks that the two copies remain byte-identical.
 
