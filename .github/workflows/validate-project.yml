@@ -8,7 +8,6 @@ on:
   push:
     branches:
       - fix/bound-private-media-ticket-cache
-      - fix/persistent-data-symlink-boundary
   pull_request:
     # Push validation runs on every candidate commit. Only validate PR lifecycle
     # events here; bot archive commits must not trigger approval-gated sync runs.
@@ -114,7 +113,7 @@ jobs:
   refresh-release-archive:
     # Archive writes must run only once per branch push. PR validation remains read-only,
     # preventing concurrent push/PR jobs from racing to commit the same ZIP file.
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/fix/bound-private-media-ticket-cache' || github.ref == 'refs/heads/fix/persistent-data-symlink-boundary')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/fix/bound-private-media-ticket-cache'
     needs: validate
     runs-on: ubuntu-latest
     permissions:
@@ -123,7 +122,7 @@ jobs:
       - name: Checkout validated branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.ref }}
+          ref: fix/bound-private-media-ticket-cache
           fetch-depth: 0
 
       - name: Rebuild and verify exact tracked-file archive
@@ -211,4 +210,4 @@ jobs:
             exit 0
           fi
           git commit -m "build: refresh audited archive after validated changes"
-          git push origin "HEAD:${GITHUB_REF}"
+          git push origin HEAD:refs/heads/fix/bound-private-media-ticket-cache
