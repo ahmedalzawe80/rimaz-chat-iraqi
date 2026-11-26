@@ -2652,6 +2652,26 @@ try {
     const shutdown=source.slice(shutdownStart,shutdownEnd);
     if(shutdown.includes('shutdownStarted=true')&&shutdown.indexOf('io.close(')<shutdown.indexOf('persistPendingMessagesDuringShutdown')&&shutdown.includes('pendingMessageWrites.length===0?0:1'))pass('graceful shutdown stops new writes, closes transports, drains queued messages, and exits nonzero if any remain');
     else fail('graceful shutdown lifecycle ordering');
+    const runShutdown=async failSave=>{
+      const events=[];
+      const context={
+        shutdownStarted:false,messageSaveTimer:null,pendingMessageWrites:[],messageSaveAttempts:0,db:{messages:[]},
+        clearTimeout:()=>{},setTimeout:()=>({}),
+        save(){if(failSave)throw new Error('simulated final save failure');},
+        io:{close:callback=>{events.push('transport-closed');callback();}},
+        process:{exit:code=>events.push(['exit',code])},
+        console:{error:()=>{}}
+      };
+      vm.createContext(context);
+      vm.runInContext(helper+'\\n'+shutdown+'\\ngracefulShutdown("SIGTERM");',context);
+      await new Promise(resolve=>setTimeout(resolve,0));
+      return events;
+    };
+    const cleanExit=await runShutdown(false),failedExit=await runShutdown(true);
+    const exitCodes=cleanExit.some(event=>Array.isArray(event)&&event[0]==='exit'&&event[1]===0)
+      &&failedExit.some(event=>Array.isArray(event)&&event[0]==='exit'&&event[1]===1);
+    if(exitCodes)pass('graceful shutdown reports success only after a successful final database save');
+    else fail('graceful shutdown final-save exit status',JSON.stringify({cleanExit,failedExit}));
   }catch(error){fail('shutdown persistence regression checks',error.message);}
 })();
  
