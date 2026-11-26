@@ -176,12 +176,13 @@ async function main() {
     const wrongFilename = await fetch(wrongFilenameUrl);
     assert.equal(wrongFilename.status, 401, 'playback ticket must be bound to its exact media filename');
 
+    const emptyVoiceState = second.waitFor('voice-state', value => value?.room === 'voice' && value.count === 0);
     await Promise.all([joinRoom(first, alpha.sid, 'voice'), joinRoom(second, beta.sid, 'voice')]);
+    await emptyVoiceState;
     const micGranted = first.waitFor('voice-mic-granted');
-    first.emit('request-mic', { room: 'voice', raised: true, seatIndex: 0 });
-    await micGranted;
     const initialVoiceState = second.waitFor('voice-state', value => value?.room === 'voice' && value.count === 1);
-    await initialVoiceState;
+    first.emit('request-mic', { room: 'voice', raised: true, seatIndex: 0 });
+    await Promise.all([micGranted, initialVoiceState]);
 
     const duplicateGrant = first.waitFor('voice-mic-granted');
     await assertNoEvent(second, 'voice-state', () => {
