@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const { writeJsonSync } = require('./lib/json-writer');
-const { readJsonFile } = require('./lib/json-reader');
+const { readJsonFile, validateJsonFile } = require('./lib/json-reader');
 const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
 const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
 const { normalizeTrustedProxyHeader, createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
@@ -78,6 +78,70 @@ try {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 } catch (error) { fail('streaming JSON reader regression fixtures', error.message); }
+
+// Validate complete JSON object files without retaining a second database object graph.
+try{
+  const tempDir=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-json-validator-'));
+  try{
+    const file=path.join(tempDir,'candidate.json');
+    const valid='{"users":{},"messages":[]}';
+    fs.writeFileSync(file,valid);
+    assert.deepEqual(validateJsonFile(file),{bytes:Buffer.byteLength(valid)});
+    for(const invalid of ['','{broken','[]','null','{"unfinished":']){
+      fs.writeFileSync(file,invalid);
+      assert.throws(()=>validateJsonFile(file));
+    }
+    pass('streaming JSON integrity validator accepts complete object roots and rejects malformed, empty, and non-object files');
+  }finally{fs.rmSync(tempDir,{recursive:true,force:true});}
+}catch(error){fail('streaming JSON integrity validator fixtures',error.message);}
+
+// Last-known-good recovery rotation must validate, restrict, sync, and atomically replace its candidate.
+try{
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function refreshLastKnownGoodDatabase(){');
+  const end=source.indexOf('\nfunction save(){',start);
+  if(start<0||end<0)throw new Error('last-known-good rotation function not found');
+  const fn=source.slice(start,end);
+  const tempDir=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-last-known-good-'));
+  try{
+    const databaseFile=path.join(tempDir,'data.json');
+    const previousFile=databaseFile+'.previous';
+    fs.writeFileSync(databaseFile,'{"generation":1}');
+    const context={
+      fs,crypto,validateJsonFile,Date,
+      DB_FILE:databaseFile,DATA_DIR:tempDir,LAST_KNOWN_GOOD_FILE:previousFile,
+      LAST_KNOWN_GOOD_INTERVAL_MS:60000,lastKnownGoodDatabaseBackupAt:0,
+      process:{pid:process.pid},console:{error(){}}
+    };
+    vm.createContext(context);
+    vm.runInContext(fn+';globalThis.rotateLastKnownGood=refreshLastKnownGoodDatabase;',context);
+    context.rotateLastKnownGood();
+    const original=fs.readFileSync(previousFile,'utf8');
+    const mode=fs.statSync(previousFile).mode&0o777;
+    context.lastKnownGoodDatabaseBackupAt=0;
+    fs.writeFileSync(databaseFile,'{corrupt');
+    assert.throws(()=>context.rotateLastKnownGood());
+    assert.equal(fs.readFileSync(previousFile,'utf8'),original);
+    assert.equal(mode,0o600);
+    assert.deepEqual(fs.readdirSync(tempDir).sort(),['data.json','data.json.previous']);
+    pass('last-known-good rotation preserves a verified restrictive prior generation and rejects corrupt candidates without replacing it');
+  }finally{fs.rmSync(tempDir,{recursive:true,force:true});}
+}catch(error){fail('last-known-good recovery rotation fixture',error.message);}
+
+// Database save must validate its candidate and preserve only a parseable previous generation.
+try{
+  const source=fs.readFileSync(server,'utf8');
+  const saveStart=source.indexOf('function save(){');
+  const saveEnd=source.indexOf('// v46.82.0:',saveStart);
+  const saveBody=source.slice(saveStart,saveEnd);
+  const startupHasCandidate=source.includes('const lastKnownGoodFile=')&&source.includes('It was NOT applied automatically');
+  const checks=[
+    ['database candidate JSON is validated before atomic promotion',saveBody.includes('validateJsonFile(tempFile)')&&saveBody.indexOf('validateJsonFile(tempFile)')<saveBody.indexOf('fs.renameSync(tempFile, DB_FILE)')],
+    ['database save preserves the previous verified generation before replacing the live file',saveBody.includes('refreshLastKnownGoodDatabase()')&&saveBody.indexOf('refreshLastKnownGoodDatabase()')<saveBody.indexOf('fs.renameSync(tempFile, DB_FILE)')],
+    ['invalid startup database never auto-applies an older recovery candidate',startupHasCandidate]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+}catch(error){fail('database integrity/recovery guard checks',error.message);}
 
 // Restore preview inspection must validate the complete file while retaining no database object graph.
 try {
@@ -1008,7 +1072,7 @@ try {
   if (!saveFn) throw new Error('save() implementation not found');
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-atomic-save-'));
   try {
-    const context = { fs, crypto, writeJsonSync, DATA_DIR: tempDir, DB_FILE: path.join(tempDir, 'data.json'), db: { users: { test: { likes: 7 } }, messages: [], privateMessages: [{text:'secret'}] }, process: { pid: process.pid } };
+    const context = { fs, crypto, writeJsonSync, validateJsonFile, refreshLastKnownGoodDatabase:()=>{}, DATA_DIR: tempDir, DB_FILE: path.join(tempDir, 'data.json'), db: { users: { test: { likes: 7 } }, messages: [], privateMessages: [{text:'secret'}] }, process: { pid: process.pid } };
     vm.createContext(context);
     vm.runInContext(`${saveFn[0]}\nglobalThis.performSave = save;`, context);
     context.performSave();
