@@ -133,3 +133,13 @@ Keep PR #1 and PR #3 unmerged, leave `main` untouched, and do not deploy/restart
 - Re-audited client-IP trust handling: untrusted peers cannot override their address with forwarding headers; only an explicitly configured proxy CIDR and one allowlisted header are accepted; ambiguous/malformed values fall back to the socket peer. Regression tests cover these cases and the X-Forwarded-For trust chain. The actual Deplexo proxy CIDRs/header sanitization still must be confirmed before configuring production.
 - Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No merge, deployment, restart, production ZIP sync, or live-volume change occurred.
 - Remaining production blockers are unchanged: consistent independent backup of live `/data/rimaz`, isolated full restore and file-integrity verification, staging browser/device WebRTC/TURN tests, Deplexo restart/OOM telemetry under representative load, and provider confirmation of trusted proxy CIDRs/header sanitization.
+
+## Catalogue asset-reference follow-up — 2026-11-26
+
+- Follow-up source review confirmed that built-in smileys are generated from sorted filenames and stored in `db.customSmileys` with sequential `rimaz-art-###` IDs. The startup seed condition also rebuilds the smiley catalogue if its expected count changes. Removing one duplicate-looking smiley can therefore reset the saved catalogue, including custom entries.
+- Built-in gifts are generated from sorted filenames and assigned sequential `gift-pack-###` IDs. Removing an asset can shift IDs on a seed and leave already-persisted gift image paths referring to a missing file.
+- The five exact duplicate groups remain untouched. Safe removal would require a versioned migration preserving IDs and all persisted references, plus independent persistent-data backup and restore validation.
+- Detailed evidence is appended to `docs/audits/REPOSITORY-CLEANUP-INVENTORY-2026-11-26.md`.
+- CI run [#45870516202](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45870516202) passed both the `validate` job and the `refresh-release-archive` job for the documentation candidate `69e06acc4c117c8fb7950621b254a7f2d6e5266e`. The archive-only follow-up commit was `cf525778e03868f2a643b46591063c3336518aa2`. The new catalogue-risk appendix is a later docs-only commit and requires its own CI run; do not mark that newest head validated until its run completes.
+- PR #3 remains open/draft/unmerged. No changes to `main`, production deployment, restart, or live persistent data.
+
