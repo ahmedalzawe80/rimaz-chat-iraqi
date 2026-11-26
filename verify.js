@@ -225,6 +225,24 @@ try {
   else fail('startup announcement cleanup must preserve atomic and private-message persistence contracts');
 } catch (error) { fail('startup announcement persistence regression check', error.message); }
 
+// Full backup browser download must use a one-use ticket and native navigation, not a buffered Blob.
+try {
+  const serverText = fs.readFileSync(server, 'utf8');
+  const htmlText = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const start = htmlText.indexOf('async function downloadFullBackup(){');
+  const end = htmlText.indexOf('function loadAdminMemberStatus(){', start);
+  const downloadFunction = start >= 0 && end > start ? htmlText.slice(start, end) : '';
+  const ok = serverText.includes("app.post('/api/admin/backup/full-ticket',requireAdmin") &&
+    serverText.includes("app.get('/api/admin/backup/full-download/:token'") &&
+    serverText.includes('adminBackupDownloadTickets.delete(token)') &&
+    serverText.includes('sessionUser(ticket.sid)') &&
+    downloadFunction.includes("fetch('/api/admin/backup/full-ticket'") &&
+    downloadFunction.includes('location.assign(result.url)') &&
+    !downloadFunction.includes('r.blob()');
+  if (ok) pass('full backup browser download uses a short-lived one-use ticket and native navigation instead of buffering the archive with response.blob()');
+  else fail('full backup browser download must use a short-lived one-use ticket and native navigation');
+} catch (error) { fail('full backup browser download regression check', error.message); }
+
 // Rank-art assignment must restore the exact prior definition state when save fails.
 try {
   const source = fs.readFileSync(server, 'utf8');
@@ -234,7 +252,6 @@ try {
   const saveIndex = route.indexOf('try{save()}catch(error)');
   const catchStart = route.indexOf('catch(error){', saveIndex);
   const checks = [
-    ['full backup browser download uses a short-lived one-use ticket and native navigation instead of buffering the archive with response.blob()', serverText.includes("app.post('/api/admin/backup/full-ticket',requireAdmin") && serverText.includes("app.get('/api/admin/backup/full-download/:token'") && serverText.includes('adminBackupDownloadTickets.delete(token)') && serverText.includes('sessionUser(ticket.sid)') && htmlText.includes("fetch('/api/admin/backup/full-ticket'") && htmlText.includes('location.assign(result.url)') && !htmlText.slice(htmlText.indexOf('async function downloadFullBackup(){'),htmlText.indexOf('function loadAdminMemberStatus(){')).includes('r.blob()')],
     ['rank-art assignment captures prior art ID and URL before mutation',route.includes('const old={artId:definition.artId,artUrl:definition.artUrl}')],
     ['rank-art assignment restores prior art ID or removes newly introduced ID on save failure',route.includes('if(old.artId!==undefined)definition.artId=old.artId;else delete definition.artId;')],
     ['rank-art assignment restores prior art URL or removes newly introduced URL on save failure',route.includes('if(old.artUrl!==undefined)definition.artUrl=old.artUrl;else delete definition.artUrl;')],
