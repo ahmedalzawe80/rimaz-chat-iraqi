@@ -181,6 +181,12 @@ async function main() {
     first.emit('request-mic', { room: 'voice', raised: true, seatIndex: 0 });
     await micGranted;
 
+    const duplicateGrant = first.waitFor('voice-mic-granted');
+    await assertNoEvent(second, 'voice-state', () => {
+      first.emit('request-mic', { room: 'voice', raised: true, seatIndex: 0 });
+    });
+    await duplicateGrant;
+
     const offer = { type: 'offer', sdp: 'v=0\r\n' };
     const voiceOffer = second.waitFor('voice-peer-offer', value => value?.from === alpha.sid);
     first.emit('voice-peer-offer', { room: 'voice', to: beta.sid, offer });
@@ -205,7 +211,17 @@ async function main() {
       outsider.emit('call-answer', { to: 'admin', answer });
     });
 
-    console.log('✓ authenticated public chat, private text/media authorization and playback, room-scoped voice signaling, and authorized video-call signaling');
+    const lowered = first.waitFor('voice-mic-lowered');
+    const loweredState = second.waitFor('voice-state', value => value?.room === 'voice' && value.count === 0);
+    first.emit('request-mic', { room: 'voice', raised: false });
+    await Promise.all([lowered, loweredState]);
+    const duplicateLowered = first.waitFor('voice-mic-lowered');
+    await assertNoEvent(second, 'voice-state', () => {
+      first.emit('request-mic', { room: 'voice', raised: false });
+    });
+    await duplicateLowered;
+
+    console.log('✓ authenticated public chat, private text/media authorization and playback, idempotent room-mic transitions, room-scoped voice signaling, and authorized video-call signaling');
   } finally {
     for (const client of clients) client.close();
   }
