@@ -78,7 +78,7 @@ jobs:
           mkdir -p /tmp/rimaz-smoke-data/uploads
           dd if=/dev/zero of=/tmp/rimaz-smoke-data/uploads/load-test.bin bs=1M count=12 status=none
           rm -f /tmp/rimaz-home.html /tmp/rimaz-socketio.txt
-          docker run --detach --name rimaz-smoke --memory=128m --memory-swap=128m --cpus=0.25 --publish 127.0.0.1:3000:3000 --volume /tmp/rimaz-smoke-data:/data/rimaz --env PORT=3000 --env DATA_DIR=/data/rimaz rimaz-chat-iraqi:ci
+          docker run --detach --name rimaz-smoke --memory=128m --memory-swap=128m --cpus=0.25 --publish 127.0.0.1:3000:3000 --volume /tmp/rimaz-smoke-data:/data/rimaz --env PORT=3000 --env DATA_DIR=/data/rimaz --env RIMAZ_ALLOW_EMPTY_DATABASE_INIT=true rimaz-chat-iraqi:ci
           cleanup() {
             docker logs rimaz-smoke || true
             docker rm --force rimaz-smoke >/dev/null 2>&1 || true
