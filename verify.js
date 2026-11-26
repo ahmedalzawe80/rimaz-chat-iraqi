@@ -282,6 +282,50 @@ try {
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('startup private-history notification persistence regression checks',error.message); }
 
+// Legacy private-media migration must preserve public assets shared by other database records.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const migration=source.match(/function migratePrivateMediaToProtectedStorage\(\)\{[\\s\\S]*?\n\}/)?.[0];
+  const contains=source.match(/function containsStoredUrl\(value,url,seen=new Set\(\)\)\{[\\s\\S]*?\n\}/)?.[0];
+  if(!migration||!contains)throw new Error('private-media migration or reference scanner not found');
+  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-private-media-migration-'));
+  try {
+    const uploads=path.join(temp,'uploads'),privateMedia=path.join(temp,'private-media');
+    fs.mkdirSync(uploads);fs.mkdirSync(privateMedia);
+    const sharedBytes=Buffer.from('shared-public-and-private-media');
+    const privateBytes=Buffer.from('private-only-media');
+    const existingBytes=Buffer.from('existing-protected-media');
+    fs.writeFileSync(path.join(uploads,'shared.png'),sharedBytes);
+    fs.writeFileSync(path.join(uploads,'private-only.png'),privateBytes);
+    fs.writeFileSync(path.join(uploads,'shared-existing.png'),Buffer.from('public-copy'));
+    fs.writeFileSync(path.join(privateMedia,'shared-existing.png'),existingBytes);
+    const db={
+      privateMessages:[
+        {media:{url:'/uploads/shared.png'}},
+        {media:{url:'/uploads/private-only.png'}},
+        {media:{url:'/uploads/shared-existing.png'}}
+      ],
+      profiles:{member:{avatar:'/uploads/shared.png',banner:'/uploads/shared-existing.png'}}
+    };
+    let saves=0;
+    const context={db,fs,path,UP_DIR:uploads,PRIVATE_MEDIA_DIR:privateMedia,save:()=>{saves++;},console:{log:()=>{},error:(...args)=>{throw new Error(args.join(' '));}}};
+    vm.createContext(context);
+    vm.runInContext(contains+'\n'+migration+'\nmigratePrivateMediaToProtectedStorage();',context);
+    assert.equal(fs.readFileSync(path.join(uploads,'shared.png')).compare(sharedBytes),0,'shared public asset must remain at its public path');
+    assert.equal(fs.readFileSync(path.join(privateMedia,'shared.png')).compare(sharedBytes),0,'shared public asset must also be copied into protected storage');
+    assert.equal(fs.existsSync(path.join(uploads,'private-only.png')),false,'private-only public copy should be moved out of public storage');
+    assert.equal(fs.readFileSync(path.join(privateMedia,'private-only.png')).compare(privateBytes),0,'private-only media must be preserved in protected storage');
+    assert.equal(fs.readFileSync(path.join(uploads,'shared-existing.png')).toString(),'public-copy','existing private copy must not cause deletion of a still-referenced public asset');
+    assert.equal(fs.readFileSync(path.join(privateMedia,'shared-existing.png')).compare(existingBytes),0,'existing protected media must remain unchanged');
+    assert.deepEqual(db.privateMessages.map(x=>x.media.url),[
+      '/api/private/media/shared.png','/api/private/media/private-only.png','/api/private/media/shared-existing.png'
+    ]);
+    assert.equal(saves,1,'all URL changes must be committed once');
+    pass('legacy private-media migration protects private copies without breaking shared public upload references');
+  } finally { fs.rmSync(temp,{recursive:true,force:true}); }
+} catch(error) { fail('legacy private-media shared-upload migration regression',error.message); }
+
+
 // Startup data migrations must fail closed when their durable commit fails.
 try {
   const source = fs.readFileSync(server, 'utf8');
