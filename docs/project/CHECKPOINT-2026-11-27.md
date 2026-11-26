@@ -88,5 +88,5 @@ No Deplexo restart, rebuild, redeploy, ZIP sync, live-data mutation, merge, or p
 
 ### Documentation-only tip and archive freshness
 
-- After the source-validation/archive commit `2fcb9e8553f58db625b78666174f5c75f1a9bfd0`, two documentation commits updated this checkpoint and the release gate. At the latest check, branch tip was `2665b39be163b0ee53e34091c8116a7dd35e23cd`, and the only changes since the archive commit were those two Markdown files.
+- After the source-validation/archive commit `2fcb9e8553f58db625b78666174f5c75f1a9bfd0`, subsequent documentation-only commits updated this checkpoint and the release gate. The only paths changed since that archive commit are these two Markdown files; the application source did not change.
 - The archive refresh bot commit for these later documentation-only changes had not appeared at the latest check. Do not claim the ZIP is byte-for-byte current with the documentation tip until a new archive-only bot commit appears. The application source candidate itself remains the validated `9806c753...`.
