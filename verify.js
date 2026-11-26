@@ -134,7 +134,7 @@ try{
   const saveStart=source.indexOf('function save(){');
   const saveEnd=source.indexOf('// v46.82.0:',saveStart);
   const saveBody=source.slice(saveStart,saveEnd);
-  const startupHasCandidate=source.includes('const lastKnownGoodFile=')&&source.includes('It was NOT applied automatically');
+  const startupHasCandidate=source.includes('fs.existsSync(LAST_KNOWN_GOOD_FILE)')&&source.includes('It was NOT applied automatically');
   const checks=[
     ['database candidate JSON is validated before atomic promotion',saveBody.includes('validateJsonFile(tempFile)')&&saveBody.indexOf('validateJsonFile(tempFile)')<saveBody.indexOf('fs.renameSync(tempFile, DB_FILE)')],
     ['database save preserves the previous verified generation before replacing the live file',saveBody.includes('refreshLastKnownGoodDatabase()')&&saveBody.indexOf('refreshLastKnownGoodDatabase()')<saveBody.indexOf('fs.renameSync(tempFile, DB_FILE)')],
