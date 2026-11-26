@@ -32,6 +32,30 @@ try {
   assert.equal(canInitializeEmptyDatabase({ persistentRoot: persistent, allowEmpty: true }), true);
   assert.equal(canInitializeEmptyDatabase({ persistentRoot: persistent, allowEmpty: true, legacyDatabaseExists: true }), false);
   assert.equal(canInitializeEmptyDatabase({ persistentRoot: null }), true);
+  const symlinkRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-data-boundary-'));
+  const externalData = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-data-external-'));
+  try {
+    fs.mkdirSync(path.join(symlinkRoot, 'inside'));
+    fs.symlinkSync(path.join(symlinkRoot, 'inside'), path.join(symlinkRoot, 'inside-link'), 'dir');
+    fs.symlinkSync(externalData, path.join(symlinkRoot, 'escape'), 'dir');
+    assert.equal(isWithinPersistentRoot(symlinkRoot, path.join(symlinkRoot, 'inside-link', 'future')), true);
+    assert.equal(isWithinPersistentRoot(symlinkRoot, path.join(symlinkRoot, 'escape', 'future')), false);
+    assert.equal(resolveDataDirectory({
+      persistentRoot: symlinkRoot,
+      configuredPath: path.join(symlinkRoot, 'escape'),
+      defaultPath: path.join(symlinkRoot, 'escape')
+    }), path.join(symlinkRoot, 'rimaz'));
+    fs.symlinkSync(externalData, path.join(symlinkRoot, 'rimaz'), 'dir');
+    assert.throws(() => resolveDataDirectory({
+      persistentRoot: symlinkRoot,
+      configuredPath: path.join(symlinkRoot, 'escape'),
+      defaultPath: path.join(symlinkRoot, 'escape')
+    }), /outside the persistent storage root/);
+  } finally {
+    fs.rmSync(symlinkRoot, { recursive: true, force: true });
+    fs.rmSync(externalData, { recursive: true, force: true });
+  }
+  pass('persistent data paths reject symlink escapes while allowing in-root symlinks');
   pass('persistent data path is enforced and missing member databases fail closed unless first-install initialization is explicit');
 } catch (error) { fail('persistent member database path and empty-initialization guard', error.message); }
 
