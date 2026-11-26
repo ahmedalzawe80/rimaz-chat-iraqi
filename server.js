@@ -353,10 +353,13 @@ function migratePrivateMediaToProtectedStorage(){
     if(!filename||filename!==url.slice('/uploads/'.length)||! /^[a-zA-Z0-9._-]{1,180}$/.test(filename))continue;
     const publicPath=path.join(UP_DIR,filename),privatePath=path.join(PRIVATE_MEDIA_DIR,filename);
     try{
+      const publicUrl='/uploads/'+filename;
+      const referencedOutsidePrivateMessages=Object.entries(db).some(([key,value])=>key!=='privateMessages'&&containsStoredUrl(value,publicUrl));
       if(fs.existsSync(privatePath)){
-        if(fs.existsSync(publicPath))fs.unlinkSync(publicPath);
+        if(fs.existsSync(publicPath)&&!referencedOutsidePrivateMessages)fs.unlinkSync(publicPath);
       }else if(fs.existsSync(publicPath)){
-        fs.renameSync(publicPath,privatePath);
+        if(referencedOutsidePrivateMessages)fs.copyFileSync(publicPath,privatePath);
+        else fs.renameSync(publicPath,privatePath);
       }
       media.url='/api/private/media/'+filename;
       changed=true;
