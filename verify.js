@@ -1162,15 +1162,62 @@ try {
   for (const [label, ok] of scenarios) ok ? pass(label) : fail(label);
 } catch (error) { fail('rank hierarchy regression checks', error.message); }
 
-// Chat messages are committed in a short batch before callers receive success or broadcast events.
+// Chat messages must remain queued until durable storage commits them; retries are bounded and admission is explicit.
 try {
   const source=fs.readFileSync(server,'utf8');
   const add=source.match(/function addMessage\(m\)\s*\{[\s\S]*?\n\}/);
   const batch=source.match(/function scheduleMessageSave\(delay=100\)\s*\{[\s\S]*?\n\}/);
   const flush=source.match(/function flushMessageWrites\(\)\s*\{[\s\S]*?\n\}/);
-  if(add&&batch&&flush&&add[0].includes('pendingMessageWrites.push({message:m,resolve,reject})')&&batch[0].includes('flushMessageWrites()')&&flush[0].includes('save()')&&flush[0].includes('db.messages=previousMessages')&&flush[0].includes('entry.reject(error)')&&source.includes('function gracefulShutdown(signal)')) pass('chat message writes are batched, rollback-safe, retried, and flushed during graceful shutdown');
-  else fail('chat message write batching and shutdown flush');
+  if(add&&batch&&flush&&add[0].includes('pendingMessageWrites.push({message:m,resolve,reject})')
+    &&add[0].includes('MAX_PENDING_MESSAGE_WRITES')&&add[0].includes('shutdownStarted')
+    &&batch[0].includes('flushMessageWrites()')&&batch[0].includes('shutdownStarted')
+    &&flush[0].includes('save()')&&flush[0].includes('db.messages=previousMessages')
+    &&flush[0].includes('pendingMessageWrites.splice(0,batch.length)')
+    &&flush[0].includes('scheduleMessageSave(retryDelay)')
+    &&!flush[0].includes('pendingMessageWrites.splice(0)')
+    &&!flush[0].includes('entry.reject(error)')
+    &&source.includes('const MAX_PENDING_MESSAGE_WRITES=1000')
+    &&source.includes('function gracefulShutdown(signal)'))
+    pass('chat message writes retain the pending queue across repeated save failures, use capped backoff and a bounded admission limit, and flush during graceful shutdown');
+  else fail('chat message write batching, durable retry queue, and shutdown flush');
 } catch(error){fail('chat write batching checks',error.message);}
+
+// Exercise the real queue functions with transient and persistent storage failures.
+(async()=>{
+  try{
+    const source=fs.readFileSync(server,'utf8');
+    const start=source.indexOf('let shutdownStarted=false;');
+    const end=source.indexOf('\nfunction notify(name,item)',start);
+    if(start<0||end<0)throw new Error('chat persistence queue block was not found');
+    const block=source.slice(start,end);
+    let failures=2,saved=[];
+    const delays=[];
+    const context={
+      setTimeout:(fn,delay)=>{delays.push(delay);return {fn,unref(){}};},
+      clearTimeout:()=>{},
+      console:{error:()=>{}},
+      db:{messages:[{id:'existing'}]},
+      save(){if(failures-->0)throw new Error('simulated disk failure');saved=context.db.messages.map(item=>item.id);}
+    };
+    vm.createContext(context);
+    vm.runInContext(block+';globalThis.enqueue=addMessage;globalThis.flush=flushMessageWrites;',context);
+    const committed=context.enqueue({id:'queued'});
+    const overflow=await context.enqueue({id:'overflow'}).then(()=>false,error=>/queue is full/.test(error.message));
+    const first=context.flush();
+    const retainedAfterFirst=first===false&&context.pendingMessageWrites.length===1&&context.db.messages.length===1;
+    const second=context.flush();
+    const retainedAfterSecond=second===false&&context.pendingMessageWrites.length===1&&context.db.messages.length===1;
+    const third=context.flush();
+    await committed;
+    const retryWorks=overflow&&retainedAfterFirst&&retainedAfterSecond&&third===true
+      &&context.pendingMessageWrites.length===0&&saved.join(',')==='existing,queued'
+      &&delays.includes(100)&&delays.includes(1000)&&delays.includes(2000);
+    context.shutdownStarted=true;
+    const rejectsDuringShutdown=await context.enqueue({id:'late'}).then(()=>false,error=>/shutting down/.test(error.message));
+    if(retryWorks&&rejectsDuringShutdown)pass('chat queue retains messages through repeated disk failures, retries with increasing delays, rejects overflow clearly, and blocks writes during shutdown');
+    else fail('chat queue runtime retry and admission behavior',JSON.stringify({overflow,retainedAfterFirst,retainedAfterSecond,third,retryWorks,rejectsDuringShutdown,delays,saved}));
+  }catch(error){fail('chat queue runtime retry and admission behavior',error.message);}
+})();
 
 // Public room and wall content have a 24-hour retention policy with media cleanup.
 try {
@@ -2572,26 +2619,42 @@ try {
 } catch(error) { fail('room/avatar upload authorization ordering checks',error.message); }
 
 
-// A failed final database flush must not be reported as a clean process shutdown.
-try {
-  const source=fs.readFileSync(server,'utf8');
-  const start=source.indexOf('function gracefulShutdown(signal){');
-  const end=source.indexOf("\nprocess.once('SIGTERM'",start);
-  if(start<0||end<0)throw new Error('graceful shutdown function was not found');
-  const fn=source.slice(start,end);
-  const run=failSave=>{
-    const events=[];
-    const context={messageSaveTimer:null,pendingMessageWrites:[],flushMessageWrites:()=>true,clearTimeout:()=>{},save:()=>{if(failSave)throw new Error('disk failure');},
-      console:{error:()=>{}},io:{close:callback=>{events.push('close');callback();}},
-      process:{exit:code=>events.push(['exit',code])},setTimeout:()=>({unref(){}})};
-    vm.createContext(context);vm.runInContext(fn+";gracefulShutdown('SIGTERM');",context);return events;
-  };
-  const success=run(false),failure=run(true);
-  const ok=success.some(x=>Array.isArray(x)&&x[0]==='exit'&&x[1]===0)&&failure.some(x=>Array.isArray(x)&&x[0]==='exit'&&x[1]===1);
-  if(ok)pass('graceful shutdown exits nonzero when the final atomic database save fails');
-  else fail('graceful shutdown save-failure exit status',JSON.stringify({success,failure}));
-} catch(error) { fail('graceful shutdown save-failure exit status',error.message); }
-
+// Shutdown must retry a previously failed batch and must not exit successfully with queued messages.
+(async()=>{
+  try{
+    const source=fs.readFileSync(server,'utf8');
+    const helperStart=source.indexOf('async function persistPendingMessagesDuringShutdown(');
+    const helperEnd=source.indexOf('\nfunction gracefulShutdown',helperStart);
+    if(helperStart<0||helperEnd<0)throw new Error('shutdown persistence helper was not found');
+    const helper=source.slice(helperStart,helperEnd);
+    const makeContext=(failures)=>{
+      let left=failures,saved=[],resolved=0;
+      const context={
+        messageSaveTimer:null,pendingMessageWrites:[{message:{id:'queued'},resolve:()=>resolved++,reject:()=>{}}],
+        messageSaveAttempts:1,db:{messages:[{id:'existing'}]},
+        clearTimeout:()=>{},setTimeout:(fn)=>setTimeout(fn,1),
+        save(){if(left-->0)throw new Error('simulated transient disk failure');saved=context.db.messages.map(x=>x.id);},
+        console:{error(){}}
+      };
+      vm.createContext(context);
+      vm.runInContext(helper+';globalThis.flushAtShutdown=persistPendingMessagesDuringShutdown;',context);
+      return {context,get saved(){return saved;},get resolved(){return resolved;}};
+    };
+    const transient=makeContext(1);
+    const recovered=await transient.context.flushAtShutdown(3,1);
+    const retryWorks=recovered===true&&transient.context.pendingMessageWrites.length===0&&transient.saved.join(',')==='existing,queued'&&transient.resolved===1;
+    const permanent=makeContext(5);
+    const remainsPending=await permanent.context.flushAtShutdown(2,1)===false&&permanent.context.pendingMessageWrites.length===1&&permanent.context.db.messages.length===1;
+    if(retryWorks&&remainsPending)pass('shutdown retries transient message-save failures and retains uncommitted messages on persistent failure');
+    else fail('shutdown pending-message retry fixture',JSON.stringify({retryWorks,remainsPending}));
+    const shutdownStart=source.indexOf('function gracefulShutdown(signal){');
+    const shutdownEnd=source.indexOf("\nprocess.once('SIGTERM'",shutdownStart);
+    const shutdown=source.slice(shutdownStart,shutdownEnd);
+    if(shutdown.includes('shutdownStarted=true')&&shutdown.indexOf('io.close(')<shutdown.indexOf('persistPendingMessagesDuringShutdown')&&shutdown.includes('pendingMessageWrites.length===0?0:1'))pass('graceful shutdown stops new writes, closes transports, drains queued messages, and exits nonzero if any remain');
+    else fail('graceful shutdown lifecycle ordering');
+  }catch(error){fail('shutdown persistence regression checks',error.message);}
+})();
+ 
 // Repository hygiene and safe source-sync regression checks.
 try {
   const ignore = fs.readFileSync(path.join(root, '.gitignore'), 'utf8');
