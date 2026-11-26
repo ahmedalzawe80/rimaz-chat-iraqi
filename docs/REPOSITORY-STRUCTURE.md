@@ -48,7 +48,7 @@ This guide explains why each top-level area exists and which files must remain i
 └── verify.js
 ```
 
-The repository root currently has 16 tracked files. Each has an identified runtime, dependency, editor/Git, documentation, domain-verification, build, test, or audited-release role; the root is intentionally not a dumping ground. Keep these entry points at the root rather than moving them merely to reduce the visible file count. The two HTML entry copies and two domain-verification copies have separate serving/verification roles and must remain synchronized.
+The repository root currently has 17 tracked files. Each has an identified runtime, dependency, editor/Git, documentation, domain-verification, build, test, or audited-release role; the root is intentionally not a dumping ground. Keep these entry points at the root rather than moving them merely to reduce the visible file count. The two HTML entry copies and two domain-verification copies have separate serving/verification roles and must remain synchronized.
 
 ## Root files that must not be moved casually
 
