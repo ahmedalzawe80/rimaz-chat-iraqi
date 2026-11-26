@@ -19,6 +19,7 @@ This guide explains why each top-level area exists and which files must remain i
 │   ├── backup-temp-cleanup.js
 │   ├── cgroup-metrics.js
 │   ├── client-ip.js
+│   ├── data-directory.js
 │   ├── json-reader.js
 │   ├── json-writer.js
 │   └── restore-inspector.js
@@ -72,6 +73,7 @@ The root also contains a small tracked data placeholder, the domain-verification
 
 ## Persistence and JSON helpers
 
+- `lib/data-directory.js` resolves the persistent database directory and prevents accidental initialization or redirection of an existing hosted member database.
 - `lib/json-reader.js` incrementally parses the live database and restore-confirmation file in bounded chunks, with a nesting limit and without allocating a full source-text string.
 - `lib/json-writer.js` serializes database snapshots in bounded chunks for durable atomic writes and backup staging.
 - `lib/restore-inspector.js` validates staged restore previews from JSON tokens without retaining the full replacement database graph.
