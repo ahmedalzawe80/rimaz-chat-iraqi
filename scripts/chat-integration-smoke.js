@@ -153,10 +153,22 @@ async function main() {
       headers: { 'Content-Type': 'application/json', 'x-session': beta.sid },
       body: JSON.stringify({ url: uploaded.media.url })
     });
-    const streamed = await fetch(new URL(ticket.url, baseUrl));
+    const ticketUrl = new URL(ticket.url, baseUrl);
+    const wrongFilenameUrl = new URL(ticketUrl);
+    wrongFilenameUrl.pathname += '.wrong';
+    const wrongFilename = await fetch(wrongFilenameUrl);
+    assert.equal(wrongFilename.status, 401, 'playback ticket must be bound to its exact media filename');
+
+    const ranged = await fetch(ticketUrl, { headers: { Range: 'bytes=0-7' } });
+    assert.equal(ranged.status, 206, 'private media stream must support byte-range requests for seeking');
+    assert.equal(ranged.headers.get('content-range'), 'bytes 0-7/' + png.length);
+    const rangedBytes = Buffer.from(await ranged.arrayBuffer());
+    assert.deepEqual(rangedBytes, png.subarray(0, 8), 'private media range must return the exact requested bytes');
+
+    const streamed = await fetch(ticketUrl);
     assert.equal(streamed.status, 200, 'recipient playback ticket must stream private media');
     const streamedBytes = Buffer.from(await streamed.arrayBuffer());
-    assert.deepEqual(streamedBytes.subarray(0, 8), png.subarray(0, 8), 'private media stream must preserve PNG signature');
+    assert.deepEqual(streamedBytes, png, 'private media stream must preserve the complete file');
 
     await Promise.all([joinRoom(first, alpha.sid, 'voice'), joinRoom(second, beta.sid, 'voice')]);
     const micGranted = first.waitFor('voice-mic-granted');
