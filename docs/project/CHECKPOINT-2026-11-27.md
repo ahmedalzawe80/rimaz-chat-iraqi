@@ -50,3 +50,10 @@
 ## Safety boundary
 
 No Deplexo restart, rebuild, redeploy, ZIP sync, live-data mutation, merge, or production file deletion is authorized by this checkpoint. Preserve the existing owner/admin accounts and all uploaded media.
+
+## Repository navigation update
+
+- `docs/README.md` now links this 2026-11-27 checkpoint first and labels the 2026-11-26 and 2026-11-25 checkpoints as history.
+- `docs/REPOSITORY-STRUCTURE.md` now identifies the 2026-11-27 checkpoint as the current continuity record.
+- The source candidate remains `d83422e5f58f59f0e089649f4908f97a81876469`; the subsequent commits through `2003b2c1a59b38cfac64f1d58e26458062e9c6ee` update documentation/navigation only.
+- Push-triggered CI and release-archive refresh for the latest branch tip still require explicit verification. The connector's available workflow lookup does not expose push-triggered runs.
