@@ -3318,6 +3318,10 @@ try {
   const refs=createBackupMediaSnapshot({database:{messages:[{text:'/uploads/not-a-file.png',media:{url:'/uploads/present.png'}}],profiles:{alice:{gifts:[sharedGift]}},rankDefinitions:[rankDefinition],giftCatalog:[{image:'/uploads/gift.png'}],customSmileys:[{id:'custom-smiley',icon:'/uploads/smiley.png'}]},uploadDirectory:uploads,dataDirectory:temp});
   try { assert.deepEqual(refs.entries.map(entry=>entry.name),['uploads/gift.png','uploads/present.png','uploads/rank-art.png','uploads/smiley.png']); } finally { refs.cleanup(); }
   assert.throws(()=>createBackupMediaSnapshot({database:{profiles:{alice:{avatar:'/uploads/missing.png'}}},uploadDirectory:uploads,dataDirectory:temp}),/Referenced public upload is missing/);
+  assert.throws(
+    ()=>createBackupMediaSnapshot({database:{profiles:{alice:{avatar:'/uploads/missing-a.png'},bob:{avatar:'/uploads/missing-b.png'}}},uploadDirectory:uploads,dataDirectory:temp}),
+    error=>/missing-a\.png/.test(error.message)&&/missing-b\.png/.test(error.message)
+  );
   fs.symlinkSync(path.join(uploads,'present.png'),path.join(uploads,'link.png'));
   assert.throws(()=>createBackupMediaSnapshot({database:{profiles:{alice:{avatar:'/uploads/link.png'}}},uploadDirectory:uploads,dataDirectory:temp}),/not a regular file/);
   assert.equal(fs.readdirSync(temp).filter(name=>name.startsWith('.rimaz-backup-media-')).length,0);
