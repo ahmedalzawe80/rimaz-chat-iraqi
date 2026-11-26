@@ -8,6 +8,15 @@
 - The exact-head combined status and PR-triggered workflow lookup returned no checks/runs for this documentation commit at review time. Do not treat it as CI-validated until a matching run completes.
 - Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`; no merge, deployment, restart, or live-volume mutation occurred.
 
+## Repository cleanup inventory — 2026-11-26
+
+- A read-only tracked-tree inventory reviewed 402 files: 360 public assets/files, 11 documentation files, 8 library modules, one smoke-test script, and the root application/build/test files.
+- Five exact duplicate blob groups were identified. The root/public HTML and Google verification pairs are intentional synchronized endpoints. Three image pairs have different gift/smiley filenames and remain in place because persistent references/catalogue semantics have not been ruled out.
+- The nested `rimaz-chat-iraqi-main/` duplicate directory is absent. No tracked root file or media asset was proven safe to delete or relocate.
+- The inventory is documented in [REPOSITORY-CLEANUP-INVENTORY-2026-11-26.md](../audits/REPOSITORY-CLEANUP-INVENTORY-2026-11-26.md). It records the evidence and the decision to preserve uncertain assets rather than risk breaking old profile/message references.
+- CI run [#45870169010](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45870169010) passed both `validate` and `refresh-release-archive` on candidate `f70a3bb4dea3d89f001caa94e7e5a07269401196`. This is isolated CI evidence, not a production/Deplexo memory or live-data guarantee.
+- The inventory and documentation links are follow-up documentation changes after that validated candidate; their exact new head must receive its own push validation before being described as CI-passed.
+
 ## Historical checkpoint record
 
 The sections below preserve earlier checkpoint snapshots and their exact evidence. Their branch heads and run references are historical; use the latest follow-up above and subsequent dated follow-ups for current state.
