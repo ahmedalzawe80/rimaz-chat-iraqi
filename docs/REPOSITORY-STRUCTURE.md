@@ -100,7 +100,7 @@ Some files have identical contents but distinct names. Two duplicate pairs are i
 
 ## Documentation ownership
 
-- `docs/project/`: dated continuation checkpoints; `CHECKPOINT-2026-11-26.md` is the latest recorded reference, while earlier checkpoints are retained as history. Update the documentation index when a newer checkpoint is added.
+- `docs/project/`: dated continuation checkpoints; `CHECKPOINT-2026-11-27.md` is the latest recorded reference, while earlier checkpoints are retained as history. `docs/README.md` links the latest checkpoint first.
 - `docs/audits/`: security, runtime-resource, and transaction-safety findings.
 - `docs/operations/`: release gate and deployment procedures.
 - `docs/README.md`: navigation index for maintained documentation.
