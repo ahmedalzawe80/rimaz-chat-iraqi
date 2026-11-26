@@ -1177,6 +1177,8 @@ try {
     &&!flush[0].includes('pendingMessageWrites.splice(0)')
     &&!flush[0].includes('entry.reject(error)')
     &&source.includes('const MAX_PENDING_MESSAGE_WRITES=1000')
+    &&source.includes("res.status(queueFull?503:500)")
+    &&source.includes("الخادم مشغول بحفظ الرسائل، حاول بعد قليل")
     &&source.includes('function gracefulShutdown(signal)'))
     pass('chat message writes retain the pending queue across repeated save failures, use capped backoff and a bounded admission limit, and flush during graceful shutdown');
   else fail('chat message write batching, durable retry queue, and shutdown flush');
