@@ -1,5 +1,17 @@
 # Rimaz — continuation checkpoint (2026-11-26)
 
+## Latest repository follow-up — documentation organization
+
+- Latest reviewed PR #3 head: `e95e3ecaa64b67dd9eeb3ca00baca52ea5341f53` on `fix/bound-private-media-ticket-cache`; PR #3 remains open, draft, and unmerged, based on `safety/validate-and-backup-before-sync`.
+- This follow-up updates only `docs/README.md` and `docs/REPOSITORY-STRUCTURE.md`: the documentation index now points to this checkpoint as the latest reference, and the structure guide explains that dated checkpoints are retained as history.
+- No application source, runtime assets, production configuration, or user data was changed by this documentation follow-up.
+- The exact-head combined status and PR-triggered workflow lookup returned no checks/runs for this documentation commit at review time. Do not treat it as CI-validated until a matching run completes.
+- Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`; no merge, deployment, restart, or live-volume mutation occurred.
+
+## Historical checkpoint record
+
+The sections below preserve earlier checkpoint snapshots and their exact evidence. Their branch heads and run references are historical; use the latest follow-up above and subsequent dated follow-ups for current state.
+
 ## Repository state
 
 - Repository: `ahmedalzawe80/rimaz-chat-iraqi`
