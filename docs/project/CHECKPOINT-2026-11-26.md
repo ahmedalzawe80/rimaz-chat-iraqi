@@ -225,3 +225,12 @@ Keep PR #1 and PR #3 unmerged, leave `main` untouched, and do not deploy/restart
 - Archive-only commit/current PR #3 head after refresh: `21737ed0d435edefabcd428fe4c337f9235cb155`. The source/test/workflow commit validated immediately before archive refresh: `5ae06a8aa7c1563d9e5cd36634bd58f148d50565`.
 - PR #3 remains open/draft/unmerged against `safety/validate-and-backup-before-sync`. Production `main` remains unchanged. No Deplexo deployment, restart, live volume inspection, database replacement, or production data change occurred.
 - Repository cleanup decision remains evidence-based: no root file or media asset was deleted. The tracked placeholder `data.json`, synchronized HTML/verification copies, and all catalogued gift/smiley filenames remain protected pending a separate live-volume backup and reference-preserving migration plan.
+
+
+### Additional edge-case hardening — dangling symlink targets
+
+- A second-pass review identified an edge case in the new boundary resolver: a dangling symlink returns `ENOENT` from `realpathSync`, so treating every `ENOENT` as a missing ordinary directory could incorrectly accept a symlink whose external target is created later.
+- The resolver now checks `lstatSync` on each missing component and rejects dangling symlinks instead of appending them as ordinary missing path segments.
+- Regression tests now cover a dangling symlink under the persistent root and a fallback directory redirected through a dangling external symlink, in addition to valid in-root and existing external symlinks.
+- Exact validation run [#45893756376](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45893756376) passed both jobs: source regression/build/HTTP+Socket.IO smoke, plus exact ZIP rebuild and extracted-archive install/test/Docker build. PR #3 remains open/draft/unmerged; production main and live Deplexo data remain untouched.
+- Source/test commits: `19cfe9e01adfa5100611518c95c77f797d952349`, `17496e657d906bfe0ceca7ee89e67ddcb7157bc9`, `d5a2d5c57793cfe7397819f411f6cab95882f521`. The archive was refreshed after validation; current PR head at checkpoint writing: `cf9b11933b308c41b3a69a36001c5bacbfb4822e`.
