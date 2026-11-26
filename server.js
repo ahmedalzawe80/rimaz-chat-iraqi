@@ -2597,19 +2597,38 @@ function gracefulShutdown(signal){
   shutdownStarted=true;
   if(messageSaveTimer){clearTimeout(messageSaveTimer);messageSaveTimer=null;}
   const forceExit=setTimeout(()=>process.exit(1),10000);
-  // Stop accepting work first; only then drain the durable message queue.
-  io.close(()=>{
-    persistPendingMessagesDuringShutdown(8,250).then(messagesSaved=>{
-      let finalSaveSucceeded=messagesSaved;
-      try{save();}catch(error){finalSaveSucceeded=false;console.error(`Final database save failed during ${signal}:`,error.message);}
-      if(pendingMessageWrites.length)console.error(`Shutdown aborted with ${pendingMessageWrites.length} uncommitted chat message(s); process will exit nonzero.`);
-      clearTimeout(forceExit);
-      process.exit(finalSaveSucceeded&&pendingMessageWrites.length===0?0:1);
-    }).catch(error=>{
-      console.error(`Unexpected shutdown persistence failure during ${signal}:`,error.message);
-      clearTimeout(forceExit);
-      process.exit(1);
-    });
+  let transportsClosed=false,messagesSaved=null,finished=false;
+  const finishShutdown=()=>{
+    if(finished||!transportsClosed||messagesSaved===null)return;
+    finished=true;
+    let finalSaveSucceeded=messagesSaved;
+    try{save();}catch(error){finalSaveSucceeded=false;console.error(`Final database save failed during ${signal}:`,error.message);}
+    if(pendingMessageWrites.length)console.error(`Shutdown aborted with ${pendingMessageWrites.length} uncommitted chat message(s); process will exit nonzero.`);
+    clearTimeout(forceExit);
+    process.exit(finalSaveSucceeded&&pendingMessageWrites.length===0?0:1);
+  };
+  const rejectUncommittedMessages=()=>{
+    const error=new Error('Server shutdown: chat message could not be committed to storage');
+    for(const entry of pendingMessageWrites){try{entry.reject(error);}catch(rejectError){console.error('Could not reject a pending chat request during shutdown:',rejectError.message);}}
+  };
+  // Initiate transport closure, but drain the message queue immediately rather
+  // than waiting for the HTTP close callback: active HTTP message handlers may
+  // themselves be waiting for these queued writes to finish.
+  try{
+    io.close(()=>{transportsClosed=true;finishShutdown();});
+  }catch(error){
+    console.error(`Transport shutdown failed during ${signal}:`,error.message);
+    transportsClosed=true;
+  }
+  persistPendingMessagesDuringShutdown(8,250).then(saved=>{
+    messagesSaved=saved;
+    if(!saved)rejectUncommittedMessages();
+    finishShutdown();
+  }).catch(error=>{
+    messagesSaved=false;
+    console.error(`Unexpected shutdown persistence failure during ${signal}:`,error.message);
+    rejectUncommittedMessages();
+    finishShutdown();
   });
 }
 process.once('SIGTERM',()=>gracefulShutdown('SIGTERM'));
