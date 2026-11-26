@@ -2691,7 +2691,7 @@ try {
         console:{error:()=>{}}
       };
       vm.createContext(context);
-      vm.runInContext(helper+'\\n'+shutdown+'\\ngracefulShutdown("SIGTERM");',context);
+      vm.runInContext(helper+'\n'+shutdown+'\ngracefulShutdown("SIGTERM");',context);
       await new Promise(resolve=>setTimeout(resolve,30));
       return events;
     };
