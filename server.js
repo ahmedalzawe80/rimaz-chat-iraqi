@@ -1229,11 +1229,13 @@ function globalBanResponse(res,name,ip){const ban=globalBanStatus(name,ip);if(!b
 function globalBanned(name,ip){return !!globalBanStatus(name,ip);}
 function nameTaken(name){const n=keyName(name);if(!n)return false;return n==='owner'||(!!process.env.OWNER_NAME&&n===keyName(process.env.OWNER_NAME))||Object.keys(db.users||{}).some(x=>keyName(x)===n)||Object.keys(db.guests||{}).some(x=>keyName(x)===n);} 
 function removeFromChat(name, banned){ const n=keyName(name); for(const so of io.sockets.sockets.values()){ const sid2=so.data?.sid, u2=so.data?.user||socketUsers.get(sid2); if(!u2||keyName(u2.name)!==n)continue; const oldRoom=u2.room||''; if(oldRoom){so.leave(oldRoom);removeSessionFromRoomRuntime(sid2,oldRoom);} if(so.data?.user)so.data.user.room=''; if(socketUsers.get(sid2))socketUsers.get(sid2).room=''; so.emit('kicked',{global:true,banned:!!banned,room:oldRoom,...(banned?(globalBanStatus(n,'')||{}):{})}); if(banned)so.disconnect(true); } emitState(); }
+let shutdownStarted=false;
 let messageSaveTimer=null;
 let pendingMessageWrites=[];
 let messageSaveAttempts=0;
+const MAX_PENDING_MESSAGE_WRITES=1000;
 function scheduleMessageSave(delay=100){
-  if(messageSaveTimer)return;
+  if(messageSaveTimer||shutdownStarted)return;
   messageSaveTimer=setTimeout(()=>{messageSaveTimer=null;flushMessageWrites();},delay);
   messageSaveTimer.unref?.();
 }
@@ -1252,17 +1254,17 @@ function flushMessageWrites(){
     return true;
   }catch(error){
     db.messages=previousMessages;
-    messageSaveAttempts++;
-    console.error(`Batched chat-message save failed (attempt ${messageSaveAttempts}/3):`,error.message);
-    if(messageSaveAttempts<3){scheduleMessageSave(1000*messageSaveAttempts);return false;}
-    const failed=pendingMessageWrites.splice(0);
-    messageSaveAttempts=0;
-    for(const entry of failed)entry.reject(error);
+    messageSaveAttempts=Math.min(messageSaveAttempts+1,32);
+    const retryDelay=Math.min(30000,1000*2**Math.min(messageSaveAttempts-1,5));
+    console.error(`Batched chat-message save failed (attempt ${messageSaveAttempts}); retaining ${pendingMessageWrites.length} pending message(s) and retrying in ${retryDelay}ms:`,error.message);
+    scheduleMessageSave(retryDelay);
     return false;
   }
 }
 function addMessage(m){
   return new Promise((resolve,reject)=>{
+    if(shutdownStarted)return reject(new Error('Server is shutting down'));
+    if(pendingMessageWrites.length>=MAX_PENDING_MESSAGE_WRITES)return reject(new Error('Message persistence queue is full; message was not accepted'));
     pendingMessageWrites.push({message:m,resolve,reject});
     scheduleMessageSave();
   });
@@ -2571,13 +2573,44 @@ app.use((err,req,res,next)=>{
 });
 app.get(/.*/,(req,res)=>sendSeoIndex(req,res));
 server.listen(PORT,()=>console.log(`Rimaz server listening on ${PORT}`));
-function gracefulShutdown(signal){
+async function persistPendingMessagesDuringShutdown(maxAttempts=8,retryDelayMs=250){
   if(messageSaveTimer){clearTimeout(messageSaveTimer);messageSaveTimer=null;}
-  let finalSaveSucceeded=true;
-  if(pendingMessageWrites.length){flushMessageWrites();if(pendingMessageWrites.length)finalSaveSucceeded=false;}
-  try{save();}catch(error){finalSaveSucceeded=false;console.error(`Final database save failed during ${signal}:`,error.message);}
-  io.close(()=>process.exit(finalSaveSucceeded?0:1));
-  const forceExit=setTimeout(()=>process.exit(1),10000);forceExit.unref?.();
+  for(let attempt=1;pendingMessageWrites.length&&attempt<=maxAttempts;attempt++){
+    const batch=pendingMessageWrites.slice();
+    const previousMessages=db.messages;
+    db.messages=[...previousMessages,...batch.map(entry=>entry.message)].slice(-1000);
+    try{
+      save();
+      pendingMessageWrites.splice(0,batch.length);
+      messageSaveAttempts=0;
+      for(const entry of batch)entry.resolve();
+    }catch(error){
+      db.messages=previousMessages;
+      console.error(`Shutdown message flush failed (attempt ${attempt}/${maxAttempts}):`,error.message);
+      if(attempt<maxAttempts)await new Promise(resolve=>setTimeout(resolve,retryDelayMs));
+    }
+  }
+  return pendingMessageWrites.length===0;
+}
+function gracefulShutdown(signal){
+  if(shutdownStarted)return;
+  shutdownStarted=true;
+  if(messageSaveTimer){clearTimeout(messageSaveTimer);messageSaveTimer=null;}
+  const forceExit=setTimeout(()=>process.exit(1),10000);
+  // Stop accepting work first; only then drain the durable message queue.
+  io.close(()=>{
+    persistPendingMessagesDuringShutdown(8,250).then(messagesSaved=>{
+      let finalSaveSucceeded=messagesSaved;
+      try{save();}catch(error){finalSaveSucceeded=false;console.error(`Final database save failed during ${signal}:`,error.message);}
+      if(pendingMessageWrites.length)console.error(`Shutdown aborted with ${pendingMessageWrites.length} uncommitted chat message(s); process will exit nonzero.`);
+      clearTimeout(forceExit);
+      process.exit(finalSaveSucceeded&&pendingMessageWrites.length===0?0:1);
+    }).catch(error=>{
+      console.error(`Unexpected shutdown persistence failure during ${signal}:`,error.message);
+      clearTimeout(forceExit);
+      process.exit(1);
+    });
+  });
 }
 process.once('SIGTERM',()=>gracefulShutdown('SIGTERM'));
 process.once('SIGINT',()=>gracefulShutdown('SIGINT'));
