@@ -180,6 +180,8 @@ async function main() {
     const micGranted = first.waitFor('voice-mic-granted');
     first.emit('request-mic', { room: 'voice', raised: true, seatIndex: 0 });
     await micGranted;
+    const initialVoiceState = second.waitFor('voice-state', value => value?.room === 'voice' && value.count === 1);
+    await initialVoiceState;
 
     const duplicateGrant = first.waitFor('voice-mic-granted');
     await assertNoEvent(second, 'voice-state', () => {
