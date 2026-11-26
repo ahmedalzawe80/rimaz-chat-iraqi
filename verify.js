@@ -2699,9 +2699,9 @@ try {
     const inFlightFailed=await runInFlightShutdown(true);
     const savedExit=inFlightSaved.some(event=>Array.isArray(event)&&event[0]==='exit'&&event[1]===0)
       &&inFlightSaved.indexOf('request-resolved')<inFlightSaved.indexOf('transport-closed');
-    const failedExit=inFlightFailed.some(event=>Array.isArray(event)&&event[0]==='exit'&&event[1]===1)
+    const failedInFlightExit=inFlightFailed.some(event=>Array.isArray(event)&&event[0]==='exit'&&event[1]===1)
       &&inFlightFailed.includes('request-rejected')&&inFlightFailed.includes('transport-closed');
-    if(savedExit&&failedExit)pass('shutdown drains an in-flight HTTP chat request before waiting for transport close, and releases it with nonzero exit when persistence remains unavailable');
+    if(savedExit&&failedInFlightExit)pass('shutdown drains an in-flight HTTP chat request before waiting for transport close, and releases it with nonzero exit when persistence remains unavailable');
     else fail('shutdown in-flight HTTP message deadlock regression',JSON.stringify({inFlightSaved,inFlightFailed}));
   }catch(error){fail('shutdown persistence regression checks',error.message);}
 })();
