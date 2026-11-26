@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 const { Readable, pipeline } = require('stream');
 const { writeJsonSync } = require('./lib/json-writer');
-const { readJsonFile } = require('./lib/json-reader');
+const { readJsonFile, validateJsonFile } = require('./lib/json-reader');
 const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
 const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
 const { normalizeIp, normalizeTrustedProxyHeader, createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
@@ -198,6 +198,9 @@ const defaults = () => ({
   roomBans:{}, roomMutes:{}, roomKicks:{}, globalBans:{}, globalIpBans:{},
   wallLikes:{}, wallComments:{}, wallReadAt:{}, privateMessages:[], privateHidden:{}, privateRead:{}, ignored:{}
 });
+const LAST_KNOWN_GOOD_INTERVAL_MS = 60 * 1000;
+const LAST_KNOWN_GOOD_FILE = DB_FILE + '.previous';
+let lastKnownGoodDatabaseBackupAt = 0;
 
 let db;
 try {
@@ -227,6 +230,14 @@ try {
     try { fs.copyFileSync(DB_FILE, recoveryCopy, fs.constants.COPYFILE_EXCL); }
     catch (copyError) { console.error(`Could not create database recovery copy: ${copyError.message}`); }
     console.error(`FATAL: database JSON is invalid. Original file was preserved${fs.existsSync(recoveryCopy) ? ` at ${recoveryCopy}` : ''}. Repair or restore it before restarting.`);
+    if(fs.existsSync(LAST_KNOWN_GOOD_FILE)){
+      try{
+        validateJsonFile(LAST_KNOWN_GOOD_FILE);
+        console.error(`A separately preserved, JSON-valid last-known-good candidate exists at ${LAST_KNOWN_GOOD_FILE}. It was NOT applied automatically; inspect/restore it deliberately to avoid silently rolling back newer data.`);
+      }catch(previousError){console.error(`Last-known-good candidate is not valid and must not be restored: ${previousError.message}`);}
+    }else{
+      console.error('No last-known-good database candidate exists; use an independently verified backup for recovery.');
+    }
     throw new Error('Refusing to start with an invalid database to prevent data loss.');
   } else {
     console.error(`FATAL: cannot read database ${DB_FILE}: ${error.message}`);
@@ -289,9 +300,32 @@ if(expiredAnnouncementIds.size){db.announcements=(db.announcements||[]).filter(a
 const RANK_PERMISSION_PROFILES=['admin-full','admin-shield','crown-gold','crown-silver','super-black','super-white','super-red'];
 const CORE_RANK_LEVELS=Object.freeze({'admin-full':1000,'admin-shield':900,'crown-gold':800,'crown-silver':700,'super-black':600,'super-white':500,'super-red':400});
 db.accountPermissions=db.accountPermissions&&typeof db.accountPermissions==='object'?db.accountPermissions:{};
+function refreshLastKnownGoodDatabase(){
+  if(!fs.existsSync(DB_FILE))return;
+  const now=Date.now();
+  if(now-lastKnownGoodDatabaseBackupAt<LAST_KNOWN_GOOD_INTERVAL_MS)return;
+  const tempFile=`${DB_FILE}.${process.pid}.database-backup.${crypto.randomBytes(8).toString('hex')}.tmp`;
+  let fd=null;
+  try{
+    // Preserve the prior committed generation, but never promote an invalid recovery copy.
+    fs.copyFileSync(DB_FILE,tempFile,fs.constants.COPYFILE_EXCL);
+    fs.chmodSync(tempFile,0o600);
+    fd=fs.openSync(tempFile,'r+');
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);fd=null;
+    validateJsonFile(tempFile);
+    fs.renameSync(tempFile,LAST_KNOWN_GOOD_FILE);
+    try{const dirFd=fs.openSync(DATA_DIR,'r');try{fs.fsyncSync(dirFd);}finally{fs.closeSync(dirFd);}}
+    catch(syncError){console.error('Last-known-good database directory sync unavailable:',syncError.message);}
+    lastKnownGoodDatabaseBackupAt=now;
+  }catch(error){
+    if(fd!==null){try{fs.closeSync(fd);}catch(_){}}
+    try{fs.unlinkSync(tempFile);}catch(_){}
+    throw new Error('Could not refresh the verified last-known-good database copy: '+error.message);
+  }
+}
 function save(){
-  // Keep the existing synchronous/atomic contract for every route while writing
-  // JSON in bounded chunks instead of allocating a second full-database string.
+  // Keep the synchronous/atomic contract while serializing in bounded chunks.
   // Private messages are deliberately memory-only and are never written to disk.
   const snapshot = { ...db, privateMessages: [] };
   const tempFile = `${DB_FILE}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
@@ -302,6 +336,9 @@ function save(){
     writeJsonSync(fd, snapshot);
     fs.fsyncSync(fd);
     fs.closeSync(fd); fd = null;
+    // Validate the complete candidate before preserving or replacing a committed generation.
+    validateJsonFile(tempFile);
+    refreshLastKnownGoodDatabase();
     fs.renameSync(tempFile, DB_FILE);
     // Best-effort directory sync makes the atomic rename survive sudden power loss on supported filesystems.
     try { const dirFd=fs.openSync(DATA_DIR,'r'); try { fs.fsyncSync(dirFd); } finally { fs.closeSync(dirFd); } }
