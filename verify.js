@@ -2792,7 +2792,7 @@ try {
 (async()=>{
   try {
     const source=fs.readFileSync(server,'utf8');
-    const queue=source.match(/let messageSaveTimer=null;\nlet pendingMessageWrites=\[\];[\s\S]*?function addMessage\(m\)\{[\s\S]*?\n\}/);
+    const queue=source.match(/let shutdownStarted=false;\nlet messageSaveTimer=null;\nlet pendingMessageWrites=\[\];[\s\S]*?function addMessage\(m\)\{[\s\S]*?\n\}/);
     if(!queue)throw new Error('message persistence queue not found');
     const makeContext=(initialFailures=0)=>{
       let failuresLeft=initialFailures, activeTimer=null, saved=[];
