@@ -66,8 +66,8 @@ No Deplexo restart, rebuild, redeploy, ZIP sync, live-data mutation, merge, or p
 
 - PR #1: open draft, base `main`, head `safety/validate-and-backup-before-sync`, currently reported mergeable. It remains the safety-workflow prerequisite.
 - PR #3: open draft, base `safety/validate-and-backup-before-sync`, head `fix/bound-private-media-ticket-cache`, currently reported mergeable. This is the consolidated application/repository candidate.
-- PR #7: open draft, based on the application branch but its head `fix/shutdown-flush-and-db-recovery-guard` is diverged from the current application branch (8 commits ahead / 138 behind at the comparison point) and GitHub reports it not mergeable. It needs a deliberate rebase/reconstruction before any review or merge.
-- PR #8: open draft, base `main`, head `fix/retry-pending-chat-writes`. Its branch is three commits ahead of PR #7's head, but its comparison against `main` contains 697 commits / 44 changed files, so it is not a clean standalone message-queue patch. Do not merge it directly to `main`; first reconstruct the intended dependency chain on the validated application head and review the resulting exact diff.
+- PR #7: open draft, based on the application branch but its head `fix/shutdown-flush-and-db-recovery-guard` is diverged from the current application branch and GitHub reports it not mergeable. Its intended shutdown-flush and last-known-good JSON protections are already present in the current PR #3 source, with corresponding tests.
+- PR #8: open draft, base `main`, head `fix/retry-pending-chat-writes`. Its branch is three commits ahead of PR #7's head, but its comparison against `main` contains 697 commits / 44 changed files, so it is not a clean standalone patch. Its bounded pending-message queue and retry logic are also already present in PR #3 source, with regression coverage. Do not merge PR #7 or #8 independently; they are stale/overlapping branches, not missing features in the current source candidate. Leave them open until the user approves cleanup of the PR list.
 - PR #2: open draft and overlaps the cleanup already represented in PR #3; do not merge separately.
 - No PR was retargeted, closed, marked ready, or merged during this review.
 
@@ -84,4 +84,9 @@ No Deplexo restart, rebuild, redeploy, ZIP sync, live-data mutation, merge, or p
 - `docs/README.md` now links this 2026-11-27 checkpoint first and labels the 2026-11-26 and 2026-11-25 checkpoints as history.
 - `docs/REPOSITORY-STRUCTURE.md` now identifies the 2026-11-27 checkpoint as the current continuity record.
 - The source candidate remains `d83422e5f58f59f0e089649f4908f97a81876469`; the subsequent commits through `2003b2c1a59b38cfac64f1d58e26458062e9c6ee` update documentation/navigation only.
-- Push-triggered CI and release-archive refresh for the latest branch tip still require explicit verification. The connector's available workflow lookup does not expose push-triggered runs.
+- At the time of this initial checkpoint, push-triggered CI and release-archive refresh still required verification; see the final-stage section below for later evidence.
+
+### Documentation-only tip and archive freshness
+
+- After the source-validation/archive commit `2fcb9e8553f58db625b78666174f5c75f1a9bfd0`, two documentation commits updated this checkpoint and the release gate. At the latest check, branch tip was `2665b39be163b0ee53e34091c8116a7dd35e23cd`, and the only changes since the archive commit were those two Markdown files.
+- The archive refresh bot commit for these later documentation-only changes had not appeared at the latest check. Do not claim the ZIP is byte-for-byte current with the documentation tip until a new archive-only bot commit appears. The application source candidate itself remains the validated `9806c753...`.
