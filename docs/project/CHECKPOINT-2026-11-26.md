@@ -5,12 +5,12 @@
 - Repository: `ahmedalzawe80/rimaz-chat-iraqi`.
 - Working branch: `fix/bound-private-media-ticket-cache`.
 - PR #3: open, draft, unmerged; base `safety/validate-and-backup-before-sync`.
-- Current PR #3 branch head: archive-only commit `d09e182f893f7f1534893179b9e9b503c58b97a8`; its validated source/test parent is `e9aab830cbc62d88881c686c988000ff7eec4ac5`.
-- GitHub Actions run [#45888153431](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45888153431) completed successfully on both `validate` and `refresh-release-archive`. The source validation passed **643 checks, zero failures**, JavaScript syntax, locked dependency install/tree, production Docker build, HTTP + Socket.IO smoke and authenticated public/private chat, private-media, voice and call integration. npm audit reported **0 vulnerabilities**.
-- Under the isolated CI limit of 128 MiB RAM / 0.25 CPU, the smoke workload reported **50,417,664 bytes current / 68,702,208 bytes peak** against 134,217,728 bytes; the container stayed running and was not OOM-killed. This is CI evidence only, not Deplexo production telemetry.
-- The refreshed release archive passed CRC/path/parity checks and its extracted project passed **642 regression checks**, locked install and production Docker build. The archive contains **402 source files / 16,384,387 bytes**; archive-only commit: `d09e182f893f7f1534893179b9e9b503c58b97a8`.
-- Repository tree: 403 blobs, 17 root files, five expected top-level directories (`.github/`, `docs/`, `lib/`, `public/`, `scripts/`), 360 public assets, 12 docs files and 8 lib modules. No nested `rimaz-chat-iraqi-main/`; exactly one release ZIP.
-- PR #3 remains open/draft/unmerged, targeting `safety/validate-and-backup-before-sync`. Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No merge, deployment, restart, production archive sync, or live-volume mutation occurred.
+- Latest validated source/test commit: `5ea4ca8f0879c0a5421bd23788d151a933d76ea3`.
+- GitHub Actions run [#45889530024](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45889530024) completed successfully on both `validate` and `refresh-release-archive`. Source validation passed **644 checks, zero failures**, JavaScript syntax, locked dependency install/tree, production Docker build, HTTP + Socket.IO smoke, and authenticated chat/private-media/voice/video integration. npm audit reported **0 vulnerabilities**.
+- Under the isolated CI limit of 128 MiB RAM / 0.25 CPU, the workload reported **49,221,632 bytes current / 78,094,336 bytes peak** against 134,217,728 bytes; the container remained running and was not OOM-killed. This is CI evidence only, not Deplexo production telemetry.
+- The release archive was rebuilt and its extracted project passed all static/archive checks, locked install and production Docker build. It contains **402 source files / 16,385,245 bytes**; archive-only commit/current PR branch head: `800b8dfc89ae34604a1396568ec89732f34376a6`.
+- Repository tree remains 403 tracked files, 17 root files, five expected top-level directories (`.github/`, `docs/`, `lib/`, `public/`, `scripts/`), 360 public assets, 12 docs files and 8 lib modules. No nested `rimaz-chat-iraqi-main/`; exactly one release ZIP.
+- Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. PR #3 remains open/draft/unmerged. No merge, deployment, restart, production archive sync, or live-volume mutation occurred.
 
 ## Repository inventory and cleanup decision
 
@@ -25,8 +25,8 @@
 
 ## Remaining review and release blockers
 
-1. Reconcile and review the exact current PR diff and complete exact-head CI, including archive refresh.
-2. Continue source/reference audit for genuinely unused files without changing chat behavior or persistent IDs.
+1. Continue source/reference audit for genuinely unused files without changing chat behavior, public UI, or persistent asset IDs.
+2. Reconcile the complete current PR diff against the safety base and preserve the validated archive parity.
 3. Run a real staging test for browser/device chat, uploads, voice/video/WebRTC and TURN relay.
 4. Obtain independent consistent backup of the live Deplexo persistent volume and verify restore/rollback on an isolated clone.
 5. Collect Deplexo runtime memory, restart, exit, and OOM evidence under representative load; isolated CI resource tests do not prove the historical production 128 MB issue is resolved.
@@ -184,3 +184,13 @@ Keep PR #1 and PR #3 unmerged, leave `main` untouched, and do not deploy/restart
 - The same run rebuilt and tested the extracted release archive: **402 files / 16,384,387 bytes**, 642 archive regression checks, locked dependency install and production Docker build passed. Archive-only commit/current PR branch head at this checkpoint: `d09e182f893f7f1534893179b9e9b503c58b97a8`.
 - This change touches only `server.js`, `verify.js`, the checkpoint and the generated ZIP; neither browser entry file nor chat UI was modified. The queue fix is not a substitute for a production volume backup or Deplexo runtime telemetry.
 - PR #3 remains open/draft/unmerged. Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No merge, deployment, restart, production ZIP sync, or live persistent-data change occurred.
+
+
+## Graceful shutdown / in-flight chat request fix — 2026-11-26
+
+- Further lifecycle review found a potential shutdown deadlock: an active HTTP room-message request can be waiting for its queued database write while the HTTP server's close callback waits for that request to finish. Waiting for `io.close(callback)` before draining the queue can therefore prevent the queue flush from starting until the force-exit timeout.
+- `gracefulShutdown()` now initiates transport closure and drains the durable message queue concurrently. The close callback and queue flush are both required before the final save and exit. If retries cannot commit messages, their waiting request promises are rejected so active handlers can finish, and the process exits nonzero while retaining the uncommitted queue until process exit.
+- Added runtime regression coverage for both a successful in-flight HTTP message request and persistent storage failure; the tests prove the request settles before transport close completes and that failed persistence never exits successfully.
+- Exact source/test commit `5ea4ca8f0879c0a5421bd23788d151a933d76ea3` passed [Actions run #45889530024](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45889530024): **644 checks, zero failures**, npm audit **0 vulnerabilities**, production Docker build, HTTP/Socket.IO smoke, and archive refresh. CI cgroup memory was 49,221,632 bytes current / 78,094,336 bytes peak under the 128 MiB cap.
+- Archive-only commit/current branch head: `800b8dfc89ae34604a1396568ec89732f34376a6`; archive: 402 files / 16,385,245 bytes.
+- No browser entry file or chat UI was changed. PR #3 remains open/draft/unmerged; production `main` is untouched; no deployment, restart, or live persistent-data operation occurred.
