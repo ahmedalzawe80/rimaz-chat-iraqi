@@ -69,7 +69,6 @@ The repository root currently has 16 tracked files. Each has an identified runti
 | `Dockerfile` | Hosting and CI build from the repository root |
 | `verify.js` | Current npm test script runs this file |
 | `rimaz-final-deep-audit-46.93.72.zip` | Exact reviewed source archive rebuilt and parity-checked by CI; required input to the guarded manual synchronization workflow |
-| `.nvmrc` | Canonical Node.js major version used by local nvm setup and CI |
 | `data.json` | Tracked warning placeholder retained for repository/workflow compatibility; it is not production data |
 | `google1a84d9d1dec7b85d.html` | Domain verification endpoint; keep it byte-identical to the copy under `public/` |
 
