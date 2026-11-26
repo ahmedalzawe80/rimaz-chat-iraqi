@@ -51,6 +51,34 @@
 
 No Deplexo restart, rebuild, redeploy, ZIP sync, live-data mutation, merge, or production file deletion is authorized by this checkpoint. Preserve the existing owner/admin accounts and all uploaded media.
 
+## Final-stage verification — 2026-11-27
+
+### Latest source and CI/archive evidence
+
+- Latest application-source fix: `9806c753cae67fd108830d30a3a94a7265156036`.
+- The final source review caught a missing statement separator in the public room-image upload rollback path introduced during the guarded-cleanup refactor. It was corrected before release validation. The invalid-image branch now also routes uploaded-file cleanup through the guarded helper.
+- GitHub Actions then created archive-only commit `2fcb9e8553f58db625b78666174f5c75f1a9bfd0`, authored by `github-actions[bot]`, with message `build: refresh audited archive after validated changes`.
+- Comparing `9806c753...` to `2fcb9e855...` shows exactly one changed file: `rimaz-final-deep-audit-46.93.72.zip`. The archive refresh job in `.github/workflows/validate-project.yml` has `needs: validate`, and commits only after rebuilding and validating the tracked-file archive. This is strong workflow evidence that the source validation job and archive refresh completed after the syntax correction. The available GitHub connector did not expose the run ID or job logs, so no run number or individual test count is claimed.
+- The configured `validate` job includes locked dependency installation, `npm ls`, JavaScript syntax checks, `npm test`, production Docker build, and HTTP/Socket.IO/chat integration smoke tests under 128 MiB / 0.25 CPU limits.
+- Current branch tip is `2fcb9e8553f58db625b78666174f5c75f1a9bfd0`; production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
+
+### Current pull-request chain — do not merge independently
+
+- PR #1: open draft, base `main`, head `safety/validate-and-backup-before-sync`, currently reported mergeable. It remains the safety-workflow prerequisite.
+- PR #3: open draft, base `safety/validate-and-backup-before-sync`, head `fix/bound-private-media-ticket-cache`, currently reported mergeable. This is the consolidated application/repository candidate.
+- PR #7: open draft, based on the application branch but its head `fix/shutdown-flush-and-db-recovery-guard` is diverged from the current application branch (8 commits ahead / 138 behind at the comparison point) and GitHub reports it not mergeable. It needs a deliberate rebase/reconstruction before any review or merge.
+- PR #8: open draft, base `main`, head `fix/retry-pending-chat-writes`. Its branch is three commits ahead of PR #7's head, but its comparison against `main` contains 697 commits / 44 changed files, so it is not a clean standalone message-queue patch. Do not merge it directly to `main`; first reconstruct the intended dependency chain on the validated application head and review the resulting exact diff.
+- PR #2: open draft and overlaps the cleanup already represented in PR #3; do not merge separately.
+- No PR was retargeted, closed, marked ready, or merged during this review.
+
+### Remaining production blockers
+
+- No independent verified copy of the live Deplexo `/data/rimaz` volume has been obtained; no isolated restore has been performed.
+- The production missing-upload reference `/data/rimaz/uploads/1794900547703-e6ba8a72bd45f3ba.jpg` remains unexplained. Do not delete the database reference, fabricate a replacement, or change live data.
+- No staging run has verified the real owner/admin accounts, full upload inventory/hashes, or all chat/voice/video/moderation flows against a clone.
+- The historical Deplexo OOM/restart incident and trusted-proxy header boundary remain unproven resolved.
+- No Deplexo restart, rebuild, redeploy, live-volume mutation, merge, or production sync was performed.
+
 ## Repository navigation update
 
 - `docs/README.md` now links this 2026-11-27 checkpoint first and labels the 2026-11-26 and 2026-11-25 checkpoints as history.
