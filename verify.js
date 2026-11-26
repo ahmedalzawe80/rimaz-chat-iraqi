@@ -217,6 +217,7 @@ try {
   const saveIndex = route.indexOf('try{save()}catch(error)');
   const catchStart = route.indexOf('catch(error){', saveIndex);
   const checks = [
+    ['full backup browser download uses a short-lived one-use ticket and native navigation instead of buffering the archive with response.blob()', serverText.includes("app.post('/api/admin/backup/full-ticket',requireAdmin") && serverText.includes("app.get('/api/admin/backup/full-download/:token'") && serverText.includes('adminBackupDownloadTickets.delete(token)') && serverText.includes('sessionUser(ticket.sid)') && htmlText.includes("fetch('/api/admin/backup/full-ticket'") && htmlText.includes('location.assign(result.url)') && !htmlText.includes('const blob=await r.blob(),url=URL.createObjectURL(blob),a=document.createElement(\'a\')')],
     ['rank-art assignment captures prior art ID and URL before mutation',route.includes('const old={artId:definition.artId,artUrl:definition.artUrl}')],
     ['rank-art assignment restores prior art ID or removes newly introduced ID on save failure',route.includes('if(old.artId!==undefined)definition.artId=old.artId;else delete definition.artId;')],
     ['rank-art assignment restores prior art URL or removes newly introduced URL on save failure',route.includes('if(old.artUrl!==undefined)definition.artUrl=old.artUrl;else delete definition.artUrl;')],
