@@ -89,3 +89,8 @@ A source-level follow-up checked the exact catalogue construction and migration 
 
 **Result:** the five duplicate blob groups remain intentionally untouched. Any future deduplication requires a designed, versioned migration that preserves catalogue IDs and rewrites/retains all stored references, plus a verified copy of persistent data and restore test. A plain file deletion or rename is not safe.
 
+
+
+## Follow-up: uploaded smiley backup coverage — 2026-11-26
+
+The reference-aware backup review confirmed that uploaded custom smiley artwork is persisted in `db.customSmileys[].icon` as `/uploads/...`. The backup media collector intentionally treats `icon` as a structured media-reference field, so these files must be included just like profile avatars, gift images, and rank artwork. The regression fixture now creates an uploaded-smiley file and asserts that the backup snapshot includes it, while continuing to exclude unreferenced uploads and ordinary chat text. This is a test-coverage improvement only; it does not alter catalogue IDs, saved member data, runtime UI, or media files.
