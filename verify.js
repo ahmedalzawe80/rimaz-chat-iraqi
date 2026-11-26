@@ -32,6 +32,30 @@ try {
   assert.equal(canInitializeEmptyDatabase({ persistentRoot: persistent, allowEmpty: true }), true);
   assert.equal(canInitializeEmptyDatabase({ persistentRoot: persistent, allowEmpty: true, legacyDatabaseExists: true }), false);
   assert.equal(canInitializeEmptyDatabase({ persistentRoot: null }), true);
+  const symlinkRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-data-boundary-'));
+  const externalData = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-data-external-'));
+  try {
+    fs.mkdirSync(path.join(symlinkRoot, 'inside'));
+    fs.symlinkSync(path.join(symlinkRoot, 'inside'), path.join(symlinkRoot, 'inside-link'), 'dir');
+    fs.symlinkSync(externalData, path.join(symlinkRoot, 'escape'), 'dir');
+    assert.equal(isWithinPersistentRoot(symlinkRoot, path.join(symlinkRoot, 'inside-link', 'future')), true);
+    assert.equal(isWithinPersistentRoot(symlinkRoot, path.join(symlinkRoot, 'escape', 'future')), false);
+    assert.equal(resolveDataDirectory({
+      persistentRoot: symlinkRoot,
+      configuredPath: path.join(symlinkRoot, 'escape'),
+      defaultPath: path.join(symlinkRoot, 'escape')
+    }), path.join(symlinkRoot, 'rimaz'));
+    fs.symlinkSync(externalData, path.join(symlinkRoot, 'rimaz'), 'dir');
+    assert.throws(() => resolveDataDirectory({
+      persistentRoot: symlinkRoot,
+      configuredPath: path.join(symlinkRoot, 'escape'),
+      defaultPath: path.join(symlinkRoot, 'escape')
+    }), /outside the persistent storage root/);
+  } finally {
+    fs.rmSync(symlinkRoot, { recursive: true, force: true });
+    fs.rmSync(externalData, { recursive: true, force: true });
+  }
+  pass('persistent data paths reject symlink escapes while allowing in-root symlinks');
   pass('persistent data path is enforced and missing member databases fail closed unless first-install initialization is explicit');
 } catch (error) { fail('persistent member database path and empty-initialization guard', error.message); }
 
@@ -2822,7 +2846,7 @@ try {
     ['committed npm lockfile v3 matches package identity and dependency declarations', lockManifest.lockfileVersion === 3 && !!lockManifest.packages?.[''] && lockManifest.packages[''].name === packageManifest.name && lockManifest.packages[''].version === packageManifest.version && sortedDependencies(lockManifest.packages[''].dependencies) === sortedDependencies(packageManifest.dependencies) && sortedDependencies(lockManifest.packages[''].devDependencies) === sortedDependencies(packageManifest.devDependencies)],
     ['production Docker image installs only the locked production dependency graph', dockerfile.includes('RUN npm ci --omit=dev') && !dockerfile.includes('npm install --omit=dev')],
     ['permanent CI requires npm ci and verifies the dependency tree', validateWorkflow.includes('npm ci --no-audit --no-fund') && validateWorkflow.includes('npm ls --depth=0')],
-    ['release archive refresh is post-validation, branch-scoped, bot-loop-safe, and verifies exact tracked-file parity', validateWorkflow.includes('refresh-release-archive:') && validateWorkflow.includes('needs: validate') && validateWorkflow.includes("if: github.event_name == 'push' && github.ref == 'refs/heads/fix/bound-private-media-ticket-cache'") && !validateWorkflow.includes("github.event.pull_request.number == 3") && validateWorkflow.includes('contents: write') && validateWorkflow.includes("'ls-files','-z'") && validateWorkflow.includes('z.testzip()') && validateWorkflow.includes('actual!=set(paths)') && validateWorkflow.includes('git push origin HEAD:refs/heads/fix/bound-private-media-ticket-cache') && validateWorkflow.includes('git diff --cached --quiet') && validateWorkflow.includes('Install locked dependencies and test the rebuilt archive') && validateWorkflow.includes("PROJECT=\"$RUNNER_TEMP/rimaz-release-archive\"") && validateWorkflow.includes('docker build --pull -t rimaz-chat-iraqi:release-archive .') && !archiveWorkflow.includes('\n  pull_request:\n') && archiveWorkflow.slice(0,archiveWorkflow.indexOf('  workflow_dispatch:')).includes("'rimaz-final-deep-audit-46.93.72.zip'") && !archiveWorkflow.slice(0,archiveWorkflow.indexOf('  workflow_dispatch:')).includes("'server.js'") && validateWorkflow.includes("types:\n      - opened\n      - reopened\n      - ready_for_review") && !validateWorkflow.slice(validateWorkflow.indexOf('  pull_request:'),validateWorkflow.indexOf('  workflow_dispatch:')).includes("'rimaz-final-deep-audit-46.93.72.zip'")],
+    ['release archive refresh is post-validation, branch-scoped, bot-loop-safe, and verifies exact tracked-file parity', validateWorkflow.includes('refresh-release-archive:') && validateWorkflow.includes('needs: validate') && validateWorkflow.includes("if: github.event_name == 'push' && (github.ref == 'refs/heads/fix/bound-private-media-ticket-cache' || github.ref == 'refs/heads/fix/persistent-data-symlink-boundary')") && validateWorkflow.includes('ref: ${{ github.ref }}') && !validateWorkflow.includes("github.event.pull_request.number == 3") && validateWorkflow.includes('contents: write') && validateWorkflow.includes("'ls-files','-z'") && validateWorkflow.includes('z.testzip()') && validateWorkflow.includes('actual!=set(paths)') && validateWorkflow.includes('git push origin "HEAD:${GITHUB_REF}"') && validateWorkflow.includes('git diff --cached --quiet') && validateWorkflow.includes('Install locked dependencies and test the rebuilt archive') && validateWorkflow.includes("PROJECT=\"$RUNNER_TEMP/rimaz-release-archive\"") && validateWorkflow.includes('docker build --pull -t rimaz-chat-iraqi:release-archive .') && !archiveWorkflow.includes('\n  pull_request:\n') && archiveWorkflow.slice(0,archiveWorkflow.indexOf('  workflow_dispatch:')).includes("'rimaz-final-deep-audit-46.93.72.zip'") && !archiveWorkflow.slice(0,archiveWorkflow.indexOf('  workflow_dispatch:')).includes("'server.js'") && validateWorkflow.includes("types:\n      - opened\n      - reopened\n      - ready_for_review") && !validateWorkflow.slice(validateWorkflow.indexOf('  pull_request:'),validateWorkflow.indexOf('  workflow_dispatch:')).includes("'rimaz-final-deep-audit-46.93.72.zip'")],
     ['manual source replacement requires explicit confirmation on main', syncWorkflow.includes('confirm_main_replacement') && syncWorkflow.includes("github.ref == 'refs/heads/main' && inputs.confirm_main_replacement == true")],
     ['manual source sync is scoped to application/build files and explicitly synchronizes public assets plus required lib modules', syncWorkflow.includes('for file in server.js index.html package.json package-lock.json Dockerfile verify.js; do') && syncWorkflow.includes('install -m 0644 "$PROJECT_SOURCE/$file" "./$file"') && syncWorkflow.includes("rsync -a --delete --exclude='/google1a84d9d1dec7b85d.html' \"$PROJECT_SOURCE/public/\" ./public/") && syncWorkflow.includes('rsync -a --delete "$PROJECT_SOURCE/lib/" ./lib/') && syncWorkflow.includes('test -d "$SOURCE/lib"') && !syncWorkflow.includes('rsync -a --delete "$PROJECT_SOURCE/" ./')],
     ['manual source sync refuses a stale archive that differs from main, including server library modules', syncWorkflow.includes('Require archive to match current main source') && syncWorkflow.includes('cmp -s "$PROJECT_SOURCE/$file" "$file"') && syncWorkflow.includes('diff -qr --no-dereference "$PROJECT_SOURCE/public" ./public') && syncWorkflow.includes('diff -qr --no-dereference "$PROJECT_SOURCE/lib" ./lib')],
