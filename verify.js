@@ -55,6 +55,13 @@ try {
       configuredPath: path.join(symlinkRoot, 'escape'),
       defaultPath: path.join(symlinkRoot, 'escape')
     }), /outside the persistent storage root/);
+    fs.unlinkSync(path.join(symlinkRoot, 'rimaz'));
+    fs.symlinkSync(danglingTarget, path.join(symlinkRoot, 'rimaz'), 'dir');
+    assert.throws(() => resolveDataDirectory({
+      persistentRoot: symlinkRoot,
+      configuredPath: path.join(symlinkRoot, 'escape'),
+      defaultPath: path.join(symlinkRoot, 'escape')
+    }), /outside the persistent storage root/);
   } finally {
     fs.rmSync(symlinkRoot, { recursive: true, force: true });
     fs.rmSync(externalData, { recursive: true, force: true });
