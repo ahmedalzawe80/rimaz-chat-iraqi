@@ -249,12 +249,13 @@ function siteModuleEnabled(name){return db.siteSettings?.modules?.[name]!==false
 if(!db.chatFilter || typeof db.chatFilter!=='object') db.chatFilter={enabled:false,words:[]};
 if(!Array.isArray(db.chatFilter.words)) db.chatFilter.words=[];
 if(!Array.isArray(db.chatShortcuts)) db.chatShortcuts=[]; if(!Array.isArray(db.customSmileys)) db.customSmileys=[];
-// Gallery migration v9: replace all legacy smileys with the supplied artwork pack and requested mobile emojis.
-// This only resets the smiley catalogue; accounts, messages, uploads and chat shortcuts remain untouched.
+// Gallery migration v9: install the supplied artwork pack and requested mobile emojis once.
+// After seeding, preserve the entire saved list: member-added smileys share this array.
+// Future built-in pack changes must use an explicit seed-version migration, never a length check.
 {
   const classicFiles=Object.keys(BUILTIN_SMILEYS).sort();
   const desiredCount=classicFiles.length+ALL_MOBILE_EMOJIS.length;
-  if(Number(db.smileysSeedVersion||0)<9 || !Array.isArray(db.customSmileys) || db.customSmileys.length!==desiredCount){
+  if(Number(db.smileysSeedVersion||0)<9 || !Array.isArray(db.customSmileys)){
     const artwork=classicFiles.map((file,i)=>({id:'rimaz-art-'+String(i+1).padStart(3,'0'),icon:BUILTIN_SMILEYS[file],name:'سميل '+String(i+1),shortcut:''}));
     const mobile=ALL_MOBILE_EMOJIS.map((icon,i)=>({id:'rimaz-mobile-'+String(i+1).padStart(3,'0'),icon,name:'إيموجي موبايل '+String(i+1),shortcut:''}));
     db.customSmileys=[...artwork,...mobile];
