@@ -63,12 +63,19 @@ const PUBLIC_SITE_URL = (() => {
     return 'https://noble-horizon-5826.de.deplexo.com';
   }
 })();
-// Prefer persistent hosting storage. Never silently fall back to /tmp: that can
-// make existing accounts appear to disappear after a restart/redeploy.
-let DATA_DIR = process.env.DATA_DIR || (fs.existsSync('/data') ? '/data/rimaz' : path.join(ROOT, 'data'));
-// A legacy deployment may still have DATA_DIR=/app/data, which is not the
-// persistent mount on Deplexo. If the mount exists and the configured path
-// cannot be created, use the persistent mount rather than ephemeral storage.
+// Prefer the persistent hosting mount even when an old DATA_DIR points to
+// an ephemeral container path. Never silently start a second empty member DB.
+const { isWithinPersistentRoot, resolveDataDirectory, canInitializeEmptyDatabase } = require('./lib/data-directory');
+const PERSISTENT_DATA_ROOT = fs.existsSync('/data') ? path.resolve('/data') : null;
+const CONFIGURED_DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : null;
+const LEGACY_DATA_DIR = PERSISTENT_DATA_ROOT && CONFIGURED_DATA_DIR && !isWithinPersistentRoot(PERSISTENT_DATA_ROOT, CONFIGURED_DATA_DIR)
+  ? CONFIGURED_DATA_DIR : null;
+let DATA_DIR = resolveDataDirectory({
+  persistentRoot: PERSISTENT_DATA_ROOT,
+  configuredPath: CONFIGURED_DATA_DIR,
+  defaultPath: path.join(ROOT, 'data')
+});
+if (LEGACY_DATA_DIR) console.error(`Configured DATA_DIR ${LEGACY_DATA_DIR} is outside persistent storage; using ${DATA_DIR}. The legacy directory will not be modified automatically.`);
 let UP_DIR = path.join(DATA_DIR, 'uploads');
 let DB_FILE = path.join(DATA_DIR, 'data.json');
 try { fs.mkdirSync(UP_DIR, { recursive: true }); }
@@ -198,6 +205,20 @@ try {
   if (!db || typeof db !== 'object' || Array.isArray(db)) throw new Error('Database root must be a JSON object');
 } catch (error) {
   if (error.code === 'ENOENT') {
+    const legacyDatabaseFile = LEGACY_DATA_DIR ? path.join(LEGACY_DATA_DIR, 'data.json') : null;
+    const legacyDatabaseExists = !!(legacyDatabaseFile && fs.existsSync(legacyDatabaseFile));
+    if (legacyDatabaseExists) {
+      console.error(`FATAL: persistent database is missing at ${DB_FILE}, but a legacy database exists at ${legacyDatabaseFile}. Refusing to create an empty member database; migrate the complete data directory after an independent backup.`);
+      throw new Error('Refusing to initialize an empty database while a legacy member database exists outside persistent storage.');
+    }
+    if (!canInitializeEmptyDatabase({
+      persistentRoot: PERSISTENT_DATA_ROOT,
+      allowEmpty: process.env.RIMAZ_ALLOW_EMPTY_DATABASE_INIT === 'true',
+      legacyDatabaseExists
+    })) {
+      console.error(`FATAL: persistent database is missing at ${DB_FILE}. Refusing to initialize empty accounts on an existing persistent mount. Restore the database or explicitly allow a first-time empty initialization.`);
+      throw new Error('Refusing to initialize an empty database on persistent storage without explicit first-install approval.');
+    }
     db = defaults();
   } else if (error instanceof SyntaxError || /Database root must be/.test(error.message || '')) {
     // Never replace a damaged database with empty defaults: preserve the original
