@@ -6,6 +6,7 @@ on:
       - safety/validate-and-backup-before-sync
       - maintenance/repository-cleanup-2026-11-24
       - fix/bound-private-media-ticket-cache
+      - fix/persistent-data-symlink-boundary
     paths:
       - 'rimaz-final-deep-audit-46.93.72.zip'
   workflow_dispatch:
