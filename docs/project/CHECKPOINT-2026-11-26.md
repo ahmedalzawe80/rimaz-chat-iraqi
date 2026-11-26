@@ -99,3 +99,16 @@ Keep PR #1 and PR #3 unmerged, leave `main` untouched, and do not deploy/restart
 - Rechecked repository organization: the nested duplicate project directory is absent; the root contains only the expected project/configuration directories and the single required release ZIP. Keep the intentional root/public HTML and Google verification copies, and the root warning-only `data.json`.
 - The current checkpoint's earlier PR-head references are historical snapshots; use the exact SHAs and run above as the newer state. Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
 - Remaining production blockers are unchanged: independent consistent Deplexo volume backup, isolated restore and file-integrity verification, staging browser/device and WebRTC/TURN tests, provider restart/OOM telemetry, and confirmation of trusted proxy CIDRs/header sanitization. No live Deplexo access, deployment, restart, merge, main update, or live-volume mutation occurred in this review.
+
+
+
+## Follow-up verification — 2026-11-26 14:00 Iraq time
+
+- Rechecked the exact PR #3 branch and the latest completed Actions run. PR #3 remains open/draft/unmerged; base remains `safety/validate-and-backup-before-sync`.
+- Source/documentation commit `d0e77c7f5810d9e597394273dca00b533b6ea396` passed Actions run [#45806305779](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45806305779). Both `validate` and `refresh-release-archive` jobs completed successfully.
+- The validation log contains **639 passing regression checks and zero failing checks**. Locked dependency installation/tree verification, JavaScript syntax, production Docker build, isolated HTTP/Socket.IO and authenticated chat/media/voice/call smoke tests passed; npm audit reported **0 vulnerabilities**.
+- The constrained isolated container used 128 MiB RAM and 0.25 CPU. After the concurrent workload, cgroup-v2 reported **56,676,352 bytes current** and **76,804,096 bytes peak** against **134,217,728 bytes**. The container remained running and was not OOM-killed. This is CI evidence only, not Deplexo production telemetry.
+- The successful archive job created current branch head `68e4bd198ad6e1d71a250e000dec5eb558051da3`; that commit changes only `rimaz-final-deep-audit-46.93.72.zip`. The source/test evidence applies to `d0e77c7...`; the ZIP-only commit has no source changes requiring a separate source test.
+- Re-audited client-IP trust handling: untrusted peers cannot override their address with forwarding headers; only an explicitly configured proxy CIDR and one allowlisted header are accepted; ambiguous/malformed values fall back to the socket peer. Regression tests cover these cases and the X-Forwarded-For trust chain. The actual Deplexo proxy CIDRs/header sanitization still must be confirmed before configuring production.
+- Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No merge, deployment, restart, production ZIP sync, or live-volume change occurred.
+- Remaining production blockers are unchanged: consistent independent backup of live `/data/rimaz`, isolated full restore and file-integrity verification, staging browser/device WebRTC/TURN tests, Deplexo restart/OOM telemetry under representative load, and provider confirmation of trusted proxy CIDRs/header sanitization.
