@@ -76,3 +76,16 @@ The next safe cleanup step is a reference-aware media/catalogue audit against th
 ## Validation boundary
 
 The successful CI run on `f70a3bb4dea3d89f001caa94e7e5a07269401196` completed both the application validation job and the release-archive refresh job. This validates the isolated candidate and generated archive only. It does not prove Deplexo production memory behavior, live data integrity, or staging restore correctness.
+
+
+## Follow-up: catalogue and persisted-reference safety
+
+A source-level follow-up checked the exact catalogue construction and migration logic in `server.js`:
+
+- Built-in smiley entries are generated from every matching filename in `public/smileys/`, sorted by filename, then assigned sequential persistent IDs `rimaz-art-001...`. The startup migration rebuilds `db.customSmileys` when the seed version is older than 9 **or when the current catalogue length differs from the expected built-in-plus-mobile count**. Removing even one apparently duplicate smiley changes that expected count and can cause startup to replace the saved custom smiley catalogue. This is a concrete reason not to remove any smiley asset based on byte equality.
+- Built-in gifts are generated from the sorted filenames in `public/gifts/` and assigned sequential IDs `gift-pack-001...`. Deleting a file changes the generated sequence on a fresh/legacy catalogue seed. On an already-seeded persistent database, the stored catalogue may still point at the removed filename. Either outcome can break gift selection/history or existing profile references.
+- The standard gift seed is persisted in `db.giftCatalog`; VIP gifts are separately seeded to `/vip-gifts/vip-special.gif`. Profile gift records retain gift metadata, and the browser renders saved `giftImage` paths. Thus matching bytes under two names are not proof that either name is redundant.
+- Built-in smiley paths are stored in `db.customSmileys`, and chat messages render saved smiley IDs/tokens from that catalogue. The filenames are therefore part of the data compatibility surface, not just static files.
+
+**Result:** the five duplicate blob groups remain intentionally untouched. Any future deduplication requires a designed, versioned migration that preserves catalogue IDs and rewrites/retains all stored references, plus a verified copy of persistent data and restore test. A plain file deletion or rename is not safe.
+
