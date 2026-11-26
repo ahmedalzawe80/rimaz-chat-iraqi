@@ -285,8 +285,8 @@ try {
 // Legacy private-media migration must preserve public assets shared by other database records.
 try {
   const source=fs.readFileSync(server,'utf8');
-  const migration=source.match(/function migratePrivateMediaToProtectedStorage\(\)\{[\\s\\S]*?\n\}/)?.[0];
-  const contains=source.match(/function containsStoredUrl\(value,url,seen=new Set\(\)\)\{[\\s\\S]*?\n\}/)?.[0];
+  const migration=source.match(/function migratePrivateMediaToProtectedStorage\(\)\{[\s\S]*?\n\}/)?.[0];
+  const contains=source.match(/function containsStoredUrl\(value,url,seen=new Set\(\)\)\{[\s\S]*?\n\}/)?.[0];
   if(!migration||!contains)throw new Error('private-media migration or reference scanner not found');
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-private-media-migration-'));
   try {
@@ -480,7 +480,7 @@ try {
   const checks = [
     ['registration rejects names already held by registered members or guests', source.includes('function nameTaken(name)') && source.includes("Object.keys(db.users||{}).some(x=>keyName(x)===n)") && source.includes("Object.keys(db.guests||{}).some(x=>keyName(x)===n)") && source.includes('if(nameTaken(n)&&!ownerRequested)')],
     ['guest entry rejects names already held by members or guests', source.includes("app.post('/api/guest'") && source.includes('if(nameTaken(n))return res.status(409)')],
-    ['all entry routes return remaining global-ban time', routes.every(route => { const m=source.match(new RegExp("app\\.post\\('"+route.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')+"',[\\s\\S]*?\\n\\}\\);")); return m && m[0].includes('globalBanResponse(res,n,requestClientIp(req))'); })],
+    ['all entry routes return remaining global-ban time', routes.every(route => { const m=source.match(new RegExp("app\\.post\\('"+route.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')+"',[\s\S]*?\\n\\}\\);")); return m && m[0].includes('globalBanResponse(res,n,requestClientIp(req))'); })],
     ['global-ban response calculates remaining minutes and seconds from stored expiry', source.includes('function globalBanStatus(name,ip,now=Date.now())') && source.includes('remainingSeconds:totalSeconds') && source.includes('remainingText') && source.includes('GLOBAL_BAN_ACTIVE')],
     ['login forms show actionable errors without leaving the entry screen', html.includes('async function doRegister()') && html.includes('async function doLogin()') && html.includes('async function doGuest()') && html.includes("document.getElementById('ln')?.focus()") && html.includes('الوقت المتبقي|دقيقة|ثانية|الاسم موجود')],
     ['duplicate-name response uses the requested exact Arabic message', source.includes("error:'هذا الاسم موجود'") && !source.includes('هذا الاسم موجود بالفعل، اختار اسماً آخر')],
