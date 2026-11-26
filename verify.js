@@ -2674,6 +2674,35 @@ try {
       &&failedExit.some(event=>Array.isArray(event)&&event[0]==='exit'&&event[1]===1);
     if(exitCodes)pass('graceful shutdown reports success only after a successful final database save');
     else fail('graceful shutdown final-save exit status',JSON.stringify({cleanExit,failedExit}));
+    const runInFlightShutdown=async failSave=>{
+      const events=[];
+      let closeCallback=null;
+      const pendingEntry={
+        message:{id:'in-flight-http-message'},
+        resolve(){events.push('request-resolved');if(closeCallback)closeCallback();},
+        reject(){events.push('request-rejected');if(closeCallback)closeCallback();}
+      };
+      const context={
+        shutdownStarted:false,messageSaveTimer:null,pendingMessageWrites:[pendingEntry],messageSaveAttempts:0,db:{messages:[]},
+        clearTimeout, setTimeout:(fn,delay)=>setTimeout(fn,delay===10000?10000:0),
+        save(){events.push('save-attempt');if(failSave)throw new Error('simulated persistent disk failure');},
+        io:{close:callback=>{events.push('transport-close-started');closeCallback=()=>{events.push('transport-closed');callback();};if(!context.pendingMessageWrites.length)closeCallback();}},
+        process:{exit:code=>events.push(['exit',code])},
+        console:{error:()=>{}}
+      };
+      vm.createContext(context);
+      vm.runInContext(helper+'\\n'+shutdown+'\\ngracefulShutdown("SIGTERM");',context);
+      await new Promise(resolve=>setTimeout(resolve,30));
+      return events;
+    };
+    const inFlightSaved=await runInFlightShutdown(false);
+    const inFlightFailed=await runInFlightShutdown(true);
+    const savedExit=inFlightSaved.some(event=>Array.isArray(event)&&event[0]==='exit'&&event[1]===0)
+      &&inFlightSaved.indexOf('request-resolved')<inFlightSaved.indexOf('transport-closed');
+    const failedExit=inFlightFailed.some(event=>Array.isArray(event)&&event[0]==='exit'&&event[1]===1)
+      &&inFlightFailed.includes('request-rejected')&&inFlightFailed.includes('transport-closed');
+    if(savedExit&&failedExit)pass('shutdown drains an in-flight HTTP chat request before waiting for transport close, and releases it with nonzero exit when persistence remains unavailable');
+    else fail('shutdown in-flight HTTP message deadlock regression',JSON.stringify({inFlightSaved,inFlightFailed}));
   }catch(error){fail('shutdown persistence regression checks',error.message);}
 })();
  
