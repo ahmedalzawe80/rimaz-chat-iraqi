@@ -3315,15 +3315,15 @@ try {
   const sharedGift={giftImage:'/uploads/gift.png'};
   fs.writeFileSync(path.join(uploads,'rank-art.png'),'rank art');
   const rankDefinition={artUrl:'/uploads/rank-art.png'};
-  for(const name of ['banner.png','banner-url.png','cover.png','background.png'])fs.writeFileSync(path.join(uploads,name),name);
+  for(const name of ['banner.png','banner-url.png','cover.png','background.png','decoration.png'])fs.writeFileSync(path.join(uploads,name),name);
   const refs=createBackupMediaSnapshot({database:{
     messages:[{text:'/uploads/not-a-file.png',media:{url:'/uploads/present.png'}}],
-    profiles:{alice:{avatar:'/uploads/present.png',banner:'/uploads/banner.png',cover:'/uploads/cover.png',background:'/uploads/background.png',gifts:[sharedGift]}},
+    profiles:{alice:{avatar:'/uploads/present.png',banner:'/uploads/banner.png',cover:'/uploads/cover.png',background:'/uploads/background.png',customDecorationImage:'/uploads/decoration.png',gifts:[sharedGift]}},
     rankDefinitions:[rankDefinition,{bannerUrl:'/uploads/banner-url.png'}],
     giftCatalog:[{image:'/uploads/gift.png'}],
     customSmileys:[{id:'custom-smiley',icon:'/uploads/smiley.png'}]
   },uploadDirectory:uploads,dataDirectory:temp});
-  try { assert.deepEqual(refs.entries.map(entry=>entry.name),['uploads/background.png','uploads/banner-url.png','uploads/banner.png','uploads/cover.png','uploads/gift.png','uploads/present.png','uploads/rank-art.png','uploads/smiley.png']); } finally { refs.cleanup(); }
+  try { assert.deepEqual(refs.entries.map(entry=>entry.name),['uploads/background.png','uploads/banner-url.png','uploads/banner.png','uploads/cover.png','uploads/decoration.png','uploads/gift.png','uploads/present.png','uploads/rank-art.png','uploads/smiley.png']); } finally { refs.cleanup(); }
   assert.throws(()=>createBackupMediaSnapshot({database:{profiles:{alice:{avatar:'/uploads/missing.png'}}},uploadDirectory:uploads,dataDirectory:temp}),/Referenced public upload is missing/);
   assert.throws(
     ()=>createBackupMediaSnapshot({database:{profiles:{alice:{avatar:'/uploads/missing-a.png'},bob:{avatar:'/uploads/missing-b.png'}}},uploadDirectory:uploads,dataDirectory:temp}),
