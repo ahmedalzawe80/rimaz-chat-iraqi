@@ -4,8 +4,9 @@
 
 - Repository: `ahmedalzawe80/rimaz-chat-iraqi`
 - Working branch: `fix/bound-private-media-ticket-cache`
-- Current source candidate: `d83422e5f58f59f0e089649f4908f97a81876469`
-- PR #3 remains open/draft/unmerged. Do not merge or deploy from this checkpoint.
+- Current application-source candidate: `9806c753cae67fd108830d30a3a94a7265156036`.
+- Current documentation branch tip: `179ea98fa30f653d0cab52341601b787b942ac14` (documentation-only commits after the validated source/archive candidate).
+- PR #3 remains open/draft/unmerged. Its latest GitHub mergeability field has fluctuated between true and false during refreshes; do not merge or deploy until a fresh exact-head review confirms it.
 - Production `main` and Deplexo persistent data have not been modified by this work.
 
 ## Backup-media integrity work completed on the branch
