@@ -2517,11 +2517,18 @@ io.on('connection',socket=>{
       const occupied=[...speakers.entries()].find(([peerSid,x])=>peerSid!==sid&&Number(x.seatIndex)===requested);
       if(occupied){const error='هذا المقعد مشغول، اختَر مقعداً فارغاً';socket.emit('voice-mic-denied',{error});return socket.emit('error-msg',{error});}
       if(speakers.size>=limit&&!speakers.has(sid)){const error='اكتمل عدد المايكات في هذه الغرفة';socket.emit('voice-mic-denied',{error});return socket.emit('error-msg',{error});}
-      const previous=speakers.get(sid);if(previous&&Number(previous.seatIndex)!==requested){const error='أنت مرفوع على مقعد آخر؛ اخفض المايك أولاً';socket.emit('voice-mic-denied',{error});return socket.emit('error-msg',{error});}
+      const previous=speakers.get(sid);
+      if(previous&&Number(previous.seatIndex)===requested){
+        const peers=[...(roomSockets.get(room)||new Set())].filter(peerSid=>peerSid!==sid).map(peerSid=>({sid:peerSid,name:socketUsers.get(peerSid)?.name||''}));
+        socket.emit('voice-mic-granted',{room,peers});
+        return;
+      }
+      if(previous&&Number(previous.seatIndex)!==requested){const error='أنت مرفوع على مقعد آخر؛ اخفض المايك أولاً';socket.emit('voice-mic-denied',{error});return socket.emit('error-msg',{error});}
       speakers.set(sid,{sid,name:u.name,displayName:displayName(u.name),avatar:profile(u.name).avatar||'',seatIndex:requested,at:Date.now()});voiceSpeakers.set(room,speakers);
       const peers=[...(roomSockets.get(room)||new Set())].filter(peerSid=>peerSid!==sid).map(peerSid=>({sid:peerSid,name:socketUsers.get(peerSid)?.name||''}));
       socket.emit('voice-mic-granted',{room,peers});
     }else{
+      if(!speakers.has(sid)){socket.emit('voice-mic-lowered',{room});return;}
       speakers.delete(sid);if(!speakers.size)voiceSpeakers.delete(room);
       socket.emit('voice-mic-lowered',{room});
     }
