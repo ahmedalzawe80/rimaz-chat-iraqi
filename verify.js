@@ -13,11 +13,28 @@ const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
 const { normalizeTrustedProxyHeader, createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
 const { readCgroupMetrics } = require('./lib/cgroup-metrics');
 const { cleanupStaleBackupTemps } = require('./lib/backup-temp-cleanup');
+const { isWithinPersistentRoot, resolveDataDirectory, canInitializeEmptyDatabase } = require('./lib/data-directory');
 
 const root = __dirname;
 const failures = [];
 const pass = (label) => console.log(`✓ ${label}`);
 const fail = (label, detail) => { failures.push(label); console.error(`✗ ${label}${detail ? `: ${detail}` : ''}`); };
+ 
+// Persistent data-directory selection must never silently redirect an existing site to an ephemeral path.
+try {
+  const persistent = path.resolve('/data');
+  assert.equal(resolveDataDirectory({ persistentRoot: persistent, configuredPath: '/app/data', defaultPath: '/app/data' }), path.join(persistent, 'rimaz'));
+  assert.equal(resolveDataDirectory({ persistentRoot: persistent, configuredPath: '/data/custom', defaultPath: '/app/data' }), path.join(persistent, 'custom'));
+  assert.equal(resolveDataDirectory({ persistentRoot: null, configuredPath: '/app/data', defaultPath: '/app/data' }), path.resolve('/app/data'));
+  assert.equal(isWithinPersistentRoot(persistent, '/data/rimaz'), true);
+  assert.equal(isWithinPersistentRoot(persistent, '/data-old/rimaz'), false);
+  assert.equal(canInitializeEmptyDatabase({ persistentRoot: persistent }), false);
+  assert.equal(canInitializeEmptyDatabase({ persistentRoot: persistent, allowEmpty: true }), true);
+  assert.equal(canInitializeEmptyDatabase({ persistentRoot: persistent, allowEmpty: true, legacyDatabaseExists: true }), false);
+  assert.equal(canInitializeEmptyDatabase({ persistentRoot: null }), true);
+  pass('persistent data path is enforced and missing member databases fail closed unless first-install initialization is explicit');
+} catch (error) { fail('persistent member database path and empty-initialization guard', error.message); }
+
 
 const server = path.join(root, 'server.js');
 const serverCheck = spawnSync(process.execPath, ['--check', server], { encoding: 'utf8' });
