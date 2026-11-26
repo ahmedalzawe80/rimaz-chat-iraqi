@@ -3305,6 +3305,36 @@ try {
   fs.rmSync(temp,{recursive:true,force:true});
 } catch(error) { fail('backup media snapshot regression checks',error.message); }
 
+// Upload cleanup must never unlink a public file that remains referenced by committed database state.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function removeUploadedFile(file){');
+  const end=source.indexOf('\\nfunction restoreDatabaseFileFromRecovery',start);
+  if(start<0||end<0)throw new Error('upload cleanup helper not found');
+  const deleted=[];
+  const warnings=[];
+  const context={
+    fs:{unlinkSync(file){deleted.push(file);}},
+    path,
+    UP_DIR:path.resolve('/tmp/rimaz-upload-guard/uploads'),
+    db:{profiles:{alice:{avatar:'/uploads/keep.jpg'}}},
+    containsStoredUrl(value,url,seen=new Set()){
+      if(value===url)return true;
+      if(!value||typeof value!=='object'||seen.has(value))return false;
+      seen.add(value);
+      return Object.values(value).some(child=>this.containsStoredUrl(child,url,seen));
+    },
+    console:{warn(...args){warnings.push(args);}}
+  };
+  vm.runInNewContext(source.slice(start,end)+'\\nthis.removeUploadedFile=removeUploadedFile;',context);
+  context.removeUploadedFile({path:path.join(context.UP_DIR,'keep.jpg')});
+  context.removeUploadedFile({path:path.join(context.UP_DIR,'orphan.jpg')});
+  context.removeUploadedFile({path:'/tmp/rimaz-restore-preview.tmp'});
+  assert.deepEqual(deleted,[path.join(context.UP_DIR,'orphan.jpg'),'/tmp/rimaz-restore-preview.tmp']);
+  assert.equal(warnings.length,1);
+  pass('upload cleanup preserves referenced public media and still removes orphan/temporary files');
+} catch(error) { fail('referenced public upload cleanup guard',error.message); }
+
 // Backup snapshot collection must ignore chat text and fail closed for broken media references.
 try {
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-backup-media-integrity-'));
