@@ -10,6 +10,7 @@ This directory contains the maintained project checkpoint, engineering audits, a
 - [Previous checkpoint](project/CHECKPOINT-2026-11-25.md) — retained historical record; consult the 2026-11-26 checkpoint first for the newer state.
 
 ## Engineering audits
+- [Repository cleanup inventory](audits/REPOSITORY-CLEANUP-INVENTORY-2026-11-26.md) — tracked-file classification, exact duplicate findings, and evidence-based keep/delete decisions.
 - [Code audit](audits/CODE-AUDIT.md) — historical source review.
 - [Final deep audit](audits/FINAL-DEEP-AUDIT.md) — original v46.93.72 source snapshot.
 - [Audit follow-up](audits/AUDIT-FOLLOWUP-2026-11-24.md) — follow-up findings and remediation notes.
