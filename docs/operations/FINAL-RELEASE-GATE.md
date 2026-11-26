@@ -66,6 +66,14 @@ The user has authorized publication after completion, but that authorization doe
 - These results validate source, archive, and isolated container startup only. They do **not** clear the independent Deplexo backup, isolated restore, full staging chat/media/voice, representative-load memory/provider telemetry, or proxy IP-header trust blockers. Do not merge to production or deploy until those are evidenced.
 
 
+## Final-stage status — 2026-11-27
+
+The latest continuation checkpoint is [CHECKPOINT-2026-11-27.md](../project/CHECKPOINT-2026-11-27.md). The final source fix `9806c753cae67fd108830d30a3a94a7265156036` was followed by GitHub Actions bot archive commit `2fcb9e8553f58db625b78666174f5c75f1a9bfd0`, which changes only the audited ZIP. The archive refresh job depends on successful `validate`; this is workflow evidence that source validation and archive refresh completed, although the available connector did not expose the run ID/logs.
+
+Current PR chain review: PR #1 is the safety prerequisite; PR #3 is the consolidated app candidate and is currently reported mergeable; PR #7 is diverged/not mergeable; PR #8 is three commits atop PR #7 but targets `main` with a 697-commit / 44-file comparison, so it must not be merged as a standalone patch. PR #2 overlaps PR #3. See the checkpoint for exact refs and do-not-merge guidance.
+
+**Production remains blocked:** independent live-volume backup and isolated restore, investigation of the missing referenced JPG, staging verification, Deplexo OOM/restart evidence, and provider proxy-header confirmation are still outstanding. No merge, deployment, restart, ZIP sync, or live-data mutation occurred.
+
 ## Latest root-fix evidence — 2026-11-25 19:50 UTC
 
 - Source candidate `44db9cf9fb1d244d5e91e7073b5b2b86c2976d5b` passed Actions run [#45688954104](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45688954104): 636 regression checks, zero failures, production Docker build, and 0 npm audit vulnerabilities. The archive job independently rebuilt, extracted, and validated the release ZIP; archive-only commit `9d1395e3fdfb125a499bcb99c0a7c60306f33070` then updated the PR head.
