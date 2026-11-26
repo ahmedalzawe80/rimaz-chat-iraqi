@@ -1429,7 +1429,16 @@ function restorePreviewCapacityAvailable(ownerName){
 const databaseRestoreCleanupTimer=setInterval(purgeExpiredDatabaseRestores,30*1000);
 databaseRestoreCleanupTimer.unref?.();
 
-function removeUploadedFile(file){if(file?.path){try{fs.unlinkSync(file.path)}catch(e){if(e.code!=='ENOENT')console.warn('Upload cleanup failed:',e.message)}}}
+function removeUploadedFile(file){
+ if(!file?.path)return;
+ const resolved=path.resolve(file.path);
+ const uploadRoot=path.resolve(UP_DIR);
+ if(path.dirname(resolved)===uploadRoot&&containsStoredUrl(db,'/uploads/'+path.basename(resolved))){
+  console.warn('Upload cleanup skipped because the file is still referenced by the database:',path.basename(resolved));
+  return;
+ }
+ try{fs.unlinkSync(resolved)}catch(error){if(error.code!=='ENOENT')console.warn('Upload cleanup failed:',error.message);}
+}
 function restoreDatabaseFileFromRecovery(recoveryFile){
  const rollbackTemp=`${DB_FILE}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.rollback.tmp`;
  let fd=null;
