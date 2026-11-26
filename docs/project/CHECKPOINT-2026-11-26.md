@@ -1,21 +1,37 @@
 # Rimaz — continuation checkpoint (2026-11-26)
 
-## Latest repository follow-up — documentation organization
+## Latest verified repository state
 
-- Latest reviewed PR #3 head: `e95e3ecaa64b67dd9eeb3ca00baca52ea5341f53` on `fix/bound-private-media-ticket-cache`; PR #3 remains open, draft, and unmerged, based on `safety/validate-and-backup-before-sync`.
-- This follow-up updates only `docs/README.md` and `docs/REPOSITORY-STRUCTURE.md`: the documentation index now points to this checkpoint as the latest reference, and the structure guide explains that dated checkpoints are retained as history.
-- No application source, runtime assets, production configuration, or user data was changed by this documentation follow-up.
-- The exact-head combined status and PR-triggered workflow lookup returned no checks/runs for this documentation commit at review time. Do not treat it as CI-validated until a matching run completes.
-- Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`; no merge, deployment, restart, or live-volume mutation occurred.
+- Repository: `ahmedalzawe80/rimaz-chat-iraqi`.
+- Working branch: `fix/bound-private-media-ticket-cache`.
+- PR #3: open, draft, unmerged; base `safety/validate-and-backup-before-sync`.
+- Latest observed PR head: `c6aab01678b5c0f9f37b88fb4691155f71ea9c21` (`c6aab01`).
+- Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`; no merge, deployment, restart, production archive sync, or live-volume mutation occurred.
+- Exact-head Actions run [#45870886098](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45870886098) is associated with `c6aab01`, but was still `pending` with zero jobs at the latest inspection. Do not describe this head as CI-passed.
+- Earlier exact candidate `69e06acc4c117c8fb7950621b254a7f2d6e5266e` passed both validation and archive-refresh jobs in run [#45870516202](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45870516202). This does not validate later commits.
+- The previous run on `f467bc97a99ed7657e9df43048fb906f3198450a` was still in progress at the latest run-list inspection; it is not evidence for the current head.
 
-## Repository cleanup inventory — 2026-11-26
+## Repository inventory and cleanup decision
 
-- A read-only tracked-tree inventory reviewed 402 files: 360 public assets/files, 11 documentation files, 8 library modules, one smoke-test script, and the root application/build/test files.
-- Five exact duplicate blob groups were identified. The root/public HTML and Google verification pairs are intentional synchronized endpoints. Three image pairs have different gift/smiley filenames and remain in place because persistent references/catalogue semantics have not been ruled out.
-- The nested `rimaz-chat-iraqi-main/` duplicate directory is absent. No tracked root file or media asset was proven safe to delete or relocate.
-- The inventory is documented in [REPOSITORY-CLEANUP-INVENTORY-2026-11-26.md](../audits/REPOSITORY-CLEANUP-INVENTORY-2026-11-26.md). It records the evidence and the decision to preserve uncertain assets rather than risk breaking old profile/message references.
-- CI run [#45870169010](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45870169010) passed both `validate` and `refresh-release-archive` on candidate `f70a3bb4dea3d89f001caa94e7e5a07269401196`. This is isolated CI evidence, not a production/Deplexo memory or live-data guarantee.
-- The inventory and documentation links are follow-up documentation changes after that validated candidate; their exact new head must receive its own push validation before being described as CI-passed.
+- Latest recursive tracked-tree inspection: 403 files total; 17 root-level files; 360 files under `public/`; 12 documentation files; 8 `lib/` modules; one smoke-test script.
+- Top-level directories are `.github/`, `docs/`, `lib/`, `public/`, and `scripts/`. The obsolete nested `rimaz-chat-iraqi-main/` directory is absent.
+- The root contains required runtime/build/configuration files and the deterministic release archive. Do not move root entry points merely to make the root look smaller: npm, Docker, hosting, domain verification, and workflows consume these paths.
+- `.gitignore` excludes runtime data, uploads, private media, local secrets, credentials, backups, and generated artifacts. `.dockerignore` excludes `data.json`, runtime data/media, credentials, local dependencies, archives, and repository-only files from Docker context.
+- The cleanup inventory is documented in [REPOSITORY-CLEANUP-INVENTORY-2026-11-26.md](../audits/REPOSITORY-CLEANUP-INVENTORY-2026-11-26.md).
+- Exact duplicate asset filenames are not considered safe deletion candidates: the server dynamically discovers gift/smiley assets and derives IDs from sorted filenames; persisted catalogue and profile/history references may depend on names and ordering. No media files have been deleted or renamed.
+- Root/public `index.html` and domain-verification copies are intentional served-path parity pairs and must remain synchronized.
+- A documentation-only cleanup has not yet proved any application asset safe to remove. Further cleanup must be reference-driven and validated, not cosmetic.
+
+## Remaining review and release blockers
+
+1. Reconcile and review the exact current PR diff and complete exact-head CI, including archive refresh.
+2. Continue source/reference audit for genuinely unused files without changing chat behavior or persistent IDs.
+3. Run a real staging test for browser/device chat, uploads, voice/video/WebRTC and TURN relay.
+4. Obtain independent consistent backup of the live Deplexo persistent volume and verify restore/rollback on an isolated clone.
+5. Collect Deplexo runtime memory, restart, exit, and OOM evidence under representative load; isolated CI resource tests do not prove the historical production 128 MB issue is resolved.
+6. Confirm Deplexo's actual trusted proxy CIDRs and sanitized client-IP headers; do not guess ranges.
+
+Keep PR #3 unmerged, `main` untouched, and production undeployed until the blockers above are evidenced and explicit release approval is given.
 
 ## Historical checkpoint record
 
