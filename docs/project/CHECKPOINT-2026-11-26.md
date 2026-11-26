@@ -211,3 +211,17 @@ Keep PR #1 and PR #3 unmerged, leave `main` untouched, and do not deploy/restart
 - Archive-only commit/current branch head: `e7f3daadfbdeb33bd251d643b10b5492696f3d3f`; archive contains 402 files / 16,387,812 bytes.
 - PR #7 remains open/draft and has not been merged or closed. Its relevant database integrity work is now integrated and tested in PR #3; its older shutdown ordering was not carried over. PR #8's queue retry fix is also already integrated into PR #3.
 - No UI/browser entry files were changed. PR #3 remains open/draft/unmerged; production `main` is untouched; no deployment, restart, or live persistent-data operation occurred.
+
+
+## Persistent data path boundary hardening — 2026-11-26 (follow-up)
+
+- A source review of `lib/data-directory.js` found that the existing containment check compared normalized path strings but did not resolve filesystem symlinks. A configured path could therefore appear lexically inside the persistent root while resolving outside it.
+- Updated `isWithinPersistentRoot()` to resolve existing path components through `realpathSync`, including not-yet-created descendants by resolving their nearest existing parent. Both the persistent root and candidate are compared after filesystem resolution.
+- `resolveDataDirectory()` now rejects a fallback path if its actual resolved destination escapes the persistent root, rather than silently accepting an unsafe default.
+- Added regression tests for: a valid in-root symlink, an escaping symlink, a missing descendant under an in-root symlink, fallback behavior for an invalid configured path, and rejection when the fallback itself is redirected outside.
+- The change and tests were integrated into PR #3, not left isolated on a side branch. The validation workflow and archive audit workflow were also made branch-aware for the isolated hardening check and its exact ZIP refresh.
+- Exact successful validation run [#45893248481](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45893248481): regression suite passed; Docker build passed; HTTP/Socket.IO smoke passed under the 128 MiB / 0.25 vCPU limits; npm audit reported **0 vulnerabilities**. Container memory after the concurrent workload was **95,096,832 bytes current / 107,761,664 bytes peak** under the 134,217,728-byte hard limit.
+- The release archive was rebuilt from the exact tracked tree and validated: **402 archived files / 16,389,678 bytes**. The extracted archive also passed dependency installation, regression tests, and Docker build.
+- Archive-only commit/current PR #3 head after refresh: `21737ed0d435edefabcd428fe4c337f9235cb155`. The source/test/workflow commit validated immediately before archive refresh: `5ae06a8aa7c1563d9e5cd36634bd58f148d50565`.
+- PR #3 remains open/draft/unmerged against `safety/validate-and-backup-before-sync`. Production `main` remains unchanged. No Deplexo deployment, restart, live volume inspection, database replacement, or production data change occurred.
+- Repository cleanup decision remains evidence-based: no root file or media asset was deleted. The tracked placeholder `data.json`, synchronized HTML/verification copies, and all catalogued gift/smiley filenames remain protected pending a separate live-volume backup and reference-preserving migration plan.
