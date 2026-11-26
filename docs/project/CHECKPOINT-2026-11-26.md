@@ -5,11 +5,11 @@
 - Repository: `ahmedalzawe80/rimaz-chat-iraqi`.
 - Working branch: `fix/bound-private-media-ticket-cache`.
 - PR #3: open, draft, unmerged; base `safety/validate-and-backup-before-sync`.
-- Latest observed PR head: `c6aab01678b5c0f9f37b88fb4691155f71ea9c21` (`c6aab01`).
-- Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`; no merge, deployment, restart, production archive sync, or live-volume mutation occurred.
-- Exact-head Actions run [#45870886098](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45870886098) is associated with `c6aab01`, but was still `pending` with zero jobs at the latest inspection. Do not describe this head as CI-passed.
-- Earlier exact candidate `69e06acc4c117c8fb7950621b254a7f2d6e5266e` passed both validation and archive-refresh jobs in run [#45870516202](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45870516202). This does not validate later commits.
-- The previous run on `f467bc97a99ed7657e9df43048fb906f3198450a` was still in progress at the latest run-list inspection; it is not evidence for the current head.
+- Current working-branch head: `ebf7f58e60fee80f8808f4faaa3862a3fecb7357`. It includes the durable chat-write queue and shutdown changes recorded below.
+- The exact-head Actions status for this new push has not been confirmed. The connected status/run lookup currently returns no status records for this push; do not describe the new head as CI-passed.
+- The release ZIP has not yet been refreshed for these new source/test changes; require a successful validation and archive-refresh run before treating the ZIP as current.
+- The preceding source/test candidate `7cbd6eec9938a223bcf82dc7fa1a33d3d020aa15` passed run [#45886403562](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45886403562) with 641 checks and zero failures. The archive-only head from that run was `1039375815d36c6caaaa234dbad5bed034362df0`. This does not validate the newer queue commits.
+- Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`; PR #3 remains open/draft/unmerged. No merge, deployment, restart, production archive sync, or live-volume mutation occurred.
 
 ## Repository inventory and cleanup decision
 
