@@ -1083,6 +1083,35 @@ try {
   } finally { fs.rmSync(tempDir, { recursive: true, force: true }); }
 } catch (error) { fail('atomic save runtime fixture', error.message); }
 
+// A malformed serialized candidate must never replace the committed database or rotate recovery state.
+try{
+  const source=fs.readFileSync(server,'utf8');
+  const saveFn=source.match(/function save\(\)\s*\{[\s\S]*?\n\}/);
+  if(!saveFn)throw new Error('save() implementation not found');
+  const tempDir=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-invalid-save-'));
+  try{
+    const databaseFile=path.join(tempDir,'data.json');
+    const committed='{"generation":1}';
+    fs.writeFileSync(databaseFile,committed);
+    let recoveryRotations=0;
+    const context={
+      fs,crypto,validateJsonFile,
+      writeJsonSync:fd=>fs.writeSync(fd,'{broken'),
+      refreshLastKnownGoodDatabase:()=>{recoveryRotations++;},
+      DATA_DIR:tempDir,DB_FILE:databaseFile,
+      db:{users:{member:{likes:2}},messages:[],privateMessages:[]},
+      process:{pid:process.pid}
+    };
+    vm.createContext(context);
+    vm.runInContext(saveFn[0]+'\nglobalThis.performSave=save;',context);
+    assert.throws(()=>context.performSave());
+    assert.equal(fs.readFileSync(databaseFile,'utf8'),committed);
+    assert.equal(recoveryRotations,0);
+    assert.deepEqual(fs.readdirSync(tempDir),['data.json']);
+    pass('database save rejects malformed candidates before recovery rotation or atomic replacement and removes the temp file');
+  }finally{fs.rmSync(tempDir,{recursive:true,force:true});}
+}catch(error){fail('invalid database candidate atomic-save fixture',error.message);}
+
 // Exercise the real uploaded-signature function against small byte fixtures.
 try {
   const source = fs.readFileSync(server, 'utf8');
