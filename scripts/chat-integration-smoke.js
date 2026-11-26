@@ -114,15 +114,21 @@ async function joinRoom(client, sid, room) {
   await history;
 }
 
+async function assertNoEvent(client, name, emit, timeout = 300) {
+  const unexpected = client.waitFor(name, null, timeout);
+  emit();
+  await assert.rejects(unexpected, new RegExp('Timed out waiting for Socket.IO event: ' + name));
+}
+
 async function main() {
   const clients = [];
   try {
     const alpha = await createAccount('/api/register', 'admin', 'Rimaz-CI-Admin-Password-2026!');
     const beta = await createAccount('/api/guest', 'integration-peer', undefined);
     const intruder = await createAccount('/api/guest', 'integration-outsider', undefined);
-    const first = new SocketIoProbe(), second = new SocketIoProbe();
-    clients.push(first, second);
-    await Promise.all([first.connect(), second.connect()]);
+    const first = new SocketIoProbe(), second = new SocketIoProbe(), outsider = new SocketIoProbe();
+    clients.push(first, second, outsider);
+    await Promise.all([first.connect(), second.connect(), outsider.connect()]);
     await Promise.all([joinRoom(first, alpha.sid, 'public'), joinRoom(second, beta.sid, 'public')]);
 
     const publicMarker = 'rimaz-ci-public-' + Date.now();
@@ -184,6 +190,9 @@ async function main() {
     const voiceAnswer = first.waitFor('voice-peer-answer', value => value?.from === beta.sid);
     second.emit('voice-peer-answer', { room: 'voice', to: alpha.sid, answer });
     await voiceAnswer;
+    await assertNoEvent(outsider, 'voice-peer-offer', () => {
+      first.emit('voice-peer-offer', { room: 'voice', to: intruder.sid, offer });
+    });
 
     const incomingCall = second.waitFor('call-offer', value => value?.from === 'admin');
     first.emit('call-offer', { to: 'integration-peer', offer, video: true });
@@ -192,8 +201,11 @@ async function main() {
     const callerAnswer = first.waitFor('call-answer', value => value?.from === 'integration-peer');
     second.emit('call-answer', { to: 'admin', answer });
     await Promise.all([accepted, callerAnswer]);
+    await assertNoEvent(first, 'call-answer', () => {
+      outsider.emit('call-answer', { to: 'admin', answer });
+    });
 
-    console.log('✓ authenticated public chat, private text/media authorization and playback, voice-room negotiation, and video-call signaling');
+    console.log('✓ authenticated public chat, private text/media authorization and playback, room-scoped voice signaling, and authorized video-call signaling');
   } finally {
     for (const client of clients) client.close();
   }
