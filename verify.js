@@ -3313,17 +3313,18 @@ try {
   if(start<0||end<0)throw new Error('upload cleanup helper not found');
   const deleted=[];
   const warnings=[];
+  const containsStoredUrl=(value,url,seen=new Set())=>{
+    if(value===url)return true;
+    if(!value||typeof value!=='object'||seen.has(value))return false;
+    seen.add(value);
+    return Object.values(value).some(child=>containsStoredUrl(child,url,seen));
+  };
   const context={
     fs:{unlinkSync(file){deleted.push(file);}},
     path,
     UP_DIR:path.resolve('/tmp/rimaz-upload-guard/uploads'),
     db:{profiles:{alice:{avatar:'/uploads/keep.jpg'}}},
-    containsStoredUrl(value,url,seen=new Set()){
-      if(value===url)return true;
-      if(!value||typeof value!=='object'||seen.has(value))return false;
-      seen.add(value);
-      return Object.values(value).some(child=>this.containsStoredUrl(child,url,seen));
-    },
+    containsStoredUrl,
     console:{warn(...args){warnings.push(args);}}
   };
   vm.runInNewContext(source.slice(start,end)+'\nthis.removeUploadedFile=removeUploadedFile;',context);
