@@ -6,7 +6,8 @@ This directory contains the maintained project checkpoint, engineering audits, a
 - [Repository structure](REPOSITORY-STRUCTURE.md) — root-file ownership, runtime asset layout, and safe cleanup rules.
 
 ## Project continuity
-- [Current continuation checkpoint](project/CHECKPOINT-2026-11-25.md) — current branch head, completed source work, exact CI evidence, and remaining release blockers.
+- [Latest continuation checkpoint](project/CHECKPOINT-2026-11-26.md) — latest recorded branch/PR state, validation evidence, repository review, and outstanding release blockers.
+- [Previous checkpoint](project/CHECKPOINT-2026-11-25.md) — retained historical record; consult the 2026-11-26 checkpoint first for the newer state.
 
 ## Engineering audits
 - [Code audit](audits/CODE-AUDIT.md) — historical source review.
@@ -17,7 +18,7 @@ This directory contains the maintained project checkpoint, engineering audits, a
 
 ## Operations
 - [Final release gate](operations/FINAL-RELEASE-GATE.md) — exact-head CI evidence, staging requirements, and production promotion boundary.
-- [Deployment reference](operations/DEPLOYMENT-46.93.72.md) — guarded synchronization workflow and deployment precautions.
+- [Deployment reference](operations/DEPLOYMENT-46.93.72.md) — guarded source synchronization workflow and deployment precautions; this is a historical package-specific reference, not production approval.
 
 ## Contributor guidance
 - [Contribution guide](../CONTRIBUTING.md) — branch policy, local checks, and data-safety requirements.
