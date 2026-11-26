@@ -65,7 +65,7 @@ Retain these records. Their navigation and historical status should be made expl
 
 ### 5. Previously reported nested duplicate
 
-The old nested `rimaz-chat-iraqi-main/` directory is absent from the reviewed tree. No second nested application root was found among the 402 tracked files.
+The old nested `rimaz-chat-iraqi-main/` directory is absent from the reviewed tree. No second nested application root was found among the 403 tracked files.
 
 ## Cleanup decision
 
@@ -94,3 +94,8 @@ A source-level follow-up checked the exact catalogue construction and migration 
 ## Follow-up: uploaded smiley backup coverage — 2026-11-26
 
 The reference-aware backup review confirmed that uploaded custom smiley artwork is persisted in `db.customSmileys[].icon` as `/uploads/...`. The backup media collector intentionally treats `icon` as a structured media-reference field, so these files must be included just like profile avatars, gift images, and rank artwork. The regression fixture now creates an uploaded-smiley file and asserts that the backup snapshot includes it, while continuing to exclude unreferenced uploads and ordinary chat text. This is a test-coverage improvement only; it does not alter catalogue IDs, saved member data, runtime UI, or media files.
+
+
+## Follow-up: voice-room request idempotency — 2026-11-27
+
+The server-side voice-room microphone request handler and integration smoke test were reviewed together. Repeated requests to raise an already-raised microphone on the same seat now return the current grant without rewriting speaker state or rebroadcasting the room state. Repeated lower requests from a non-speaker return the acknowledgement without an unnecessary room-wide state broadcast; an actual lower request still releases the seat and broadcasts the updated state. Existing membership, permission, seat-range, occupied-seat, and speaker-limit checks remain active. The integration smoke test covers duplicate raise/lower behavior and synchronizes its listeners before the expected events to avoid test-order races. Final CI run [#45899789210](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45899789210) passed both validation and exact release-archive refresh jobs. This is a source/CI result only; no live production session or Deplexo volume was modified.
