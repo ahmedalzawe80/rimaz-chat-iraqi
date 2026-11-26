@@ -5,12 +5,14 @@
 - Repository: `ahmedalzawe80/rimaz-chat-iraqi`.
 - Working branch: `fix/bound-private-media-ticket-cache`.
 - PR #3: open, draft, unmerged; base `safety/validate-and-backup-before-sync`.
-- Latest validated source/test commit: `5ea4ca8f0879c0a5421bd23788d151a933d76ea3`.
-- GitHub Actions run [#45889530024](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45889530024) completed successfully on both `validate` and `refresh-release-archive`. Source validation passed **644 checks, zero failures**, JavaScript syntax, locked dependency install/tree, production Docker build, HTTP + Socket.IO smoke, and authenticated chat/private-media/voice/video integration. npm audit reported **0 vulnerabilities**.
-- Under the isolated CI limit of 128 MiB RAM / 0.25 CPU, the workload reported **49,221,632 bytes current / 78,094,336 bytes peak** against 134,217,728 bytes; the container remained running and was not OOM-killed. This is CI evidence only, not Deplexo production telemetry.
-- The release archive was rebuilt and its extracted project passed all static/archive checks, locked install and production Docker build. It contains **402 source files / 16,385,245 bytes**; archive-only commit/current PR branch head: `800b8dfc89ae34604a1396568ec89732f34376a6`.
-- Repository tree remains 403 tracked files, 17 root files, five expected top-level directories (`.github/`, `docs/`, `lib/`, `public/`, `scripts/`), 360 public assets, 12 docs files and 8 lib modules. No nested `rimaz-chat-iraqi-main/`; exactly one release ZIP.
-- Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. PR #3 remains open/draft/unmerged. No merge, deployment, restart, production archive sync, or live-volume mutation occurred.
+- Latest source/test commit: `8d84dfa74625bb8ad3489e689a59ebb42caa9dc3`; latest archive-only commit/current branch head: `e7f3daadfbdeb33bd251d643b10b5492696f3d3f`.
+- GitHub Actions run [#45890917966](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45890917966) completed successfully on both `validate` and `refresh-release-archive`. Source validation passed **650 checks, zero failures**, JavaScript syntax, locked dependency install/tree, production Docker build, HTTP + Socket.IO smoke, and authenticated public/private chat, private-media, voice and video-call integration. npm audit reported **0 vulnerabilities**.
+- CI cgroup-v2 memory under the isolated 128 MiB / 0.25 CPU cap was **49,172,480 bytes current / 78,176,256 bytes peak**; the container remained running and was not OOM-killed. This is CI evidence only, not Deplexo production telemetry.
+- Release archive refresh rebuilt and verified the exact tracked-file set; extracted archive checks, locked install and production Docker build passed. Archive contains **402 source files / 16,387,812 bytes**.
+- Repository tree: 403 tracked files, 17 root files, five expected top-level directories (`.github/`, `docs/`, `lib/`, `public/`, `scripts/`), 360 public assets, 12 docs files and 8 lib modules. No nested `rimaz-chat-iraqi-main/`; exactly one release ZIP.
+- PR #3 is **745 commits ahead** of its safety base across 47 changed files. The tree diff is bounded, but the long commit history needs deliberate consolidation/review before final merge. No force-push or history rewrite has been performed.
+- PR #1 (safety prerequisite), #2 (older cleanup draft), #7 (shutdown/database recovery draft), and #8 (chat queue draft) are also open drafts. The relevant queue/shutdown and database-integrity changes from #7/#8 have been selectively integrated into PR #3; the other drafts were not merged or closed.
+- Production `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`. No merge, deployment, restart, production archive sync, or live-volume mutation occurred.
 
 ## Repository inventory and cleanup decision
 
@@ -26,11 +28,12 @@
 ## Remaining review and release blockers
 
 1. Continue source/reference audit for genuinely unused files without changing chat behavior, public UI, or persistent asset IDs.
-2. Reconcile the complete current PR diff against the safety base and preserve the validated archive parity.
-3. Run a real staging test for browser/device chat, uploads, voice/video/WebRTC and TURN relay.
-4. Obtain independent consistent backup of the live Deplexo persistent volume and verify restore/rollback on an isolated clone.
-5. Collect Deplexo runtime memory, restart, exit, and OOM evidence under representative load; isolated CI resource tests do not prove the historical production 128 MB issue is resolved.
-6. Confirm Deplexo's actual trusted proxy CIDRs and sanitized client-IP headers; do not guess ranges.
+2. Reconcile overlapping open drafts #2, #7 and #8 with PR #3; do not merge or close them without an explicit decision.
+3. Review the 745-commit PR history and decide on safe consolidation; do not force-push or rewrite history without approval.
+4. Run a real staging test for browser/device chat, uploads, voice/video/WebRTC and TURN relay.
+5. Obtain independent consistent backup of the live Deplexo persistent volume and verify restore/rollback on an isolated clone.
+6. Collect Deplexo runtime memory, restart, exit, and OOM evidence under representative load; isolated CI resource tests do not prove the historical production 128 MB issue is resolved.
+7. Confirm Deplexo's actual trusted proxy CIDRs and sanitized client-IP headers; do not guess ranges.
 
 Keep PR #3 unmerged, `main` untouched, and production undeployed until the blockers above are evidenced and explicit release approval is given.
 
@@ -194,3 +197,17 @@ Keep PR #1 and PR #3 unmerged, leave `main` untouched, and do not deploy/restart
 - Exact source/test commit `5ea4ca8f0879c0a5421bd23788d151a933d76ea3` passed [Actions run #45889530024](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45889530024): **644 checks, zero failures**, npm audit **0 vulnerabilities**, production Docker build, HTTP/Socket.IO smoke, and archive refresh. CI cgroup memory was 49,221,632 bytes current / 78,094,336 bytes peak under the 128 MiB cap.
 - Archive-only commit/current branch head: `800b8dfc89ae34604a1396568ec89732f34376a6`; archive: 402 files / 16,385,245 bytes.
 - No browser entry file or chat UI was changed. PR #3 remains open/draft/unmerged; production `main` is untouched; no deployment, restart, or live persistent-data operation occurred.
+
+
+## Database integrity and last-known-good generation — 2026-11-26
+
+- Selectively integrated the database recovery improvement from the separate draft PR #7 without merging its older branch or reverting the newer shutdown fix.
+- `lib/json-reader.js` now provides `validateJsonFile()`, a bounded-chunk streaming JSON integrity validator that verifies a complete object root without retaining a second parsed database graph.
+- Every database save validates the fsynced temporary candidate before atomic replacement. A malformed candidate is rejected, its temp file removed, the current committed database left intact, and last-known-good rotation is not attempted.
+- Before replacing the current database, the server periodically preserves the previous committed generation as `data.json.previous`. The copy is restrictive (0600), fsynced, parsed/validated, and atomically renamed. Failed or malformed candidates never replace the existing recovery point.
+- On startup with corrupt live JSON, the server preserves the corrupt original and reports whether a separately verified last-known-good candidate exists. It does **not** auto-restore an older generation, avoiding silent rollback of newer member data.
+- Regression coverage verifies malformed/non-object JSON rejection, successful last-known-good rotation, restrictive permissions, retention of the prior recovery copy when a corrupt candidate appears, and rejection of malformed save candidates before replacement.
+- Exact source/test commit `8d84dfa74625bb8ad3489e689a59ebb42caa9dc3` passed [Actions run #45890917966](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45890917966): **650 checks, zero failures**, npm audit **0 vulnerabilities**, production Docker build and HTTP/Socket.IO smoke. CI memory was 49,172,480 bytes current / 78,176,256 bytes peak under 128 MiB.
+- Archive-only commit/current branch head: `e7f3daadfbdeb33bd251d643b10b5492696f3d3f`; archive contains 402 files / 16,387,812 bytes.
+- PR #7 remains open/draft and has not been merged or closed. Its relevant database integrity work is now integrated and tested in PR #3; its older shutdown ordering was not carried over. PR #8's queue retry fix is also already integrated into PR #3.
+- No UI/browser entry files were changed. PR #3 remains open/draft/unmerged; production `main` is untouched; no deployment, restart, or live persistent-data operation occurred.
