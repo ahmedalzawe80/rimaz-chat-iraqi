@@ -543,6 +543,9 @@ const publicRetentionTimer=setInterval(()=>cleanupExpiredPublicContent(),5*60*10
 publicRetentionTimer.unref?.();
 
 const sessions = new Map(); // sid -> {name,type,created}
+const adminBackupDownloadTickets = new Map(); // bounded, short-lived, one-use browser download tickets
+const MAX_ADMIN_BACKUP_DOWNLOAD_TICKETS = 4;
+const ADMIN_BACKUP_DOWNLOAD_TTL_MS = 60 * 1000;
 const privateMediaPlaybackTickets = new Map(); // bounded, short-lived, account-bound stream tickets
 const MAX_PRIVATE_MEDIA_TICKETS=4096;
 const MAX_PRIVATE_MEDIA_TICKETS_PER_ACCOUNT=32;
@@ -2058,6 +2061,33 @@ app.get('/api/admin/backup/database',requireAdmin,(req,res)=>{
   if(!res.headersSent)res.status(500).json({error:'تعذر إنشاء النسخة الاحتياطية'});
   else res.destroy(e);
  }
+});
+app.post('/api/admin/backup/full-ticket',requireAdmin,(req,res)=>{
+ if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخة الاحتياطية الكاملة'});
+ const now=Date.now();
+ for(const [token,ticket] of adminBackupDownloadTickets)if(ticket.expiresAt<=now)adminBackupDownloadTickets.delete(token);
+ if(adminBackupDownloadTickets.size>=MAX_ADMIN_BACKUP_DOWNLOAD_TICKETS)return res.status(429).json({error:'هناك تنزيلات نسخ احتياطية قيد البدء؛ حاول بعد قليل'});
+ const sid=String(req.get('x-session')||'');
+ if(!sid)return res.status(401).json({error:'انتهت الجلسة؛ سجل الدخول مجدداً'});
+ const token=crypto.randomBytes(32).toString('hex');
+ adminBackupDownloadTickets.set(token,{sid,account:keyName(req.user.name),expiresAt:now+ADMIN_BACKUP_DOWNLOAD_TTL_MS});
+ res.set('Referrer-Policy','no-referrer').json({url:'/api/admin/backup/full-download/'+token});
+});
+app.get('/api/admin/backup/full-download/:token',(req,res)=>{
+ const token=String(req.params.token||'');
+ if(!/^[a-f0-9]{64}$/.test(token))return res.status(404).json({error:'رابط التنزيل غير صالح أو منتهي'});
+ const ticket=adminBackupDownloadTickets.get(token);
+ if(!ticket)return res.status(404).json({error:'رابط التنزيل غير صالح أو منتهي'});
+ adminBackupDownloadTickets.delete(token);
+ if(ticket.expiresAt<=Date.now())return res.status(410).json({error:'انتهت صلاحية رابط التنزيل؛ اطلب رابطاً جديداً'});
+ const user=sessionUser(ticket.sid);
+ if(!user||keyName(user.name)!==ticket.account||(!isOwner(user)&&!hasPermission(user,'site_admin')))return res.status(403).json({error:'انتهت الجلسة أو لم تعد تملك صلاحية النسخ الاحتياطي'});
+ res.set('Referrer-Policy','no-referrer');
+ res.set('Cache-Control','no-store, no-cache, must-revalidate');
+ res.set('Content-Type','application/gzip');
+ res.set('Content-Disposition',`attachment; filename="rimaz-full-backup-${new Date().toISOString().slice(0,10)}.tar.gz"`);
+ const source=Readable.from(fullBackupTar()),archive=zlib.createGzip({level:6});
+ pipeline(source,archive,res,error=>{if(error&&error.code!=='ERR_STREAM_PREMATURE_CLOSE')console.error('Full backup pipeline failed:',error);});
 });
 app.get('/api/admin/backup/full',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخة الاحتياطية الكاملة'});res.set('Cache-Control','no-store, no-cache, must-revalidate');res.set('Content-Type','application/gzip');res.set('Content-Disposition',`attachment; filename=\"rimaz-full-backup-${new Date().toISOString().slice(0,10)}.tar.gz\"`);const source=Readable.from(fullBackupTar()),archive=zlib.createGzip({level:6});pipeline(source,archive,res,error=>{if(error&&error.code!=='ERR_STREAM_PREMATURE_CLOSE')console.error('Full backup pipeline failed:',error);});});
 app.post('/api/admin/restore/database/preview',requireAdmin,restoreUploadGate,(req,res)=>{
