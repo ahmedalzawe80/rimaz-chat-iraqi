@@ -38,8 +38,12 @@ try {
     fs.mkdirSync(path.join(symlinkRoot, 'inside'));
     fs.symlinkSync(path.join(symlinkRoot, 'inside'), path.join(symlinkRoot, 'inside-link'), 'dir');
     fs.symlinkSync(externalData, path.join(symlinkRoot, 'escape'), 'dir');
+    const danglingTarget = path.join(os.tmpdir(), 'rimaz-dangling-target-not-created', 'future');
+    fs.rmSync(path.dirname(danglingTarget), { recursive: true, force: true });
+    fs.symlinkSync(danglingTarget, path.join(symlinkRoot, 'dangling'), 'dir');
     assert.equal(isWithinPersistentRoot(symlinkRoot, path.join(symlinkRoot, 'inside-link', 'future')), true);
     assert.equal(isWithinPersistentRoot(symlinkRoot, path.join(symlinkRoot, 'escape', 'future')), false);
+    assert.equal(isWithinPersistentRoot(symlinkRoot, path.join(symlinkRoot, 'dangling', 'future')), false);
     assert.equal(resolveDataDirectory({
       persistentRoot: symlinkRoot,
       configuredPath: path.join(symlinkRoot, 'escape'),
