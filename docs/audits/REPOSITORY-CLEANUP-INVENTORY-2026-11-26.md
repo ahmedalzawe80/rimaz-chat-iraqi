@@ -24,11 +24,11 @@ The root is not an unstructured dump. Its files have identifiable build/runtime,
 - `server.js`, `index.html`, `package.json`, `package-lock.json`, `Dockerfile`, `.nvmrc`, and `verify.js` are active application/build/test entry points.
 - `CHANGELOG.md` is a long historical change record, not a second application copy.
 - `data.json` is a 138-byte tracked warning placeholder. It is not the live database and must never replace persistent production data.
-- `rimaz-final-deep-audit-46.93.72.zip` is a 16 MB workflow input/output. The validation workflow rebuilds it from the exact tracked tree after a successful branch push; archive validation checks its layout, tracked-file parity, install, tests, and Docker build. Do not delete or hand-edit it.
+- **Historical at the 2026-11-26 inventory point:** `rimaz-final-deep-audit-46.93.72.zip` was a 16 MB tracked workflow input/output. This finding was superseded on 2026-11-27: the ZIP was removed from the candidate tree and is now generated in runner temporary storage as a 30-day GitHub Actions artifact only on explicit dispatch. It is not a tracked repository file.
 - `google1a84d9d1dec7b85d.html` is the root domain-verification endpoint and has a matching public copy.
 - Root `index.html` has an exact matching `public/index.html` fallback copy, and the regression suite checks their parity.
 
-No root file was proven safe to delete or relocate.
+No root file was proven safe to delete or relocate in the original 2026-11-26 snapshot. The later 2026-11-27 release-artifact migration removed only the generated root ZIP after replacing its workflow consumers; see the current-tree refresh below.
 
 ### 2. Exact duplicate blobs
 
@@ -69,7 +69,7 @@ The old nested `rimaz-chat-iraqi-main/` directory is absent from the reviewed tr
 
 ## Cleanup decision
 
-**No deletion or relocation is approved from this inventory.** The exact duplicates are either intentional synchronized copies or distinct public filenames whose references have not been proven obsolete. The root ZIP is workflow-critical, and the remaining old reports are historical evidence.
+**No deletion or relocation is approved from this inventory.** The exact duplicates are either intentional synchronized copies or distinct public filenames whose references have not been proven obsolete. At the original inventory date the root ZIP was workflow-critical. That conclusion was superseded by the 2026-11-27 artifact-only workflow migration. The remaining old reports are historical evidence.
 
 The next safe cleanup step is a reference-aware media/catalogue audit against the application’s gift/smiley catalogue logic and a separately obtained, protected copy of persistent data. That check must not modify the live volume. Only after all persisted references and runtime paths are accounted for can a media duplicate be considered removable.
 
@@ -101,17 +101,16 @@ The reference-aware backup review confirmed that uploaded custom smiley artwork 
 The server-side voice-room microphone request handler and integration smoke test were reviewed together. Repeated requests to raise an already-raised microphone on the same seat now return the current grant without rewriting speaker state or rebroadcasting the room state. Repeated lower requests from a non-speaker return the acknowledgement without an unnecessary room-wide state broadcast; an actual lower request still releases the seat and broadcasts the updated state. Existing membership, permission, seat-range, occupied-seat, and speaker-limit checks remain active. The integration smoke test covers duplicate raise/lower behavior and synchronizes its listeners before the expected events to avoid test-order races. Final CI run [#45899789210](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45899789210) passed both validation and exact release-archive refresh jobs. This is a source/CI result only; no live production session or Deplexo volume was modified.
 
 
-## Current-tree refresh — 2026-11-27
+## Current-tree refresh — 2026-11-27 (latest verified state)
 
-The original counts above describe the 2026-11-26 tree only. A fresh recursive Git tree inspection on the current PR #3 branch found:
+The original counts above describe the 2026-11-26 tree only. The latest verified PR #3 candidate tree is:
 
-- Tree SHA: `cb7e3917eee73b47244d3050e9ccbb889807221d`.
-- **416 total tree entries**, with **404 tracked file blobs** and 12 directory entries; the response was not truncated.
-- **17 root files** and five root directories.
-- **17 Markdown documentation files** in the current tree (the original inventory counted 12).
-- The public asset count remains **360 files**.
-- No nested `rimaz-chat-iraqi-main/` application copy, additional root archive, or backup/temp dump appears in the current tree.
+- Exact source head before this documentation refresh: `accd5e8d67b89ba0e5dfcd282f90ec70c951c411`.
+- Recursive tree: **413 total entries = 401 tracked file blobs + 12 directory entries**, not truncated.
+- Root: **16 tracked files** and five directories; documentation: **17 Markdown files**; public assets: **360 files**.
+- Exactly one workflow remains under `.github/workflows/`: `validate-project.yml`. No root ZIP, nested `rimaz-chat-iraqi-main/` copy, symlink, or database dump is tracked.
+- All 17 Markdown files were rechecked for relative local links: **zero broken links**. The repository tree diagram's escaped newline was corrected.
+- [GitHub Actions run #45949927455](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45949927455) passed dependency installation/tree verification, JavaScript syntax, the full regression suite, production Docker build, and constrained HTTP/Socket.IO smoke. The artifact job was skipped as expected on an ordinary push.
+- The release ZIP is now generated in temporary runner storage and uploaded as a 30-day artifact only on explicit `workflow_dispatch`. Its first real upload remains pending until the updated workflow is present on the default branch; the embedded archive scripts have only been syntax-checked and fixture-tested so far.
 
-The source/test commit `f60b85fe6f84fd997a500546880c10949a170d46` passed GitHub Actions run [#45943098064](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45943098064). Both `validate` and `refresh-release-archive` jobs succeeded. The validated source includes locked dependency installation/tree verification, syntax checks, the regression suite, production Docker build, and constrained HTTP/Socket.IO integration smoke. The archive job rebuilt and verified the ZIP, then tested and built from the extracted archive. The current branch tip `4c8309f86c589b4afac04253efb6cb1fc2126971` is the archive-only child of that tested source commit; compare confirms only the ZIP changed.
-
-This refresh does not change the cleanup decision: no media or root file is approved for deletion based on current evidence. Production data and the Deplexo volume were not accessed.
+This refresh does not change the media cleanup decision: no gift, smiley, VIP, or other public media file is approved for deletion based on byte equality alone. Production data and the Deplexo volume were not accessed.

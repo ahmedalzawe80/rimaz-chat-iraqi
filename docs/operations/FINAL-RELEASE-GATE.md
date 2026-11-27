@@ -2,6 +2,8 @@
 
 > **Historical snapshot:** This document contains release evidence recorded on 2026-11-25 and earlier. For the latest branch/PR head and follow-up activity, consult [the 2026-11-27 continuation checkpoint](../project/CHECKPOINT-2026-11-27.md). Do not use the historical SHAs below as the current candidate without re-fetching the PR and exact-head checks.
 
+> **Current packaging update (2026-11-27):** The historical tracked-ZIP and archive-refresh evidence below records earlier workflow versions only. In the current candidate, the root ZIP and the old write-enabled self-sync workflow are removed; one read-only workflow generates and tests a ZIP in runner temporary storage on explicit dispatch, then uploads a 30-day Actions artifact. Ordinary pushes do not create ZIP commits. The first real artifact upload is still pending because the updated workflow is not yet on the default branch. See [current deployment instructions](DEPLOYMENT-46.93.72.md) and [latest checkpoint](../project/CHECKPOINT-2026-11-27.md). Latest source validation at this edit point: [run #45949927455](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45949927455), successful on candidate head `accd5e8d67b89ba0e5dfcd282f90ec70c951c411`; a documentation refresh is now in progress.
+
 **Review date:** 2026-11-25  
 **Status:** Source candidate and isolated container smoke validated; **not cleared for production**.
 
@@ -66,7 +68,7 @@ The user has authorized publication after completion, but that authorization doe
 - These results validate source, archive, and isolated container startup only. They do **not** clear the independent Deplexo backup, isolated restore, full staging chat/media/voice, representative-load memory/provider telemetry, or proxy IP-header trust blockers. Do not merge to production or deploy until those are evidenced.
 
 
-## Final-stage status — 2026-11-27
+## Historical final-stage status snapshot — 2026-11-27 (superseded by the current checkpoint)
 
 The latest continuation checkpoint is [CHECKPOINT-2026-11-27.md](../project/CHECKPOINT-2026-11-27.md). The final source fix `9806c753cae67fd108830d30a3a94a7265156036` was followed by GitHub Actions bot archive commit `2fcb9e8553f58db625b78666174f5c75f1a9bfd0`, which changes only the audited ZIP. The archive refresh job depends on successful `validate`; this is workflow evidence that source validation and archive refresh completed, although the available connector did not expose the run ID/logs.
 
