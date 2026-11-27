@@ -277,3 +277,12 @@ The PR filename list includes changed paths whether added, modified, renamed, or
 - PR #8 is an older 697-commit chat-write retry branch based on the PR #7 line. Its message-queue retry, bounded admission, and shutdown handling are already present in the current PR #3 tree with additional checks. It is marked superseded and must not be merged independently.
 - PR #1 is the safety-branch prerequisite targeting `main`. Its current diff still contains the legacy `unzip-upload.yml` write-enabled workflow. **Do not merge PR #1 in its current form.** The safe order is to finish review of PR #3, integrate its final tree into the safety branch, verify that PR #1 then reflects the final workflow set (including removal of the legacy sync workflow), and only then consider promotion to `main` with explicit approval.
 - PR #2, #7, and #8 remain open drafts for now; none was closed, merged, or force-pushed. PR #3 remains the single candidate for the unified review. No changes were made to `main`, Deplexo, or live data.
+
+
+### CI coverage and latest candidate verification — 2026-11-27
+
+- A review found that pull-request path filters did not include `scripts/**`, even though `scripts/chat-integration-smoke.js` is part of the validation process. Added the missing path and a regression assertion so changes to CI smoke scripts trigger PR validation.
+- Latest exact source head before this checkpoint update: `accd5e8d67b89ba0e5dfcd282f90ec70c951c411`; [Actions run #45949927455](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45949927455) passed dependency installation/tree verification, JS syntax, full regression tests, production Docker build, and constrained HTTP/Socket.IO integration smoke. The archive artifact job was skipped as expected on a normal push.
+- A fresh recursive tree inspection of that exact head returned **413 entries = 401 file blobs + 12 directories**, not truncated; 16 root files, one workflow file, no symlinks, no tracked file over 5 MiB, and 360 public assets (115 gifts, 238 smileys, 1 VIP gift plus six other public files). No ZIP, nested project duplicate, or database dump is tracked.
+- The repository tree diagram's escaped newline was corrected. All 17 Markdown files were rechecked for local relative links in the previous tree review; a fresh final link scan will be repeated after this checkpoint update.
+- No merge, force-push, deployment, Deplexo operation, or live-data change was performed.
