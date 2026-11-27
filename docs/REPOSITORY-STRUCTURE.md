@@ -112,3 +112,14 @@ Keep implementation entry points in the root, application media in `public/`, an
 The full application export contains the database and structured references to public uploads. Transient private messages and their private-media files are intentionally excluded because private conversations are not persisted. An independent persistent-volume backup must be planned separately.
 
 Git history and rollback branches cover tracked repository files only. They do not back up the live Deplexo persistent volume, database, uploads, or private media. Never replace live data with the tracked placeholder or a source archive. Production promotion requires a separately verified volume backup, a restore test, staging smoke tests, and explicit approval.
+
+
+## Verified tree snapshot — 2026-11-27
+
+A fresh recursive Git tree inspection of the current PR #3 branch (`fix/bound-private-media-ticket-cache`) returned 416 entries without truncation: 404 tracked file blobs and 12 directory entries. The root contains 17 files and five directories. The 17 root files are intentional application, build, dependency, verification, documentation, or release entry points; the root is not a loose collection of old project copies.
+
+The current tree has 17 Markdown documentation files, organized by audit, operations, and project continuity. Public assets remain in the three catalog directories and other required `public/` paths; the current public asset/file count is 360. No nested second application directory, extra root ZIP, or backup/temp dump was found.
+
+The latest source/test commit `f60b85fe6f84fd997a500546880c10949a170d46` passed both jobs in Actions run [#45943098064](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45943098064). The branch tip `4c8309f86c589b4afac04253efb6cb1fc2126971` is the subsequent archive-only commit. See the repository cleanup inventory for the detailed file and duplicate-media classifications.
+
+These counts are a dated snapshot and should be refreshed after structural changes. They do not imply that production data, the Deplexo volume, or live media were inspected.
