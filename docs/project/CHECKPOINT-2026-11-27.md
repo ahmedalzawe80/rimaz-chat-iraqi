@@ -225,3 +225,12 @@ The PR filename list includes changed paths whether added, modified, renamed, or
 - Updated `verify.js` to assert that the obsolete workflow is absent and that the remaining archive audit is read-only, manually runnable, and checks safe paths plus exact public/library parity.
 - Updated README, repository structure, deployment reference, documentation index, and changelog so they no longer describe ZIP-to-main synchronization as a supported release path.
 - This is a candidate-branch repository/workflow change only. It does not alter `main`, merge PRs, deploy to Deplexo, or touch persistent data. The next push-triggered CI run must pass on the exact new commit before this change is considered validated.
+
+
+### Post-removal tree and exact-head validation — 2026-11-27
+
+- After removing the obsolete ZIP self-sync workflow, the refreshed recursive tree is SHA `c6548cadf97bd8799d9a8d71d6d2c1c24455b686`: **415 entries = 403 tracked files + 12 directories**; response not truncated.
+- Root remains 17 files; `public/` remains 360 files; documentation remains 17 Markdown files; only two GitHub workflow files remain: `validate-project.yml` and `audit-rootfix-archive.yml`.
+- Re-scanned all 17 Markdown files after the workflow/docs changes: **zero broken relative links**. The five exact duplicate groups remain intentionally preserved. No nested project directory, extra root ZIP, or tracked database dump exists.
+- Exact candidate commit `ad4aed52394f5344c3697a1a767c49a616413453` passed Actions run [#45947902148](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45947902148), including the updated repository regression assertions, Docker build, and constrained HTTP/Socket.IO smoke. Archive refresh was skipped intentionally on this ordinary push.
+- This checkpoint-only correction will itself trigger another source-validation run; the archive refresh remains intentionally manual and must not be described as current until explicitly rebuilt and audited.
