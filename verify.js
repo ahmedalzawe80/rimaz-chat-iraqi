@@ -3646,3 +3646,20 @@ try {
  ];
  for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('chat delivery protocol regression tests',error.message); }
+
+;(async()=>{
+ const runtimeSource=fs.readFileSync(server,'utf8');
+ const helperStart=runtimeSource.indexOf('const SOCKET_MESSAGE_REQUEST_LIMIT=');
+ const helperEnd=runtimeSource.indexOf("\nio.on('connection'",helperStart);
+ if(helperStart<0||helperEnd<0)throw new Error('request idempotency helper boundaries not found');
+ const fixture={Map,Date,Promise,console};
+ vm.runInNewContext(runtimeSource.slice(helperStart,helperEnd)+';globalThis.execute=executeSocketMessageRequest;globalThis.cache=socketMessageRequestCache;globalThis.limit=SOCKET_MESSAGE_REQUEST_LIMIT;',fixture);
+ const resolvers=[],pending=[];
+ for(let i=0;i<fixture.limit;i++)pending.push(fixture.execute('session-test',`pending_${i}`,'public',()=>new Promise(resolve=>resolvers.push(resolve))));
+ const overflow=await fixture.execute('session-test','overflow_000','public',()=>({ok:true}));
+ if(overflow?.ok!==false||fixture.cache.size!==fixture.limit||resolvers.length!==fixture.limit)throw new Error('pending request admission exceeded its hard capacity instead of rejecting safely');
+ for(const resolve of resolvers)resolve({ok:true});
+ await Promise.all(pending);
+ if(fixture.cache.size!==fixture.limit)throw new Error('request cache capacity changed after pending requests settled');
+ pass('idempotency request cache enforces its hard cap under fully concurrent pending load');
+})().catch(error=>{fail('idempotency request cache hard-cap runtime test',error.message);process.exitCode=1;});
