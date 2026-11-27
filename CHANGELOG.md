@@ -3,6 +3,11 @@
 - Removed the obsolete write-enabled ZIP self-sync workflow. Its exact-`main` parity precondition meant it could not promote a feature-branch candidate, while its rollback-branch creation, `rsync --delete`, and Git-push steps added unnecessary write capability.
 - Retained the validated release-archive builder and read-only archive audit. Application source integration remains pull-request based; archive refresh does not merge, deploy, or touch live data.
 
+## Repository automation safety — 2026-11-27
+
+- Removed the obsolete write-enabled ZIP self-sync workflow. Its exact-`main` parity precondition meant it could not promote a feature-branch candidate, while its rollback-branch creation, `rsync --delete`, and Git-push steps added unnecessary write capability.
+- Retained the validated release-archive builder and read-only archive audit. Application source integration remains pull-request based; archive refresh does not merge, deploy, or touch live data.
+
 ## Runtime and restore maintenance — 2026-11-25 (no application version change)
 
 - Coordinated full-backup streaming with Node.js pipeline teardown so client cancellation propagates through the gzip/source chain and the generator can run its temporary-file cleanup.

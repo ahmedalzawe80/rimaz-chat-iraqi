@@ -154,7 +154,7 @@ No Deplexo restart, rebuild, redeploy, ZIP sync, live-data mutation, merge, or p
 
 ### Controlled release-archive refresh policy — 2026-11-27
 
-A history review found that the first 250 commit records returned by GitHub included 68 automated `build: refresh audited archive` commits. The tracked ZIP is required by the current archive audit and guarded main-only sync workflow, so it was not deleted or moved. Instead:
+A history review found that the first 250 commit records returned by GitHub included 68 automated `build: refresh audited archive` commits. The tracked ZIP is required by the current archive audit and ZIP self-sync workflow (now removed), so it was not deleted or moved. Instead:
 
 - Ordinary branch pushes continue to run source validation but no longer rebuild and commit the ZIP.
 - The `refresh-release-archive` job now runs only after an explicit `workflow_dispatch` on `main` or the designated maintenance branches, and only after the source validation job succeeds.
@@ -175,7 +175,7 @@ A history review found that the first 250 commit records returned by GitHub incl
 - **416 tree entries = 404 tracked file blobs + 12 directory entries**.
 - Root: **17 tracked files**; documentation: **17 Markdown files**; `public/`: **360 files**.
 - No nested `rimaz-chat-iraqi-main/` directory remains; no extra root ZIP or tracked database dump exists. The only tracked database-named file is the 138-byte warning placeholder `data.json`, not production data.
-- One root release ZIP remains because the archive audit and guarded manual source-sync workflow explicitly consume that exact path.
+- One root release ZIP remains because the archive refresh and audit workflows explicitly consume that exact path.
 - A fresh link scan of all 17 Markdown files found **zero broken relative links**.
 - The exact-blob scan found five duplicate groups: the synchronized root/public HTML pair, the synchronized Google verification pair, two same-content gift filenames, and two same-content smiley filename pairs. Keep all five groups: the first two serve separate URLs; the media filenames are part of catalog/persisted-reference compatibility and are not safe to delete based on byte equality.
 
@@ -194,7 +194,7 @@ The PR filename list includes changed paths whether added, modified, renamed, or
 - Updated the historical release-gate banner to point to this 2026-11-27 checkpoint rather than the older 2026-11-26 checkpoint.
 - Added this status-aware path reconciliation and fresh tree/link/duplicate inventory to the checkpoint.
 - The three documentation commits in this review ended at `236abbc9ed1f7d15524c10b8e921852974adf07b`. Exact-head Actions run [#45947257239](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45947257239) completed successfully: locked dependency install/tree verification, JavaScript syntax, full regression suite, production Docker build, and constrained HTTP/Socket.IO smoke all passed.
-- The `refresh-release-archive` job was **skipped intentionally** for this ordinary push. The tracked ZIP is not certified current with the documentation batch. Before any future use of the guarded source-sync workflow, explicitly dispatch `Validate Rimaz Project` on the intended release branch, wait for source validation and archive refresh, then confirm the archive audit succeeds. The user does not need to edit or upload the ZIP manually.
+- The `refresh-release-archive` job was **skipped intentionally** for this ordinary push. The tracked ZIP is not certified current with the documentation batch. Before any future use of the ZIP self-sync workflow (now removed), explicitly dispatch `Validate Rimaz Project` on the intended release branch, wait for source validation and archive refresh, then confirm the archive audit succeeds. The user does not need to edit or upload the ZIP manually.
 - The latest checked PR state before this checkpoint correction was open/draft/unmerged, base `safety/validate-and-backup-before-sync`, with 48 changed paths and an unusually long commit history. Do not force-push or rewrite history as an unreviewed cleanup action.
 
 ### Current repository-phase boundary
@@ -202,6 +202,16 @@ The PR filename list includes changed paths whether added, modified, renamed, or
 - No files or assets were deleted during this review. The only edits were documentation corrections on the existing candidate branch.
 - No merge, force-push, Deplexo operation, production sync, restart, or live-data change was performed.
 - Continue phase one with reference-aware review of all 48 changed paths, workflow safety assumptions, and PR-history/integration strategy. Do not begin chat/runtime phase two until repository phase one is explicitly complete.
+
+
+### ZIP workflow root-cause correction — 2026-11-27
+
+- Reviewed `.github/workflows/unzip-upload.yml` end-to-end and found it was not a valid promotion mechanism: it required the archive to match current `main` exactly, then copied the same files back. A changed feature-branch archive was rejected before synchronization.
+- The workflow also held `contents: write`, created a rollback branch, used `rsync --delete` on `public/` and `lib/`, and could push to `main`, despite having no useful source-update path under its exact-parity gate.
+- Removed this obsolete write-enabled self-sync workflow from the candidate. The existing `validate-project.yml` archive refresh and `audit-rootfix-archive.yml` read-only archive audit remain. Source integration must happen through reviewed pull requests.
+- Updated `verify.js` to assert that the obsolete workflow is absent and that the remaining archive audit is read-only, manually runnable, and checks safe paths plus exact public/library parity.
+- Updated README, repository structure, deployment reference, documentation index, and changelog so they no longer describe ZIP-to-main synchronization as a supported release path.
+- This is a candidate-branch repository/workflow change only. It does not alter `main`, merge PRs, deploy to Deplexo, or touch persistent data. The next push-triggered CI run must pass on the exact new commit before this change is considered validated.
 
 
 ### ZIP workflow root-cause correction — 2026-11-27

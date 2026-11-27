@@ -2867,7 +2867,7 @@ try {
   }catch(error){fail('shutdown persistence regression checks',error.message);}
 })();
  
-// Repository hygiene and safe source-sync regression checks.
+// Repository hygiene and read-only archive-workflow regression checks.
 try {
   const ignore = fs.readFileSync(path.join(root, '.gitignore'), 'utf8');
   const dockerIgnore = fs.readFileSync(path.join(root, '.dockerignore'), 'utf8');
@@ -2885,8 +2885,8 @@ try {
     ['root and public Google verification files remain present and byte-identical', fs.existsSync(path.join(root, 'google1a84d9d1dec7b85d.html')) && fs.existsSync(path.join(root, 'public', 'google1a84d9d1dec7b85d.html')) && fs.readFileSync(path.join(root, 'google1a84d9d1dec7b85d.html'), 'utf8') === fs.readFileSync(path.join(root, 'public', 'google1a84d9d1dec7b85d.html'), 'utf8')],
     ['the incomplete nested project duplicate is removed', !fs.existsSync(nestedLegacy)],
     ['the obsolete write-enabled ZIP self-sync workflow is removed', !fs.existsSync(path.join(root, '.github', 'workflows', 'unzip-upload.yml'))],
-    ['the existing main archive audit is read-only and supports explicit manual verification', archiveWorkflow.includes('workflow_dispatch:') && archiveWorkflow.includes('      - main') && archiveWorkflow.includes('permissions:\\n  contents: read') && !archiveWorkflow.includes('contents: write') && !archiveWorkflow.includes('git push') && !archiveWorkflow.includes('rsync --delete')],
-    ['the archive audit verifies safe paths, one project root, and exact public/library parity', archiveWorkflow.includes('stat.S_IFLNK') && archiveWorkflow.includes('Expected one complete project root') && archiveWorkflow.includes('z.testzip()') && archiveWorkflow.includes('diff -qr --no-dereference \\"$PROJECT/public\\" public') && archiveWorkflow.includes('diff -qr --no-dereference \\"$PROJECT/lib\\" lib')],
+    ['the existing main archive audit is read-only and supports explicit manual verification', archiveWorkflow.includes('workflow_dispatch:') && archiveWorkflow.includes('      - main') && archiveWorkflow.includes('contents: read') && !archiveWorkflow.includes('contents: write') && !archiveWorkflow.includes('git push') && !archiveWorkflow.includes('rsync --delete')],
+    ['the archive audit verifies safe paths, one project root, and exact public/library parity', archiveWorkflow.includes('stat.S_IFLNK') && archiveWorkflow.includes('Expected one complete project root') && archiveWorkflow.includes('z.testzip()') && archiveWorkflow.includes('diff -qr --no-dereference "$PROJECT/public" public') && archiveWorkflow.includes('diff -qr --no-dereference "$PROJECT/lib" lib')],
     ['Docker build exclusions no longer reference the deleted nested project', !dockerIgnore.includes('rimaz-chat-iraqi-main/')],
     ['committed npm lockfile v3 matches package identity and dependency declarations', lockManifest.lockfileVersion === 3 && !!lockManifest.packages?.[''] && lockManifest.packages[''].name === packageManifest.name && lockManifest.packages[''].version === packageManifest.version && sortedDependencies(lockManifest.packages[''].dependencies) === sortedDependencies(packageManifest.dependencies) && sortedDependencies(lockManifest.packages[''].devDependencies) === sortedDependencies(packageManifest.devDependencies)],
     ['production Docker image installs only the locked production dependency graph', dockerfile.includes('RUN npm ci --omit=dev') && !dockerfile.includes('npm install --omit=dev')],
@@ -2898,7 +2898,7 @@ try {
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
 } catch (error) {
-  fail('repository hygiene and safe source-sync checks', error.message);
+  fail('repository hygiene and archive-workflow checks', error.message);
 }
 
 
