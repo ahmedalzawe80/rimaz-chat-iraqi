@@ -1429,9 +1429,32 @@ function restoreContainsOwner(candidate,ownerName){
  for(const [name,account] of Object.entries(guests))if(validAccount(account)&&(keyName(name)==='owner'||String(account.role||'')==='owner'))return true;
  return false;
 }
+function removeRestoreStagedFile(filePath){
+ if(!filePath)return false;
+ const resolved=path.resolve(filePath);
+ const restoreRoot=path.resolve(RESTORE_TMP_DIR);
+ const name=path.basename(resolved);
+ // Only remove files created by this restore uploader inside its private staging directory.
+ if(path.dirname(resolved)!==restoreRoot||!/^restore-\\d+-[a-f0-9]{32}\\.json$/.test(name)){
+  console.warn('Restore staging cleanup skipped an unrecognized path:',name);
+  return false;
+ }
+ try{
+  const stat=fs.lstatSync(resolved);
+  if(!stat.isFile()||stat.isSymbolicLink()){
+   console.warn('Restore staging cleanup skipped a non-regular file:',name);
+   return false;
+  }
+  fs.unlinkSync(resolved);
+  return true;
+ }catch(error){
+  if(error.code!=='ENOENT')console.warn('Restore preview file cleanup failed:',error.message);
+  return false;
+ }
+}
 function discardDatabaseRestorePreview(token,item=pendingDatabaseRestores.get(token)){
  pendingDatabaseRestores.delete(token);
- if(item?.filePath){try{fs.unlinkSync(item.filePath);}catch(error){if(error.code!=='ENOENT')console.warn('Restore preview file cleanup failed:',error.message);}}
+ if(item?.filePath)removeRestoreStagedFile(item.filePath);
 }
 function purgeExpiredDatabaseRestores(){const now=Date.now();for(const [token,item] of pendingDatabaseRestores)if(item.expiresAt<=now)discardDatabaseRestorePreview(token,item);}
 function restorePreviewCapacityAvailable(ownerName){
@@ -2236,7 +2259,7 @@ app.post('/api/admin/restore/database/preview',requireAdmin,restoreUploadGate,(r
    uploadedFile.path='';
    res.set('Cache-Control','no-store');
    res.json({ok:true,token,expiresInSeconds:300,summary,warning:'سيتم استبدال بيانات قاعدة البيانات الحالية. الجلسات النشطة والرسائل الخاصة المؤقتة لن تُستعاد.'});
-  }catch(e){removeUploadedFile(uploadedFile);res.status(400).json({error:e.message||'ملف النسخة غير صالح'});}
+  }catch(e){removeRestoreStagedFile(uploadedFile.path);res.status(400).json({error:e.message||'ملف النسخة غير صالح'});}
  });
 });
 app.post('/api/admin/restore/database/confirm',requireAdmin,(req,res)=>{
