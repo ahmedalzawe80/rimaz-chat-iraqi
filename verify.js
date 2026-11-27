@@ -1986,6 +1986,46 @@ try {
   usesInspector ? pass('restore preview validates backup without materializing the replacement database') : fail('restore preview streaming inspection route');
 } catch (error) { fail('restore preview streaming inspection route', error.message); }
 
+// Rejected restore uploads must be removed from their private staging directory, not public uploads.
+try {
+  const serverText=fs.readFileSync(server,'utf8');
+  const helperStart=serverText.indexOf('function removeRestoreStagedFile(filePath){');
+  const helperEnd=serverText.indexOf('\\nfunction discardDatabaseRestorePreview',helperStart);
+  if(helperStart<0||helperEnd<0)throw new Error('restore staging cleanup helper not found');
+  const helperSource=serverText.slice(helperStart,helperEnd);
+  const deleted=[],warnings=[];
+  const root=path.resolve('/tmp/rimaz-restore-staging');
+  const valid=path.join(root,'restore-123-'+('a'.repeat(32))+'.json');
+  const symlink=path.join(root,'restore-124-'+('b'.repeat(32))+'.json');
+  const context={
+    path,RESTORE_TMP_DIR:root,
+    fs:{
+      lstatSync(file){
+        if(file===symlink)return {isFile:()=>false,isSymbolicLink:()=>true};
+        return {isFile:()=>true,isSymbolicLink:()=>false};
+      },
+      unlinkSync(file){deleted.push(file);}
+    },
+    console:{warn(...args){warnings.push(args);}}
+  };
+  vm.runInNewContext(helperSource+'\\nthis.removeRestoreStagedFile=removeRestoreStagedFile;',context);
+  const removed=context.removeRestoreStagedFile(valid);
+  const rejectedOutside=context.removeRestoreStagedFile('/tmp/outside/restore-125-'+('c'.repeat(32))+'.json');
+  const rejectedName=context.removeRestoreStagedFile(path.join(root,'other.json'));
+  const rejectedSymlink=context.removeRestoreStagedFile(symlink);
+  const routeStart=serverText.indexOf("app.post('/api/admin/restore/database/preview'");
+  const routeEnd=serverText.indexOf("\\napp.post('/api/admin/restore/database/confirm'",routeStart);
+  const route=routeStart>=0&&routeEnd>routeStart?serverText.slice(routeStart,routeEnd):'';
+  const discardStart=serverText.indexOf('function discardDatabaseRestorePreview(');
+  const discardEnd=serverText.indexOf('function purgeExpiredDatabaseRestores()',discardStart);
+  const discard=serverText.slice(discardStart,discardEnd);
+  const ok=removed===true&&rejectedOutside===false&&rejectedName===false&&rejectedSymlink===false&&
+    deleted.length===1&&deleted[0]===valid&&warnings.length===3&&
+    route.includes('removeRestoreStagedFile(uploadedFile.path)')&&!route.includes('removeUploadedFile(uploadedFile)')&&
+    discard.includes('removeRestoreStagedFile(item.filePath)');
+  ok?pass('rejected restore uploads and expired previews clean only regular files owned by the private restore staging directory'):fail('restore staging cleanup safety and rejected-upload regression');
+}catch(error){fail('restore staging cleanup safety and rejected-upload regression',error.message);}
+
 // Restore preview admission: reject full queues before Multer writes or JSON parsing.
 try {
   const serverText = fs.readFileSync(server, 'utf8');
