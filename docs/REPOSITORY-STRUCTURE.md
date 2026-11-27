@@ -123,3 +123,12 @@ The current tree has 17 Markdown documentation files, organized by audit, operat
 The latest source/test commit `f60b85fe6f84fd997a500546880c10949a170d46` passed both jobs in Actions run [#45943098064](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45943098064). The branch tip `4c8309f86c589b4afac04253efb6cb1fc2126971` is the subsequent archive-only commit. See the repository cleanup inventory for the detailed file and duplicate-media classifications.
 
 These counts are a dated snapshot and should be refreshed after structural changes. They do not imply that production data, the Deplexo volume, or live media were inspected.
+
+
+## Release archive lifecycle — 2026-11-27
+
+The root `rimaz-final-deep-audit-46.93.72.zip` remains because the guarded main-branch source-sync procedure and archive audit currently consume that exact path. It is a generated release artifact, not an application source file or production-data backup.
+
+To keep the Git history reviewable, the `refresh-release-archive` job now runs only after an explicit `workflow_dispatch` on `main` or an approved maintenance branch, and only after the source validation job succeeds. Ordinary pushes still run source validation but no longer create an archive-only commit. The archive audit also watches `main` so an explicitly refreshed main-branch archive is checked.
+
+Do not delete or relocate the ZIP until both archive audit and guarded sync workflows are redesigned and validated together. For a future release, manually dispatch **Validate Rimaz Project** on the intended branch, wait for both jobs, and confirm the archive audit succeeds before using the guarded main-only sync workflow.
