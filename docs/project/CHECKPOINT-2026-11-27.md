@@ -268,3 +268,12 @@ The PR filename list includes changed paths whether added, modified, renamed, or
 - PR #1 is still open/draft/unmerged, targets `main`, and includes `validate-project.yml` as the safety-workflow prerequisite. GitHub requires a manually dispatched workflow to exist on the default branch, so the new `build-release-archive` artifact job cannot yet be dispatched end-to-end.
 - The new artifact job's workflow syntax is parsed by push CI; its embedded Python steps compile and passed synthetic archive-build/extraction fixture checks. A real artifact upload remains pending until the prerequisite workflow is approved and present on `main`; then the updated maintenance branch can be selected.
 - No merge, default-branch update, Deplexo deployment, or live-data operation was performed.
+
+
+### Overlapping draft PR disposition and safe integration order — 2026-11-27
+
+- PR #2 is a repository-cleanup draft whose 11 changed paths are all contained in PR #3's 48-path candidate. Its description now marks it as superseded; it remains open/draft and must not be merged separately.
+- PR #7 is an older 8-commit follow-up touching `server.js`, `verify.js`, and `lib/json-reader.js`. The current PR #3 tree already contains the evolved JSON streaming validator, verified last-known-good rotation, shutdown message retry, and regression fixtures. PR #7 is marked superseded and must not be merged independently, because it would reintroduce older versions of shared files.
+- PR #8 is an older 697-commit chat-write retry branch based on the PR #7 line. Its message-queue retry, bounded admission, and shutdown handling are already present in the current PR #3 tree with additional checks. It is marked superseded and must not be merged independently.
+- PR #1 is the safety-branch prerequisite targeting `main`. Its current diff still contains the legacy `unzip-upload.yml` write-enabled workflow. **Do not merge PR #1 in its current form.** The safe order is to finish review of PR #3, integrate its final tree into the safety branch, verify that PR #1 then reflects the final workflow set (including removal of the legacy sync workflow), and only then consider promotion to `main` with explicit approval.
+- PR #2, #7, and #8 remain open drafts for now; none was closed, merged, or force-pushed. PR #3 remains the single candidate for the unified review. No changes were made to `main`, Deplexo, or live data.
