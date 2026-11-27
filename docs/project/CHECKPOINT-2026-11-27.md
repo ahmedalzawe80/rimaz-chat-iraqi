@@ -90,3 +90,43 @@ No Deplexo restart, rebuild, redeploy, ZIP sync, live-data mutation, merge, or p
 
 - After the source-validation/archive commit `2fcb9e8553f58db625b78666174f5c75f1a9bfd0`, subsequent documentation-only commits updated this checkpoint and the release gate. The only paths changed since that archive commit are these two Markdown files; the application source did not change.
 - The archive refresh bot commit for these later documentation-only changes had not appeared at the latest check. Do not claim the ZIP is byte-for-byte current with the documentation tip until a new archive-only bot commit appears. The application source candidate itself remains the validated `9806c753...`.
+
+
+## Repository phase-one continuation — 2026-11-27
+
+### Exact current branch and validation
+
+- Current PR #3 branch tip: `4c8309f86c589b4afac04253efb6cb1fc2126971`.
+- Its parent application/test commit is `f60b85fe6f84fd997a500546880c10949a170d46`; the only change in the child commit is the refreshed release ZIP. GitHub compare confirms one changed path: `rimaz-final-deep-audit-46.93.72.zip`.
+- Push workflow run [#45943098064](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45943098064) completed successfully on source/test commit `f60b85f...`. Both jobs succeeded: `validate` and `refresh-release-archive`.
+- The validate job passed locked dependency installation/tree verification, JavaScript syntax, `npm test`, production Docker build, and the constrained 128 MiB / 0.25 CPU HTTP/Socket.IO integration smoke test.
+- The archive job rebuilt the ZIP from tracked files, checked CRC/safe paths/symlinks/duplicates/compression ratio and exact tracked-file parity, then installed dependencies and ran tests and Docker build against the extracted archive.
+- The current branch tip is therefore an archive-only child of the tested source commit. This is branch CI evidence, not production or staging sign-off.
+
+### Fresh tracked-tree inventory
+
+- Current tree SHA: `cb7e3917eee73b47244d3050e9ccbb889807221d`.
+- Recursive tree: **416 entries**, comprising **404 tracked file blobs** and 12 directory entries; GitHub reports the tree is not truncated.
+- Root: **17 files and 5 directories**. The 17 root files have documented runtime, build, dependency, verification, documentation, test, or release roles.
+- Documentation: **17 Markdown files**, grouped under `docs/audits/`, `docs/operations/`, and `docs/project/`, plus the documentation index and root project guidance.
+- Public media and site assets: **360 files**. No asset was deleted or renamed.
+- No nested `rimaz-chat-iraqi-main/` application copy, extra root ZIP, or backup/temp dump is present in this tree.
+- The prior 2026-11-26 inventory counts (403 files / 12 documentation files) are historical snapshot counts, not the current tree; the inventory has a dated follow-up documenting the refreshed counts.
+
+### Phase-one repository decisions
+
+- Keep the 17 root files in place; moving Node/Docker/SEO entry points solely to reduce the root count would break expected paths.
+- Keep both HTML entry copies and both Google verification copies; they serve separate paths and parity is tested.
+- Keep all five exact-content duplicate media pairs documented in the inventory. Filename-derived smiley/gift IDs and persisted references make file deletion unsafe without a versioned data migration.
+- Keep the single reviewed release ZIP. It is a workflow-generated artifact with exact tracked-file parity checks, not a production data backup.
+- Historical audits and dated checkpoints remain under categorized documentation folders; the latest checkpoint is linked first in `docs/README.md`.
+- No production branch, Deplexo service, persistent data, or live uploads were changed.
+
+### Remaining phase-one work
+
+1. Continue a reference-aware audit of documentation links, workflow path assumptions, archive/source parity, and stale package-specific instructions.
+2. Review the unusually long PR #3 commit history (820 commits reported by GitHub) before any integration; do not force-push or rewrite history as an unreviewed cleanup action.
+3. Decide with explicit approval whether stale overlapping draft PRs should be closed after their changes are proven integrated; do not merge them independently.
+4. Keep the repository phase separate from the later chat behavior phase.
+
+**No merge, deployment, Deplexo restart, production ZIP sync, or live-data operation is authorized by this continuation.**
