@@ -168,26 +168,37 @@ A history review found that the first 250 commit records returned by GitHub incl
 
 ## Repository phase-one reconciliation — latest exact branch review (2026-11-27)
 
-### Exact branch and CI state
+### Fresh tracked-tree and documentation audit
 
-- Current PR #3 head: `02c901f5cc912c8dbb4c746913f54c8e62482fad` (`docs: record controlled archive release workflow and CI result`).
-- PR #3 remains open, draft, and unmerged; it targets `safety/validate-and-backup-before-sync`. GitHub reports 841 commits ahead and 48 changed paths. The unusually long history remains a separate integration-review item; do not force-push or rewrite it as cleanup.
-- Exact-head Actions run [#45946706579](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45946706579) passed source validation: locked dependency installation/tree verification, JavaScript syntax, regression tests, production Docker build, and constrained HTTP/Socket.IO smoke checks.
-- The `refresh-release-archive` job was skipped on that ordinary push by design. The tracked ZIP is therefore **not certified current with this exact branch head**. Before any future use of the guarded source-sync workflow, explicitly dispatch `Validate Rimaz Project` on the intended release branch, wait for validation and archive refresh, then confirm the archive audit succeeds. This is an operator action in GitHub, not a manual file edit by the user.
-- The run validates the candidate in CI only; it is not Deplexo production or staging sign-off.
+- Reviewed PR #3 against its base using GitHub's status-aware compare, not the changed-filename list alone.
+- Current tree snapshot used for this audit: tree SHA `6567a03251ebe49eae42e412afa0aa2b7ac551a3`; recursive tree is not truncated.
+- **416 tree entries = 404 tracked file blobs + 12 directory entries**.
+- Root: **17 tracked files**; documentation: **17 Markdown files**; `public/`: **360 files**.
+- No nested `rimaz-chat-iraqi-main/` directory remains; no extra root ZIP or tracked database dump exists. The only tracked database-named file is the 138-byte warning placeholder `data.json`, not production data.
+- One root release ZIP remains because the archive audit and guarded manual source-sync workflow explicitly consume that exact path.
+- A fresh link scan of all 17 Markdown files found **zero broken relative links**.
+- The exact-blob scan found five duplicate groups: the synchronized root/public HTML pair, the synchronized Google verification pair, two same-content gift filenames, and two same-content smiley filename pairs. Keep all five groups: the first two serve separate URLs; the media filenames are part of catalog/persisted-reference compatibility and are not safe to delete based on byte equality.
 
 ### Reconciliation of paths shown in PR #3
 
-The PR filename list includes changed paths whether they are added, modified, renamed, or removed. A status-aware comparison against its base confirms:
+The PR filename list includes changed paths whether added, modified, renamed, or removed. A status-aware comparison against its base confirms:
 
 - `rimaz-chat-iraqi-main/data.json` and `rimaz-chat-iraqi-main/public/google1a84d9d1dec7b85d.html` have status **removed**. They are not present in the current branch tree; their appearance in the PR file list does not mean a nested app copy remains.
 - The former root documents `DEPLOYMENT-46.93.72.md`, `HANDOFF-2026-11-24.md`, and `REPAIR-NOTES-46.93.72.md` have been removed from the root as part of documentation consolidation. The maintained package deployment reference now lives at `docs/operations/DEPLOYMENT-46.93.72.md`; audit/checkpoint records are categorized under `docs/audits/` and `docs/project/`.
 - The existing audit documents moved into `docs/audits/` are represented as renames, not lost reports.
-- The current tree inventory remains 416 tree entries: 404 file blobs and 12 directory entries; the nested duplicate application directory is absent.
+- The former deployment note contained outdated archive instructions and an old ZIP filename; the maintained operations reference describes the current tracked archive and manual workflow instead.
+
+### Documentation corrections and exact CI result
+
+- Corrected the docs index summary so it no longer describes the latest CI state as outstanding.
+- Updated the historical release-gate banner to point to this 2026-11-27 checkpoint rather than the older 2026-11-26 checkpoint.
+- Added this status-aware path reconciliation and fresh tree/link/duplicate inventory to the checkpoint.
+- The three documentation commits in this review ended at `236abbc9ed1f7d15524c10b8e921852974adf07b`. Exact-head Actions run [#45947257239](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45947257239) completed successfully: locked dependency install/tree verification, JavaScript syntax, full regression suite, production Docker build, and constrained HTTP/Socket.IO smoke all passed.
+- The `refresh-release-archive` job was **skipped intentionally** for this ordinary push. The tracked ZIP is not certified current with the documentation batch. Before any future use of the guarded source-sync workflow, explicitly dispatch `Validate Rimaz Project` on the intended release branch, wait for source validation and archive refresh, then confirm the archive audit succeeds. The user does not need to edit or upload the ZIP manually.
+- The latest checked PR state before this checkpoint correction was open/draft/unmerged, base `safety/validate-and-backup-before-sync`, with 48 changed paths and an unusually long commit history. Do not force-push or rewrite history as an unreviewed cleanup action.
 
 ### Current repository-phase boundary
 
-- The root release ZIP remains tracked because the archive-audit and guarded source-sync workflows consume that exact path. It is not a live-data backup.
-- The user does not need to edit or upload the ZIP manually. If/when a release package is required, the repository workflow can rebuild it through explicit GitHub Actions dispatch after source validation.
-- No files or assets were deleted in this review. No merge, force-push, Deplexo operation, production sync, restart, or live-data change was performed.
-- Continue phase one with reference-aware review of the 48 changed paths, workflow safety assumptions, and documentation currency. Do not begin chat/runtime phase two until repository phase one is explicitly complete.
+- No files or assets were deleted during this review. The only edits were documentation corrections on the existing candidate branch.
+- No merge, force-push, Deplexo operation, production sync, restart, or live-data change was performed.
+- Continue phase one with reference-aware review of all 48 changed paths, workflow safety assumptions, and PR-history/integration strategy. Do not begin chat/runtime phase two until repository phase one is explicitly complete.
