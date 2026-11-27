@@ -208,7 +208,7 @@ The PR filename list includes changed paths whether added, modified, renamed, or
 
 - Reviewed `.github/workflows/unzip-upload.yml` end-to-end and found it was not a valid promotion mechanism: it required the archive to match current `main` exactly, then copied the same files back. A changed feature-branch archive was rejected before synchronization.
 - The workflow also held `contents: write`, created a rollback branch, used `rsync --delete` on `public/` and `lib/`, and could push to `main`, despite having no useful source-update path under its exact-parity gate.
-- Removed this obsolete write-enabled self-sync workflow from the candidate. The existing `validate-project.yml` archive refresh and `audit-rootfix-archive.yml` read-only archive audit remain. Source integration must happen through reviewed pull requests.
+- Removed this obsolete write-enabled self-sync workflow from the candidate. At that intermediate point the archive refresh and standalone audit still existed; both were later consolidated into `validate-project.yml`'s artifact-only job, and the separate audit workflow was removed. Source integration must happen through reviewed pull requests.
 - Updated `verify.js` to assert that the obsolete workflow is absent and that the remaining archive audit is read-only, manually runnable, and checks safe paths plus exact public/library parity.
 - Updated README, repository structure, deployment reference, documentation index, and changelog so they no longer describe ZIP-to-main synchronization as a supported release path.
 - Exact candidate commit `fb40e735625f2a78da282fc59bb8768a72ea7419` passed Actions run [#45947805826](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45947805826): dependency install/tree verification, JavaScript syntax, full regression tests (including the new read-only archive assertions), production Docker build, and constrained HTTP/Socket.IO smoke all succeeded. The archive-refresh job was skipped intentionally because this was an ordinary push.
@@ -230,7 +230,7 @@ The PR filename list includes changed paths whether added, modified, renamed, or
 ### Post-removal tree and exact-head validation — 2026-11-27
 
 - After removing the obsolete ZIP self-sync workflow, the refreshed recursive tree is SHA `c6548cadf97bd8799d9a8d71d6d2c1c24455b686`: **415 entries = 403 tracked files + 12 directories**; response not truncated.
-- Root remains 17 files; `public/` remains 360 files; documentation remains 17 Markdown files; only two GitHub workflow files remain: `validate-project.yml` and `audit-rootfix-archive.yml`.
+- Root remains 17 files; `public/` remains 360 files; documentation remains 17 Markdown files; at that intermediate point two GitHub workflow files remained; the later artifact migration removed the standalone audit workflow, leaving only `validate-project.yml`.
 - Re-scanned all 17 Markdown files after the workflow/docs changes: **zero broken relative links**. The five exact duplicate groups remain intentionally preserved. No nested project directory, extra root ZIP, or tracked database dump exists.
 - Exact candidate commit `ad4aed52394f5344c3697a1a767c49a616413453` passed Actions run [#45947902148](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45947902148), including the updated repository regression assertions, Docker build, and constrained HTTP/Socket.IO smoke. Archive refresh was skipped intentionally on this ordinary push.
 - This checkpoint-only correction will itself trigger another source-validation run; the archive refresh remains intentionally manual and must not be described as current until explicitly rebuilt and audited.
@@ -253,3 +253,10 @@ The PR filename list includes changed paths whether added, modified, renamed, or
 - `.gitignore` excludes the former root ZIP path so it cannot be accidentally reintroduced. No archive binary is committed on ordinary pushes or manual artifact generation.
 - The artifact workflow has read-only repository permission and does not write to `main`, push bot commits, deploy, or touch Deplexo/live data. Source integration remains pull-request based.
 - This tree snapshot is a candidate-branch estimate until the new exact-head CI and fresh tree/link audit complete.
+
+
+### Latest exact-tree validation note — 2026-11-27
+
+- The latest checked source head before this documentation refresh was `67f05c8b5cdef080272f1178b98a12b2e6205929`, and Actions run [#45948606723](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45948606723) passed. The archive artifact job was skipped by design on a normal push.
+- The new archive build/extraction Python blocks were syntax-compiled and exercised with a synthetic tracked-file repository fixture. This checks path splitting, ZIP generation, CRC, and extraction logic; it does not replace the first real `workflow_dispatch` artifact run.
+- The next commit updates only this checkpoint and repository structure documentation; its own push-triggered validation must be checked separately.
