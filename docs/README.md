@@ -6,7 +6,7 @@ This directory contains the maintained project checkpoint, engineering audits, a
 - [Repository structure](REPOSITORY-STRUCTURE.md) — root-file ownership, runtime asset layout, and safe cleanup rules.
 
 ## Project continuity
-- [Latest continuation checkpoint](project/CHECKPOINT-2026-11-27.md) — backup-media integrity work, upload cleanup protection, current branch state, and outstanding CI/production-data verification.
+- [Latest continuation checkpoint](project/CHECKPOINT-2026-11-27.md) — backup-media integrity work, upload cleanup protection, latest exact-head CI result, and the remaining archive/staging/production release gates.
 - [Previous checkpoint](project/CHECKPOINT-2026-11-26.md) — retained historical record; consult the 2026-11-27 checkpoint first for the newer state.
 - [Earlier checkpoint](project/CHECKPOINT-2026-11-25.md) — retained historical record.
 
