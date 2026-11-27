@@ -2577,14 +2577,15 @@ async function executeSocketMessageRequest(sid,requestId,scope,task){
   const cacheKey=`${sid}:${scope}:${id}`;
   const cached=socketMessageRequestCache.get(cacheKey);
   if(cached){socketMessageRequestCache.delete(cacheKey);socketMessageRequestCache.set(cacheKey,cached);return cached.promise;}
+  if(socketMessageRequestCache.size>=SOCKET_MESSAGE_REQUEST_LIMIT){
+    let evictableKey=null;
+    for(const [key,entry] of socketMessageRequestCache){if(!entry.pending){evictableKey=key;break;}}
+    if(evictableKey===null)return Promise.resolve({ok:false,error:'الخادم مشغول بمعالجة رسائل أخرى، حاول بعد قليل'});
+    socketMessageRequestCache.delete(evictableKey);
+  }
   const entry={expiresAt:now+SOCKET_MESSAGE_REQUEST_TTL_MS,pending:true,promise:null};
   entry.promise=run().then(result=>{entry.pending=false;entry.expiresAt=Date.now()+SOCKET_MESSAGE_REQUEST_TTL_MS;return result;});
   socketMessageRequestCache.set(cacheKey,entry);
-  while(socketMessageRequestCache.size>SOCKET_MESSAGE_REQUEST_LIMIT){
-    const oldestKey=socketMessageRequestCache.keys().next().value,oldest=socketMessageRequestCache.get(oldestKey);
-    if(oldest?.pending)break;
-    socketMessageRequestCache.delete(oldestKey);
-  }
   return entry.promise;
 }
 
