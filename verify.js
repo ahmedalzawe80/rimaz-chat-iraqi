@@ -223,6 +223,19 @@ try {
     fs.writeFileSync(file, JSON.stringify(invalidType));
     assert.throws(() => inspectDatabaseRestoreFile(file, options), /نوع بيانات غير صالح داخل النسخة: label/);
 
+    // Missing core collections must be rejected before restore can fill them
+    // from defaults and silently replace existing rooms or chat history.
+    for (const missingField of ['users', 'guests', 'rooms', 'messages']) {
+      const incompleteBackup = { ...backup, database: { ...backup.database } };
+      delete incompleteBackup.database[missingField];
+      fs.writeFileSync(file, JSON.stringify(incompleteBackup));
+      assert.throws(
+        () => inspectDatabaseRestoreFile(file, options),
+        /النسخة لا تحتوي البنية الأساسية لقاعدة بيانات ريماز/,
+        'restore preview must reject a backup missing ' + missingField
+      );
+    }
+
     for (const invalidAccount of [null, [], 'not-an-account', 17]) {
       const malformedAccountBackup = {
         format: 'rimaz-database-backup', version: 1,
