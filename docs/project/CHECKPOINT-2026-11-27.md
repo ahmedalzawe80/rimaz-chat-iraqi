@@ -260,3 +260,11 @@ The PR filename list includes changed paths whether added, modified, renamed, or
 - The latest checked source head before this documentation refresh was `67f05c8b5cdef080272f1178b98a12b2e6205929`, and Actions run [#45948606723](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45948606723) passed. The archive artifact job was skipped by design on a normal push.
 - The new archive build/extraction Python blocks were syntax-compiled and exercised with a synthetic tracked-file repository fixture. This checks path splitting, ZIP generation, CRC, and extraction logic; it does not replace the first real `workflow_dispatch` artifact run.
 - The next commit updates only this checkpoint and repository structure documentation; its own push-triggered validation must be checked separately.
+
+
+### GitHub workflow-dispatch availability gate — 2026-11-27
+
+- Confirmed the default branch `main` remains at `a2c74fded15ea5cfde38d310a84c3c8edfe994b3` and currently contains only `.github/workflows/unzip-upload.yml`; it does not yet contain `validate-project.yml`.
+- PR #1 is still open/draft/unmerged, targets `main`, and includes `validate-project.yml` as the safety-workflow prerequisite. GitHub requires a manually dispatched workflow to exist on the default branch, so the new `build-release-archive` artifact job cannot yet be dispatched end-to-end.
+- The new artifact job's workflow syntax is parsed by push CI; its embedded Python steps compile and passed synthetic archive-build/extraction fixture checks. A real artifact upload remains pending until the prerequisite workflow is approved and present on `main`; then the updated maintenance branch can be selected.
+- No merge, default-branch update, Deplexo deployment, or live-data operation was performed.

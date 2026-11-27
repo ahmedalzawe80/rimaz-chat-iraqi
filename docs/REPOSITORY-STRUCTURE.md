@@ -129,6 +129,8 @@ The release ZIP is no longer tracked in the repository. It is generated in GitHu
 
 The `build-release-archive` job runs only after an explicit `workflow_dispatch` on `main` or an approved maintenance branch, and only after the source-validation job succeeds. It builds the archive outside the repository, checks safe paths and exact tracked-file parity, tests the extracted project, builds the Docker image, and uploads a 30-day Actions artifact. Ordinary pushes do not create ZIP files or binary commits. This process does not promote code to `main` or deploy; integrate application changes through the reviewed pull-request process.
 
+**Dispatch availability prerequisite:** GitHub exposes a manually dispatched workflow only after its workflow file exists on the repository's default branch. At this checkpoint, `main` still contains only the legacy `.github/workflows/unzip-upload.yml`; `validate-project.yml` is present in draft PR #1 and has not been merged. Therefore the new artifact job is configured and validated by source CI, but cannot yet be dispatched from GitHub. After the prerequisite workflow reaches `main` through an approved PR, select the updated maintenance branch when dispatching the artifact build. No merge is performed as part of this cleanup.
+
 
 ## Current tree after release-artifact migration — 2026-11-27
 

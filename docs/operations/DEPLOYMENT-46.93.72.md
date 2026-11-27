@@ -14,6 +14,8 @@ The former `.github/workflows/unzip-upload.yml` self-sync workflow and the separ
 
 Use the reviewed pull-request process to integrate application changes. For an archive build, explicitly dispatch **Validate Rimaz Project** on the intended branch. Its source-validation job must pass before `build-release-archive` creates the ZIP in runner temporary storage, validates safe paths and exact tracked-file parity, tests the extracted project, builds the Docker image, and uploads the 30-day artifact. The archive is not stored or committed in the repository. This workflow does not merge branches, update `main`, deploy to Deplexo, or modify live data. No manual ZIP file editing or upload is required.
 
+**Current availability gate:** GitHub requires a manually dispatched workflow to exist on the default branch. At this checkpoint, `main` contains only the legacy `unzip-upload.yml`; `validate-project.yml` is included in draft PR #1 and remains unmerged. Thus the artifact job cannot yet be dispatched. Once the prerequisite workflow is approved and reaches `main`, the updated maintenance branch can be selected for the artifact run. This project work does not merge PR #1 or alter `main`.
+
 ## Hosting and persistent storage
 
 - Use Node.js 24 LTS, matching `package.json`, `.nvmrc`, and the production Docker image.
