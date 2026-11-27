@@ -244,3 +244,12 @@ The PR filename list includes changed paths whether added, modified, renamed, or
 - The artifact job has `contents: read` permission and no Git push, bot commit, main synchronization, deployment, or live-data operations. Ordinary source pushes still update the branch directly and run source CI; they do not require a manual ZIP edit/upload.
 - Added `.gitignore` protection and updated regression tests, README, repository structure, deployment reference, changelog, and checkpoint to enforce and explain this lifecycle.
 - This is a candidate-branch packaging/organization change only. `main` and Deplexo remain untouched. Exact new-tree counts and CI results must be refreshed after this commit.
+
+
+### Current repository tree after moving release ZIP to CI artifact — 2026-11-27
+
+- Removed the tracked root release ZIP and the separate archive-audit workflow. The ZIP is now built in runner temporary storage by `build-release-archive` and uploaded as a 30-day GitHub Actions artifact only after source validation, archive safety/parity checks, extracted-project tests, and Docker build all pass.
+- The current expected tree is **413 entries = 401 tracked files + 12 directories**; root is **16 files**, documentation is **17 Markdown files**, and `public/` remains **360 files**. The only workflow under `.github/workflows/` is now `validate-project.yml`.
+- `.gitignore` excludes the former root ZIP path so it cannot be accidentally reintroduced. No archive binary is committed on ordinary pushes or manual artifact generation.
+- The artifact workflow has read-only repository permission and does not write to `main`, push bot commits, deploy, or touch Deplexo/live data. Source integration remains pull-request based.
+- This tree snapshot is a candidate-branch estimate until the new exact-head CI and fresh tree/link audit complete.

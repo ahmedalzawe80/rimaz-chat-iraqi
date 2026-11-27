@@ -9,7 +9,7 @@ This guide explains why each top-level area exists and which files must remain i
 ├── .github/
 │   ├── dependabot.yml
 │   ├── pull_request_template.md
-│   └── workflows/
+│   └── workflows/\n│       └── validate-project.yml
 ├── docs/
 │   ├── audits/
 │   ├── operations/
@@ -112,9 +112,9 @@ The full application export contains the database and structured references to p
 Git history and rollback branches cover tracked repository files only. They do not back up the live Deplexo persistent volume, database, uploads, or private media. Never replace live data with the tracked placeholder or a source archive. Production promotion requires a separately verified volume backup, a restore test, staging smoke tests, and explicit approval.
 
 
-## Verified tree snapshot — 2026-11-27
+## Historical tree snapshot before release-artifact migration — 2026-11-27
 
-A fresh recursive Git tree inspection of the current PR #3 branch (`fix/bound-private-media-ticket-cache`) returned 416 entries without truncation: 404 tracked file blobs and 12 directory entries. The root contains 17 files and five directories. The 16 root files are intentional application, build, dependency, verification, documentation, or release entry points; the root is not a loose collection of old project copies.
+At this earlier review point, a recursive tree inspection returned 416 entries: 404 tracked file blobs and 12 directory entries. The root then contained 17 files and five directories. These are historical counts from before the release ZIP and standalone archive-audit workflow were removed; see the current-tree section below.
 
 The current tree has 17 Markdown documentation files, organized by audit, operations, and project continuity. Public assets remain in the three catalog directories and other required `public/` paths; the current public asset/file count is 360. No nested second application directory, extra root ZIP, or backup/temp dump was found.
 
@@ -128,3 +128,11 @@ These counts are a dated snapshot and should be refreshed after structural chang
 The release ZIP is no longer tracked in the repository. It is generated in GitHub Actions runner temporary storage only after explicit dispatch and successful source validation, then uploaded as a downloadable workflow artifact. This keeps the 16-file repository root free of generated binary archives and avoids archive-only Git commits.
 
 The `build-release-archive` job runs only after an explicit `workflow_dispatch` on `main` or an approved maintenance branch, and only after the source-validation job succeeds. It builds the archive outside the repository, checks safe paths and exact tracked-file parity, tests the extracted project, builds the Docker image, and uploads a 30-day Actions artifact. Ordinary pushes do not create ZIP files or binary commits. This process does not promote code to `main` or deploy; integrate application changes through the reviewed pull-request process.
+
+
+## Current tree after release-artifact migration — 2026-11-27
+
+- The root now contains **16 tracked files** and five directories. The generated ZIP is no longer tracked; it is produced in CI temporary storage and uploaded as a 30-day Actions artifact.
+- The standalone `audit-rootfix-archive.yml` workflow has been removed because its safety checks now run inside `validate-project.yml`'s artifact job. Only the unified validation/release workflow remains under `.github/workflows/`.
+- The tree therefore has **401 tracked file blobs + 12 directory entries = 413 total entries**. The 17 Markdown files and 360 public files are unchanged. The nested duplicate project directory remains absent.
+- A fresh relative-link scan and CI run are required on this exact tree before treating these counts and packaging changes as validated. No media or live data was changed.

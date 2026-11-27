@@ -10,9 +10,9 @@ The Git repository's incomplete `rimaz-chat-iraqi-main/` duplicate is not part o
 
 ## GitHub release-archive validation
 
-The former `.github/workflows/unzip-upload.yml` workflow has been removed from the maintenance candidate. It required the ZIP to match the current `main` application files, `public/`, and `lib/` exactly before copying those same files back to `main`. That precondition made it incapable of promoting a feature-branch candidate; the later copy, `rsync --delete`, rollback-branch creation, and Git push were unnecessary write operations.
+The former `.github/workflows/unzip-upload.yml` self-sync workflow and the separate `.github/workflows/audit-rootfix-archive.yml` workflow have both been removed from the maintenance candidate. The self-sync workflow required the ZIP to match `main` exactly before copying the same files back, so it could not promote a feature-branch candidate. The standalone archive audit is now part of the release-artifact job.
 
-Use the reviewed pull-request process to integrate application changes. For an archive build, explicitly dispatch **Validate Rimaz Project** on the intended branch. Its source-validation job must pass before `build-release-archive` creates the ZIP in runner temporary storage, validates safe paths and exact tracked-file parity, tests the extracted project, builds the Docker image, and uploads the 30-day artifact. No archive file is committed to the repository. This workflow does not merge branches, update `main`, deploy to Deplexo, or modify live data. No manual ZIP file editing or upload is required.
+Use the reviewed pull-request process to integrate application changes. For an archive build, explicitly dispatch **Validate Rimaz Project** on the intended branch. Its source-validation job must pass before `build-release-archive` creates the ZIP in runner temporary storage, validates safe paths and exact tracked-file parity, tests the extracted project, builds the Docker image, and uploads the 30-day artifact. The archive is not stored or committed in the repository. No archive file is committed to the repository. This workflow does not merge branches, update `main`, deploy to Deplexo, or modify live data. No manual ZIP file editing or upload is required.
 
 ## Hosting and persistent storage
 
