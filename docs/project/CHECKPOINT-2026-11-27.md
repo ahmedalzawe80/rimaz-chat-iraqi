@@ -1,5 +1,19 @@
 # Rimaz checkpoint — 2026-11-27
 
+## Current verified status — supersedes older snapshots below
+
+- Production deployment reported by Deplexo on 2026-11-27: commit `6d931239167f5cd811da4df75ef0ededcfec802c` on branch `review/rimaz-clean-integration-2026-11-27`.
+- The current review branch and open draft PR #9 have that same exact head SHA. PR #9 targets `safety/validate-and-backup-before-sync`; it is **open, draft, and unmerged**. PR #3 is closed as superseded. Do not merge, deploy, restart, or modify live data without a separate explicit release decision.
+- Production/default branch `main` remains `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
+- Exact-head GitHub Actions run #46022343659 completed successfully on `6d93123`: locked dependency installation/tree check, JavaScript syntax, regression tests, production Docker build, and constrained HTTP/Socket.IO integration smoke all passed. The smoke container ran at 128 MiB and 0.25 vCPU; measured cgroup memory current was 47,669,248 bytes and peak was 66,060,288 bytes, with the container running and not OOM-killed. This is isolated CI evidence, not proof that Deplexo's historical OOM is resolved.
+- The Deplexo log findings map to current source safeguards: `lastKnownGoodDatabaseBackupAt` is declared before startup migrations call `save()`; generated restore staging names are matched by the corrected anchored expression; current ticket use is declared in its route; the exact deployed head passed syntax checks. Historical log lines alone do not prove these errors still occur on the current deployment.
+- The corrupt database recovery copy and missing historical JPG remain production-data questions. No access to or modification of `/data/rimaz` occurred. Do not overwrite `data.json`, auto-restore `.previous`, delete references, or recreate a placeholder image. A missing physical upload requires recovery from a verified independent copy.
+- The repository root has been rechecked: the nested `rimaz-chat-iraqi-main/` copy and tracked release ZIP are absent; `data.json` is only the warning placeholder; runtime state, uploads, private media, and backups are excluded from the Docker build. Required runtime entry points and public assets remain in place.
+- Remaining production blockers: independent consistent backup of the live persistent volume, isolated full restore of database plus uploads/private media, browser/device staging checks including WebRTC/TURN, Deplexo restart/OOM evidence under representative load, and provider-confirmed trusted proxy configuration.
+- User's standing constraints: root-cause fixes only; preserve existing behavior and features; protect all member data and media; no merge, main update, deploy, rebuild, restart, or live-volume mutation until the required evidence and explicit release approval.
+
+The sections below are retained as historical audit notes. Their earlier PR numbers, branch heads, and CI states are not the current status unless explicitly restated in this superseding section.
+
 ## Current working state
 
 - Repository: `ahmedalzawe80/rimaz-chat-iraqi`
