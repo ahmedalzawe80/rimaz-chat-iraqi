@@ -2080,13 +2080,36 @@ async function* fullBackupTarEntries(){
   if(databaseBackupFile){try{fs.unlinkSync(databaseBackupFile);}catch(error){if(error.code!=='ENOENT')console.error('Full backup temporary database cleanup failed:',error.message);}}
  }
 }
-async function* fullBackupTar(){
- for await(const entry of fullBackupTarEntries()){
+async function prepareFullBackupEntries(){
+ const entries=fullBackupTarEntries();
+ const firstEntry=await entries.next();
+ if(firstEntry.done)throw new Error('Full backup snapshot is empty');
+ return {entries,firstEntry};
+}
+async function* fullBackupTar(entries=fullBackupTarEntries(),firstEntry=null){
+ const emitEntry=async function*(entry){
   yield tarHeader(entry.name,entry.size,Math.floor((entry.mtime||Date.now())/1000));
   if(entry.buffer)yield entry.buffer;else for await(const chunk of fs.createReadStream(entry.disk))yield chunk;
   const padding=(512-(entry.size%512))%512;if(padding)yield Buffer.alloc(padding);
- }
+ };
+ const first=firstEntry||await entries.next();
+ if(!first.done)yield* emitEntry(first.value);
+ for await(const entry of entries)yield* emitEntry(entry);
  yield Buffer.alloc(1024);
+}
+async function sendFullBackupResponse(res){
+ let prepared;
+ try{prepared=await prepareFullBackupEntries();}
+ catch(error){
+  console.error('Full backup preparation failed:',error);
+  const mediaIntegrityFailure=/Backup media integrity check failed|Referenced public upload/.test(String(error?.message||''));
+  return res.status(mediaIntegrityFailure?409:500).json({error:mediaIntegrityFailure?'تعذر تجهيز النسخة الكاملة: قاعدة البيانات تشير إلى ملف وسائط مفقود أو غير صالح. راجع سجل الخادم.':'تعذر تجهيز النسخة الاحتياطية الكاملة. راجع سجل الخادم.'});
+ }
+ res.set('Cache-Control','no-store, no-cache, must-revalidate');
+ res.set('Content-Type','application/gzip');
+ res.set('Content-Disposition',`attachment; filename="rimaz-full-backup-${new Date().toISOString().slice(0,10)}.tar.gz"`);
+ const source=Readable.from(fullBackupTar(prepared.entries,prepared.firstEntry)),archive=zlib.createGzip({level:6});
+ pipeline(source,archive,res,error=>{if(error&&error.code!=='ERR_STREAM_PREMATURE_CLOSE')console.error('Full backup pipeline failed:',error);});
 }
 
 // Owner-only site controls, login history and database backup. These endpoints
@@ -2161,13 +2184,9 @@ app.get('/api/admin/backup/full-download/:token',(req,res)=>{
  const user=sessionUser(ticket.sid);
  if(!user||keyName(user.name)!==ticket.account||(!isOwner(user)&&!hasPermission(user,'site_admin')))return res.status(403).json({error:'انتهت الجلسة أو لم تعد تملك صلاحية النسخ الاحتياطي'});
  res.set('Referrer-Policy','no-referrer');
- res.set('Cache-Control','no-store, no-cache, must-revalidate');
- res.set('Content-Type','application/gzip');
- res.set('Content-Disposition',`attachment; filename="rimaz-full-backup-${new Date().toISOString().slice(0,10)}.tar.gz"`);
- const source=Readable.from(fullBackupTar()),archive=zlib.createGzip({level:6});
- pipeline(source,archive,res,error=>{if(error&&error.code!=='ERR_STREAM_PREMATURE_CLOSE')console.error('Full backup pipeline failed:',error);});
+ return sendFullBackupResponse(res);
 });
-app.get('/api/admin/backup/full',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخة الاحتياطية الكاملة'});res.set('Cache-Control','no-store, no-cache, must-revalidate');res.set('Content-Type','application/gzip');res.set('Content-Disposition',`attachment; filename=\"rimaz-full-backup-${new Date().toISOString().slice(0,10)}.tar.gz\"`);const source=Readable.from(fullBackupTar()),archive=zlib.createGzip({level:6});pipeline(source,archive,res,error=>{if(error&&error.code!=='ERR_STREAM_PREMATURE_CLOSE')console.error('Full backup pipeline failed:',error);});});
+app.get('/api/admin/backup/full',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخة الاحتياطية الكاملة'});return sendFullBackupResponse(res);});
 app.post('/api/admin/restore/database/preview',requireAdmin,restoreUploadGate,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية استعادة النسخة'});
  purgeExpiredDatabaseRestores();
