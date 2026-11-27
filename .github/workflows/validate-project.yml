@@ -119,7 +119,7 @@ jobs:
     # Produce a downloadable release artifact only on explicit dispatch and
     # only after the exact branch source has passed the validation job.
     # The archive is built in runner temp storage, never committed to Git.
-    if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/fix/bound-private-media-ticket-cache' || github.ref == 'refs/heads/fix/persistent-data-symlink-boundary')
+    if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/safety/validate-and-backup-before-sync' || github.ref == 'refs/heads/review/rimaz-clean-integration-2026-11-27' || github.ref == 'refs/heads/fix/bound-private-media-ticket-cache' || github.ref == 'refs/heads/fix/persistent-data-symlink-boundary')
     needs: validate
     runs-on: ubuntu-latest
     permissions:
