@@ -164,3 +164,30 @@ A history review found that the first 250 commit records returned by GitHub incl
 - Exact source/test commit `e534e07e01142d0df5cfb61a075c507dd6428a9c` passed Actions run [#45946608116](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45946608116): dependency installation/tree verification, JavaScript syntax, the full regression suite, production Docker build, and constrained HTTP/Socket.IO smoke all succeeded. The archive-refresh job was **skipped as intended** for an ordinary push.
 - The current branch tree remains 416 entries / 404 tracked files. PR #3 remains open/draft/unmerged; production `main` and Deplexo remain untouched.
 - The archive must be explicitly refreshed and audited on the intended release branch before any future use of the main-only sync workflow. A branch push passing source CI alone does not certify the tracked ZIP.
+
+
+## Repository phase-one reconciliation — latest exact branch review (2026-11-27)
+
+### Exact branch and CI state
+
+- Current PR #3 head: `02c901f5cc912c8dbb4c746913f54c8e62482fad` (`docs: record controlled archive release workflow and CI result`).
+- PR #3 remains open, draft, and unmerged; it targets `safety/validate-and-backup-before-sync`. GitHub reports 841 commits ahead and 48 changed paths. The unusually long history remains a separate integration-review item; do not force-push or rewrite it as cleanup.
+- Exact-head Actions run [#45946706579](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45946706579) passed source validation: locked dependency installation/tree verification, JavaScript syntax, regression tests, production Docker build, and constrained HTTP/Socket.IO smoke checks.
+- The `refresh-release-archive` job was skipped on that ordinary push by design. The tracked ZIP is therefore **not certified current with this exact branch head**. Before any future use of the guarded source-sync workflow, explicitly dispatch `Validate Rimaz Project` on the intended release branch, wait for validation and archive refresh, then confirm the archive audit succeeds. This is an operator action in GitHub, not a manual file edit by the user.
+- The run validates the candidate in CI only; it is not Deplexo production or staging sign-off.
+
+### Reconciliation of paths shown in PR #3
+
+The PR filename list includes changed paths whether they are added, modified, renamed, or removed. A status-aware comparison against its base confirms:
+
+- `rimaz-chat-iraqi-main/data.json` and `rimaz-chat-iraqi-main/public/google1a84d9d1dec7b85d.html` have status **removed**. They are not present in the current branch tree; their appearance in the PR file list does not mean a nested app copy remains.
+- The former root documents `DEPLOYMENT-46.93.72.md`, `HANDOFF-2026-11-24.md`, and `REPAIR-NOTES-46.93.72.md` have been removed from the root as part of documentation consolidation. The maintained package deployment reference now lives at `docs/operations/DEPLOYMENT-46.93.72.md`; audit/checkpoint records are categorized under `docs/audits/` and `docs/project/`.
+- The existing audit documents moved into `docs/audits/` are represented as renames, not lost reports.
+- The current tree inventory remains 416 tree entries: 404 file blobs and 12 directory entries; the nested duplicate application directory is absent.
+
+### Current repository-phase boundary
+
+- The root release ZIP remains tracked because the archive-audit and guarded source-sync workflows consume that exact path. It is not a live-data backup.
+- The user does not need to edit or upload the ZIP manually. If/when a release package is required, the repository workflow can rebuild it through explicit GitHub Actions dispatch after source validation.
+- No files or assets were deleted in this review. No merge, force-push, Deplexo operation, production sync, restart, or live-data change was performed.
+- Continue phase one with reference-aware review of the 48 changed paths, workflow safety assumptions, and documentation currency. Do not begin chat/runtime phase two until repository phase one is explicitly complete.
