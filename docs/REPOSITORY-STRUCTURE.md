@@ -9,7 +9,8 @@ This guide explains why each top-level area exists and which files must remain i
 ├── .github/
 │   ├── dependabot.yml
 │   ├── pull_request_template.md
-│   └── workflows/\n│       └── validate-project.yml
+│   └── workflows/
+│       └── validate-project.yml
 ├── docs/
 │   ├── audits/
 │   ├── operations/
