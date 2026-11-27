@@ -3402,9 +3402,9 @@ try {
   context.removeUploadedFile({path:path.join(context.UP_DIR,'keep.jpg')});
   context.removeUploadedFile({path:path.join(context.UP_DIR,'orphan.jpg')});
   context.removeUploadedFile({path:'/tmp/rimaz-restore-preview.tmp'});
-  assert.deepEqual(deleted,[path.join(context.UP_DIR,'orphan.jpg'),'/tmp/rimaz-restore-preview.tmp']);
-  assert.equal(warnings.length,1);
-  pass('upload cleanup preserves referenced public media and still removes orphan/temporary files');
+  assert.deepEqual(deleted,[path.join(context.UP_DIR,'orphan.jpg')]);
+  assert.equal(warnings.length,2);
+  pass('upload cleanup preserves referenced and out-of-directory files while removing only orphan files inside UP_DIR');
 } catch(error) { fail('referenced public upload cleanup guard',error.message); }
 
 // Backup snapshot collection must ignore chat text and fail closed for broken media references.
