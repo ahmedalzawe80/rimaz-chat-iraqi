@@ -99,3 +99,19 @@ The reference-aware backup review confirmed that uploaded custom smiley artwork 
 ## Follow-up: voice-room request idempotency — 2026-11-27
 
 The server-side voice-room microphone request handler and integration smoke test were reviewed together. Repeated requests to raise an already-raised microphone on the same seat now return the current grant without rewriting speaker state or rebroadcasting the room state. Repeated lower requests from a non-speaker return the acknowledgement without an unnecessary room-wide state broadcast; an actual lower request still releases the seat and broadcasts the updated state. Existing membership, permission, seat-range, occupied-seat, and speaker-limit checks remain active. The integration smoke test covers duplicate raise/lower behavior and synchronizes its listeners before the expected events to avoid test-order races. Final CI run [#45899789210](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45899789210) passed both validation and exact release-archive refresh jobs. This is a source/CI result only; no live production session or Deplexo volume was modified.
+
+
+## Current-tree refresh — 2026-11-27
+
+The original counts above describe the 2026-11-26 tree only. A fresh recursive Git tree inspection on the current PR #3 branch found:
+
+- Tree SHA: `cb7e3917eee73b47244d3050e9ccbb889807221d`.
+- **416 total tree entries**, with **404 tracked file blobs** and 12 directory entries; the response was not truncated.
+- **17 root files** and five root directories.
+- **17 Markdown documentation files** in the current tree (the original inventory counted 12).
+- The public asset count remains **360 files**.
+- No nested `rimaz-chat-iraqi-main/` application copy, additional root archive, or backup/temp dump appears in the current tree.
+
+The source/test commit `f60b85fe6f84fd997a500546880c10949a170d46` passed GitHub Actions run [#45943098064](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45943098064). Both `validate` and `refresh-release-archive` jobs succeeded. The validated source includes locked dependency installation/tree verification, syntax checks, the regression suite, production Docker build, and constrained HTTP/Socket.IO integration smoke. The archive job rebuilt and verified the ZIP, then tested and built from the extracted archive. The current branch tip `4c8309f86c589b4afac04253efb6cb1fc2126971` is the archive-only child of that tested source commit; compare confirms only the ZIP changed.
+
+This refresh does not change the cleanup decision: no media or root file is approved for deletion based on current evidence. Production data and the Deplexo volume were not accessed.
