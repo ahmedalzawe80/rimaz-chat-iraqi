@@ -286,3 +286,10 @@ The PR filename list includes changed paths whether added, modified, renamed, or
 - A fresh recursive tree inspection of that exact head returned **413 entries = 401 file blobs + 12 directories**, not truncated; 16 root files, one workflow file, no symlinks, no tracked file over 5 MiB, and 360 public assets (115 gifts, 238 smileys, 1 VIP gift plus six other public files). No ZIP, nested project duplicate, or database dump is tracked.
 - The repository tree diagram's escaped newline was corrected. All 17 Markdown files were rechecked for local relative links in the previous tree review; a fresh final link scan will be repeated after this checkpoint update.
 - No merge, force-push, deployment, Deplexo operation, or live-data change was performed.
+
+
+### Final documentation refresh validation — 2026-11-27
+
+- The latest documentation-only refresh updated historical release/archive evidence to clearly distinguish the old tracked-ZIP process from the current artifact-only design, and recorded the superseded PR #2/#7/#8 and safe PR #1 integration order.
+- Exact head `e752b8755b2d3411d7b635ab2db6ede62ac7b243` passed [Actions run #45950194769](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45950194769). Dependency installation/tree verification, JavaScript syntax, regression suite, Docker build, and constrained HTTP/Socket.IO smoke all succeeded. The optional artifact job was skipped as expected on a normal push.
+- A fresh link scan of all 17 Markdown files found zero broken relative links and no escaped newline artifacts. Tree remains 413 entries (401 tracked files + 12 directories), 16 root files, and 360 public assets.

@@ -146,3 +146,8 @@ The `build-release-archive` job runs only after an explicit `workflow_dispatch` 
 - Exact head `accd5e8d67b89ba0e5dfcd282f90ec70c951c411` passed [Actions run #45949927455](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45949927455), including the full regression suite, production Docker build, and constrained HTTP/Socket.IO smoke. The pull-request path filter now explicitly includes `scripts/**` so changes to the integration smoke script also trigger validation.
 - Recursive tree: **413 entries = 401 files + 12 directories**, not truncated; root **16 files**; one workflow file; no symlinks; no tracked files larger than 5 MiB; public assets **360**. The ZIP, nested project duplicate, and database dumps are absent.
 - The archive artifact job is intentionally skipped on push events. Its first real upload remains blocked until the current safety workflow is updated onto the default branch through the reviewed PR sequence; no merge has been performed.
+
+
+### Documentation follow-up verification — 2026-11-27
+
+The historical archive and inventory notes were refreshed on exact head `e752b8755b2d3411d7b635ab2db6ede62ac7b243`. Actions run [#45950194769](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45950194769) passed. A fresh local-link scan across all 17 Markdown files returned zero broken links; no escaped newline formatting remains. Tree counts are unchanged at 413 entries, 401 tracked files, 12 directories, 16 root files, and 360 public assets.
