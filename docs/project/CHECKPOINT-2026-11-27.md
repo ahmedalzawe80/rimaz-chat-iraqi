@@ -211,7 +211,10 @@ The PR filename list includes changed paths whether added, modified, renamed, or
 - Removed this obsolete write-enabled self-sync workflow from the candidate. The existing `validate-project.yml` archive refresh and `audit-rootfix-archive.yml` read-only archive audit remain. Source integration must happen through reviewed pull requests.
 - Updated `verify.js` to assert that the obsolete workflow is absent and that the remaining archive audit is read-only, manually runnable, and checks safe paths plus exact public/library parity.
 - Updated README, repository structure, deployment reference, documentation index, and changelog so they no longer describe ZIP-to-main synchronization as a supported release path.
-- This is a candidate-branch repository/workflow change only. It does not alter `main`, merge PRs, deploy to Deplexo, or touch persistent data. The next push-triggered CI run must pass on the exact new commit before this change is considered validated.
+- Exact candidate commit `fb40e735625f2a78da282fc59bb8768a72ea7419` passed Actions run [#45947805826](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45947805826): dependency install/tree verification, JavaScript syntax, full regression tests (including the new read-only archive assertions), production Docker build, and constrained HTTP/Socket.IO smoke all succeeded. The archive-refresh job was skipped intentionally because this was an ordinary push.
+- The first run on the preceding workflow-removal commit exposed two incorrect regression-test string expectations; those expectations were corrected in the next commit. The exact latest run above passed. This was a test assertion correction, not an application runtime failure.
+- The tracked ZIP is not certified current with the post-removal candidate because automatic refresh is disabled on ordinary pushes. If a release package is needed, the GitHub archive-refresh workflow must be explicitly dispatched on the intended branch, then the archive audit must pass. No manual file editing or upload is required.
+- This is a candidate-branch repository/workflow change only. It does not alter `main`, merge PRs, deploy to Deplexo, or touch persistent data.
 
 
 ### ZIP workflow root-cause correction — 2026-11-27
