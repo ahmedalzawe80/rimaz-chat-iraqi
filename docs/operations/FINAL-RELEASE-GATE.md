@@ -1,6 +1,6 @@
 # Rimaz — final release gate
 
-> **Historical snapshot:** This document contains release evidence recorded on 2026-11-25 and earlier. For the latest branch/PR head and follow-up activity, consult [the 2026-11-26 continuation checkpoint](../project/CHECKPOINT-2026-11-26.md). Do not use the historical SHAs below as the current candidate without re-fetching the PR and exact-head checks.
+> **Historical snapshot:** This document contains release evidence recorded on 2026-11-25 and earlier. For the latest branch/PR head and follow-up activity, consult [the 2026-11-27 continuation checkpoint](../project/CHECKPOINT-2026-11-27.md). Do not use the historical SHAs below as the current candidate without re-fetching the PR and exact-head checks.
 
 **Review date:** 2026-11-25  
 **Status:** Source candidate and isolated container smoke validated; **not cleared for production**.
