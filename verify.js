@@ -636,8 +636,12 @@ try {
 try {
   const source = fs.readFileSync(server, 'utf8');
   const httpRoute = source.match(/app\.post\('\/api\/message',[\s\S]*?\n\}\);/);
-  const socketRoute = source.match(/socket\.on\('send-message',[\s\S]*?\n/);
-  const privateRoute = source.match(/socket\.on\('private-message',[\s\S]*?\n/);
+  const socketStart=source.indexOf("socket.on('send-message',async(d,acknowledge)=>");
+  const socketEnd=source.indexOf("socket.on('private-typing'",socketStart);
+  const socketRoute=socketStart>=0&&socketEnd>socketStart?[source.slice(socketStart,socketEnd)]:null;
+  const privateStart=source.indexOf("socket.on('private-message',async(d,acknowledge)=>");
+  const privateEnd=source.indexOf("socket.on('call-offer'",privateStart);
+  const privateRoute=privateStart>=0&&privateEnd>privateStart?[source.slice(privateStart,privateEnd)]:null;
   if (httpRoute && httpRoute[0].includes('blockedChatTerm(text)') && httpRoute[0].includes('.slice(0,2000)')) pass('HTTP room messages enforce chat filter and 2000-character limit');
   else fail('HTTP room messages enforce chat filter and 2000-character limit');
   if (httpRoute && httpRoute[0].includes('globalBanResponse(res,u.name,requestClientIp(req))') && httpRoute[0].indexOf('globalBanResponse') < httpRoute[0].indexOf('const room=')) pass('HTTP room messages reject global bans before room checks or message creation');
@@ -646,7 +650,7 @@ try {
   else fail('Socket room messages enforce chat filter');
   if (privateRoute && privateRoute[0].includes('blockedChatTerm(text)')) pass('private messages enforce chat filter');
   else fail('private messages enforce chat filter');
-  if (socketRoute && socketRoute[0].includes('globalBanned(u.name,socketClientIp(socket))') && socketRoute[0].includes("error-msg',{error:'لا يمكنك الكتابة أثناء الحظر العام'}")) pass('public room messages recheck global bans at send time, not only on room join');
+  if (socketRoute && socketRoute[0].includes('globalBanned(u.name,socketClientIp(socket))') && socketRoute[0].includes("return {ok:false,error:'لا يمكنك الكتابة أثناء الحظر العام'}")) pass('public room messages recheck global bans at send time, not only on room join');
   else fail('public room messages recheck global bans at send time');
   if (httpRoute && httpRoute[0].includes('roomMessageRateLimitError(sessionId,text)') && socketRoute && socketRoute[0].includes('roomMessageRateLimitError(socket.data.sid,text)')) pass('HTTP and Socket.IO public messages share the same anti-spam policy');
   else fail('HTTP and Socket.IO public messages share the same anti-spam policy');
@@ -1853,7 +1857,7 @@ try {
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
-    ['private chat module is enforced on history, contacts, media, and Socket.IO send', serverText.includes("app.get('/api/private/history',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))") && serverText.includes("app.get('/api/private/contacts',requireAuth,(req,res)=>{\n  if(!siteModuleEnabled('privateChat'))") && serverText.includes("socket.on('private-message',d=>{const u=socket.data.user,sid=socket.data.sid;if(!u||!isCurrentSessionSocket(socket)||!d?.to)return;if(!siteModuleEnabled('privateChat'))")],
+    ['private chat module is enforced on history, contacts, media, and Socket.IO send', serverText.includes("app.get('/api/private/history',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))") && serverText.includes("app.get('/api/private/contacts',requireAuth,(req,res)=>{\n  if(!siteModuleEnabled('privateChat'))") && serverText.includes("socket.on('private-message',async(d,acknowledge)=>{") && serverText.includes("if(!siteModuleEnabled('privateChat'))")],
     ['voice room module is enforced on join, mic requests, and peer signaling', serverText.includes("targetRoom.kind==='voice'&&!siteModuleEnabled('voiceRooms')") && serverText.includes("socket.on('request-mic',({room,raised,seatIndex}={})=>{\n    if(!isCurrentSessionSocket(socket))return;\n    if(!siteModuleEnabled('voiceRooms'))") && serverText.includes("socket.on('voice-peer-offer',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))")],
     ['video-call module is enforced on call offer and answer', serverText.includes("socket.on('call-offer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))") && serverText.includes("socket.on('call-answer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))return")],
     ['gift module is enforced on send, upload, and catalogue deletion', serverText.includes("app.post('/api/admin/gift',requireAdmin,(req,res)=>{requireAuth(req,res,()=>{if(!siteModuleEnabled('gifts'))") && serverText.includes("app.post('/api/admin/gifts/catalog/upload',requireAdmin,(req,res,next)=>requireAuth(req,res,()=>{if(!siteModuleEnabled('gifts'))") && serverText.includes("if(!hasPermission(req.user,'gift_catalog_manage'))return res.status(403)") && serverText.includes("}),uploadSmallImage.single('file'),validateUploadedContent('image')") && serverText.includes("app.post('/api/admin/gifts/catalog/delete',requireAdmin,(req,res)=>{if(!siteModuleEnabled('gifts'))")],
@@ -2330,7 +2334,7 @@ try {
     ['call answer exempts the recipient and revalidates only the original caller', answerLine.includes('if(!canMedia(target[1]))') && !answerLine.includes('!canMedia(u)') && answerLine.includes('state.callee!==sid')],
     ['retired staff/media/mic bypass permissions are absent from catalog and UI', !source.includes("staff_notice:'") && !source.includes("staff_media:'") && !source.includes("voice_mic_override:'") && !client.includes("'staff_notice'") && !client.includes("'staff_media'") && !client.includes("'voice_mic_override'")],
     ['permission schema version reflects the retired bypass capabilities', source.includes('permissionSchemaVersion:10') && client.includes('permissionSchemaVersion:compatibility.permissionSchemaVersion||10')],
-    ['private text messages remain independent of likes restrictions', source.includes("socket.on('private-message',d=>") && !/socket\.on\('private-message',d=>[\s\S]{0,1200}likes/.test(source)]
+    ['private text messages remain independent of likes restrictions', source.includes("socket.on('private-message',async(d,acknowledge)=>") && (()=>{const start=source.indexOf("socket.on('private-message',async(d,acknowledge)=>");const end=source.indexOf("socket.on('call-offer'",start);return start>=0&&end>start&&!source.slice(start,end).includes('canMedia(');})()]
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
 
@@ -2502,7 +2506,7 @@ try {
   const checks=[
     ['v46.93.72 package version is current (private-media regression suite)',pkgNow.version==='46.93.72'],
     ['private media verifies an active recipient account and fans out to all its active sessions',route.includes('hasConnectedSessionForUser(to)')&&route.includes("emitToUser(to,'private-media',m)")&&!route.includes('targetSocket[0]')],
-    ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',m)")&&source.includes("emitToUser(to,'private-media',m)")],
+    ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',message)")&&source.includes("emitToUser(to,'private-media',m)")],
     ['private media upload enforces the private-chat module switch and removes rejected uploads',route.includes("if(scope==='private'&&!siteModuleEnabled('privateChat')){removeUploadedFile(req.file);return res.status(403)")&&route.indexOf("if(scope==='private'&&!siteModuleEnabled('privateChat'))")<route.indexOf("db.privateMessages=[...")],
     ['wall media upload enforces the wall module switch and removes rejected uploads',route.includes("if(scope==='wall'&&!siteModuleEnabled('wall')){removeUploadedFile(req.file);return res.status(403)")&&route.indexOf("if(scope==='wall'&&!siteModuleEnabled('wall'))")<route.indexOf("db.wall.push(post)")],
     ['QuickTime MOV uploads have a safe extension and require a valid ISO-BMFF signature',source.includes("'video/quicktime':'.mov'")&&source.includes("['video/mp4','video/quicktime'].includes(mime) && actual==='mp4'")],
@@ -3128,10 +3132,12 @@ try {
 try {
   const source=fs.readFileSync(server,'utf8');
   const http=source.match(/app\.post\('\/api\/message',[\s\S]*?\n\}\);/);
-  const socket=source.match(/socket\.on\('send-message',[\s\S]*?\n/);
+  const socketStart=source.indexOf("socket.on('send-message',async(d,acknowledge)=>");
+  const socketEnd=source.indexOf("socket.on('private-typing'",socketStart);
+  const socket=socketStart>=0&&socketEnd>socketStart?source.slice(socketStart,socketEnd):'';
   const checks=[
     ['HTTP room messages await the disk commit before broadcast and success response',!!http&&http[0].indexOf('await addMessage(m)')<http[0].indexOf("io.to(room).emit('message',m)")&&http[0].indexOf('await addMessage(m)')<http[0].indexOf('res.json({ok:true,message:m})')],
-    ['Socket.IO room messages await the disk commit before broadcast',!!socket&&socket[0].indexOf('await addMessage(m)')<socket[0].indexOf("io.to(room).emit('message',m)")],
+    ['Socket.IO room messages await the disk commit before broadcast',!!socket&&socket.indexOf('await addMessage(message)')<socket.indexOf("io.to(room).emit('message',message)")],
     ['room message enqueue does not expose pending writes through db.messages',source.includes('pendingMessageWrites.push({message:m,resolve,reject})')&&!source.includes('function addMessage(m){\n  db.messages.push(m)')]
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
@@ -3144,15 +3150,15 @@ try {
   const source=fs.readFileSync(server,'utf8');
   const httpStart=source.indexOf("app.post('/api/message'");
   const httpEnd=source.indexOf("\n});",httpStart);
-  const socketStart=source.indexOf("socket.on('send-message'");
-  const socketEnd=source.indexOf("\n  socket.on(",socketStart);
+  const socketStart=source.indexOf("socket.on('send-message',async(d,acknowledge)=>");
+  const socketEnd=source.indexOf("socket.on('private-typing'",socketStart);
   const http=httpStart>=0&&httpEnd>httpStart?source.slice(httpStart,httpEnd):'';
   const socket=socketStart>=0&&socketEnd>socketStart?source.slice(socketStart,socketEnd):'';
   const commandStart=source.indexOf('async function processBuiltInBotCommand(');
   const commandEnd=source.indexOf('\n}',commandStart);
   const command=commandStart>=0&&commandEnd>commandStart?source.slice(commandStart,commandEnd):'';
   const checks=[
-    ['HTTP and Socket.IO both call the shared built-in bot command handler',http.includes('processBuiltInBotCommand(joinedSocket,u,room,text')&&socket.includes('processBuiltInBotCommand(socket,u,room,text)')],
+    ['HTTP and Socket.IO both call the shared built-in bot command handler',http.includes('processBuiltInBotCommand(joinedSocket,u,room,text')&&socket.includes('processBuiltInBotCommand(socket,u,room,text,message=>{commandError=message;})')],
     ['HTTP bot command failures are returned as HTTP errors rather than false success',http.includes('botCommandError')&&http.includes('res.status(botCommandError.status).json')],
     ['the shared bot handler reports missing admin notice text as HTTP 400 and socket error',command.includes('onError(message,400)')&&command.includes("socket.emit('error-msg',{error:message})")],
     ['the shared bot handler reports missing admin permission as HTTP 403 and socket error',command.includes('onError(message,403)')&&command.includes("socket.emit('error-msg',{error:message})")],
@@ -3205,14 +3211,14 @@ try {
   const source=fs.readFileSync(server,'utf8');
   const httpStart=source.indexOf("app.post('/api/message'");
   const httpEnd=source.indexOf("\n});",httpStart);
-  const socketStart=source.indexOf("socket.on('send-message'");
-  const socketEnd=source.indexOf("\n  socket.on(",socketStart);
+  const socketStart=source.indexOf("socket.on('send-message',async(d,acknowledge)=>");
+  const socketEnd=source.indexOf("socket.on('private-typing'",socketStart);
   const http=httpStart>=0&&httpEnd>httpStart?source.slice(httpStart,httpEnd):'';
   const socket=socketStart>=0&&socketEnd>socketStart?source.slice(socketStart,socketEnd):'';
   const checks=[
     ['HTTP rejects blocked public-chat terms before consuming the anti-spam quota',http.indexOf('blockedChatTerm(text)')>=0&&http.indexOf('blockedChatTerm(text)')<http.indexOf('roomMessageRateLimitError(sessionId,text)')],
-    ['Socket.IO rejects blocked public-chat terms before consuming the anti-spam quota',socket.indexOf('blockedChatTerm(text)')>=0&&socket.indexOf('blockedChatTerm(text)')<socket.indexOf('roomMessageRateLimitError(socket.data.sid,text)')],
-    ['both transports retain anti-spam protection before processing built-in bot commands',http.indexOf('roomMessageRateLimitError(sessionId,text)')<http.indexOf('processBuiltInBotCommand(joinedSocket')&&socket.indexOf('roomMessageRateLimitError(socket.data.sid,text)')<socket.indexOf('processBuiltInBotCommand(socket')]
+    ['Socket.IO rejects blocked public-chat terms before consuming the anti-spam quota',socket.indexOf('blockedChatTerm(text)')>=0&&socket.indexOf('blockedChatTerm(text)')<socket.indexOf('roomMessageRateLimitError(sid,text)')],
+    ['both transports retain anti-spam protection before processing built-in bot commands',http.indexOf('roomMessageRateLimitError(sessionId,text)')<http.indexOf('processBuiltInBotCommand(joinedSocket')&&socket.indexOf('roomMessageRateLimitError(sid,text)')<socket.indexOf('processBuiltInBotCommand(socket')]
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('blocked-term anti-spam quota ordering regression checks',error.message); }
@@ -3273,7 +3279,7 @@ try {
     ['private-message limiter enforces seven messages per five-second window across distinct content',distinct.slice(0,3).every(Boolean)&&distinct[3]===false],
     ['private-message limiter resets after its five-second window and rejects empty messages',reset===true&&empty===false],
     ['private-message limiter runs after blocked-term, recipient, privacy, ignore, and online checks',rate>route.indexOf('blockedChatTerm(text)')&&rate>route.indexOf('getUser(to)')&&rate>route.indexOf('tp.privateOpen===false')&&rate>route.indexOf('ignored)return')&&rate>route.indexOf('hasConnectedSessionForUser(to)')],
-    ['private-message limiter runs before the accepted message is appended and delivered',rate>=0&&rate<route.indexOf('db.privateMessages=[...')&&rate<route.indexOf("emitToUser(to,'private-message',m)")]
+    ['private-message limiter runs before the accepted message is appended and delivered',rate>=0&&rate<route.indexOf('db.privateMessages=[...')&&rate<route.indexOf("emitToUser(to,'private-message',message)")]
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('private-message rate-limit ordering regression checks',error.message); }
