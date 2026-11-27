@@ -16,6 +16,11 @@ const { cleanupStaleBackupTemps } = require('./lib/backup-temp-cleanup');
 const { syncFileAndDirectory, syncDirectory } = require('./lib/durable-file');
 const { isWithinPersistentRoot, resolveDataDirectory, canInitializeEmptyDatabase } = require('./lib/data-directory');
 
+const root = __dirname;
+const failures = [];
+const pass = (label) => console.log(`✓ ${label}`);
+const fail = (label, detail) => { failures.push(label); console.error(`✗ ${label}${detail ? `: ${detail}` : ''}`); };
+
 // Public uploads must be flushed to disk before their URLs can be committed.
 try {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-durable-upload-'));
@@ -38,10 +43,6 @@ try {
   fail('durable uploaded-media persistence tests', error.message);
 }
 
-const root = __dirname;
-const failures = [];
-const pass = (label) => console.log(`✓ ${label}`);
-const fail = (label, detail) => { failures.push(label); console.error(`✗ ${label}${detail ? `: ${detail}` : ''}`); };
  
 // Persistent data-directory selection must never silently redirect an existing site to an ephemeral path.
 try {
