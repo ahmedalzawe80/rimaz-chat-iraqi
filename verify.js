@@ -2028,7 +2028,7 @@ try {
   const serverText = fs.readFileSync(server, 'utf8');
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const checks = [
-    ['full backup route supports delegated site_admin and uses pipeline to cancel streams on response close', serverText.includes("app.get('/api/admin/backup/full',requireAdmin") && serverText.includes('source=Readable.from(fullBackupTar()),archive=zlib.createGzip') && serverText.includes('pipeline(source,archive,res') && serverText.includes("const { Readable, pipeline } = require('stream')")],
+    ['full backup route supports delegated site_admin and uses pipeline to cancel streams on response close', serverText.includes("app.get('/api/admin/backup/full',requireAdmin") && serverText.includes('return sendFullBackupResponse(res)') && serverText.includes('source=Readable.from(fullBackupTar(prepared.entries,prepared.firstEntry))') && serverText.includes('pipeline(source,archive,res') && serverText.includes("const { Readable, pipeline } = require('stream')")],
     ['full backup snapshots referenced public uploads before streaming and omits private media with excluded private conversations', serverText.includes("name:'database/rimaz-database.json'") && serverText.includes('createBackupMediaSnapshot({database:snapshot.database,uploadDirectory:UP_DIR,dataDirectory:DATA_DIR})') && serverText.includes('for(const entry of mediaSnapshot.entries)yield entry') && !serverText.includes("['uploads',UP_DIR],['private-media',PRIVATE_MEDIA_DIR]") && (serverText.match(/database:\{\.\.\.db,sessions:\{\},privateMessages:\[\]\}/g)||[]).length===2],
      ['database-only backup excludes transient private conversations', serverText.includes("app.get('/api/admin/backup/database',requireAdmin") && serverText.includes('database:{...db,sessions:{},privateMessages:[]}')],
     ['backup streams immutable hard-link snapshots and rejects symlink media sources', serverText.includes('fs.createReadStream(entry.disk)') && serverText.includes('mediaSnapshot.cleanup()') && fs.readFileSync(path.join(root,'lib','backup-media-snapshot.js'),'utf8').includes('fs.linkSync(source, target)') && fs.readFileSync(path.join(root,'lib','backup-media-snapshot.js'),'utf8').includes('sourceStat.isSymbolicLink()')],
@@ -3466,7 +3466,7 @@ try {
     if(rejected&&clean)pass('database backup temp writer rejects circular data and removes partial files');else fail('database backup temp writer failure cleanup');
   }finally{fs.rmSync(tempDir,{recursive:true,force:true});}
   const fullStart=source.indexOf('async function* fullBackupTarEntries(){');
-  const fullEnd=source.indexOf('async function* fullBackupTar(){',fullStart);
+  const fullEnd=source.indexOf('async function prepareFullBackupEntries(){',fullStart);
   const full=fullStart>=0&&fullEnd>fullStart?source.slice(fullStart,fullEnd):'';
   const fullOk=full.includes("createDatabaseBackupTempFile(snapshot,'full-backup')")&&full.includes("yield {name:'database/rimaz-database.json',disk:databaseBackupFile")&&full.includes('finally{')&&full.includes('fs.unlinkSync(databaseBackupFile)')&&!full.includes('JSON.stringify(snapshot')&&!full.includes('Buffer.from(');
   const databaseStart=source.indexOf("app.get('/api/admin/backup/database'");
@@ -3484,7 +3484,7 @@ try {
   const source=fs.readFileSync(server,'utf8');
   const helperStart=source.indexOf('function createDatabaseBackupTempFile(snapshot,purpose){');
   const generatorStart=source.indexOf('async function* fullBackupTarEntries(){',helperStart);
-  const generatorEnd=source.indexOf('async function* fullBackupTar(){',generatorStart);
+  const generatorEnd=source.indexOf('async function prepareFullBackupEntries(){',generatorStart);
   if(helperStart<0||generatorStart<0||generatorEnd<0)throw new Error('backup helper/generator boundaries not found');
   const executable=source.slice(helperStart,generatorEnd);
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-tar-generator-cleanup-'));
@@ -3531,3 +3531,31 @@ try {
   }
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 })().catch(error=>{fail('full-backup TAR generator cleanup lifecycle tests',error.message);process.exitCode=1;});
+
+
+// Full-backup preparation must complete integrity checks before HTTP archive headers are sent.
+(async()=>{
+  const source=fs.readFileSync(server,'utf8');
+  const prepareStart=source.indexOf('async function prepareFullBackupEntries(){');
+  const prepareEnd=source.indexOf('\nasync function* fullBackupTar(',prepareStart);
+  if(prepareStart<0||prepareEnd<0)throw new Error('full-backup preparation helper boundaries not found');
+  const prepareSource=source.slice(prepareStart,prepareEnd);
+  const goodContext={fullBackupTarEntries:()=>({next:async()=>({done:false,value:{name:'database/rimaz-database.json'}})})};
+  vm.createContext(goodContext);
+  vm.runInContext(prepareSource+';globalThis.prepare=prepareFullBackupEntries;',goodContext);
+  const prepared=await goodContext.prepare();
+  const preparationOk=prepared.firstEntry?.value?.name==='database/rimaz-database.json'&&typeof prepared.entries.next==='function';
+
+  const sendStart=source.indexOf('async function sendFullBackupResponse(res){');
+  const sendEnd=source.indexOf('\n\n// Owner-only site controls',sendStart);
+  if(sendStart<0||sendEnd<0)throw new Error('full-backup response helper boundaries not found');
+  const sendSource=source.slice(sendStart,sendEnd);
+  const sendContext={prepareFullBackupEntries:async()=>{throw new Error('Backup media integrity check failed. Referenced public upload is missing');},console:{error(){}}};
+  vm.createContext(sendContext);
+  vm.runInContext(sendSource+';globalThis.send=sendFullBackupResponse;',sendContext);
+  const response={statusCode:0,body:null,headers:0,status(code){this.statusCode=code;return this;},json(value){this.body=value;return this;},set(){this.headers++;return this;}};
+  await sendContext.send(response);
+  const responseOk=response.statusCode===409&&response.headers===0&&/وسائط مفقود/.test(response.body?.error||'');
+  preparationOk?pass('full-backup integrity preflight captures the first database entry before streaming'):fail('full-backup integrity preflight preparation');
+  responseOk?pass('missing referenced media returns a clear pre-stream HTTP conflict instead of a broken archive'):fail('full-backup missing-media response must be sent before archive headers');
+})().catch(error=>{fail('full-backup preflight response regression tests',error.message);process.exitCode=1;});
