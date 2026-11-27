@@ -150,3 +150,17 @@ No Deplexo restart, rebuild, redeploy, ZIP sync, live-data mutation, merge, or p
 - PR #3 now reports **832 commits ahead across 48 changed files**. The GitHub PR commits endpoint returned 250 commit records across its first three pages; within those returned records, 68 were automated archive-refresh commits, 71 documentation commits, and 52 test commits. This is a genuine history-maintenance concern, not 832 files or 832 independent runtime changes. Do not force-push or rewrite history; review a controlled squash/integration plan separately.
 - The current branch tip after the latest successful CI/archive refresh is `ce3dec65949fd54b387d6a5383494a0c1a57d18a`. The immediately preceding documentation commit `9b1a37d3b83b3de2e6edd4f1a158e8c8a016036a` passed Actions run [#45946239051](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45946239051); both `validate` and `refresh-release-archive` succeeded. The final branch tip is the archive-only child of that validated documentation commit.
 - The PR description has been refreshed to remove stale inventory counts and reflect the current branch state. PR #3 remains open/draft/unmerged. Production `main` and Deplexo remain untouched.
+
+
+### Controlled release-archive refresh policy — 2026-11-27
+
+A history review found that the first 250 commit records returned by GitHub included 68 automated `build: refresh audited archive` commits. The tracked ZIP is required by the current archive audit and guarded main-only sync workflow, so it was not deleted or moved. Instead:
+
+- Ordinary branch pushes continue to run source validation but no longer rebuild and commit the ZIP.
+- The `refresh-release-archive` job now runs only after an explicit `workflow_dispatch` on `main` or the designated maintenance branches, and only after the source validation job succeeds.
+- The archive audit now also watches `main` so a manually refreshed main release archive is checked.
+- README and repository-structure documentation describe the new release lifecycle. The ZIP remains tracked for compatibility with the existing guarded sync path; do not remove it until those workflows are redesigned together.
+- The first CI attempt after this policy change correctly exposed a stale regression assertion that still expected the old push-triggered behavior. The assertion was updated to verify the manual-dispatch condition and main-branch archive audit.
+- Exact source/test commit `e534e07e01142d0df5cfb61a075c507dd6428a9c` passed Actions run [#45946608116](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45946608116): dependency installation/tree verification, JavaScript syntax, the full regression suite, production Docker build, and constrained HTTP/Socket.IO smoke all succeeded. The archive-refresh job was **skipped as intended** for an ordinary push.
+- The current branch tree remains 416 entries / 404 tracked files. PR #3 remains open/draft/unmerged; production `main` and Deplexo remain untouched.
+- The archive must be explicitly refreshed and audited on the intended release branch before any future use of the main-only sync workflow. A branch push passing source CI alone does not certify the tracked ZIP.
