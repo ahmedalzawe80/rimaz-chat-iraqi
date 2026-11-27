@@ -1,5 +1,7 @@
 # Rimaz Chat — transaction safety and persistence audit
 
+> **Dated source audit (2026-11-24).** This is a source-review snapshot, not a current production or live-data verification. Consult the [2026-11-27 checkpoint](../project/CHECKPOINT-2026-11-27.md) for the latest branch state and release blockers.
+
 **Last reviewed:** 2026-11-24  
 **Reviewed branch:** `fix/bound-private-media-ticket-cache`  
 **Scope:** source-level review of persistence, rollback behavior, startup migrations, and the current automated validation state.
