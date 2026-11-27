@@ -5,3 +5,13 @@ node_modules
 *.log
 .DS_Store
 rimaz-chat-iraqi-main/
+
+# Runtime state and uploaded/private media must never enter the Docker image.
+data.json
+data/
+uploads/
+private-media/
+.restore-tmp/
+*.tmp
+*.corrupt-*
+*.pre-restore-*

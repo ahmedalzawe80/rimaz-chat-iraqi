@@ -1,0 +1,92 @@
+name: Validate Rimaz Project
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - safety/validate-and-backup-before-sync
+      - fix/bound-private-media-ticket-cache
+  pull_request:
+    # Push validation runs on every candidate commit. Only validate PR lifecycle
+    # events here; bot archive commits must not trigger approval-gated sync runs.
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+    branches:
+      - safety/validate-and-backup-before-sync
+      - main
+    paths:
+      - 'server.js'
+      - 'lib/**'
+      - 'verify.js'
+      - 'index.html'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'npm-shrinkwrap.json'
+      - '*.md'
+      - 'docs/**/*.md'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.gitignore'
+      - '.github/**'
+      - '.editorconfig'
+      - '.nvmrc'
+      - '.gitattributes'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js 20 for the current safety-branch baseline
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies without generating a lockfile
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      - name: Verify installed dependency tree
+        run: npm ls --depth=0
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check server.js
+          node --check verify.js
+
+      - name: Run project regression tests
+        run: npm test
+
+      - name: Build production container
+        run: docker build --pull -t rimaz-chat-iraqi:ci .
+
+      - name: Smoke-test production container HTTP and Socket.IO
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/rimaz-home.html /tmp/rimaz-socketio.txt
+          docker run --detach --name rimaz-smoke --publish 127.0.0.1:3000:3000 --env PORT=3000 --env DATA_DIR=/tmp/rimaz-smoke-data rimaz-chat-iraqi:ci
+          cleanup() {
+            docker logs rimaz-smoke || true
+            docker rm --force rimaz-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3000/ -o /tmp/rimaz-home.html; then break; fi
+            sleep 1
+          done
+          test -s /tmp/rimaz-home.html
+          grep -qi '<html' /tmp/rimaz-home.html
+          curl --fail --silent 'http://127.0.0.1:3000/socket.io/?EIO=4&transport=polling' -o /tmp/rimaz-socketio.txt
+          grep -q '^0{' /tmp/rimaz-socketio.txt
