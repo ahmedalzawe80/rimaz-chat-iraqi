@@ -130,3 +130,13 @@ No Deplexo restart, rebuild, redeploy, ZIP sync, live-data mutation, merge, or p
 4. Keep the repository phase separate from the later chat behavior phase.
 
 **No merge, deployment, Deplexo restart, production ZIP sync, or live-data operation is authorized by this continuation.**
+
+
+### Final documentation and archive verification — 2026-11-27
+
+- The refreshed phase-one documentation commit `539c08c294da8bb598e2ff7655076759d7432d82` passed Actions run [#45943551181](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45943551181): both `validate` and `refresh-release-archive` completed successfully.
+- Validation passed locked dependency installation/tree verification, syntax checks, `npm test`, production Docker build, and constrained HTTP/Socket.IO smoke tests.
+- The archive job rebuilt and validated the release ZIP, tested the extracted archive, and committed only that ZIP. Current branch tip after the archive-only refresh: `fb19e4000e9b49bb30bdba0f9f93d22b375b7ba5`; comparing it with documentation commit `539c08c...` confirms the ZIP is the sole changed path.
+- A separate read-only scan of all 17 Markdown files found **zero broken relative file links**. Git blob IDs reconfirmed both synchronized HTML/verification pairs and the three duplicate-media pairs; all remain retained.
+- The PR currently reports 824 commits and 48 changed files. This unusually long history remains an integration-review item; do not rewrite or force-push it as an unreviewed cleanup step.
+- This exact-tree CI and documentation review do not include Deplexo production data, and do not authorize merge or deployment.
