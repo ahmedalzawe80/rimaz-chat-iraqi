@@ -393,12 +393,25 @@ function migratePrivateMediaToProtectedStorage(){
     try{
       const publicUrl='/uploads/'+filename;
       const referencedOutsidePrivateMessages=Object.entries(db).some(([key,value])=>key!=='privateMessages'&&containsStoredUrl(value,publicUrl));
+      let privateFileCreated=false,publicDirectoryChanged=false;
       if(fs.existsSync(privatePath)){
-        if(fs.existsSync(publicPath)&&!referencedOutsidePrivateMessages)fs.unlinkSync(publicPath);
+        if(fs.existsSync(publicPath)&&!referencedOutsidePrivateMessages){
+          fs.unlinkSync(publicPath);
+          publicDirectoryChanged=true;
+        }
       }else if(fs.existsSync(publicPath)){
         if(referencedOutsidePrivateMessages)fs.copyFileSync(publicPath,privatePath);
-        else fs.renameSync(publicPath,privatePath);
+        else{
+          fs.renameSync(publicPath,privatePath);
+          publicDirectoryChanged=true;
+        }
+        privateFileCreated=true;
       }
+      // A legacy private-media move is not committed until the protected file
+      // and every changed directory entry are durable. Startup must stop rather
+      // than persist a private URL whose bytes could disappear after a crash.
+      if(privateFileCreated)syncFileAndDirectory(privatePath,PRIVATE_MEDIA_DIR);
+      if(publicDirectoryChanged)syncDirectory(UP_DIR);
       media.url='/api/private/media/'+filename;
       changed=true;
     }catch(error){
