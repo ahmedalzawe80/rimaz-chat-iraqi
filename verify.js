@@ -663,6 +663,34 @@ try {
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
 } catch (error) { fail('upload security checks', error.message); }
 
+
+// Upload cleanup must be confined to direct Multer children of UP_DIR.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const fn=source.match(/function removeUploadedFile\(file\)\{[\s\S]*?\n\}/)?.[0];
+  const contains=source.match(/function containsStoredUrl\(value,url,seen=new Set\(\)\)\{[\s\S]*?\n\}/)?.[0];
+  if(!fn||!contains)throw new Error('upload cleanup or database reference scanner not found');
+  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-upload-cleanup-'));
+  try {
+    const uploads=path.join(temp,'uploads'),protectedDir=path.join(temp,'private-media');
+    fs.mkdirSync(uploads);fs.mkdirSync(protectedDir);
+    const referenced=path.join(uploads,'referenced.jpg');
+    const orphan=path.join(uploads,'orphan.jpg');
+    const protectedFile=path.join(protectedDir,'protected.jpg');
+    for(const file of [referenced,orphan,protectedFile])fs.writeFileSync(file,'keep-or-delete');
+    const context={fs,path,UP_DIR:uploads,db:{profiles:{member:{avatar:'/uploads/referenced.jpg'}}},console:{warn:()=>{}}};
+    vm.createContext(context);
+    vm.runInContext(contains+'\n'+fn,context);
+    context.removeUploadedFile({path:referenced});
+    context.removeUploadedFile({path:orphan});
+    context.removeUploadedFile({path:protectedFile});
+    assert.equal(fs.existsSync(referenced),true,'database-referenced upload must remain');
+    assert.equal(fs.existsSync(orphan),false,'unreferenced upload inside UP_DIR should be removed');
+    assert.equal(fs.existsSync(protectedFile),true,'file outside UP_DIR must never be removed');
+    pass('upload cleanup is confined to unreferenced files directly inside UP_DIR');
+  } finally { fs.rmSync(temp,{recursive:true,force:true}); }
+} catch(error) { fail('upload cleanup path-boundary regression checks',error.message); }
+
 try {
   const source = fs.readFileSync(server, 'utf8');
   const wallLike = source.match(/app\.post\('\/api\/wall\/like',[\s\S]*?\n\}\);/);
