@@ -1,5 +1,7 @@
 # Rimaz — continuation checkpoint (2026-11-26)
 
+> **Superseded checkpoint.** Use [CHECKPOINT-2026-11-27.md](CHECKPOINT-2026-11-27.md) for the current branch head, latest CI evidence, repository inventory, and remaining work. This file is retained as a dated history record.
+
 ## Latest verified repository state
 
 - Repository: `ahmedalzawe80/rimaz-chat-iraqi`.
