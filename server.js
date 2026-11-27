@@ -12,6 +12,7 @@ const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
 const { normalizeIp, normalizeTrustedProxyHeader, createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
 const { readCgroupMetrics } = require('./lib/cgroup-metrics');
 const { cleanupStaleBackupTemps } = require('./lib/backup-temp-cleanup');
+const { syncFileAndDirectory, syncDirectory } = require('./lib/durable-file');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { Server } = require('socket.io');
@@ -1511,6 +1512,16 @@ function validateUploadedContent(category='any') {
       removeUploadedFile(req.file);
       return res.status(415).json({error:category==='media'?'محتوى الملف لا يطابق نوع الوسائط المعلن':'محتوى الملف ليس صورة صالحة'});
     }
+    // Multer has closed the upload, but close alone does not guarantee that
+    // file contents and the new directory entry survive a host crash. Commit
+    // both before any route can persist a /uploads reference in data.json.
+    try {
+      syncFileAndDirectory(req.file.path, UP_DIR);
+    } catch (error) {
+      removeUploadedFile(req.file);
+      console.error('Uploaded file durability sync failed:', error.message);
+      return res.status(500).json({error:'تعذر تثبيت ملف الرفع على التخزين الدائم. حاول مرة أخرى.'});
+    }
     next();
   };
 }
@@ -2412,8 +2423,18 @@ app.post('/api/media',requireAuth,upload.single('file'),validateUploadedContent(
     const ignored=(db.ignored?.[keyName(to)]||[]).some(x=>keyName(x)===keyName(u.name)); if(ignored){removeUploadedFile(req.file);return res.status(403).json({error:`لقد قام ${displayName(to)} بتجاهلك`});}
     if(!hasConnectedSessionForUser(to)){removeUploadedFile(req.file);return res.status(403).json({error:'هذا المستخدم غير متصل'});}
     const privateFilename=path.basename(req.file.filename),privatePath=path.join(PRIVATE_MEDIA_DIR,privateFilename);
-    try{fs.renameSync(req.file.path,privatePath);req.file.path=privatePath;media.url='/api/private/media/'+privateFilename;}
-    catch(error){removeUploadedFile(req.file);console.error('Private media move failed:',error.message);return res.status(500).json({error:'تعذر تأمين تخزين الوسائط الخاصة'});}
+    try{
+      fs.renameSync(req.file.path,privatePath);
+      req.file.path=privatePath;
+      // Persist both sides of the cross-directory move before exposing the
+      // protected-media URL to either participant.
+      syncFileAndDirectory(privatePath,PRIVATE_MEDIA_DIR);
+      syncDirectory(UP_DIR);
+      media.url='/api/private/media/'+privateFilename;
+    }catch(error){
+      console.error('Private media durable move failed:',error.message);
+      return res.status(500).json({error:'تعذر تأمين تخزين الوسائط الخاصة'});
+    }
     const m={id:crypto.randomUUID(),room:'__private__',from:u.name,fromDisplayName:displayName(u.name),to,type:'media',media,at:Date.now(),profile:profile(u.name),role:roleOf(u),vip:vipActive(u.name),likes:userLikes(u)};
     const toKey=keyName(to),fromKey=keyName(u.name);
     db.privateMessages=[...(db.privateMessages||[]),m].slice(-5000);
