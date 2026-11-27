@@ -64,7 +64,7 @@ The admin health panel reports process RSS/heap plus cgroup memory current/peak/
 - `.github/workflows/`: pull-request validation, archive audit, and guarded manual source synchronization.
 - `.github/dependabot.yml`: scheduled dependency update proposals for GitHub Actions and npm.
 - `package-lock.json`: exact npm dependency tree used by local, CI, and Docker clean installs.
-- `rimaz-final-deep-audit-46.93.72.zip`: deterministic source archive rebuilt from the reviewed candidate; CI verifies source parity and the manual sync workflow refuses stale archives.
+- `rimaz-final-deep-audit-46.93.72.zip`: reviewed source archive retained for the guarded main-branch packaging/sync procedure. It is regenerated only by an explicit `workflow_dispatch` after validation, not on every push, to avoid repeated binary commits.
 
 ## Docker
 
