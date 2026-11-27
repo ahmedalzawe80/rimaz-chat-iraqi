@@ -20,7 +20,7 @@ This directory contains the maintained project checkpoint, engineering audits, a
 
 ## Operations
 - [Final release gate](operations/FINAL-RELEASE-GATE.md) — exact-head CI evidence, staging requirements, and production promotion boundary.
-- [Deployment reference](operations/DEPLOYMENT-46.93.72.md) — guarded source synchronization workflow and deployment precautions; this is a historical package-specific reference, not production approval.
+- [Deployment reference](operations/DEPLOYMENT-46.93.72.md) — package-specific release archive validation and deployment precautions; this is a historical reference, not production approval.
 
 ## Contributor guidance
 - [Contribution guide](../CONTRIBUTING.md) — branch policy, local checks, and data-safety requirements.

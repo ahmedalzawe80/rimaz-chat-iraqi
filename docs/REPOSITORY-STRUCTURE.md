@@ -68,7 +68,7 @@ The repository root currently has 17 tracked files. Each has an identified runti
 | `index.html` | Main browser entry file and server SEO integration |
 | `Dockerfile` | Hosting and CI build from the repository root |
 | `verify.js` | Current npm test script runs this file |
-| `rimaz-final-deep-audit-46.93.72.zip` | Exact reviewed source archive rebuilt and parity-checked by CI; required input to the guarded manual synchronization workflow |
+| `rimaz-final-deep-audit-46.93.72.zip` | Generated release archive refreshed after explicit CI dispatch and checked by the read-only archive audit; not a data backup or source-promotion mechanism |
 | `data.json` | Tracked warning placeholder retained for repository/workflow compatibility; it is not production data |
 | `google1a84d9d1dec7b85d.html` | Domain verification endpoint; keep it byte-identical to the copy under `public/` |
 
@@ -131,4 +131,4 @@ The root `rimaz-final-deep-audit-46.93.72.zip` remains because the guarded main-
 
 To keep the Git history reviewable, the `refresh-release-archive` job now runs only after an explicit `workflow_dispatch` on `main` or an approved maintenance branch, and only after the source validation job succeeds. Ordinary pushes still run source validation but no longer create an archive-only commit. The archive audit also watches `main` so an explicitly refreshed main-branch archive is checked.
 
-Do not delete or relocate the ZIP until both archive audit and guarded sync workflows are redesigned and validated together. For a future release, manually dispatch **Validate Rimaz Project** on the intended branch, wait for both jobs, and confirm the archive audit succeeds before using the guarded main-only sync workflow.
+Do not delete or relocate the ZIP until the release-archive builder and audit are redesigned together. For a future package refresh, dispatch **Validate Rimaz Project** on the intended branch, wait for source validation and archive refresh, then confirm **Audit Rootfix Archive** succeeds. This refreshes the ZIP on that branch only; it does not promote code to `main` or deploy. Integrate application changes through the reviewed pull-request process.

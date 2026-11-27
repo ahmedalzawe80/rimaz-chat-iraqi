@@ -61,7 +61,7 @@ The admin health panel reports process RSS/heap plus cgroup memory current/peak/
 - `verify.js`: regression checks.
 - `lib/`: isolated persistent-data path enforcement, streaming JSON read/write and restore inspection, backup snapshot/cleanup, trusted client-IP, and cgroup health helpers.
 - `scripts/chat-integration-smoke.js`: CI-only authenticated integration checks against the running container (public/private chat, private-media authorization/playback, voice and call signaling).
-- `.github/workflows/`: pull-request validation, archive audit, and guarded manual source synchronization.
+- `.github/workflows/`: pull-request validation, controlled release-archive refresh, and read-only archive audit.
 - `.github/dependabot.yml`: scheduled dependency update proposals for GitHub Actions and npm.
 - `package-lock.json`: exact npm dependency tree used by local, CI, and Docker clean installs.
 - `rimaz-final-deep-audit-46.93.72.zip`: reviewed source archive retained for the guarded main-branch packaging/sync procedure. It is regenerated only by an explicit `workflow_dispatch` after validation, not on every push, to avoid repeated binary commits.
@@ -74,7 +74,7 @@ The Dockerfile installs production dependencies with `npm ci --omit=dev` from th
 
 Work on a feature or maintenance branch and open a pull request to the repository's designated integration branch. The current maintenance PRs target `safety/validate-and-backup-before-sync`; `main` is the production branch and remains unchanged during this review. Promote to `main` only through a separate reviewed change after CI, staging smoke tests, a verified persistent-volume backup, and explicit approval.
 
-The manual ZIP synchronization workflow is restricted to a manual run from `main` and requires the `confirm_main_replacement` input. Its rollback branch backs up Git-tracked repository state only, not the live hosting volume.
+The old write-enabled ZIP self-sync workflow has been removed: it required the archive to match `main` exactly before copying the same files back, so it could not promote a feature-branch candidate and carried unnecessary `rsync --delete` / Git-push permissions. Application changes are integrated through reviewed pull requests. The `Validate Rimaz Project` workflow refreshes the tracked ZIP only after an explicit dispatch and successful source validation; `Audit Rootfix Archive` checks its safe paths and exact source parity without changing repository files. Neither workflow deploys to Deplexo or changes live data. You do not need to edit or upload the ZIP manually.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the required branch, validation, and review process.
 

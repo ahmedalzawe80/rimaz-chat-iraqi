@@ -202,3 +202,13 @@ The PR filename list includes changed paths whether added, modified, renamed, or
 - No files or assets were deleted during this review. The only edits were documentation corrections on the existing candidate branch.
 - No merge, force-push, Deplexo operation, production sync, restart, or live-data change was performed.
 - Continue phase one with reference-aware review of all 48 changed paths, workflow safety assumptions, and PR-history/integration strategy. Do not begin chat/runtime phase two until repository phase one is explicitly complete.
+
+
+### ZIP workflow root-cause correction — 2026-11-27
+
+- Reviewed `.github/workflows/unzip-upload.yml` end-to-end and found it was not a valid promotion mechanism: it required the archive to match current `main` exactly, then copied the same files back. A changed feature-branch archive was rejected before synchronization.
+- The workflow also held `contents: write`, created a rollback branch, used `rsync --delete` on `public/` and `lib/`, and could push to `main`, despite having no useful source-update path under its exact-parity gate.
+- Removed this obsolete write-enabled self-sync workflow from the candidate. The existing `validate-project.yml` archive refresh and `audit-rootfix-archive.yml` read-only archive audit remain. Source integration must happen through reviewed pull requests.
+- Updated `verify.js` to assert that the obsolete workflow is absent and that the remaining archive audit is read-only, manually runnable, and checks safe paths plus exact public/library parity.
+- Updated README, repository structure, deployment reference, documentation index, and changelog so they no longer describe ZIP-to-main synchronization as a supported release path.
+- This is a candidate-branch repository/workflow change only. It does not alter `main`, merge PRs, deploy to Deplexo, or touch persistent data. The next push-triggered CI run must pass on the exact new commit before this change is considered validated.

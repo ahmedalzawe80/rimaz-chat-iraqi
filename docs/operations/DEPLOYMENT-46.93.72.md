@@ -8,13 +8,11 @@ The audited source archive is `rimaz-final-deep-audit-46.93.72.zip`. Its project
 
 The Git repository's incomplete `rimaz-chat-iraqi-main/` duplicate is not part of the application and has been removed by the repository-maintenance change.
 
-## GitHub source synchronization
+## GitHub release-archive validation
 
-The manual workflow `.github/workflows/unzip-upload.yml` expects the exact archive filename above. It runs only when dispatched from `main` and requires the `confirm_main_replacement` input to be explicitly checked.
+The former `.github/workflows/unzip-upload.yml` workflow has been removed from the maintenance candidate. It required the ZIP to match the current `main` application files, `public/`, and `lib/` exactly before copying those same files back to `main`. That precondition made it incapable of promoting a feature-branch candidate; the later copy, `rsync --delete`, rollback-branch creation, and Git push were unnecessary write operations.
 
-The workflow validates ZIP paths and symlinks, checks the archive package version against its filename, and creates a rollback branch before changing files. Before sync, it requires exact parity with current `main` for `package.json`, `package-lock.json`, `Dockerfile`, `server.js`, `index.html`, `verify.js`, and the complete `public/` tree; a stale archive is rejected. It runs `npm ci`, `npm ls`, regression tests, and a Docker build before and after synchronization. It copies only the application/build files and `public/`, not the whole repository root, so README, audit reports, GitHub workflows, and other repository-maintenance files remain in place.
-
-This workflow is a GitHub source synchronization mechanism; it is not evidence of a Deplexo deployment or a live-server restart. The rollback branch is a snapshot of Git-tracked repository state. It is **not** a backup of the live Deplexo persistent volume or its database/uploads. Back up and verify the hosting volume separately before any production operation.
+Use the reviewed pull-request process to integrate application changes. For an archive refresh, explicitly dispatch **Validate Rimaz Project** on the intended branch. Its source-validation job must pass before the ZIP refresh job runs. Then confirm **Audit Rootfix Archive** passes; it checks safe archive paths, a single project root, and exact parity with the branch source. These workflows do not merge branches, update `main`, deploy to Deplexo, or modify live data. No manual ZIP file editing or upload is required.
 
 ## Hosting and persistent storage
 
