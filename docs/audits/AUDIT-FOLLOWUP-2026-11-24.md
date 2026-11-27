@@ -1,5 +1,7 @@
 # Rimaz runtime follow-up audit — 2026-11-24
 
+> **Historical snapshot (2026-11-24).** This audit describes the source and deployment evidence available on its review date. It is not the current branch or production status. For the latest repository state, see the [2026-11-27 checkpoint](../project/CHECKPOINT-2026-11-27.md) and [repository cleanup inventory](REPOSITORY-CLEANUP-INVENTORY-2026-11-26.md).
+
 ## Scope
 Read-only review of the working branch `safety/validate-and-backup-before-sync` after the Deplexo deployment/log review. No runtime source changes, no deployment, no restart, no production data access, and no destructive workflow execution were performed.
 
