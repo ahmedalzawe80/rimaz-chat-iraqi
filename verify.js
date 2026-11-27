@@ -2356,6 +2356,39 @@ try {
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('v46.93.52 private media streaming/layout checks',error.message); }
 
+// Private-media playback ticket helper is exercised behaviourally, not only by source-text assertions.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function createPrivateMediaPlaybackTicket(filename,account,now=Date.now()){');
+  const end=source.indexOf('const privateMediaPlaybackTicketCleanup=',start);
+  if(start<0||end<=start)throw new Error('private-media ticket helper boundaries not found');
+  const helper=source.slice(start,end);
+  const context={crypto,privateMediaPlaybackTickets:new Map(),MAX_PRIVATE_MEDIA_TICKETS:4096,MAX_PRIVATE_MEDIA_TICKETS_PER_ACCOUNT:32};
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.issue=createPrivateMediaPlaybackTicket;',context);
+  const first=context.issue('video.mp4','alice',1000);
+  assert.equal(first.reused,false);
+  assert.match(first.token,/^[a-f0-9]{64}$/);
+  assert.equal(first.ticket.account,'alice');
+  assert.equal(first.ticket.filename,'video.mp4');
+  assert.equal(first.ticket.expiresAt,1000+15*60*1000);
+  const reused=context.issue('video.mp4','alice',2000);
+  assert.equal(reused.token,first.token);
+  assert.equal(reused.reused,true);
+  assert.equal(reused.ticket.expiresAt,2000+15*60*1000);
+  assert.notEqual(context.issue('video.mp4','bob',2000).token,first.token);
+  for(let n=1;n<32;n++)context.issue('file-'+n,'alice',3000);
+  assert.equal(context.issue('overflow','alice',3000).error,'account-limit');
+  context.issue('expired','stale-account',0);
+  const expiredToken=[...context.privateMediaPlaybackTickets.entries()].find(([,ticket])=>ticket.account==='stale-account')[0];
+  assert.equal(context.issue('new','fresh-account',15*60*1000+1).error,undefined);
+  assert.equal(context.privateMediaPlaybackTickets.has(expiredToken),false);
+  context.privateMediaPlaybackTickets.clear();
+  for(let n=0;n<4096;n++)context.privateMediaPlaybackTickets.set('t'+n,{filename:'f'+n,account:'account-'+n,expiresAt:999999999});
+  assert.equal(context.issue('global-overflow','another-account',1).error,'global-limit');
+  pass('private-media tickets enforce account/global caps, reuse same-file tickets, bind accounts, random token format and expiry cleanup');
+} catch(error) { fail('private-media playback ticket behavioural regression checks',error.message); }
+
 // v46.93.38: private media delivery must fan out to every active recipient session.
 try {
   const source=fs.readFileSync(server,'utf8');
