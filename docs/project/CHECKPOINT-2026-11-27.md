@@ -346,3 +346,15 @@ The PR filename list includes changed paths whether added, modified, renamed, or
 - The historical missing-media filename from the supplied Deplexo logs is not present in the user-provided 2026-11-27 database backup's current upload references. The uploaded JSON backup does not contain media bytes, so it cannot restore a missing physical file. If the same issue is confirmed against the current live volume, recovery requires the corresponding media file from an older verified full backup or a separately verified copy; do not delete its database reference or alter live storage speculatively.
 - Production remains separate from this review branch. The Deplexo dashboard previously showed deployed commit `15559a9` on `fix/bound-private-media-ticket-cache`; no deployment, restart, merge, `main` update, or live-data operation was performed during this follow-up.
 - Remaining release blockers are unchanged: independent backup of the persistent volume, isolated database+media restore drill, staging browser/device tests, Deplexo restart/OOM evidence under representative load, trusted-proxy verification, and explicit approval before promotion.
+
+
+## Chat delivery and reconnect root fixes — 2026-11-27
+
+- Public Socket.IO text messages acknowledge success only after the existing batched disk-persistence queue commits the message. The browser retains the draft after a rejection or timeout and clears it only after server confirmation.
+- Private text messages now return an explicit acceptance acknowledgement while preserving the existing memory-only private-message behavior. No private-history persistence policy was changed.
+- Public and private request IDs use separate bounded, five-minute idempotency scopes keyed by session and client request ID, preventing duplicate delivery when a client retries after a lost acknowledgement.
+- Private history loading merges fetched history with live messages received during the request, deduplicates by message ID, sorts chronologically, and ignores stale responses from previous peer selections.
+- Locked-room passwords are kept only in page memory and reused on Socket.IO reconnect. They are cleared on leaving, rejected room entry, logout, and expired-session return.
+- A missing session during room rejoin now emits a dedicated expired-session event and returns the browser to login rather than leaving the chat silently disconnected.
+- Regression coverage now includes positive and negative acknowledgements, idempotent public/private retries, private-history merging, and reconnect/session handling. Exact-head CI is required before treating this work as validated.
+- No main-branch update, PR merge, manual restart, or direct live-volume/database/media mutation was performed. Updating this Deplexo-tracked review branch triggers its configured automatic rebuild/deployment.

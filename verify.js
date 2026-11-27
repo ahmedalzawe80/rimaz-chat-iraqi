@@ -3623,3 +3623,19 @@ try {
   preparationOk?pass('full-backup integrity preflight captures the first database entry before streaming'):fail('full-backup integrity preflight preparation');
   responseOk?pass('missing referenced media returns a clear pre-stream HTTP conflict instead of a broken archive'):fail('full-backup missing-media response must be sent before archive headers');
 })().catch(error=>{fail('full-backup preflight response regression tests',error.message);process.exitCode=1;});
+
+ // Chat delivery protocol regression tests.
+try {
+ const source=fs.readFileSync(server,'utf8');
+ const client=fs.readFileSync(path.join(root,'public','index.html'),'utf8');
+ const checks=[
+  ['public Socket.IO acknowledgement follows durable save and broadcast',/await addMessage\(message\)[\s\S]*?io\.to\(room\)\.emit\('message',message\)[\s\S]*?return \{ok:true,messageId:message\.id\}/.test(source)],
+  ['private Socket.IO acknowledgement follows accepted message delivery',/socket\.on\('private-message',async\(d,acknowledge\)=>[\s\S]*?socket\.emit\('private-message',message\)[\s\S]*?return \{ok:true,messageId:message\.id\}/.test(source)],
+  ['public and private requests use separate bounded idempotency scopes',source.includes("d?.requestId,'public'")&&source.includes("d?.requestId,'private'")&&source.includes('socketMessageRequestCache')],
+  ['composers wait for acknowledgements and preserve drafts on timeout',client.includes('socket.timeout(15000).emit(event')&&client.includes('احتفظنا برسالتك')&&client.includes('احتفظنا برسالتك الخاصة')],
+  ['private history merges live messages and rejects stale async results',client.includes('renderMergedPrivateHistory')&&client.includes('privateMessageBuffer.values()')&&client.includes('historyGeneration!==privateHistoryLoadGeneration')],
+  ['locked-room password stays in page memory and is reused on reconnect',client.includes('currentRoomPassword')&&client.includes('joinRoom(currentRoom,currentRoomPassword)')],
+  ['expired sessions are reported by server and handled by client',source.includes("socket.emit('session-expired'")&&client.includes("socket.on('session-expired'")],
+ ];
+ for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('chat delivery protocol regression tests',error.message); }

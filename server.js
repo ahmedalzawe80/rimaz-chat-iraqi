@@ -2557,12 +2557,43 @@ async function processBuiltInBotCommand(socket,user,room,text,onError=null){
  return false;
 }
 
+
+const SOCKET_MESSAGE_REQUEST_LIMIT=2048;
+const SOCKET_MESSAGE_REQUEST_TTL_MS=5*60*1000;
+const socketMessageRequestCache=new Map();
+function sendSocketMessageResponse(socket,acknowledge,result){
+  if(typeof acknowledge==='function'){acknowledge(result);return;}
+  if(!result?.ok)socket.emit('error-msg',{error:result?.error||'تعذر إرسال الرسالة، حاول مرة أخرى'});
+}
+async function executeSocketMessageRequest(sid,requestId,scope,task){
+  const run=()=>Promise.resolve().then(task).catch(error=>{
+    console.error('Socket message request failed:',error.message);
+    return {ok:false,error:'تعذر إرسال الرسالة، حاول مرة أخرى'};
+  });
+  const id=String(requestId||'');
+  if(!sid||!/^[A-Za-z0-9_-]{8,80}$/.test(id))return run();
+  const now=Date.now();
+  for(const [key,entry] of socketMessageRequestCache){if(entry.expiresAt<=now)socketMessageRequestCache.delete(key);}
+  const cacheKey=`${sid}:${scope}:${id}`;
+  const cached=socketMessageRequestCache.get(cacheKey);
+  if(cached){socketMessageRequestCache.delete(cacheKey);socketMessageRequestCache.set(cacheKey,cached);return cached.promise;}
+  const entry={expiresAt:now+SOCKET_MESSAGE_REQUEST_TTL_MS,pending:true,promise:null};
+  entry.promise=run().then(result=>{entry.pending=false;entry.expiresAt=Date.now()+SOCKET_MESSAGE_REQUEST_TTL_MS;return result;});
+  socketMessageRequestCache.set(cacheKey,entry);
+  while(socketMessageRequestCache.size>SOCKET_MESSAGE_REQUEST_LIMIT){
+    const oldestKey=socketMessageRequestCache.keys().next().value,oldest=socketMessageRequestCache.get(oldestKey);
+    if(oldest?.pending)break;
+    socketMessageRequestCache.delete(oldestKey);
+  }
+  return entry.promise;
+}
+
 io.on('connection',socket=>{
   socket.on('join',async({sid,room='public',password=''}={})=>{
     // A socket may join initially or move rooms, but a superseded socket must never reclaim the same session.
     const requestedSid=String(sid||'');
     if(socket.data.sid&&(socket.data.sid!==requestedSid||!isCurrentSessionSocket(socket)))return;
-    const u=sessionUser(requestedSid); if(!u)return;
+    const u=sessionUser(requestedSid); if(!u){socket.emit('session-expired',{error:'انتهت جلسة الدخول؛ سجّل الدخول مرة أخرى'});return;}
     const targetRoom=db.rooms.find(r=>r.id===room); if(!targetRoom){socket.emit('join-error',{error:'الغرفة غير موجودة'});return;}if(targetRoom.kind==='voice'&&!siteModuleEnabled('voiceRooms')){socket.emit('join-error',{error:'الغرف الصوتية متوقفة من إدارة الموقع'});return;}
     if(targetRoom.passwordHash&&!bcrypt.compareSync(String(password||''),targetRoom.passwordHash)){socket.emit('join-error',{error:'الغرفة مقفلة؛ أدخل الباسورد الصحيح'});return;} 
     // Validate access before changing the active room, then move this socket atomically.
@@ -2629,7 +2660,38 @@ io.on('connection',socket=>{
   socket.on('voice-peer-answer',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validSessionDescription(d.answer,'answer'))return;const speakers=voiceSpeakers.get(room),members=roomSockets.get(room),state=activeVoicePairs.get(voiceRoomPairKey(room,d.to,sid));if(!members?.has(sid)||!speakers?.has(d.to)||!state||Date.now()-state.created>VOICE_PAIR_TTL_MS||state.offerer!==d.to||state.b!==sid)return;socketBySession(d.to)?.emit('voice-peer-answer',{room,from:sid,answer:d.answer});});
   socket.on('voice-peer-ice',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validIceCandidate(d.candidate))return;const members=roomSockets.get(room),state=activeVoicePairs.get(voiceRoomPairKey(room,sid,d.to));if(!members?.has(sid)||!members?.has(d.to)||!state||Date.now()-state.created>VOICE_PAIR_TTL_MS||(state.a!==sid&&state.b!==sid)||(state.a!==d.to&&state.b!==d.to))return;socketBySession(d.to)?.emit('voice-peer-ice',{room,from:sid,candidate:d.candidate});});
   socket.on('leave-room',async({room}={})=>{const u=socket.data.user,sid=socket.data.sid;if(!isCurrentSessionSocket(socket)||!u||!room||room!==u.room||!socket.rooms.has(room))return;const accountStillInRoom=[...socketUsers.entries()].some(([otherSid,active])=>otherSid!==sid&&active.room===room&&keyName(active.name)===keyName(u.name));socket.leave(room);removeSessionFromRoomRuntime(sid,room);if(socketUsers.get(sid))socketUsers.get(sid).room='';if(socket.data.user)socket.data.user.room='';if(!u.ghost&&!accountStillInRoom){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',exitKind:'room',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{await addMessage(pm);emitPresenceToRoom(room,pm)}catch(e){console.warn('Leave presence could not be saved:',e.message)}}{const members=roomSockets.get(room)||new Set();for(const memberSid of [...members]){const active=socketUsers.get(memberSid);if(!active||active.room!==room)members.delete(memberSid);}if(members.size===0){roomSockets.delete(room);try{save()}catch(e){console.error('Room state save failed:',e.message)}}}emitState();});
-  socket.on('send-message',async d=>{const u=socket.data.user;if(!u||!isCurrentSessionSocket(socket))return;const room=String(d?.room||'');if(!room||u.room!==room||!socket.rooms.has(room))return socket.emit('error-msg',{error:'أنت خارج الغرفة'});const targetRoom=db.rooms.find(r=>r.id===room);if(!targetRoom)return socket.emit('error-msg',{error:'الغرفة غير موجودة'});if(globalBanned(u.name,socketClientIp(socket)))return socket.emit('error-msg',{error:'لا يمكنك الكتابة أثناء الحظر العام'});if(roomMuted(u.name,room)||roomBanned(u.name,room))return socket.emit('error-msg',{error:'لا يمكنك الكتابة هنا'});const text=String(d?.text||'').trim().slice(0,2000);if(!text)return;if(blockedChatTerm(text))return socket.emit('error-msg',{error:'رسالتك تحتوي على كلمة غير مسموح بها'});const rateError=roomMessageRateLimitError(socket.data.sid,text);if(rateError)return socket.emit('error-msg',{error:rateError});if(await processBuiltInBotCommand(socket,u,room,text))return;const m={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'text',text,at:Date.now(),likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)};try{await addMessage(m)}catch(e){console.error('Socket room message save failed:',e.message);const queueFull=e?.message==='Message persistence queue is full; message was not accepted';return socket.emit('error-msg',{error:queueFull?'الخادم مشغول بحفظ الرسائل، حاول بعد قليل':'تعذر حفظ الرسالة، حاول مرة أخرى'});}io.to(room).emit('message',m);});
+  socket.on('send-message',async(d,acknowledge)=>{
+    const sid=socket.data.sid;
+    const result=await executeSocketMessageRequest(sid,d?.requestId,'public',async()=>{
+      const u=socket.data.user;
+      if(!u||!isCurrentSessionSocket(socket))return {ok:false,error:'انتهت جلسة الاتصال، أعد الدخول إلى الدردشة'};
+      const room=String(d?.room||'');
+      if(!room||u.room!==room||!socket.rooms.has(room))return {ok:false,error:'أنت خارج الغرفة'};
+      const targetRoom=db.rooms.find(r=>r.id===room);
+      if(!targetRoom)return {ok:false,error:'الغرفة غير موجودة'};
+      if(globalBanned(u.name,socketClientIp(socket)))return {ok:false,error:'لا يمكنك الكتابة أثناء الحظر العام'};
+      if(roomMuted(u.name,room)||roomBanned(u.name,room))return {ok:false,error:'لا يمكنك الكتابة هنا'};
+      const text=String(d?.text||'').trim().slice(0,2000);
+      if(!text)return {ok:false,error:'اكتب رسالة أولاً'};
+      if(blockedChatTerm(text))return {ok:false,error:'رسالتك تحتوي على كلمة غير مسموح بها'};
+      const rateError=roomMessageRateLimitError(sid,text);
+      if(rateError)return {ok:false,error:rateError};
+      let commandError='';
+      if(await processBuiltInBotCommand(socket,u,room,text,message=>{commandError=message;})){
+        return commandError?{ok:false,error:commandError}:{ok:true,command:true};
+      }
+      const message={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'text',text,at:Date.now(),likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)};
+      try{await addMessage(message);}
+      catch(error){
+        console.error('Socket room message save failed:',error.message);
+        const queueFull=error?.message==='Message persistence queue is full; message was not accepted';
+        return {ok:false,error:queueFull?'الخادم مشغول بحفظ الرسائل، حاول بعد قليل':'تعذر حفظ الرسالة، حاول مرة أخرى'};
+      }
+      io.to(room).emit('message',message);
+      return {ok:true,messageId:message.id};
+    });
+    sendSocketMessageResponse(socket,acknowledge,result);
+  });
   socket.on('private-typing',d=>{
     const user=socket.data.user,sid=socket.data.sid;
     if(!user||!sid||!isCurrentSessionSocket(socket)||!siteModuleEnabled('privateChat'))return;
@@ -2662,7 +2724,51 @@ io.on('connection',socket=>{
     socket.data.privateTypingTimer.unref?.();
     emitToUser(recipient,'private-typing',{from:user.name,typing:true});
   });
-  socket.on('private-message',d=>{const u=socket.data.user,sid=socket.data.sid;if(!u||!isCurrentSessionSocket(socket)||!d?.to)return;if(!siteModuleEnabled('privateChat'))return socket.emit('error-msg',{error:'المحادثات الخاصة متوقفة من إدارة الموقع'});if(globalBanned(u.name,socketClientIp(socket)))return socket.emit('error-msg',{error:'لا يمكنك المراسلة أثناء الحظر العام'});const toKey=keyName(d.to),to=accountKey(d.to),text=String(d.text||'').trim().slice(0,2000);if(!text)return;if(blockedChatTerm(text))return socket.emit('error-msg',{error:'رسالتك تحتوي على كلمة غير مسموح بها'});if(!getUser(to)&&!getGuest(to))return socket.emit('error-msg',{error:'هذا المستخدم غير موجود'});const tp=profile(to);if(tp.privateOpen===false&&!canMessageClosedPrivate(u))return socket.emit('error-msg',{error:`لقد أغلق ${displayName(to)} المحادثة الخاصة`});const ignored=(db.ignored?.[toKey]||[]).some(x=>keyName(x)===keyName(u.name));if(ignored)return socket.emit('error-msg',{error:`لقد قام ${displayName(to)} بتجاهلك`});if(!hasConnectedSessionForUser(to))return socket.emit('error-msg',{error:'العضو غير متصل؛ المحادثات الخاصة مؤقتة بين المتصلين فقط'});const fromKey=keyName(u.name),previousHidden=db.privateHidden,nextHidden={...(db.privateHidden||{})};let hiddenChanged=false;for(const [owner,other] of [[toKey,fromKey],[fromKey,toKey]]){if(Array.isArray(nextHidden[owner])){const filtered=nextHidden[owner].filter(x=>keyName(x)!==other);if(filtered.length!==nextHidden[owner].length){nextHidden[owner]=filtered;hiddenChanged=true;}}}if(hiddenChanged){db.privateHidden=nextHidden;try{save();}catch(error){if(previousHidden===undefined)delete db.privateHidden;else db.privateHidden=previousHidden;console.error('Private conversation unhide save failed:',error.message);return socket.emit('error-msg',{error:'تعذر حفظ فتح المحادثة الخاصة؛ أعد المحاولة'});}}if(!allowPrivateMessage(sid,text))return socket.emit('error-msg',{error:'الرسائل الخاصة سريعة أو متكررة جداً؛ انتظر قليلاً ثم حاول مجدداً'});if(socket.data.privateTypingTimer){clearTimeout(socket.data.privateTypingTimer);socket.data.privateTypingTimer=null;}if(socket.data.privateTypingTo){emitToUser(socket.data.privateTypingTo,'private-typing',{from:u.name,typing:false});socket.data.privateTypingTo='';}const m={id:crypto.randomUUID(),from:u.name,fromDisplayName:displayName(u.name),to,toDisplayName:displayName(to),type:'text',text,at:Date.now(),profile:profile(u.name),role:roleOf(u),vip:vipActive(u.name),likes:userLikes(u)};db.privateMessages=[...(db.privateMessages||[]),m].slice(-5000);emitToUser(to,'private-message',m);socket.emit('private-message',m);});
+  socket.on('private-message',async(d,acknowledge)=>{
+    const sid=socket.data.sid;
+    const result=await executeSocketMessageRequest(sid,d?.requestId,'private',async()=>{
+      const u=socket.data.user;
+      if(!u||!isCurrentSessionSocket(socket))return {ok:false,error:'انتهت جلسة الاتصال، أعد الدخول إلى الدردشة'};
+      if(!d?.to)return {ok:false,error:'اختر العضو أولاً'};
+      if(!siteModuleEnabled('privateChat'))return {ok:false,error:'المحادثات الخاصة متوقفة من إدارة الموقع'};
+      if(globalBanned(u.name,socketClientIp(socket)))return {ok:false,error:'لا يمكنك المراسلة أثناء الحظر العام'};
+      const toKey=keyName(d.to),to=accountKey(d.to),text=String(d.text||'').trim().slice(0,2000);
+      if(!text)return {ok:false,error:'اكتب رسالة أولاً'};
+      if(blockedChatTerm(text))return {ok:false,error:'رسالتك تحتوي على كلمة غير مسموح بها'};
+      if(!getUser(to)&&!getGuest(to))return {ok:false,error:'هذا المستخدم غير موجود'};
+      const targetProfile=profile(to);
+      if(targetProfile.privateOpen===false&&!canMessageClosedPrivate(u))return {ok:false,error:`لقد أغلق ${displayName(to)} المحادثة الخاصة`};
+      const ignored=(db.ignored?.[toKey]||[]).some(x=>keyName(x)===keyName(u.name));
+      if(ignored)return {ok:false,error:`لقد قام ${displayName(to)} بتجاهلك`};
+      if(!hasConnectedSessionForUser(to))return {ok:false,error:'العضو غير متصل؛ المحادثات الخاصة مؤقتة بين المتصلين فقط'};
+      const fromKey=keyName(u.name),previousHidden=db.privateHidden,nextHidden={...(db.privateHidden||{})};
+      let hiddenChanged=false;
+      for(const [owner,other] of [[toKey,fromKey],[fromKey,toKey]]){
+        if(Array.isArray(nextHidden[owner])){
+          const filtered=nextHidden[owner].filter(x=>keyName(x)!==other);
+          if(filtered.length!==nextHidden[owner].length){nextHidden[owner]=filtered;hiddenChanged=true;}
+        }
+      }
+      if(hiddenChanged){
+        db.privateHidden=nextHidden;
+        try{save();}
+        catch(error){
+          if(previousHidden===undefined)delete db.privateHidden;else db.privateHidden=previousHidden;
+          console.error('Private conversation unhide save failed:',error.message);
+          return {ok:false,error:'تعذر حفظ فتح المحادثة الخاصة؛ أعد المحاولة'};
+        }
+      }
+      if(!allowPrivateMessage(sid,text))return {ok:false,error:'الرسائل الخاصة سريعة أو متكررة جداً؛ انتظر قليلاً ثم حاول مجدداً'};
+      if(socket.data.privateTypingTimer){clearTimeout(socket.data.privateTypingTimer);socket.data.privateTypingTimer=null;}
+      if(socket.data.privateTypingTo){emitToUser(socket.data.privateTypingTo,'private-typing',{from:u.name,typing:false});socket.data.privateTypingTo='';}
+      const message={id:crypto.randomUUID(),from:u.name,fromDisplayName:displayName(u.name),to,toDisplayName:displayName(to),type:'text',text,at:Date.now(),profile:profile(u.name),role:roleOf(u),vip:vipActive(u.name),likes:userLikes(u)};
+      db.privateMessages=[...(db.privateMessages||[]),message].slice(-5000);
+      emitToUser(to,'private-message',message);
+      socket.emit('private-message',message);
+      return {ok:true,messageId:message.id};
+    });
+    sendSocketMessageResponse(socket,acknowledge,result);
+  });
   socket.on('call-offer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))return socket.emit('call-failed',{error:'المكالمات متوقفة من إدارة الموقع'});const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!d?.to)return;if(!canMedia(u))return socket.emit('call-failed',{error:`الاتصال الصوتي والكاميرا يفتحان عند ${PRIVATE_MEDIA_LIKES_REQUIRED} إعجاب من المتصل`});if(!allowCallSignal(sid))return socket.emit('call-failed',{error:'طلبات الاتصال كثيرة جداً، حاول بعد قليل'});if(!validSessionDescription(d.offer,'offer'))return socket.emit('call-failed',{error:'بيانات الاتصال غير صالحة'});const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return socket.emit('call-failed',{error:'المستخدم غير متصل'});for(const [oldPair,oldState] of activeCallPairs){const pendingCallee=socketUsers.get(oldState.callee),waitingOnRoomMic=!!pendingCallee&&voiceSpeakers.get(pendingCallee.room)?.has(oldState.callee);if(!oldState.answered&&Date.now()-oldState.created>120000&&!waitingOnRoomMic)activeCallPairs.delete(oldPair);else if(oldState.caller===sid||oldState.callee===sid||oldState.caller===target[0]||oldState.callee===target[0])return socket.emit('call-failed',{error:'أحد الطرفين مشغول باتصال آخر'});}const pair=callPairKey(sid,target[0]),state={caller:sid,callee:target[0],created:Date.now(),video:!!d.video,answered:false};activeCallPairs.set(pair,state);const timeoutCall=()=>{if(activeCallPairs.get(pair)!==state||state.answered)return;const callee=socketUsers.get(target[0]);if(callee&&voiceSpeakers.get(callee.room)?.has(target[0])){const next=setTimeout(timeoutCall,60000);next.unref?.();return;}activeCallPairs.delete(pair);socket.emit('call-timeout',{from:target[1].name});socketBySession(target[0])?.emit('call-timeout',{from:u.name})};const timeout=setTimeout(timeoutCall,60000);timeout.unref?.();socketBySession(target[0])?.emit('call-offer',{from:u.name,fromDisplayName:displayName(u.name),fromProfile:(()=>{const p=profile(u.name);return {avatar:p.avatar||'',displayName:p.displayName||'',rank:p.rank||'',rankUntil:p.rankUntil||0,gifts:(p.gifts||[]).slice(0,1),vipUntil:p.vipUntil||0}})(),fromRole:roleOf(u),fromVip:vipActive(u.name),fromLikes:userLikes(u),offer:d.offer,video:!!d.video});});
   socket.on('call-answer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))return;const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!d?.to)return;if(!allowCallSignal(sid))return socket.emit('error-msg',{error:'طلبات الاتصال كثيرة جداً، حاول بعد قليل'});if(!validSessionDescription(d.answer,'answer'))return socket.emit('error-msg',{error:'بيانات الرد غير صالحة'});if(voiceSpeakers.get(u.room)?.has(sid))return socket.emit('call-answer-denied',{reason:'room-mic'});const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||state.callee!==sid||state.caller!==target[0])return;if(Date.now()-state.created>120000){activeCallPairs.delete(pair);socket.emit('call-timeout',{from:target[1].name});socketBySession(target[0])?.emit('call-timeout',{from:u.name});return;}if(!socketBySession(state.caller)){activeCallPairs.delete(pair);return;}if(!canMedia(target[1])){activeCallPairs.delete(pair);socket.emit('call-answer-denied',{reason:'sender-likes'});socketBySession(target[0])?.emit('call-failed',{error:`الاتصال يحتاج ${PRIVATE_MEDIA_LIKES_REQUIRED} إعجاب من المتصل`});return;}state.answered=true;socket.emit('call-answer-accepted');socketBySession(target[0])?.emit('call-answer',{from:u.name,answer:d.answer,video:state.video});});
   socket.on('call-reject',d=>{const u=socket.data.user,sid=socket.data.sid;if(!isCurrentSessionSocket(socket)||!u||!d?.to||!allowCallSignal(sid))return;const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||state.callee!==sid||state.caller!==target[0])return;activeCallPairs.delete(pair);socketBySession(target[0])?.emit('call-rejected',{from:u.name,reason:String(d.reason||'declined').slice(0,32)});});
