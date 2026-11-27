@@ -1433,7 +1433,13 @@ function removeUploadedFile(file){
  if(!file?.path)return;
  const resolved=path.resolve(file.path);
  const uploadRoot=path.resolve(UP_DIR);
- if(path.dirname(resolved)===uploadRoot&&containsStoredUrl(db,'/uploads/'+path.basename(resolved))){
+ // Multer writes directly into UP_DIR. Never let a cleanup call unlink a
+ // protected-media, restore, database, or arbitrary path outside that directory.
+ if(path.dirname(resolved)!==uploadRoot){
+  console.warn('Upload cleanup skipped because the file is outside the upload directory:',path.basename(resolved));
+  return;
+ }
+ if(containsStoredUrl(db,'/uploads/'+path.basename(resolved))){
   console.warn('Upload cleanup skipped because the file is still referenced by the database:',path.basename(resolved));
   return;
  }
