@@ -9,6 +9,7 @@ on:
     branches:
       - fix/bound-private-media-ticket-cache
       - fix/persistent-data-symlink-boundary
+      - review/rimaz-clean-integration-2026-11-27
   pull_request:
     # Push validation runs on every candidate commit. Only validate PR lifecycle
     # events here; bot archive commits must not trigger approval-gated sync runs.
@@ -16,6 +17,7 @@ on:
       - opened
       - reopened
       - ready_for_review
+      - synchronize
     branches:
       - safety/validate-and-backup-before-sync
       - main
@@ -63,8 +65,9 @@ jobs:
 
       - name: Check JavaScript syntax
         run: |
-          node --check server.js
-          node --check verify.js
+          while IFS= read -r -d '' file; do
+            node --check "$file"
+          done < <(git ls-files -z -- '*.js' '*.cjs' '*.mjs')
 
       - name: Run project regression tests
         run: npm test
@@ -221,8 +224,9 @@ jobs:
           cd "$PROJECT"
           npm ci --no-audit --no-fund
           npm ls --depth=0
-          node --check server.js
-          node --check verify.js
+          while IFS= read -r -d '' file; do
+            node --check "$file"
+          done < <(git ls-files -z -- '*.js' '*.cjs' '*.mjs')
           npm test
           cmp -s index.html public/index.html
           docker build --pull -t rimaz-chat-iraqi:release-archive .
