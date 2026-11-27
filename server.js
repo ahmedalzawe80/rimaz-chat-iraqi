@@ -4,7 +4,14 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const zlib = require('zlib');
-const { Readable } = require('stream');
+const { Readable, pipeline } = require('stream');
+const { writeJsonSync } = require('./lib/json-writer');
+const { readJsonFile, validateJsonFile } = require('./lib/json-reader');
+const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
+const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
+const { normalizeIp, normalizeTrustedProxyHeader, createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
+const { readCgroupMetrics } = require('./lib/cgroup-metrics');
+const { cleanupStaleBackupTemps } = require('./lib/backup-temp-cleanup');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { Server } = require('socket.io');
@@ -56,12 +63,19 @@ const PUBLIC_SITE_URL = (() => {
     return 'https://noble-horizon-5826.de.deplexo.com';
   }
 })();
-// Prefer persistent hosting storage. Never silently fall back to /tmp: that can
-// make existing accounts appear to disappear after a restart/redeploy.
-let DATA_DIR = process.env.DATA_DIR || (fs.existsSync('/data') ? '/data/rimaz' : path.join(ROOT, 'data'));
-// A legacy deployment may still have DATA_DIR=/app/data, which is not the
-// persistent mount on Deplexo. If the mount exists and the configured path
-// cannot be created, use the persistent mount rather than ephemeral storage.
+// Prefer the persistent hosting mount even when an old DATA_DIR points to
+// an ephemeral container path. Never silently start a second empty member DB.
+const { isWithinPersistentRoot, resolveDataDirectory, canInitializeEmptyDatabase } = require('./lib/data-directory');
+const PERSISTENT_DATA_ROOT = fs.existsSync('/data') ? path.resolve('/data') : null;
+const CONFIGURED_DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : null;
+const LEGACY_DATA_DIR = PERSISTENT_DATA_ROOT && CONFIGURED_DATA_DIR && !isWithinPersistentRoot(PERSISTENT_DATA_ROOT, CONFIGURED_DATA_DIR)
+  ? CONFIGURED_DATA_DIR : null;
+let DATA_DIR = resolveDataDirectory({
+  persistentRoot: PERSISTENT_DATA_ROOT,
+  configuredPath: CONFIGURED_DATA_DIR,
+  defaultPath: path.join(ROOT, 'data')
+});
+if (LEGACY_DATA_DIR) console.error(`Configured DATA_DIR ${LEGACY_DATA_DIR} is outside persistent storage; using ${DATA_DIR}. The legacy directory will not be modified automatically.`);
 let UP_DIR = path.join(DATA_DIR, 'uploads');
 let DB_FILE = path.join(DATA_DIR, 'data.json');
 try { fs.mkdirSync(UP_DIR, { recursive: true }); }
@@ -86,6 +100,9 @@ catch (err) {
 let PRIVATE_MEDIA_DIR = path.join(DATA_DIR, 'private-media');
 try { fs.mkdirSync(PRIVATE_MEDIA_DIR, { recursive: true }); }
 catch (error) { console.error(`Cannot initialize private media directory ${PRIVATE_MEDIA_DIR}: ${error.message}`); throw error; }
+const staleBackupTemps=cleanupStaleBackupTemps(DATA_DIR,DB_FILE);
+if(staleBackupTemps.removedDirectories||staleBackupTemps.removedFiles)console.log(`Removed stale backup temp data: ${staleBackupTemps.removedDirectories} media snapshot directories, ${staleBackupTemps.removedFiles} database temp files.`);
+for(const item of staleBackupTemps.errors)console.warn(`Could not remove stale backup temp ${item.path}: ${item.message}`);
 
 app.disable('x-powered-by');
 app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','SAMEORIGIN');res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');res.setHeader('Permissions-Policy','camera=(self), microphone=(self), geolocation=()');if(req.path.startsWith('/api/'))res.setHeader('Cache-Control','no-store');next();});
@@ -181,14 +198,30 @@ const defaults = () => ({
   roomBans:{}, roomMutes:{}, roomKicks:{}, globalBans:{}, globalIpBans:{},
   wallLikes:{}, wallComments:{}, wallReadAt:{}, privateMessages:[], privateHidden:{}, privateRead:{}, ignored:{}
 });
+const LAST_KNOWN_GOOD_INTERVAL_MS = 60 * 1000;
+const LAST_KNOWN_GOOD_FILE = DB_FILE + '.previous';
+let lastKnownGoodDatabaseBackupAt = 0;
 
 let db;
 try {
-  const rawDatabase = fs.readFileSync(DB_FILE, 'utf8');
-  db = JSON.parse(rawDatabase);
+  db = readJsonFile(DB_FILE);
   if (!db || typeof db !== 'object' || Array.isArray(db)) throw new Error('Database root must be a JSON object');
 } catch (error) {
   if (error.code === 'ENOENT') {
+    const legacyDatabaseFile = LEGACY_DATA_DIR ? path.join(LEGACY_DATA_DIR, 'data.json') : null;
+    const legacyDatabaseExists = !!(legacyDatabaseFile && fs.existsSync(legacyDatabaseFile));
+    if (legacyDatabaseExists) {
+      console.error(`FATAL: persistent database is missing at ${DB_FILE}, but a legacy database exists at ${legacyDatabaseFile}. Refusing to create an empty member database; migrate the complete data directory after an independent backup.`);
+      throw new Error('Refusing to initialize an empty database while a legacy member database exists outside persistent storage.');
+    }
+    if (!canInitializeEmptyDatabase({
+      persistentRoot: PERSISTENT_DATA_ROOT,
+      allowEmpty: process.env.RIMAZ_ALLOW_EMPTY_DATABASE_INIT === 'true',
+      legacyDatabaseExists
+    })) {
+      console.error(`FATAL: persistent database is missing at ${DB_FILE}. Refusing to initialize empty accounts on an existing persistent mount. Restore the database or explicitly allow a first-time empty initialization.`);
+      throw new Error('Refusing to initialize an empty database on persistent storage without explicit first-install approval.');
+    }
     db = defaults();
   } else if (error instanceof SyntaxError || /Database root must be/.test(error.message || '')) {
     // Never replace a damaged database with empty defaults: preserve the original
@@ -197,6 +230,14 @@ try {
     try { fs.copyFileSync(DB_FILE, recoveryCopy, fs.constants.COPYFILE_EXCL); }
     catch (copyError) { console.error(`Could not create database recovery copy: ${copyError.message}`); }
     console.error(`FATAL: database JSON is invalid. Original file was preserved${fs.existsSync(recoveryCopy) ? ` at ${recoveryCopy}` : ''}. Repair or restore it before restarting.`);
+    if(fs.existsSync(LAST_KNOWN_GOOD_FILE)){
+      try{
+        validateJsonFile(LAST_KNOWN_GOOD_FILE);
+        console.error(`A separately preserved, JSON-valid last-known-good candidate exists at ${LAST_KNOWN_GOOD_FILE}. It was NOT applied automatically; inspect/restore it deliberately to avoid silently rolling back newer data.`);
+      }catch(previousError){console.error(`Last-known-good candidate is not valid and must not be restored: ${previousError.message}`);}
+    }else{
+      console.error('No last-known-good database candidate exists; use an independently verified backup for recovery.');
+    }
     throw new Error('Refusing to start with an invalid database to prevent data loss.');
   } else {
     console.error(`FATAL: cannot read database ${DB_FILE}: ${error.message}`);
@@ -219,19 +260,19 @@ function siteModuleEnabled(name){return db.siteSettings?.modules?.[name]!==false
 if(!db.chatFilter || typeof db.chatFilter!=='object') db.chatFilter={enabled:false,words:[]};
 if(!Array.isArray(db.chatFilter.words)) db.chatFilter.words=[];
 if(!Array.isArray(db.chatShortcuts)) db.chatShortcuts=[]; if(!Array.isArray(db.customSmileys)) db.customSmileys=[];
-// Gallery migration v9: replace all legacy smileys with the supplied artwork pack and requested mobile emojis.
-// This only resets the smiley catalogue; accounts, messages, uploads and chat shortcuts remain untouched.
+// Gallery migration v9: install the supplied artwork pack and requested mobile emojis once.
+// After seeding, preserve the entire saved list: member-added smileys share this array.
+// Future built-in pack changes must use an explicit seed-version migration, never a length check.
 {
   const classicFiles=Object.keys(BUILTIN_SMILEYS).sort();
-  const desiredCount=classicFiles.length+ALL_MOBILE_EMOJIS.length;
-  if(Number(db.smileysSeedVersion||0)<9 || !Array.isArray(db.customSmileys) || db.customSmileys.length!==desiredCount){
+  if(Number(db.smileysSeedVersion||0)<9){
     const artwork=classicFiles.map((file,i)=>({id:'rimaz-art-'+String(i+1).padStart(3,'0'),icon:BUILTIN_SMILEYS[file],name:'سميل '+String(i+1),shortcut:''}));
     const mobile=ALL_MOBILE_EMOJIS.map((icon,i)=>({id:'rimaz-mobile-'+String(i+1).padStart(3,'0'),icon,name:'إيموجي موبايل '+String(i+1),shortcut:''}));
     db.customSmileys=[...artwork,...mobile];
     db.smileysSeedVersion=9;
     db.smileysSeeded=true;
     try { save(); console.log(`Installed ${artwork.length} supplied smileys + ${mobile.length} mobile emojis (migration v9).`); }
-    catch(e) { console.error('Could not persist smiley gallery migration:',e.message); }
+    catch(e) { console.error('FATAL: could not persist smiley gallery migration; startup stopped:',e.message); throw new Error('Smiley gallery migration could not be persisted; refusing to start with uncommitted startup state.'); }
   }
 }
 
@@ -248,10 +289,10 @@ const legacyWelcomeTexts=new Set(['إدارة ريماز ترحب بالأعضا
 if(Array.isArray(db.welcomeMessages) && db.welcomeMessages.length && db.welcomeMessages.every(m=>legacyWelcomeTexts.has(String(m.text||'').trim()))) db.welcomeMessages=agreedWelcomeDefaults;
 // If the saved set is the old default pair, replace it with the approved default text.
 if(Array.isArray(db.welcomeMessages) && db.welcomeMessages.length===2 && db.welcomeMessages.some(m=>String(m.text||'').includes('إدارة ريماز ترحب'))) db.welcomeMessages=agreedWelcomeDefaults;
-try { save(); } catch(e) { console.error('Could not persist welcome-message defaults/migration:',e.message); }
+try { save(); } catch(e) { console.error('FATAL: could not persist welcome-message defaults/migration; startup stopped:',e.message); throw new Error('Welcome-message migration could not be persisted; refusing to start with uncommitted startup state.'); }
 // Remove expired timed announcements after restarts; expiry is stored with the announcement.
 const expiredAnnouncementIds=new Set((db.announcements||[]).filter(a=>a&&['5m','15m'].includes(a.duration)&&Number(a.at)+900000<=Date.now()).map(a=>String(a.id)));
-if(expiredAnnouncementIds.size){db.announcements=(db.announcements||[]).filter(a=>!expiredAnnouncementIds.has(String(a.id)));db.messages=(db.messages||[]).filter(m=>![...expiredAnnouncementIds].some(id=>String(m.id||'').startsWith(id+'-')));try{fs.writeFileSync(DB_FILE,JSON.stringify(db,null,2))}catch(e){console.error('Could not clean expired announcements:',e.message)}}
+if(expiredAnnouncementIds.size){db.announcements=(db.announcements||[]).filter(a=>!expiredAnnouncementIds.has(String(a.id)));db.messages=(db.messages||[]).filter(m=>![...expiredAnnouncementIds].some(id=>String(m.id||'').startsWith(id+'-')));try{save()}catch(e){console.error('FATAL: could not persist expired-announcement cleanup; startup stopped:',e.message);throw new Error('Expired-announcement cleanup could not be persisted; refusing to start with uncommitted startup state.')}}
 // Direct private conversations and the wall are separate from db.rooms.
 // Keep room announcements available in every configured room, including rooms
 // whose access kind is private; only one-to-one DMs and the wall are excluded.
@@ -259,20 +300,49 @@ if(expiredAnnouncementIds.size){db.announcements=(db.announcements||[]).filter(a
 const RANK_PERMISSION_PROFILES=['admin-full','admin-shield','crown-gold','crown-silver','super-black','super-white','super-red'];
 const CORE_RANK_LEVELS=Object.freeze({'admin-full':1000,'admin-shield':900,'crown-gold':800,'crown-silver':700,'super-black':600,'super-white':500,'super-red':400});
 db.accountPermissions=db.accountPermissions&&typeof db.accountPermissions==='object'?db.accountPermissions:{};
+function refreshLastKnownGoodDatabase(){
+  if(!fs.existsSync(DB_FILE))return;
+  const now=Date.now();
+  if(now-lastKnownGoodDatabaseBackupAt<LAST_KNOWN_GOOD_INTERVAL_MS)return;
+  const tempFile=`${DB_FILE}.${process.pid}.database-backup.${crypto.randomBytes(8).toString('hex')}.tmp`;
+  let fd=null;
+  try{
+    // Preserve the prior committed generation, but never promote an invalid recovery copy.
+    fs.copyFileSync(DB_FILE,tempFile,fs.constants.COPYFILE_EXCL);
+    fs.chmodSync(tempFile,0o600);
+    fd=fs.openSync(tempFile,'r+');
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);fd=null;
+    validateJsonFile(tempFile);
+    fs.renameSync(tempFile,LAST_KNOWN_GOOD_FILE);
+    try{const dirFd=fs.openSync(DATA_DIR,'r');try{fs.fsyncSync(dirFd);}finally{fs.closeSync(dirFd);}}
+    catch(syncError){console.error('Last-known-good database directory sync unavailable:',syncError.message);}
+    lastKnownGoodDatabaseBackupAt=now;
+  }catch(error){
+    if(fd!==null){try{fs.closeSync(fd);}catch(_){}}
+    try{fs.unlinkSync(tempFile);}catch(_){}
+    throw new Error('Could not refresh the verified last-known-good database copy: '+error.message);
+  }
+}
 function save(){
-  // Keep the existing synchronous/atomic contract for every route, but avoid
-  // pretty-printing the entire database and forcing two disk flushes per event.
+  // Keep the synchronous/atomic contract while serializing in bounded chunks.
   // Private messages are deliberately memory-only and are never written to disk.
   const snapshot = { ...db, privateMessages: [] };
-  const serialized = JSON.stringify(snapshot);
   const tempFile = `${DB_FILE}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
   let fd = null;
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     fd = fs.openSync(tempFile, 'wx', 0o600);
-    fs.writeFileSync(fd, serialized, 'utf8');
+    writeJsonSync(fd, snapshot);
+    fs.fsyncSync(fd);
     fs.closeSync(fd); fd = null;
+    // Validate the complete candidate before preserving or replacing a committed generation.
+    validateJsonFile(tempFile);
+    refreshLastKnownGoodDatabase();
     fs.renameSync(tempFile, DB_FILE);
+    // Best-effort directory sync makes the atomic rename survive sudden power loss on supported filesystems.
+    try { const dirFd=fs.openSync(DATA_DIR,'r'); try { fs.fsyncSync(dirFd); } finally { fs.closeSync(dirFd); } }
+    catch (syncError) { console.error('Database directory sync unavailable after atomic replacement:',syncError.message); }
   } catch (error) {
     if (fd !== null) { try { fs.closeSync(fd); } catch (_) {} }
     try { fs.unlinkSync(tempFile); } catch (_) {}
@@ -308,7 +378,7 @@ if(db.vipGiftCatalogV7Initialized!==true){
   }
 }
 if(!Array.isArray(db.vipGiftCatalog))db.vipGiftCatalog=[];
-try{if(giftCatalogMigrationChanged)save();}catch(error){console.error('Could not persist gift catalogue migration:',error.message)}
+try{if(giftCatalogMigrationChanged)save();}catch(error){console.error('FATAL: could not persist gift catalogue migration; startup stopped:',error.message);throw new Error('Gift catalogue migration could not be persisted; refusing to start with uncommitted startup state.')}
 
 function migratePrivateMediaToProtectedStorage(){
   let changed=false;
@@ -320,10 +390,13 @@ function migratePrivateMediaToProtectedStorage(){
     if(!filename||filename!==url.slice('/uploads/'.length)||! /^[a-zA-Z0-9._-]{1,180}$/.test(filename))continue;
     const publicPath=path.join(UP_DIR,filename),privatePath=path.join(PRIVATE_MEDIA_DIR,filename);
     try{
+      const publicUrl='/uploads/'+filename;
+      const referencedOutsidePrivateMessages=Object.entries(db).some(([key,value])=>key!=='privateMessages'&&containsStoredUrl(value,publicUrl));
       if(fs.existsSync(privatePath)){
-        if(fs.existsSync(publicPath))fs.unlinkSync(publicPath);
+        if(fs.existsSync(publicPath)&&!referencedOutsidePrivateMessages)fs.unlinkSync(publicPath);
       }else if(fs.existsSync(publicPath)){
-        fs.renameSync(publicPath,privatePath);
+        if(referencedOutsidePrivateMessages)fs.copyFileSync(publicPath,privatePath);
+        else fs.renameSync(publicPath,privatePath);
       }
       media.url='/api/private/media/'+filename;
       changed=true;
@@ -344,8 +417,11 @@ migratePrivateMediaToProtectedStorage();
 function purgePrivateHistoryAtStartup(){
   const hadHistory=(db.privateMessages||[]).length>0;
   db.privateMessages=[];
+  let notificationsChanged=false;
   for(const [name,items] of Object.entries(db.notifications||{})){
-    if(Array.isArray(items))db.notifications[name]=items.filter(item=>!String(item?.type||'').startsWith('private'));
+    if(!Array.isArray(items))continue;
+    const retained=items.filter(item=>!String(item?.type||'').startsWith('private'));
+    if(retained.length!==items.length){db.notifications[name]=retained;notificationsChanged=true;}
   }
   let removedFiles=0;
   for(const entry of fs.readdirSync(PRIVATE_MEDIA_DIR,{withFileTypes:true})){
@@ -354,7 +430,9 @@ function purgePrivateHistoryAtStartup(){
     catch(error){if(error.code!=='ENOENT')console.warn('Startup private media purge failed:',error.message);}
   }
   if(hadHistory||removedFiles)console.log(`Purged transient private history and ${removedFiles} private media file(s).`);
-  if(hadHistory||removedFiles)save();
+  // Persist notification-only cleanup too; otherwise stale private notices remain on disk
+  // and are needlessly reprocessed after every restart.
+  if(hadHistory||removedFiles||notificationsChanged)save();
 }
 purgePrivateHistoryAtStartup();
 
@@ -382,44 +460,69 @@ function roomHistoryWithAnnouncements(roomId,viewer,createdAt=0){
 function publishAnnouncement(item){
   if(!item||!item.id)return [];
   const at=Date.now();
+  const previousMessages=db.messages;
+  const previousLastPublishedAt=item.lastPublishedAt;
+  const hadLastPublishedAt=Object.prototype.hasOwnProperty.call(item,'lastPublishedAt');
+  const previousNextScheduledAt=item.nextScheduledAt;
+  const hadNextScheduledAt=Object.prototype.hasOwnProperty.call(item,'nextScheduledAt');
   if(item.duration==='permanent'){item.lastPublishedAt=at;delete item.nextScheduledAt;}
-  // Announcements are site-wide notices, not room chat messages. Keep one
-  // canonical record and broadcast it to every connected session, including
-  // users who deliberately left a room or are browsing another room.
   const message=announcementMessage(item,at,String(at));
   db.messages=[...(db.messages||[]),message].slice(-1000);
+  try{save();}catch(error){
+    if(previousMessages===undefined)delete db.messages;else db.messages=previousMessages;
+    if(hadLastPublishedAt)item.lastPublishedAt=previousLastPublishedAt;else delete item.lastPublishedAt;
+    if(hadNextScheduledAt)item.nextScheduledAt=previousNextScheduledAt;else delete item.nextScheduledAt;
+    throw error;
+  }
+  // Announcements are site-wide; broadcast only after durable commit.
   io.emit('message',message);
-  try{save()}catch(error){console.error('Announcement publish save failed:',error.message);}
   return [message];
 }
 const permanentAnnouncementTimers=new Map();
+const announcementExpiryTimers=new Map();
 function removeAnnouncement(itemId){
   const id=String(itemId);
-  const timer=permanentAnnouncementTimers.get(id);if(timer)clearTimeout(timer);permanentAnnouncementTimers.delete(id);
-  db.announcements=(db.announcements||[]).filter(a=>String(a.id)!==id);
+  const previousAnnouncements=db.announcements;
+  const previousMessages=db.messages;
   const removed=(db.messages||[]).filter(m=>String(m.announcementId||'')===id||String(m.id||'').startsWith(id+'-'));
+  db.announcements=(db.announcements||[]).filter(a=>String(a.id)!==id);
   db.messages=(db.messages||[]).filter(m=>String(m.announcementId||'')!==id&&!String(m.id||'').startsWith(id+'-'));
+  try{save();}catch(error){
+    if(previousAnnouncements===undefined)delete db.announcements;else db.announcements=previousAnnouncements;
+    if(previousMessages===undefined)delete db.messages;else db.messages=previousMessages;
+    throw error;
+  }
+  const expiryTimer=announcementExpiryTimers.get(id);if(expiryTimer)clearTimeout(expiryTimer);announcementExpiryTimers.delete(id);
+  const permanentTimer=permanentAnnouncementTimers.get(id);if(permanentTimer)clearTimeout(permanentTimer);permanentAnnouncementTimers.delete(id);
   for(const message of removed)io.emit('message-deleted',{id:message.id});
-  try{save()}catch(error){console.error('Announcement cleanup save failed:',error.message);}
   scheduleAllPermanentAnnouncements();
   return removed;
 }
-function scheduleAnnouncementExpiry(item){
+function scheduleAnnouncementExpiry(item,retryDelay=null){
   if(!item||!['5m','15m'].includes(item.duration)||!item.id)return;
-  const delay=Math.max(0,Number(item.at||Date.now())+ANNOUNCEMENT_INTERVAL_MS-Date.now());
-  setTimeout(()=>removeAnnouncement(item.id),delay).unref?.();
+  const id=String(item.id),oldTimer=announcementExpiryTimers.get(id);if(oldTimer)clearTimeout(oldTimer);
+  const due=retryDelay===null?Number(item.at||Date.now())+ANNOUNCEMENT_INTERVAL_MS:Date.now()+Math.max(1000,Number(retryDelay)||60000);
+  const timer=setTimeout(()=>{
+    announcementExpiryTimers.delete(id);
+    try{removeAnnouncement(id);}catch(error){
+      console.error('Timed announcement expiry save failed; retrying:',error.message);
+      const current=(db.announcements||[]).find(a=>String(a.id)===id);
+      if(current)scheduleAnnouncementExpiry(current,60000);
+    }
+  },Math.max(0,due-Date.now()));
+  timer.unref?.();announcementExpiryTimers.set(id,timer);
 }
-function schedulePermanentAnnouncement(item){
+function schedulePermanentAnnouncement(item,retryDelay=null){
   if(!item||item.duration!=='permanent'||!item.id)return;
   const id=String(item.id),oldTimer=permanentAnnouncementTimers.get(id);if(oldTimer)clearTimeout(oldTimer);
   const now=Date.now();
-  const due=Number(item.lastPublishedAt||0)>0?Number(item.lastPublishedAt)+ANNOUNCEMENT_INTERVAL_MS:Math.max(now,Number(item.nextScheduledAt||now));
+  const due=retryDelay!==null?now+Math.max(1000,Number(retryDelay)||60000):(Number(item.lastPublishedAt||0)>0?Number(item.lastPublishedAt)+ANNOUNCEMENT_INTERVAL_MS:Math.max(now,Number(item.nextScheduledAt||now)));
   const timer=setTimeout(()=>{
     permanentAnnouncementTimers.delete(id);
     const current=(db.announcements||[]).find(a=>String(a.id)===id&&a.duration==='permanent');
     if(!current)return;
-    publishAnnouncement(current);
-    schedulePermanentAnnouncement(current);
+    try{publishAnnouncement(current);schedulePermanentAnnouncement(current);}
+    catch(error){console.error('Permanent announcement publish failed; retrying:',error.message);schedulePermanentAnnouncement(current,60000);}
   },Math.max(0,due-now));
   timer.unref?.();permanentAnnouncementTimers.set(id,timer);
 }
@@ -459,6 +562,12 @@ function cleanupExpiredPublicContent(now=Date.now()){
   const cutoff=now-PUBLIC_RETENTION_MS;
   const expiredMessageIds=[];
   const expiredMedia=[];
+  const previousMessagesValue=db.messages;
+  const previousWallValue=db.wall;
+  const previousWallLikesValue=db.wallLikes;
+  const previousWallCommentsValue=db.wallComments;
+  const previousWallLikesSnapshot=previousWallLikesValue&&typeof previousWallLikesValue==='object'&&!Array.isArray(previousWallLikesValue)?{...previousWallLikesValue}:previousWallLikesValue;
+  const previousWallCommentsSnapshot=previousWallCommentsValue&&typeof previousWallCommentsValue==='object'&&!Array.isArray(previousWallCommentsValue)?{...previousWallCommentsValue}:previousWallCommentsValue;
   const previousMessages=db.messages||[];
   db.messages=previousMessages.filter(message=>{
     const old=message?.room==='public'&&Number(message.at||0)>0&&Number(message.at)<cutoff&&message.type!=='announcement';
@@ -476,10 +585,17 @@ function cleanupExpiredPublicContent(now=Date.now()){
     if(store&&typeof store==='object'&&!Array.isArray(store))for(const id of expiredWallIds)delete store[id];
   }
   if(expiredMessageIds.length||expiredWallIds.size){
+    try{save();}catch(error){
+      if(previousMessagesValue===undefined)delete db.messages;else db.messages=previousMessagesValue;
+      if(previousWallValue===undefined)delete db.wall;else db.wall=previousWallValue;
+      if(previousWallLikesValue===undefined)delete db.wallLikes;else db.wallLikes=previousWallLikesSnapshot;
+      if(previousWallCommentsValue===undefined)delete db.wallComments;else db.wallComments=previousWallCommentsSnapshot;
+      console.error('24-hour public retention save failed:',error.message);
+      return;
+    }
     for(const id of expiredMessageIds)io.emit('message-deleted',{id});
     io.emit('wall-retention-cleaned',{ids:[...expiredWallIds]});
     for(const url of new Set(expiredMedia))removePublicUploadIfUnreferenced(url);
-    try{save();}catch(error){console.error('24-hour public retention save failed:',error.message);}
     console.log(`24-hour cleanup removed ${expiredMessageIds.length} public message(s), ${expiredWallIds.size} wall post(s).`);
   }
 }
@@ -488,7 +604,28 @@ const publicRetentionTimer=setInterval(()=>cleanupExpiredPublicContent(),5*60*10
 publicRetentionTimer.unref?.();
 
 const sessions = new Map(); // sid -> {name,type,created}
-const privateMediaPlaybackTickets = new Map(); // short-lived, account-bound stream tickets
+const adminBackupDownloadTickets = new Map(); // bounded, short-lived, one-use browser download tickets
+const MAX_ADMIN_BACKUP_DOWNLOAD_TICKETS = 4;
+const ADMIN_BACKUP_DOWNLOAD_TTL_MS = 60 * 1000;
+const privateMediaPlaybackTickets = new Map(); // bounded, short-lived, account-bound stream tickets
+const MAX_PRIVATE_MEDIA_TICKETS=4096;
+const MAX_PRIVATE_MEDIA_TICKETS_PER_ACCOUNT=32;
+function createPrivateMediaPlaybackTicket(filename,account,now=Date.now()){
+  let accountTicketCount=0;
+  for(const [token,ticket] of privateMediaPlaybackTickets){
+    if(ticket.expiresAt<=now){privateMediaPlaybackTickets.delete(token);continue;}
+    if(ticket.account===account){
+      accountTicketCount++;
+      if(ticket.filename===filename){ticket.expiresAt=now+15*60*1000;return {token,ticket,reused:true};}
+    }
+  }
+  if(accountTicketCount>=MAX_PRIVATE_MEDIA_TICKETS_PER_ACCOUNT)return {error:'account-limit'};
+  if(privateMediaPlaybackTickets.size>=MAX_PRIVATE_MEDIA_TICKETS)return {error:'global-limit'};
+  const token=crypto.randomBytes(32).toString('hex');
+  const ticket={filename,account,expiresAt:now+15*60*1000};
+  privateMediaPlaybackTickets.set(token,ticket);
+  return {token,ticket,reused:false};
+}
 const privateMediaPlaybackTicketCleanup=setInterval(()=>{const now=Date.now();for(const [token,ticket] of privateMediaPlaybackTickets){if(ticket.expiresAt<=now)privateMediaPlaybackTickets.delete(token);}},5*60*1000);
 privateMediaPlaybackTicketCleanup.unref?.();
 for (const [sid,s] of Object.entries(db.sessions||{})) sessions.set(sid,s);
@@ -497,6 +634,11 @@ const socketUsers = new Map();
 // WebRTC signaling is relayed only between peers with a recent, server-authorized offer.
 const activeCallPairs = new Map();
 const activeVoicePairs = new Map(); // Authorized room-scoped speaker/listener negotiations.
+const MAX_ACTIVE_VOICE_PAIRS=8192;
+const VOICE_PAIR_TTL_MS=120000;
+function pruneActiveVoicePairs(now=Date.now()){for(const [key,state] of activeVoicePairs){if(!state||!Number.isFinite(state.created)||now-state.created>VOICE_PAIR_TTL_MS)activeVoicePairs.delete(key);}}
+const activeVoicePairCleanup=setInterval(()=>pruneActiveVoicePairs(),30000);
+activeVoicePairCleanup.unref?.();
 function voiceRoomPairKey(room,a,b){return String(room)+'::'+callPairKey(a,b);}
 function clearVoicePairsForSession(room,sid){for(const [key,state] of activeVoicePairs){if(state.room===room&&(state.a===sid||state.b===sid))activeVoicePairs.delete(key);}}
 const callSignalWindows = new Map();
@@ -511,6 +653,37 @@ const welcomeSentSessions = new Set();
 // Per-room raised-mic state (not shared across rooms).
 const voiceSpeakers = new Map();
 function emitVoiceState(room){ const r=db.rooms.find(x=>x.id===room); if(!r||r.kind!=='voice')return; const speakers=[...(voiceSpeakers.get(room)||new Map()).values()].sort((a,b)=>Number(a.seatIndex)-Number(b.seatIndex)); io.to(room).emit('voice-state',{room,speakers,count:speakers.length,limit:Number(r.mics)||5}); }
+function removeSessionFromRoomRuntime(sid,room){
+  if(!sid||!room)return;
+  const members=roomSockets.get(room);
+  if(members){
+    members.delete(sid);
+    for(const peerSid of members)if(peerSid!==sid)socketBySession(peerSid)?.emit('voice-peer-left',{room,sid});
+    if(members.size===0)roomSockets.delete(room);
+  }
+  const speakers=voiceSpeakers.get(room);
+  if(speakers){
+    speakers.delete(sid);
+    if(speakers.size===0)voiceSpeakers.delete(room);
+  }
+  clearVoicePairsForSession(room,sid);
+  emitVoiceState(room);
+}
+function clearDeletedRoomRuntime(room){
+  const members=[...(roomSockets.get(room)||[])];
+  for(const sid of members){
+    const socket=socketBySession(sid);
+    socket?.leave(room);
+    if(socket?.data?.user)socket.data.user.room='';
+    const active=socketUsers.get(sid);
+    if(active)active.room='';
+    removeSessionFromRoomRuntime(sid,room);
+    socket?.emit('kicked',{room,deleted:true});
+  }
+  roomSockets.delete(room);
+  voiceSpeakers.delete(room);
+  for(const [key,state] of activeVoicePairs)if(state.room===room)activeVoicePairs.delete(key);
+}
 const sessionDisconnectTimers = new Map();
 const privateDisconnectTimers = new Map();
 const SESSION_DISCONNECT_GRACE_MS=60000;
@@ -530,40 +703,107 @@ function scheduleSessionDisconnectCleanup(sid,user){
     try{save();}catch(error){
       console.error('Disconnected session cleanup failed:',error.message);sessions.set(sid,current);db.sessions[sid]=current;
       if(current.type==='guest'){if(previousGuest!==undefined)db.guests[current.name]=previousGuest;if(previousProfile!==undefined)db.profiles[current.name]=previousProfile;if(previousWallReadAt!==undefined)db.wallReadAt[guestKey]=previousWallReadAt;}
-      if(hadWelcome)welcomeSentSessions.add(sid);return;
+      if(hadWelcome)welcomeSentSessions.add(sid);
+      // The grace timer already fired; retry cleanup after a transient persistence failure.
+      scheduleSessionDisconnectCleanup(sid,current);
+      return;
     }
     clearSessionTransientState(sid);
     emitState();
   },SESSION_DISCONNECT_GRACE_MS);
   timer.unref?.();sessionDisconnectTimers.set(sid,timer);
 }
+const startupSessionDatabase=db;
+const startupSessionEntries=[...sessions.entries()];
+function cleanupOrphanedStartupSessions(){
+  if(db!==startupSessionDatabase)return;
+  const candidates=startupSessionEntries.filter(([sid,user])=>sessions.get(sid)===user&&!socketUsers.has(sid)&&!sessionDisconnectTimers.has(sid));
+  if(!candidates.length)return;
+  const removedSessions=[];
+  const guestSnapshots=new Map();
+  for(const [sid,user] of candidates){
+    const hadDbSession=Object.prototype.hasOwnProperty.call(db.sessions||{},sid);
+    const dbSession=db.sessions?.[sid];
+    sessions.delete(sid);
+    if(db.sessions)delete db.sessions[sid];
+    removedSessions.push({sid,user,hadDbSession,dbSession});
+    if(user.type==='guest'&&!hasConnectedSessionForUser(user.name)&&!guestSnapshots.has(user.name)){
+      const name=user.name,guestKey=keyName(name);
+      guestSnapshots.set(name,{
+        guestHad:Object.prototype.hasOwnProperty.call(db.guests||{},name),
+        guest:db.guests?.[name],
+        profileHad:Object.prototype.hasOwnProperty.call(db.profiles||{},name),
+        profile:db.profiles?.[name],
+        wallReadHad:Object.prototype.hasOwnProperty.call(db.wallReadAt||{},guestKey),
+        wallRead:db.wallReadAt?.[guestKey]
+      });
+      if(db.guests)delete db.guests[name];
+      if(db.profiles)delete db.profiles[name];
+      if(db.wallReadAt)delete db.wallReadAt[guestKey];
+    }
+  }
+  try{save();}catch(error){
+    for(const item of removedSessions){
+      sessions.set(item.sid,item.user);
+      if(item.hadDbSession){db.sessions=db.sessions||{};db.sessions[item.sid]=item.dbSession;}
+    }
+    for(const [name,snapshot] of guestSnapshots){
+      if(snapshot.guestHad){db.guests=db.guests||{};db.guests[name]=snapshot.guest;}
+      if(snapshot.profileHad){db.profiles=db.profiles||{};db.profiles[name]=snapshot.profile;}
+      const guestKey=keyName(name);
+      if(snapshot.wallReadHad){db.wallReadAt=db.wallReadAt||{};db.wallReadAt[guestKey]=snapshot.wallRead;}
+    }
+    console.error('Startup disconnected-session cleanup failed:',error.message);
+    const retry=setTimeout(cleanupOrphanedStartupSessions,30000);
+    retry.unref?.();
+    return;
+  }
+  for(const {sid} of removedSessions)clearSessionTransientState(sid);
+  console.log('Startup cleanup removed '+removedSessions.length+' orphaned session(s) after reconnect grace.');
+  emitState();
+}
+const startupSessionCleanupTimer=setTimeout(cleanupOrphanedStartupSessions,SESSION_DISCONNECT_GRACE_MS);
+startupSessionCleanupTimer.unref?.();
+
 function clearPrivateConversationForUser(name){
-  const userKey=keyName(name);if(!userKey||hasConnectedSessionForUser(name))return;
+  const userKey=keyName(name);if(!userKey||hasConnectedSessionForUser(name))return true;
   const removed=(db.privateMessages||[]).filter(message=>keyName(message.from)===userKey||keyName(message.to)===userKey);
-  if(!removed.length)return;
-  db.privateMessages=(db.privateMessages||[]).filter(message=>keyName(message.from)!==userKey&&keyName(message.to)!==userKey);
+  if(!removed.length)return true;
+  const previousMessages=db.privateMessages,previousRead=db.privateRead,previousHidden=db.privateHidden,previousNotifications=db.notifications;
   const peers=new Set();
-  for(const message of removed){
-    const peer=keyName(message.from)===userKey?message.to:message.from;if(peer)peers.add(peer);
-    const url=String(message?.media?.url||'');const prefix='/api/private/media/';
-    if(url.startsWith(prefix)){const filename=url.slice(prefix.length);if(/^[a-zA-Z0-9._-]{1,180}$/.test(filename)){const stillUsed=db.privateMessages.some(item=>item?.media?.url===url);if(!stillUsed){try{fs.unlinkSync(path.join(PRIVATE_MEDIA_DIR,filename));}catch(error){if(error.code!=='ENOENT')console.warn('Private media cleanup failed:',error.message);}}}}
-  }
+  for(const message of removed){const peer=keyName(message.from)===userKey?keyName(message.to):keyName(message.from);if(peer)peers.add(peer);}
+  const nextMessages=(db.privateMessages||[]).filter(message=>keyName(message.from)!==userKey&&keyName(message.to)!==userKey);
+  const readRoot={...(db.privateRead||{})},hiddenRoot={...(db.privateHidden||{})},notificationRoot={...(db.notifications||{})};
   for(const peer of peers){
-    if(db.privateRead?.[userKey])delete db.privateRead[userKey][keyName(peer)];
-    if(db.privateRead?.[keyName(peer)])delete db.privateRead[keyName(peer)][userKey];
-    if(db.privateHidden?.[userKey])db.privateHidden[userKey]=db.privateHidden[userKey].filter(item=>keyName(item)!==keyName(peer));
-    if(db.privateHidden?.[keyName(peer)])db.privateHidden[keyName(peer)]=db.privateHidden[keyName(peer)].filter(item=>keyName(item)!==userKey);
-    emitToUser(peer,'private-conversation-ended',{with:name});
+    if(readRoot[userKey]){readRoot[userKey]={...readRoot[userKey]};delete readRoot[userKey][peer];}
+    if(readRoot[peer]){readRoot[peer]={...readRoot[peer]};delete readRoot[peer][userKey];}
+    if(hiddenRoot[userKey])hiddenRoot[userKey]=hiddenRoot[userKey].filter(item=>keyName(item)!==peer);
+    if(hiddenRoot[peer])hiddenRoot[peer]=hiddenRoot[peer].filter(item=>keyName(item)!==userKey);
   }
-  for(const [owner,items] of Object.entries(db.notifications||{})){
-    if(Array.isArray(items))db.notifications[owner]=items.filter(item=>!(String(item?.type||'').startsWith('private')&&(keyName(item.from)===userKey||peers.has(keyName(item.from)))));
+  for(const [owner,items] of Object.entries(notificationRoot))if(Array.isArray(items))notificationRoot[owner]=items.filter(item=>!(String(item?.type||'').startsWith('private')&&(keyName(item.from)===userKey||peers.has(keyName(item.from)))));
+  db.privateMessages=nextMessages;db.privateRead=readRoot;db.privateHidden=hiddenRoot;db.notifications=notificationRoot;
+  try{save();}catch(error){
+    if(previousMessages===undefined)delete db.privateMessages;else db.privateMessages=previousMessages;
+    if(previousRead===undefined)delete db.privateRead;else db.privateRead=previousRead;
+    if(previousHidden===undefined)delete db.privateHidden;else db.privateHidden=previousHidden;
+    if(previousNotifications===undefined)delete db.notifications;else db.notifications=previousNotifications;
+    console.error('Transient private conversation cleanup save failed; retrying:',error.message);
+    return false;
   }
-  try{save();}catch(error){console.error('Transient private conversation cleanup save failed:',error.message);}
+  for(const message of removed){
+    const url=String(message?.media?.url||''),prefix='/api/private/media/';
+    if(!url.startsWith(prefix))continue;
+    const filename=url.slice(prefix.length);
+    if(!/^[a-zA-Z0-9._-]{1,180}$/.test(filename))continue;
+    if(!nextMessages.some(item=>item?.media?.url===url)){try{fs.unlinkSync(path.join(PRIVATE_MEDIA_DIR,filename));}catch(error){if(error.code!=='ENOENT')console.warn('Private media cleanup failed:',error.message);}}
+  }
+  for(const peer of peers)emitToUser(peer,'private-conversation-ended',{with:name});
+  return true;
 }
 function schedulePrivateConversationCleanup(name,delay=PRIVATE_DISCONNECT_GRACE_MS){
   const key=keyName(name);if(!key||hasConnectedSessionForUser(name))return;
   const old=privateDisconnectTimers.get(key);if(old)clearTimeout(old);
-  const timer=setTimeout(()=>{privateDisconnectTimers.delete(key);clearPrivateConversationForUser(name);},delay);
+  const timer=setTimeout(()=>{privateDisconnectTimers.delete(key);if(!clearPrivateConversationForUser(name)&&!hasConnectedSessionForUser(name))schedulePrivateConversationCleanup(name,60000);},delay);
   timer.unref?.();privateDisconnectTimers.set(key,timer);
 }
 function cancelPrivateConversationCleanup(name){const key=keyName(name),timer=privateDisconnectTimers.get(key);if(timer){clearTimeout(timer);privateDisconnectTimers.delete(key);}}
@@ -592,14 +832,18 @@ function level(l){ l=Number(l)||0; return l>=500?3:l>=400?2:1; }
 function canNotice(u){ return !!u&&(isFullPermissionAdmin(u)||userLikes(u)>=NOTICE_LIKES_REQUIRED); }
 function canMedia(u){ return !!u&&(isFullPermissionAdmin(u)||userLikes(u)>=PRIVATE_MEDIA_LIKES_REQUIRED); }
 function canRaiseRoomMic(u){ return !!u&&(isFullPermissionAdmin(u)||userLikes(u)>=ROOM_MIC_LIKES_REQUIRED); }
-function vipActive(name){ const p=profile(name); if(p.vipUntil&&p.vipUntil>Date.now()) return true; if(p.vipUntil){delete p.vipUntil; save();} return false; }
+function vipActive(name){const p=profile(name);if(p.vipUntil&&Number(p.vipUntil)>Date.now())return true;if(p.vipUntil){const previous=p.vipUntil;delete p.vipUntil;try{save();}catch(error){p.vipUntil=previous;console.error('Expired VIP cleanup save failed:',error.message);}}return false;}
 function defaultStatus(name){ return getGuest(name) ? '(غير مسجل)' : '(عضو جديد)'; }
 function profile(name){
   if (!db.profiles[name]) db.profiles[name]={displayName:cleanName(name),avatar:'',status:defaultStatus(name),bio:'عضو في دردشة ريماز عراقية',nameColor:'#222222',fontColor:'#222222',bgColor:'#ffffff',privateOpen:true,notificationsOpen:true};
   const p=db.profiles[name];
   if(!p.displayName) p.displayName=cleanName(name);
   // Expire temporary visual ranks before projecting their assigned rank artwork/banner.
-  if(p.rankUntil && Number(p.rankUntil)<=Date.now()) { p.rank='none'; delete p.rankUntil; delete p.rankPreviousRole; delete p.rankDurationDays; save(); }
+  if(p.rankUntil && Number(p.rankUntil)<=Date.now()) {
+    const previous={rank:p.rank,rankUntil:p.rankUntil,rankPreviousRole:p.rankPreviousRole,rankDurationDays:p.rankDurationDays};
+    p.rank='none';delete p.rankUntil;delete p.rankPreviousRole;delete p.rankDurationDays;
+    try{save();}catch(error){for(const key of ['rank','rankUntil','rankPreviousRole','rankDurationDays'])if(previous[key]!==undefined)p[key]=previous[key];else delete p[key];console.error('Expired rank cleanup save failed:',error.message);}
+  }
   const visualRank=rankDefinition(p.rank);
   p.rankArt=visualRank?.artUrl||'';
   p.rankBanner=visualRank?.bannerUrl||'';
@@ -611,18 +855,21 @@ function profile(name){
   return p;
 }
 // Migrate the old automatic status to the new type-specific default, while keeping custom statuses.
-let statusMigrated=false;
+let statusMigrated=false;const migratedProfileStatuses=[];
 for (const name of Object.keys(db.profiles||{})) {
   const p=db.profiles[name];
-  if(p && (!p.status || p.status==='متصل الآن' || p.status==='زائر جديد' || p.status==='غير مسجل' || p.status==='عضو جديد')) { const next=defaultStatus(name); if(p.status!==next){p.status=next; statusMigrated=true;} }
+  if(p && (!p.status || p.status==='متصل الآن' || p.status==='زائر جديد' || p.status==='غير مسجل' || p.status==='عضو جديد')) { const next=defaultStatus(name); if(p.status!==next){migratedProfileStatuses.push([p,p.status]);p.status=next;statusMigrated=true;} }
 }
-if(statusMigrated) save();
+if(statusMigrated){try{save();}catch(error){for(const [p,previous] of migratedProfileStatuses){if(previous===undefined)delete p.status;else p.status=previous;}console.error('Profile status migration save failed:',error.message);}}
 function displayName(name){ return profile(name).displayName || cleanName(name); }
 function sessionUser(sid){ const s=sessions.get(sid); if(!s)return null; const role=roleOf(s); return {...s, memberNumber:getMemberNumber(s.name,s.type), role, owner:isOwner(s), admin:isAdmin(s), fullAdmin:isFullPermissionAdmin(s), staff:isStaff(s), myPermissions:Object.keys(PERMISSION_CATALOG).filter(permission=>hasPermission(s,permission)), panelAccess:isOwner(s)||hasPermission(s,'panel_access')||hasPermission(s,'health_view'), vip:vipActive(s.name), likes:isOwner(s)?999999:userLikes(s)}; }
 function makeSession(name,type,visibility={}){
   cancelPrivateConversationCleanup(name);
   const sid=crypto.randomBytes(24).toString('hex');
-  const s={name,type,memberNumber:getMemberNumber(name,type),created:Date.now(),hidden:!!visibility.hidden,ghost:!!visibility.ghost}; sessions.set(sid,s); db.sessions[sid]=s; save(); return sid;
+  const s={name,type,memberNumber:getMemberNumber(name,type),created:Date.now(),hidden:!!visibility.hidden,ghost:!!visibility.ghost};
+  sessions.set(sid,s);db.sessions[sid]=s;
+  try{save();}catch(error){sessions.delete(sid);delete db.sessions[sid];schedulePrivateConversationCleanup(name);console.error('Session creation save failed:',error.message);throw error;}
+  return sid;
 }
 function requireAuth(req,res,next){
   const u=sessionUser(req.get('x-session')); if(!u)return res.status(401).json({error:'يجب تسجيل الدخول'}); req.user=u; next();
@@ -639,11 +886,11 @@ app.post('/api/private/media-ticket',requireAuth,(req,res)=>{
   const file=path.resolve(PRIVATE_MEDIA_DIR,filename);
   if(!file.startsWith(path.resolve(PRIVATE_MEDIA_DIR)+path.sep)||!fs.existsSync(file))return res.status(404).json({error:'الوسائط غير موجودة'});
   const now=Date.now();
-  for(const [token,ticket] of privateMediaPlaybackTickets){if(ticket.expiresAt<=now)privateMediaPlaybackTickets.delete(token);}
-  const token=crypto.randomBytes(32).toString('hex');
-  privateMediaPlaybackTickets.set(token,{filename,account:keyName(req.user.name),expiresAt:now+15*60*1000});
+  const issued=createPrivateMediaPlaybackTicket(filename,keyName(req.user.name),now);
+  if(issued.error==='account-limit')return res.status(429).json({error:'وصلت إلى الحد المؤقت لروابط تشغيل الوسائط؛ أغلق فيديو قديماً أو انتظر انتهاء صلاحيته'});
+  if(issued.error==='global-limit')return res.status(503).json({error:'خدمة تشغيل الوسائط مشغولة حالياً؛ حاول بعد قليل'});
   res.set('Cache-Control','no-store');
-  res.json({url:'/api/private/media-stream/'+encodeURIComponent(filename)+'?ticket='+token});
+  res.json({url:'/api/private/media-stream/'+encodeURIComponent(filename)+'?ticket='+issued.token});
 });
 app.get('/api/private/media-stream/:filename',(req,res)=>{
   if(!siteModuleEnabled('privateChat'))return res.status(403).json({error:'المحادثات الخاصة متوقفة من إدارة الموقع'});
@@ -718,7 +965,7 @@ for(const r of db.rankDefinitions){r.permissions=normalizePermissionList(r.permi
 const validBuiltInRanks=new Set(RANK_PERMISSION_PROFILES);const rankCountBeforePrune=db.rankDefinitions.length;db.rankDefinitions=db.rankDefinitions.filter(r=>validBuiltInRanks.has(r.id));if(db.rankDefinitions.length!==rankCountBeforePrune)for(const p of Object.values(db.profiles||{})){if(p?.rank&&p.rank!=='none'&&!validBuiltInRanks.has(p.rank)){p.rank='none';delete p.rankUntil;delete p.rankPreviousRole;delete p.rankDurationDays;}}
 function rankDefinition(id){const rank=String(id||'');if(!RANK_PERMISSION_PROFILES.includes(rank))return null;return (db.rankDefinitions||[]).find(r=>String(r.id)===rank)||null;}
 function coreRankLevelForName(name){const canonical=accountKey(name)||cleanName(name);if(!canonical||isOwnerName(canonical))return null;const p=profile(canonical),rank=String(p?.rank||'');return Object.hasOwn(CORE_RANK_LEVELS,rank)&&(!p.rankUntil||Number(p.rankUntil)>Date.now())?CORE_RANK_LEVELS[rank]:null;}
-function higherRankTargetError(actor,targetName){if(!actor||isOwner(actor)||!targetName||isOwnerName(targetName))return false;if(hasPermission(actor,'permission_manage'))return false;const actorLevel=coreRankLevelForName(actor.name),targetLevel=coreRankLevelForName(targetName);return actorLevel!==null&&targetLevel!==null&&targetLevel>actorLevel;}
+function higherRankTargetError(actor,targetName){if(!actor||isOwner(actor)||!targetName||isOwnerName(targetName))return false;const actorLevel=coreRankLevelForName(actor.name),targetLevel=coreRankLevelForName(targetName);return actorLevel!==null&&targetLevel!==null&&targetLevel>actorLevel;}
 function denyHigherRankTarget(actor,targetName,res){if(!higherRankTargetError(actor,targetName))return false;res.status(403).json({error:'صلاحية هذه الرتبة أعلى منك',code:'HIGHER_RANK_PROTECTED'});return true;}
 function effectivePermissionsForUser(user){
  if(!user)return new Set();
@@ -813,22 +1060,23 @@ if(Number(db.healthViewPermissionMigrationVersion||0)<2){
 function requirePermission(permission){return (req,res,next)=>requireAuth(req,res,()=>hasPermission(req.user,permission)?next():res.status(403).json({error:'ما عندك صلاحية لهذا الإجراء'}));}
 function permissionForAdminPath(req){
  const p=req.path;
- if(p==='/api/admin/data'){
-  if(hasPermission(req.user,'panel_access'))return 'panel_access';
-  if(['audit_view','stats_view','chat_filter_manage','member_status_manage','users_view'].some(k=>hasPermission(req.user,k)))return 'panel_access';
-  return 'panel_access';
- }
+ if(p==='/api/admin/data')return ALL_PERMISSION_KEYS;
  if(p==='/api/admin/audit-logs')return 'audit_view';
  if(p.startsWith('/api/admin/subscriptions'))return 'subscriptions_manage';
  if(p.startsWith('/api/admin/ads'))return 'ads_manage';
  if(p.startsWith('/api/admin/control-center'))return 'control_center_manage';
  if(p==='/api/admin/chat-filter')return 'chat_filter_manage';
  if(p==='/api/admin/profile/status')return 'member_status_manage';
- if(p==='/api/admin/chat-tools')return req.method==='GET'?'shortcuts_manage':(req.body&&Array.isArray(req.body.smileys)&&req.body.smileys.length?'smileys_manage':'shortcuts_manage');
+ if(p==='/api/admin/chat-tools/smiley-upload')return 'smileys_manage';
+ if(p==='/api/admin/chat-tools')return req.method==='GET'?'shortcuts_manage':['shortcuts_manage','smileys_manage'];
+ if(p==='/api/admin/data')return ALL_PERMISSION_KEYS;
  if(p==='/api/admin/rank')return 'rank_assign';
  if(p==='/api/admin/permissions')return 'permission_manage';
  if(p.startsWith('/api/admin/member-ip/'))return 'member_ip';
  if(p==='/api/admin/reset-likes')return 'reset_likes'; if(p==='/api/admin/unban')return 'ban_room'; if(p==='/api/admin/unmute')return 'mute_room';
+ if(p==='/api/admin/kick')return 'kick_room'; if(p==='/api/admin/mute')return 'mute_room'; if(p==='/api/admin/ban')return 'ban_room';
+ if(p==='/api/admin/member-action')return ({'global-kick':'global_kick','global-ban':'global_ban',kick:'kick_room',ban:'ban_room',mute:'mute_room','grant-like':'grant_likes','reset-likes':'reset_likes','grant-vip':'vip',gift:'gifts'})[String(req.body?.action||'')]||'panel_access';
+ if(p.startsWith('/api/admin/member-stats/'))return req.body?.field==='likes'?'grant_likes':(req.body?.field==='points'?'panel_access':'panel_access');
  if(p==='/api/admin/grant-like')return 'grant_likes';
  if(p==='/api/admin/broadcast')return 'announcement_post'; if(p.startsWith('/api/admin/announcement/'))return 'announcement_delete';
  if(p.startsWith('/api/admin/message/'))return 'messages_delete';
@@ -841,10 +1089,44 @@ function permissionForAdminPath(req){
  if(p==='/api/admin/gift-vip'||p.startsWith('/api/admin/vip/'))return 'vip';
  if(p==='/api/admin/gift')return 'gifts';
  if(p==='/api/admin/gifts/catalog')return 'gift_catalog_manage';
+ if(p==='/api/admin/gift/delete')return 'gifts';
+ if(p.startsWith('/api/admin/gifts/catalog/'))return 'gift_catalog_manage';
+ if(p==='/api/admin/rank-art')return ['rank_art_manage','member_decoration_manage'];
+ if(p.startsWith('/api/admin/rank-art/'))return 'rank_art_manage';
+ if(p==='/api/admin/ranks')return ['rank_assign','rank_art_manage','member_decoration_manage'];
+ if(p.startsWith('/api/admin/chat-banners'))return 'chat_banners_manage';
+ if(p==='/api/admin/member-decoration')return 'member_decoration_manage';
+ if(p.startsWith('/api/admin/bots'))return 'bots_manage';
+ if(p.startsWith('/api/admin/account-permissions/'))return 'permission_manage';
+ if(p==='/api/admin/site-settings'||p==='/api/admin/login-history')return 'site_admin';
+ if(p==='/api/admin/health')return ['health_view','site_admin'];
+ if(p.startsWith('/api/admin/backup/'))return 'site_admin';
+ if(p.startsWith('/api/admin/restore/database/'))return 'site_admin';
  if(p==='/api/admin/grant-like')return 'grant_likes';
  return 'panel_access';
 }
-function requireAdmin(req,res,next){ requireAuth(req,res,()=>{const permission=permissionForAdminPath(req);if(!hasPermission(req.user,permission))return res.status(403).json({error:'ما عندك صلاحية لهذا القسم أو الإجراء'});const write=['POST','PUT','PATCH','DELETE'].includes(req.method);if(write){res.on('finish',()=>{if(res.statusCode<200||res.statusCode>=300)return;try{db.adminAuditLogs=db.adminAuditLogs||[];const body=req.body&&typeof req.body==='object'?req.body:{};const target=String(body.name||body.target||body.member||'').slice(0,40);const action=String(body.action||body.operation||body.rank||body.planId||body.title||'').slice(0,80);db.adminAuditLogs.unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),at:Date.now(),actor:String(req.user?.name||'إدارة').slice(0,32),method:req.method,path:String(req.path||'').slice(0,120),status:res.statusCode,target,action,details:[target&&('العضو: '+target),action&&('التفصيل: '+action)].filter(Boolean).join(' · ')});db.adminAuditLogs=db.adminAuditLogs.slice(0,500);save();}catch(e){console.error('Admin audit log save failed:',e.message)}});}return next();}); }
+function requireAdmin(req,res,next){
+  requireAuth(req,res,()=>{
+    const permission=permissionForAdminPath(req);
+    const acceptedPermissions=Array.isArray(permission)?permission:[permission];
+    if(!acceptedPermissions.some(key=>hasPermission(req.user,key)))return res.status(403).json({error:'ما عندك صلاحية لهذا القسم أو الإجراء'});
+    const write=['POST','PUT','PATCH','DELETE'].includes(req.method);
+    const auditBefore=db.adminAuditLogs;
+    const auditBeforeLength=Array.isArray(auditBefore)?auditBefore.length:-1;
+    const auditBeforeFirst=Array.isArray(auditBefore)?auditBefore[0]?.id:undefined;
+    if(write)res.on('finish',()=>{
+      if(res.statusCode<200||res.statusCode>=300)return;
+      if(db.adminAuditLogs!==auditBefore||(Array.isArray(db.adminAuditLogs)&&(db.adminAuditLogs.length!==auditBeforeLength||db.adminAuditLogs[0]?.id!==auditBeforeFirst)))return;
+      const previous=db.adminAuditLogs;
+      const body=req.body&&typeof req.body==='object'?req.body:{};
+      const target=String(body.name||body.target||body.member||'').slice(0,40);
+      const action=String(body.action||body.operation||body.rank||body.planId||body.title||'').slice(0,80);
+      db.adminAuditLogs=[{id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),at:Date.now(),actor:String(req.user?.name||'إدارة').slice(0,32),method:req.method,path:String(req.path||'').slice(0,120),status:res.statusCode,target,action,details:[target&&('العضو: '+target),action&&('التفصيل: '+action)].filter(Boolean).join(' · ')},...(Array.isArray(previous)?previous:[])].slice(0,500);
+      try{save();}catch(error){if(previous===undefined)delete db.adminAuditLogs;else db.adminAuditLogs=previous;console.error('Admin audit log save failed:',error.message);}
+    });
+    return next();
+  });
+}
 // Presence visibility is enforced per viewer on the server. A ghost is visible only
 // to its own session; hidden accounts are visible to staff ranks and their own session.
 // A short-lived context avoids repeatedly scanning all sessions and sockets while
@@ -951,31 +1233,30 @@ function emitPresenceToRoom(room,notice){
 }
 function roomBanned(name,room){
   const list=Array.isArray(db.roomBans[room])?db.roomBans[room]:[];
-  const n=keyName(name), now=Date.now(); let changed=false;
-  const active=list.filter(item=>{
-    if(typeof item==='string') return keyName(item)===n;
-    if(item&&item.name){ if(item.until && Number(item.until)<=now){changed=true;return false;} return keyName(item.name)===n; }
-    return false;
-  });
-  if(changed){db.roomBans[room]=list.filter(item=>!(item&&item.until&&Number(item.until)<=now));save();}
+  const n=keyName(name),now=Date.now();let changed=false;
+  const active=list.filter(item=>{if(typeof item==='string')return keyName(item)===n;if(item&&item.name){if(item.until&&Number(item.until)<=now){changed=true;return false;}return keyName(item.name)===n;}return false;});
+  if(changed){const previous=db.roomBans[room];db.roomBans[room]=list.filter(item=>!(item&&item.until&&Number(item.until)<=now));try{save();}catch(error){db.roomBans[room]=previous;console.error('Expired room-ban cleanup save failed:',error.message);}}
   return active.some(item=>typeof item==='string'?keyName(item)===n:(item&&keyName(item.name)===n));
 }
 function roomMuted(name,room){ return Array.isArray(db.roomMutes[room]) && db.roomMutes[room].includes(keyName(name)); }
-function normalizeIp(value){ let ip=String(value||'').trim(); if(ip.includes(','))ip=ip.split(',')[0].trim(); if(ip.startsWith('::ffff:'))ip=ip.slice(7); if(ip.startsWith('[')&&ip.includes(']'))ip=ip.slice(1,ip.indexOf(']')); if(/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(ip))ip=ip.replace(/:\d+$/,''); return ip.toLowerCase(); }
-function requestClientIp(req){ return normalizeIp(req.get('cf-connecting-ip')||req.get('x-real-ip')||req.ip||req.socket?.remoteAddress||''); }
+const trustProxyForClientIp=createTrustedProxyTrust(process.env.TRUSTED_PROXY_CIDRS||'');
+const trustedProxyHeader=normalizeTrustedProxyHeader(process.env.TRUSTED_PROXY_HEADER||'');
+function requestClientIp(req){ return resolveClientIp(req.headers,req.socket?.remoteAddress||req.connection?.remoteAddress||'',trustProxyForClientIp,trustedProxyHeader); }
 function recordLoginEvent(req,name,type,mode='normal'){
+  const previous=db.loginHistory;
   try{const rawIp=requestClientIp(req);let ip=rawIp;if(/^\d{1,3}(?:\.\d{1,3}){3}$/.test(rawIp))ip=rawIp.split('.').slice(0,3).join('.')+'.0';else if(rawIp.includes(':'))ip=rawIp.split(':').slice(0,4).join(':')+'::';
-    db.loginHistory=Array.isArray(db.loginHistory)?db.loginHistory:[];db.loginHistory.unshift({id:crypto.randomUUID(),at:Date.now(),name:String(name||'').slice(0,32),type:String(type||'member'),mode:String(mode||'normal'),ip,agent:String(req.get('user-agent')||'').slice(0,180)});db.loginHistory=db.loginHistory.slice(0,1000);save();
-  }catch(error){console.error('Login history save failed:',error.message)}
+    db.loginHistory=[{id:crypto.randomUUID(),at:Date.now(),name:String(name||'').slice(0,32),type:String(type||'member'),mode:String(mode||'normal'),ip,agent:String(req.get('user-agent')||'').slice(0,180)},...(Array.isArray(previous)?previous:[])].slice(0,1000);save();
+  }catch(error){if(previous===undefined)delete db.loginHistory;else db.loginHistory=previous;console.error('Login history save failed:',error.message);}
 }
-function socketClientIp(socket){ const h=socket.handshake?.headers||{}; return normalizeIp(h['cf-connecting-ip']||h['x-real-ip']||socket.handshake?.address||''); }
+function socketClientIp(socket){ const h=socket.handshake?.headers||{}; const remote=socket.handshake?.address||socket.conn?.remoteAddress||socket.request?.socket?.remoteAddress||''; return resolveClientIp(h,remote,trustProxyForClientIp,trustedProxyHeader); }
 function globalBanStatus(name,ip,now=Date.now()){
-  const n=keyName(name); let until=0,changed=false;
+  const n=keyName(name);let until=0,changed=false;
+  const expiredNames=[],expiredIps=[];
   const nameBan=(db.globalBans||{})[n];
-  if(nameBan){const expiry=Number(nameBan.until)||0;if(expiry>now)until=Math.max(until,expiry);else{delete db.globalBans[n];changed=true;}}
+  if(nameBan){const expiry=Number(nameBan.until)||0;if(expiry>now)until=Math.max(until,expiry);else{expiredNames.push([n,nameBan]);delete db.globalBans[n];changed=true;}}
   const ipKey=normalizeIp(ip),ipBan=ipKey?(db.globalIpBans||{})[ipKey]:null;
-  if(ipBan){const expiry=Number(ipBan.until)||0;if(expiry>now)until=Math.max(until,expiry);else{delete db.globalIpBans[ipKey];changed=true;}}
-  if(changed)save();
+  if(ipBan){const expiry=Number(ipBan.until)||0;if(expiry>now)until=Math.max(until,expiry);else{expiredIps.push([ipKey,ipBan]);delete db.globalIpBans[ipKey];changed=true;}}
+  if(changed){try{save();}catch(error){for(const [key,value] of expiredNames)db.globalBans[key]=value;for(const [key,value] of expiredIps)db.globalIpBans[key]=value;console.error('Expired global-ban cleanup save failed:',error.message);}}
   if(!until)return null;
   const remainingMs=Math.max(0,until-now),totalSeconds=Math.ceil(remainingMs/1000),minutes=Math.floor(totalSeconds/60),seconds=totalSeconds%60;
   const remainingText=minutes?`${minutes} دقيقة و${seconds} ثانية`:`${seconds} ثانية`;
@@ -984,27 +1265,52 @@ function globalBanStatus(name,ip,now=Date.now()){
 function globalBanResponse(res,name,ip){const ban=globalBanStatus(name,ip);if(!ban)return false;return res.status(403).json({error:`أنت محظور من الدردشة. الوقت المتبقي: ${ban.remainingText}. حاول الدخول بعد انتهاء الحظر.`,code:'GLOBAL_BAN_ACTIVE',...ban});}
 function globalBanned(name,ip){return !!globalBanStatus(name,ip);}
 function nameTaken(name){const n=keyName(name);if(!n)return false;return n==='owner'||(!!process.env.OWNER_NAME&&n===keyName(process.env.OWNER_NAME))||Object.keys(db.users||{}).some(x=>keyName(x)===n)||Object.keys(db.guests||{}).some(x=>keyName(x)===n);} 
-function removeFromChat(name, banned){ const n=keyName(name); for(const so of io.sockets.sockets.values()){ const sid2=so.data?.sid, u2=so.data?.user||socketUsers.get(sid2); if(!u2||keyName(u2.name)!==n)continue; const oldRoom=u2.room||''; if(oldRoom){so.leave(oldRoom);roomSockets.get(oldRoom)?.delete(sid2);} if(so.data?.user)so.data.user.room=''; if(socketUsers.get(sid2))socketUsers.get(sid2).room=''; so.emit('kicked',{global:true,banned:!!banned,room:oldRoom,...(banned?(globalBanStatus(n,'')||{}):{})}); if(banned)so.disconnect(true); } emitState(); }
+function removeFromChat(name, banned){ const n=keyName(name); for(const so of io.sockets.sockets.values()){ const sid2=so.data?.sid, u2=so.data?.user||socketUsers.get(sid2); if(!u2||keyName(u2.name)!==n)continue; const oldRoom=u2.room||''; if(oldRoom){so.leave(oldRoom);removeSessionFromRoomRuntime(sid2,oldRoom);} if(so.data?.user)so.data.user.room=''; if(socketUsers.get(sid2))socketUsers.get(sid2).room=''; so.emit('kicked',{global:true,banned:!!banned,room:oldRoom,...(banned?(globalBanStatus(n,'')||{}):{})}); if(banned)so.disconnect(true); } emitState(); }
+let shutdownStarted=false;
 let messageSaveTimer=null;
-function scheduleMessageSave(delay=350){
-  if(messageSaveTimer)return;
-  // Batch bursts of chat traffic into one durable database write instead of
-  // serializing and replacing the full JSON database for every single message.
-  messageSaveTimer=setTimeout(()=>{
-    messageSaveTimer=null;
-    try{save();}catch(error){console.error('Batched chat-message save failed:',error.message);scheduleMessageSave(3000);}
-  },delay);
+let pendingMessageWrites=[];
+let messageSaveAttempts=0;
+const MAX_PENDING_MESSAGE_WRITES=1000;
+function scheduleMessageSave(delay=100){
+  if(messageSaveTimer||shutdownStarted)return;
+  messageSaveTimer=setTimeout(()=>{messageSaveTimer=null;flushMessageWrites();},delay);
   messageSaveTimer.unref?.();
 }
+function flushMessageWrites(){
+  if(messageSaveTimer){clearTimeout(messageSaveTimer);messageSaveTimer=null;}
+  if(!pendingMessageWrites.length)return true;
+  const batch=pendingMessageWrites.slice();
+  const previousMessages=db.messages;
+  db.messages=[...previousMessages,...batch.map(entry=>entry.message)].slice(-1000);
+  try{
+    save();
+    pendingMessageWrites.splice(0,batch.length);
+    messageSaveAttempts=0;
+    for(const entry of batch)entry.resolve();
+    if(pendingMessageWrites.length)scheduleMessageSave();
+    return true;
+  }catch(error){
+    db.messages=previousMessages;
+    messageSaveAttempts=Math.min(messageSaveAttempts+1,32);
+    const retryDelay=Math.min(30000,1000*2**Math.min(messageSaveAttempts-1,5));
+    console.error(`Batched chat-message save failed (attempt ${messageSaveAttempts}); retaining ${pendingMessageWrites.length} pending message(s) and retrying in ${retryDelay}ms:`,error.message);
+    scheduleMessageSave(retryDelay);
+    return false;
+  }
+}
 function addMessage(m){
-  db.messages.push(m);
-  if(db.messages.length>1000)db.messages.splice(0,db.messages.length-1000);
-  scheduleMessageSave();
+  return new Promise((resolve,reject)=>{
+    if(shutdownStarted)return reject(new Error('Server is shutting down'));
+    if(pendingMessageWrites.length>=MAX_PENDING_MESSAGE_WRITES)return reject(new Error('Message persistence queue is full; message was not accepted'));
+    pendingMessageWrites.push({message:m,resolve,reject});
+    scheduleMessageSave();
+  });
 }
 function notify(name,item){
-  name=accountKey(name); if(!db.notifications[name])db.notifications[name]=[];
-  db.notifications[name].unshift({...item,id:crypto.randomUUID(),at:Date.now()});
-  db.notifications[name]=db.notifications[name].slice(0,100); save();
+  name=accountKey(name);
+  const previous=db.notifications[name],had=Object.prototype.hasOwnProperty.call(db.notifications,name);
+  db.notifications[name]=[{...item,id:crypto.randomUUID(),at:Date.now()},...(Array.isArray(previous)?previous:[])].slice(0,100);
+  try{save();return true;}catch(error){if(had)db.notifications[name]=previous;else delete db.notifications[name];console.error('Notification save failed:',error.message);return false;}
 }
 function protectedOwnerAccountName(){
   const member=Object.entries(db.users||{}).find(([,u])=>String(u?.role||'')==='owner');
@@ -1034,7 +1340,7 @@ const SAFE_UPLOAD_TYPES = Object.freeze({
 });
 const uploadStorage = multer.diskStorage({
   destination:UP_DIR,
-  filename:(req,file,cb)=>cb(null,Date.now()+'-'+crypto.randomBytes(8).toString('hex')+(SAFE_UPLOAD_TYPES[file.mimetype]||'.bin'))
+  filename:(req,file,cb)=>cb(null,Date.now()+'-'+crypto.randomBytes(8).toString('hex')+(SAFE_UPLOAD_TYPES[String(file.mimetype||'').toLowerCase()]||'.bin'))
 });
 function uploadFilter(req,file,cb){
   const allowed=Object.hasOwn(SAFE_UPLOAD_TYPES,String(file.mimetype||'').toLowerCase());
@@ -1062,13 +1368,24 @@ try{
     try{if(fs.statSync(orphan).isFile())fs.unlinkSync(orphan);}catch(_){}
   }
 }catch(error){console.error('Could not initialize private restore staging directory:',error.message);throw error;}
+function createRestoreUploadGate(maxConcurrent){
+ let active=0;
+ return function restoreUploadGate(req,res,next){
+  if(active>=maxConcurrent)return res.status(429).json({error:'يوجد رفع نسخة استعادة قيد التنفيذ؛ حاول بعد قليل'});
+  active++;
+  let released=false;
+  const release=()=>{if(released)return;released=true;active=Math.max(0,active-1);};
+  res.once('finish',release);
+  res.once('close',release);
+  req.once('aborted',release);
+  next();
+ };
+}
+const restoreUploadGate=createRestoreUploadGate(1);
 const restoreUpload=multer({storage:multer.diskStorage({destination:RESTORE_TMP_DIR,filename:(req,file,cb)=>cb(null,`restore-${process.pid}-${crypto.randomBytes(16).toString('hex')}.json`)}),limits:{fileSize:20*1024*1024,files:1,fields:0}});
 const pendingDatabaseRestores=new Map();
 const MAX_PENDING_DATABASE_RESTORES=2;
-function validateDatabaseRestoreFile(source){
-  const raw=Buffer.isBuffer(source)?source.toString('utf8'):typeof source==='string'?source:'';
-  if(!raw||Buffer.byteLength(raw,'utf8')>20*1024*1024)throw new Error('حجم ملف النسخة غير صالح');
-  let parsed;try{parsed=JSON.parse(raw);}catch(_){throw new Error('ملف النسخة ليس JSON صالحاً');}
+function validateDatabaseRestoreData(parsed){
   if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)||!['rimaz-database-backup','rimaz-full-backup'].includes(parsed.format)||parsed.version!==1||!parsed.database||typeof parsed.database!=='object'||Array.isArray(parsed.database))throw new Error('صيغة النسخة غير مدعومة أو تالفة');
   const template=defaults(),incoming=parsed.database,clean={};
   for(const [key,defaultValue] of Object.entries(template)){
@@ -1080,20 +1397,22 @@ function validateDatabaseRestoreFile(source){
     clean[key]=value;
   }
   if(!clean.users||!clean.guests||!Array.isArray(clean.rooms)||!Array.isArray(clean.messages))throw new Error('النسخة لا تحتوي البنية الأساسية لقاعدة بيانات ريماز');
+  for(const collection of ['users','guests'])for(const [name,account] of Object.entries(clean[collection]))if(!account||typeof account!=='object'||Array.isArray(account))throw new Error('سجل حساب غير صالح داخل النسخة: '+name);
   if(Object.keys(clean.users).length>100000||Object.keys(clean.guests).length>100000||clean.rooms.length>10000||clean.messages.length>2000000)throw new Error('حجم البيانات داخل النسخة يتجاوز الحدود الآمنة');
   return {clean,summary:{members:Object.keys(clean.users).length,guests:Object.keys(clean.guests).length,rooms:clean.rooms.length,messages:clean.messages.length,wall:Array.isArray(clean.wall)?clean.wall.length:0,createdAt:parsed.createdAt||null,appVersion:parsed.appVersion||'غير معروف'}};
 }
 function restoreContainsOwner(candidate,ownerName){
  const users=candidate.users||{},guests=candidate.guests||{};
+ const validAccount=account=>!!account&&typeof account==='object'&&!Array.isArray(account);
  const configured=String(process.env.OWNER_NAME||'').trim();
- if(configured){const wanted=keyName(configured);return Object.keys(users).some(name=>keyName(name)===wanted)||Object.keys(guests).some(name=>keyName(name)===wanted);}
+ if(configured){const wanted=keyName(configured);return Object.entries(users).some(([name,account])=>validAccount(account)&&keyName(name)===wanted)||Object.entries(guests).some(([name,account])=>validAccount(account)&&keyName(name)===wanted);}
  const wanted=keyName(ownerName);
  if(wanted&&wanted!=='owner'){
-  for(const [name,account] of Object.entries(users))if(keyName(name)===wanted&&String(account?.role||'')==='owner')return true;
-  for(const [name,account] of Object.entries(guests))if(keyName(name)===wanted&&String(account?.role||'')==='owner')return true;
+  for(const [name,account] of Object.entries(users))if(validAccount(account)&&keyName(name)===wanted&&String(account.role||'')==='owner')return true;
+  for(const [name,account] of Object.entries(guests))if(validAccount(account)&&keyName(name)===wanted&&String(account.role||'')==='owner')return true;
  }
- for(const [name,account] of Object.entries(users))if(keyName(name)==='owner'||String(account?.role||'')==='owner')return true;
- for(const [name,account] of Object.entries(guests))if(keyName(name)==='owner'||String(account?.role||'')==='owner')return true;
+ for(const [name,account] of Object.entries(users))if(validAccount(account)&&(keyName(name)==='owner'||String(account.role||'')==='owner'))return true;
+ for(const [name,account] of Object.entries(guests))if(validAccount(account)&&(keyName(name)==='owner'||String(account.role||'')==='owner'))return true;
  return false;
 }
 function discardDatabaseRestorePreview(token,item=pendingDatabaseRestores.get(token)){
@@ -1101,10 +1420,49 @@ function discardDatabaseRestorePreview(token,item=pendingDatabaseRestores.get(to
  if(item?.filePath){try{fs.unlinkSync(item.filePath);}catch(error){if(error.code!=='ENOENT')console.warn('Restore preview file cleanup failed:',error.message);}}
 }
 function purgeExpiredDatabaseRestores(){const now=Date.now();for(const [token,item] of pendingDatabaseRestores)if(item.expiresAt<=now)discardDatabaseRestorePreview(token,item);}
+function restorePreviewCapacityAvailable(ownerName){
+ const owner=keyName(ownerName);
+ let occupied=0;
+ for(const item of pendingDatabaseRestores.values())if(item.owner!==owner)occupied++;
+ return occupied<MAX_PENDING_DATABASE_RESTORES;
+}
 const databaseRestoreCleanupTimer=setInterval(purgeExpiredDatabaseRestores,30*1000);
 databaseRestoreCleanupTimer.unref?.();
 
-function removeUploadedFile(file){if(file?.path){try{fs.unlinkSync(file.path)}catch(e){if(e.code!=='ENOENT')console.warn('Upload cleanup failed:',e.message)}}}
+function removeUploadedFile(file){
+ if(!file?.path)return;
+ const resolved=path.resolve(file.path);
+ const uploadRoot=path.resolve(UP_DIR);
+ // Multer writes directly into UP_DIR. Never let a cleanup call unlink a
+ // protected-media, restore, database, or arbitrary path outside that directory.
+ if(path.dirname(resolved)!==uploadRoot){
+  console.warn('Upload cleanup skipped because the file is outside the upload directory:',path.basename(resolved));
+  return;
+ }
+ if(containsStoredUrl(db,'/uploads/'+path.basename(resolved))){
+  console.warn('Upload cleanup skipped because the file is still referenced by the database:',path.basename(resolved));
+  return;
+ }
+ try{fs.unlinkSync(resolved)}catch(error){if(error.code!=='ENOENT')console.warn('Upload cleanup failed:',error.message);}
+}
+function restoreDatabaseFileFromRecovery(recoveryFile){
+ const rollbackTemp=`${DB_FILE}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.rollback.tmp`;
+ let fd=null;
+ try{
+  fs.copyFileSync(recoveryFile,rollbackTemp,fs.constants.COPYFILE_EXCL);
+  fs.chmodSync(rollbackTemp,0o600);
+  fd=fs.openSync(rollbackTemp,'r+');
+  fs.fsyncSync(fd);
+  fs.closeSync(fd);fd=null;
+  fs.renameSync(rollbackTemp,DB_FILE);
+  try{const dirFd=fs.openSync(DATA_DIR,'r');try{fs.fsyncSync(dirFd);}finally{fs.closeSync(dirFd);}}
+  catch(syncError){console.error('Database rollback directory sync unavailable:',syncError.message);}
+ }catch(error){
+  if(fd!==null){try{fs.closeSync(fd);}catch(_){}}
+  try{fs.unlinkSync(rollbackTemp);}catch(_){}
+  throw error;
+ }
+}
 
 // MIME headers are supplied by the client, so verify the file's actual container
 // signature before the file can be referenced by a profile, room, wall or message.
@@ -1171,9 +1529,19 @@ app.post('/api/register',(req,res)=>{
     if(p.length<12)return res.status(400).json({error:'كلمة مرور المالك يجب أن تكون 12 حرفاً على الأقل'});
   } else if(p.length<3) return res.status(400).json({error:'كلمة المرور 3 أحرف على الأقل'});
   if(nameTaken(n)&&!ownerRequested)return res.status(409).json({error:'هذا الاسم موجود'});
-  db.users[n]={hash:bcrypt.hashSync(p,12),likes:keyName(n)==='admin'?999999:0,created:Date.now()}; allocateMemberNumber(n,'member',db.users[n]);
-  if(ownerRequested){ db.ownerSetupCompleted=true; }
-  profile(n); const sid=makeSession(n,'member'); save(); recordLoginEvent(req,n,'member','register'); res.json({sid,user:sessionUser(sid)});
+  const hadUser=Object.prototype.hasOwnProperty.call(db.users,n),previousUser=db.users[n],hadProfile=Object.prototype.hasOwnProperty.call(db.profiles||{},n),previousProfile=db.profiles?.[n],previousMemberNumbers=db.memberNumbers?{...db.memberNumbers}:undefined,previousNextMemberNumber=db.nextMemberNumber,hadOwnerSetup=Object.prototype.hasOwnProperty.call(db,'ownerSetupCompleted'),previousOwnerSetup=db.ownerSetupCompleted;
+  db.users[n]={hash:bcrypt.hashSync(p,12),likes:keyName(n)==='admin'?999999:0,created:Date.now()};allocateMemberNumber(n,'member',db.users[n]);
+  if(ownerRequested)db.ownerSetupCompleted=true;
+  try{profile(n);const sid=makeSession(n,'member');recordLoginEvent(req,n,'member','register');return res.json({sid,user:sessionUser(sid)});}
+  catch(error){
+    if(hadUser)db.users[n]=previousUser;else delete db.users[n];
+    if(hadProfile)db.profiles[n]=previousProfile;else if(db.profiles)delete db.profiles[n];
+    if(previousMemberNumbers===undefined)delete db.memberNumbers;else db.memberNumbers=previousMemberNumbers;
+    if(previousNextMemberNumber===undefined)delete db.nextMemberNumber;else db.nextMemberNumber=previousNextMemberNumber;
+    if(hadOwnerSetup)db.ownerSetupCompleted=previousOwnerSetup;else delete db.ownerSetupCompleted;
+    console.error('Registration transaction failed:',error.message);
+    return res.status(500).json({error:'تعذر إنشاء الحساب وحفظه'});
+  }
 });
 app.post('/api/login',(req,res)=>{
   const n=cleanName(req.body.name), p=String(req.body.password||'');
@@ -1201,7 +1569,17 @@ app.post('/api/guest',(req,res)=>{
   const n=cleanName(req.body.name); if(!n)return res.status(400).json({error:'اكتب اسم الزائر'});
   if(globalBanResponse(res,n,requestClientIp(req)))return;
   if(nameTaken(n))return res.status(409).json({error:'هذا الاسم موجود'});
-  db.guests[n]={likes:0,created:Date.now()}; allocateMemberNumber(n,'guest',db.guests[n]); const gp=profile(n); gp.status='(غير مسجل)'; const sid=makeSession(n,'guest'); save(); recordLoginEvent(req,n,'guest','guest'); res.json({sid,user:sessionUser(sid)});
+  const hadGuest=Object.prototype.hasOwnProperty.call(db.guests,n),previousGuest=db.guests[n],hadProfile=Object.prototype.hasOwnProperty.call(db.profiles||{},n),previousProfile=db.profiles?.[n],previousMemberNumbers=db.memberNumbers?{...db.memberNumbers}:undefined,previousNextMemberNumber=db.nextMemberNumber;
+  db.guests[n]={likes:0,created:Date.now()};allocateMemberNumber(n,'guest',db.guests[n]);
+  try{const gp=profile(n);gp.status='(غير مسجل)';const sid=makeSession(n,'guest');recordLoginEvent(req,n,'guest','guest');return res.json({sid,user:sessionUser(sid)});}
+  catch(error){
+    if(hadGuest)db.guests[n]=previousGuest;else delete db.guests[n];
+    if(hadProfile)db.profiles[n]=previousProfile;else if(db.profiles)delete db.profiles[n];
+    if(previousMemberNumbers===undefined)delete db.memberNumbers;else db.memberNumbers=previousMemberNumbers;
+    if(previousNextMemberNumber===undefined)delete db.nextMemberNumber;else db.nextMemberNumber=previousNextMemberNumber;
+    console.error('Guest creation transaction failed:',error.message);
+    return res.status(500).json({error:'تعذر إنشاء دخول الزائر وحفظه'});
+  }
 });
 app.post('/api/logout',requireAuth,(req,res)=>{
   const sid=req.get('x-session'),u=sessions.get(sid),name=u?.name||req.user?.name;
@@ -1211,11 +1589,11 @@ app.post('/api/logout',requireAuth,(req,res)=>{
   const guestWallReadKey=u?.type==='guest'?keyName(u.name):'';
   const previousGuestWallReadAt=guestWallReadKey?db.wallReadAt?.[guestWallReadKey]:undefined;
   const hadWelcome=welcomeSentSessions.has(sid);
-  cancelSessionDisconnectCleanup(sid);
   if(name)db.messages=(db.messages||[]).filter(m=>!(m?.type==='presence'&&keyName(m.from)===keyName(name)));
   if(u?.type==='guest'){delete db.guests[u.name];delete db.profiles[u.name];delete db.wallReadAt[guestWallReadKey];}
   sessions.delete(sid);welcomeSentSessions.delete(sid);delete db.sessions[sid];
   try{save()}catch(e){if(previousMessages!==undefined)db.messages=previousMessages;if(u){sessions.set(sid,u);db.sessions[sid]=u;if(u.type==='guest'){if(previousGuest!==undefined)db.guests[u.name]=previousGuest;if(previousProfile!==undefined)db.profiles[u.name]=previousProfile;if(previousGuestWallReadAt!==undefined)db.wallReadAt[guestWallReadKey]=previousGuestWallReadAt;}if(hadWelcome)welcomeSentSessions.add(sid);}console.error('Logout persistence failed:',e.message);return res.status(500).json({error:'تعذر حفظ تسجيل الخروج، حاول مرة أخرى'});}
+  cancelSessionDisconnectCleanup(sid);
   clearSessionTransientState(sid);
   for(const so of [...io.sockets.sockets.values()])if(so.data?.sid===sid)so.disconnect(true);
   if(name)schedulePrivateConversationCleanup(name);
@@ -1227,7 +1605,7 @@ app.get('/api/public-online',(req,res)=>{ const users=getOnlineUsers().map(u=>({
 app.get('/api/state',requireAuth,(req,res)=>{
   const u=req.user;
   // A guest starts each fresh app entry with the default status; registered members keep their saved status.
-  if(u.type==='guest' && req.query.entry==='1'){ const p=profile(u.name); p.status='(غير مسجل)'; save(); }
+  if(u.type==='guest' && req.query.entry==='1'){const p=profile(u.name),previous=p.status;p.status='(غير مسجل)';try{save();}catch(error){p.status=previous;console.error('Guest entry status save failed:',error.message);}}
   const likes=userLikes(u); const rooms=visibleRooms(u);
   res.json({user:{...u,likes,level:level(likes),admin:isAdmin(u),owner:isOwner(u),staff:isStaff(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name),notice:canNotice(u),media:canMedia(u)}, rooms, online:getOnlineUsers(u).map(x=>({name:x.name,type:x.type,likes:x.likes,level:x.level,profile:x.profile,online:true,role:x.role||roleOf(x),admin:isAdmin(x),vip:vipActive(x.name)}))});
 });
@@ -1253,22 +1631,34 @@ app.post('/api/wall/like',requireAuth,(req,res)=>{
   io.emit('wall-like',{id:p.id,likes:p.likes});
   res.json({ok:true,liked:true,likes:p.likes});
 });
-app.post('/api/admin/wall/control',requireAdmin,(req,res)=>{const action=String(req.body.action||'');if(action==='stop'||action==='restart'){db.wallEnabled=action==='restart';save();io.emit('wall-state',{enabled:db.wallEnabled});return res.json({ok:true,enabled:db.wallEnabled});}if(action==='clear'){const before=db.wall.length;if(!isOwner(req.user)){db.wall=db.wall.filter(p=>isOwnerName(p.from)||(isOwner({name:p.from,role:(getUser(p.from)||getGuest(p.from)||{}).role})));}else db.wall=[];const removed=before-db.wall.length;save();io.emit('wall-cleared',{removed});return res.json({ok:true,removed});}if(action==='delete-user'){const name=cleanName(req.body.name||'');if(!name)return res.status(400).json({error:'حدد اسم العضو'});if(denyHigherRankTarget(req.user,name,res))return;if((isOwnerName(name)||isOwner({name,role:(getUser(name)||getGuest(name)||{}).role}))&&!isOwner(req.user))return res.status(403).json({error:'منشورات صاحب الموقع محمية'});const before=db.wall.length;db.wall=db.wall.filter(p=>keyName(p.from)!==keyName(name));const removed=before-db.wall.length;save();io.emit('wall-user-deleted',{name,removed});return res.json({ok:true,removed,name});}return res.status(400).json({error:'إجراء الجدار غير معروف'});});
+app.post('/api/admin/wall/control',requireAdmin,(req,res)=>{const action=String(req.body.action||'');if(action==='stop'||action==='restart'){const previous=db.wallEnabled;db.wallEnabled=action==='restart';try{save();}catch(error){db.wallEnabled=previous;return res.status(500).json({error:'تعذر حفظ حالة الحائط'});}io.emit('wall-state',{enabled:db.wallEnabled});return res.json({ok:true,enabled:db.wallEnabled});}if(action==='clear'){const previous=db.wall;const before=previous.length;if(!isOwner(req.user)){db.wall=previous.filter(p=>isOwnerName(p.from)||(isOwner({name:p.from,role:(getUser(p.from)||getGuest(p.from)||{}).role})));}else db.wall=[];const removed=before-db.wall.length;try{save();}catch(error){db.wall=previous;return res.status(500).json({error:'تعذر حفظ تنظيف الحائط'});}io.emit('wall-cleared',{removed});return res.json({ok:true,removed});}if(action==='delete-user'){const name=cleanName(req.body.name||'');if(!name)return res.status(400).json({error:'حدد اسم العضو'});if(denyHigherRankTarget(req.user,name,res))return;if((isOwnerName(name)||isOwner({name,role:(getUser(name)||getGuest(name)||{}).role}))&&!isOwner(req.user))return res.status(403).json({error:'منشورات صاحب الموقع محمية'});const previous=db.wall,before=previous.length;db.wall=previous.filter(p=>keyName(p.from)!==keyName(name));const removed=before-db.wall.length;try{save();}catch(error){db.wall=previous;return res.status(500).json({error:'تعذر حفظ حذف منشورات العضو'});}io.emit('wall-user-deleted',{name,removed});return res.json({ok:true,removed,name});}return res.status(400).json({error:'إجراء الجدار غير معروف'});});
 app.post('/api/notify',requireAuth,(req,res)=>{if(!canNotice(req.user))return res.status(403).json({error:`التنبيهات تفتح عند ${NOTICE_LIKES_REQUIRED} إعجاب`});const requested=cleanName(req.body.to),to=accountKey(requested);if(!getUser(to)&&!getGuest(to))return res.status(404).json({error:'العضو غير موجود'});const p=profile(to);if(p.notificationsOpen===false&&!isOwner(req.user))return res.status(403).json({error:'هذا الشخص أغلق التنبيه'});const text=String(req.body.text||'').trim().slice(0,500);if(!text)return res.status(400).json({error:'اكتب التنبيه'});notify(to,{type:'notice',from:req.user.name,text});emitToUser(to,'notification',{from:req.user.name,text});res.json({ok:true});});
 app.get('/api/private/history',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))return res.status(403).json({error:'المحادثات الخاصة متوقفة من إدارة الموقع'});const to=cleanName(req.query.to||'');if(!to)return res.status(400).json({error:'اختر عضوًا'});const meKey=keyName(req.user.name),toKey=keyName(to);const items=(db.privateMessages||[]).filter(m=>((keyName(m.from)===meKey&&keyName(m.to)===toKey)||(keyName(m.from)===toKey&&keyName(m.to)===meKey))).slice(-200).map(m=>{const acct=getUser(m.from)||getGuest(m.from);const sender={name:m.from,type:getUser(m.from)?'member':'guest'};return {...m,fromDisplayName:m.fromDisplayName||displayName(m.from),profile:profile(m.from),role:acct?roleOf(sender):'member',vip:vipActive(m.from),likes:userLikes(sender)};});res.set('Cache-Control','no-store');res.json(items);});
-app.post('/api/private/read',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))return res.status(403).json({error:'المحادثات الخاصة متوقفة من إدارة الموقع'});const from=keyName(req.body.from||'');if(!from)return res.status(400).json({error:'المحادثة غير محددة'});db.privateRead=db.privateRead||{};db.privateRead[keyName(req.user.name)]=db.privateRead[keyName(req.user.name)]||{};db.privateRead[keyName(req.user.name)][from]=Date.now();res.json({ok:true});});
-app.post('/api/private/read-all',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))return res.status(403).json({error:'المحادثات الخاصة متوقفة من إدارة الموقع'});const me=keyName(req.user.name);db.privateRead=db.privateRead||{};db.privateRead[me]=db.privateRead[me]||{};for(const m of (db.privateMessages||[])){if(keyName(m.to)!==me)continue;const from=keyName(m.from);const at=Number(m.at)||0;if(at>Number(db.privateRead[me][from]||0))db.privateRead[me][from]=at;}res.json({ok:true});});
+app.post('/api/private/read',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))return res.status(403).json({error:'المحادثات الخاصة متوقفة من إدارة الموقع'});const from=keyName(req.body.from||''),me=keyName(req.user.name);if(!from)return res.status(400).json({error:'المحادثة غير محددة'});if(!getUser(from)&&!getGuest(from))return res.status(404).json({error:'العضو غير موجود'});const previous=db.privateRead,next={...(db.privateRead||{})},mine={...(next[me]||{})};mine[from]=Date.now();next[me]=Object.fromEntries(Object.entries(mine).sort((a,b)=>Number(b[1])-Number(a[1])).slice(0,500));db.privateRead=next;try{save();}catch(error){if(previous===undefined)delete db.privateRead;else db.privateRead=previous;return res.status(500).json({error:'تعذر حفظ حالة قراءة المحادثة'});}res.json({ok:true});});
+app.post('/api/private/read-all',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))return res.status(403).json({error:'المحادثات الخاصة متوقفة من إدارة الموقع'});const me=keyName(req.user.name),previous=db.privateRead,next={...(db.privateRead||{})},mine={...(next[me]||{})};for(const m of (db.privateMessages||[])){if(keyName(m.to)!==me)continue;const from=keyName(m.from),at=Number(m.at)||0;if(at>Number(mine[from]||0))mine[from]=at;}next[me]=Object.fromEntries(Object.entries(mine).sort((a,b)=>Number(b[1])-Number(a[1])).slice(0,500));db.privateRead=next;try{save();}catch(error){if(previous===undefined)delete db.privateRead;else db.privateRead=previous;return res.status(500).json({error:'تعذر حفظ قراءة جميع المحادثات'});}res.json({ok:true});});
 app.post('/api/private/hide',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))return res.status(403).json({error:'المحادثات الخاصة متوقفة من إدارة الموقع'});
   const other=keyName(req.body.name||''),me=keyName(req.user.name);
   if(!other||other===me)return res.status(400).json({error:'اسم غير صحيح'});
-  const previousMessages=db.privateMessages,previousHidden=db.privateHidden?.[me],previousReadMe=db.privateRead?.[me]?.[other],previousReadOther=db.privateRead?.[other]?.[me];
+  if(!getUser(other)&&!getGuest(other))return res.status(404).json({error:'العضو غير موجود'});
+  const previousMessages=db.privateMessages,previousHidden=db.privateHidden,previousRead=db.privateRead;
+  const hiddenRoot={...(db.privateHidden||{})},hiddenList=Array.isArray(hiddenRoot[me])?hiddenRoot[me].slice():[];
+  if(!hiddenList.includes(other)&&hiddenList.length>=500)return res.status(400).json({error:'وصلت إلى الحد الأعلى للمحادثات المخفية'});
+  if(!hiddenList.includes(other))hiddenList.push(other);
+  hiddenRoot[me]=hiddenList;
+  const readRoot={...(db.privateRead||{})};
+  if(readRoot[me]){readRoot[me]={...readRoot[me]};delete readRoot[me][other];}
+  if(readRoot[other]){readRoot[other]={...readRoot[other]};delete readRoot[other][me];}
   const removed=(db.privateMessages||[]).filter(m=>(keyName(m.from)===me&&keyName(m.to)===other)||(keyName(m.from)===other&&keyName(m.to)===me));
-  db.privateHidden=db.privateHidden||{};db.privateHidden[me]=Array.isArray(db.privateHidden[me])?db.privateHidden[me]:[];
-  if(!db.privateHidden[me].includes(other))db.privateHidden[me].push(other);
+  db.privateHidden=hiddenRoot;db.privateRead=readRoot;
   db.privateMessages=(db.privateMessages||[]).filter(m=>!((keyName(m.from)===me&&keyName(m.to)===other)||(keyName(m.from)===other&&keyName(m.to)===me)));
-  if(db.privateRead?.[me])delete db.privateRead[me][other];if(db.privateRead?.[other])delete db.privateRead[other][me];
-  try{save()}catch(e){if(previousMessages===undefined)delete db.privateMessages;else db.privateMessages=previousMessages;if(previousHidden===undefined)delete db.privateHidden[me];else db.privateHidden[me]=previousHidden;if(db.privateRead?.[me]&&previousReadMe!==undefined)db.privateRead[me][other]=previousReadMe;if(db.privateRead?.[other]&&previousReadOther!==undefined)db.privateRead[other][me]=previousReadOther;console.error('Private conversation hide failed:',e.message);return res.status(500).json({error:'تعذر حفظ إنهاء المحادثة'});}
-  for(const message of removed){const url=String(message?.media?.url||'');const prefix='/api/private/media/';if(!url.startsWith(prefix))continue;const filename=url.slice(prefix.length);if(!/^[a-zA-Z0-9._-]{1,180}$/.test(filename))continue;const stillUsed=(db.privateMessages||[]).some(m=>m?.media?.url===url);if(!stillUsed){try{fs.unlinkSync(path.join(PRIVATE_MEDIA_DIR,filename))}catch(e){if(e.code!=='ENOENT')console.warn('Private media cleanup failed:',e.message)}}}
+  try{save();}catch(error){
+    if(previousMessages===undefined)delete db.privateMessages;else db.privateMessages=previousMessages;
+    if(previousHidden===undefined)delete db.privateHidden;else db.privateHidden=previousHidden;
+    if(previousRead===undefined)delete db.privateRead;else db.privateRead=previousRead;
+    console.error('Private conversation hide failed:',error.message);
+    return res.status(500).json({error:'تعذر حفظ إنهاء المحادثة'});
+  }
+  for(const message of removed){const url=String(message?.media?.url||''),prefix='/api/private/media/';if(!url.startsWith(prefix))continue;const filename=url.slice(prefix.length);if(!/^[a-zA-Z0-9._-]{1,180}$/.test(filename))continue;const stillUsed=(db.privateMessages||[]).some(m=>m?.media?.url===url);if(!stillUsed){try{fs.unlinkSync(path.join(PRIVATE_MEDIA_DIR,filename))}catch(error){if(error.code!=='ENOENT')console.warn('Private media cleanup failed:',error.message);}}}
   res.json({ok:true});
 });
 app.get('/api/private/contacts',requireAuth,(req,res)=>{
@@ -1287,19 +1677,27 @@ app.get('/api/private/contacts',requireAuth,(req,res)=>{
   res.set('Cache-Control','no-store');res.json(rows);
 });
 app.get('/api/notifications',requireAuth,(req,res)=>{const started=Number(req.user.created)||0;res.set('Cache-Control','no-store');res.json((db.notifications[accountKey(req.user.name)]||db.notifications[req.user.name]||[]).filter(x=>Number(x.at||0)>=started).slice(0,50));});
-app.post('/api/notifications/read',requireAuth,(req,res)=>{db.notifications[accountKey(req.user.name)]=[];save();res.json({ok:true});});
+app.post('/api/notifications/read',requireAuth,(req,res)=>{const key=accountKey(req.user.name),had=Object.prototype.hasOwnProperty.call(db.notifications,key),previous=db.notifications[key];db.notifications[key]=[];try{save();}catch(error){if(had)db.notifications[key]=previous;else delete db.notifications[key];return res.status(500).json({error:'تعذر حفظ حالة الإشعارات'});}res.json({ok:true});});
 
-app.post('/api/message',requireAuth,(req,res)=>{
-  const u=req.user, room=String(req.body.room||'public'), text=String(req.body.text||'').trim().slice(0,2000);
+app.post('/api/message',requireAuth,async(req,res)=>{
+  const u=req.user;
+  if(globalBanResponse(res,u.name,requestClientIp(req)))return;
+  const room=String(req.body.room||'public'), text=String(req.body.text||'').trim().slice(0,2000);
   if(!text)return res.status(400).json({error:'الرسالة فارغة'});
   const sessionId=String(req.get('x-session')||'');
-  const joinedSocket=[...io.sockets.sockets.values()].find(so=>so.data?.sid===sessionId&&so.data?.user?.room===room&&so.rooms.has(room));
+  const joinedSocket=[...io.sockets.sockets.values()].find(so=>so.data?.sid===sessionId&&isCurrentSessionSocket(so)&&keyName(so.data?.user?.name||'')===keyName(u.name)&&so.data?.user?.room===room&&so.rooms.has(room));
   if(!joinedSocket)return res.status(403).json({error:'يجب دخول الغرفة أولاً قبل إرسال الرسائل'});
-  if(blockedChatTerm(text))return res.status(403).json({error:'رسالتك تحتوي على كلمة غير مسموح بها'});
   if(roomBanned(u.name,room))return res.status(403).json({error:'أنت محظور من هذه الغرفة'});
   if(roomMuted(u.name,room))return res.status(403).json({error:'أنت مكتوم في هذه الغرفة'});
+  if(blockedChatTerm(text))return res.status(403).json({error:'رسالتك تحتوي على كلمة غير مسموح بها'});
+  const rateError=roomMessageRateLimitError(sessionId,text);if(rateError)return res.status(429).json({error:rateError});
+  let botCommandError=null;
+  if(await processBuiltInBotCommand(joinedSocket,u,room,text,(message,status=403)=>{botCommandError={message,status};})){
+    if(botCommandError)return res.status(botCommandError.status).json({error:botCommandError.message});
+    return res.json({ok:true,command:true});
+  }
   const r=db.rooms.find(x=>x.id===room); if(!r)return res.status(404).json({error:'الغرفة غير موجودة'});
-  const m={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:u.type,text,at:Date.now(),likes:userLikes(u),profile:profile(u.name)};try{addMessage(m)}catch(e){console.error('HTTP room message save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الرسالة'});}io.to(room).emit('message',m);res.json({ok:true,message:m});
+  const m={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'text',text,at:Date.now(),likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)};try{await addMessage(m)}catch(e){console.error('HTTP room message save failed:',e.message);const queueFull=e?.message==='Message persistence queue is full; message was not accepted';return res.status(queueFull?503:500).json({error:queueFull?'الخادم مشغول بحفظ الرسائل، حاول بعد قليل':'تعذر حفظ الرسالة'});}io.to(room).emit('message',m);res.json({ok:true,message:m});
 });
 
 app.post('/api/like',requireAuth,(req,res)=>{
@@ -1307,8 +1705,11 @@ app.post('/api/like',requireAuth,(req,res)=>{
   const canonical=accountKey(to); const target=getUser(canonical); const guestTarget=getGuest(canonical); if(!target&&!guestTarget)return res.status(404).json({error:'العضو غير موجود'});
   const k=keyName(from.name)+'::'+keyName(canonical), now=Date.now(), last=Number(db.lastLike[k]||0), remain=Math.max(0,10000-(now-last));
   if(!isOwner(from)&&remain>0){const sec=Math.max(1,Math.ceil(remain/1000));return res.status(429).json({error:`يسمح لك بعد ${sec} ثانية لإرسال اللايك`,remaining:sec});}
+  const previousLastLike=last,previousLikes=Number((target||guestTarget).likes||0);
   db.lastLike[k]=now;
-  if(target) target.likes=Number(target.likes||0)+1; else guestTarget.likes=Number(guestTarget.likes||0)+1; save(); const l=target?target.likes:guestTarget.likes;
+  if(target)target.likes=previousLikes+1;else guestTarget.likes=previousLikes+1;
+  try{save();}catch(error){if(target)target.likes=previousLikes;else guestTarget.likes=previousLikes;if(previousLastLike)db.lastLike[k]=previousLastLike;else delete db.lastLike[k];console.error('Like save failed:',error.message);return res.status(500).json({error:'تعذر حفظ الإعجاب'});}
+  const l=target?target.likes:guestTarget.likes;
   const likeText=`لقد استلمت إعجاب من ${displayName(from.name)}`;
   // الإعجاب يُحفظ دائمًا، لكن إشعار المستلم يحترم إعداد إغلاق التنبيهات.
   if(profile(canonical).notificationsOpen!==false){
@@ -1319,17 +1720,17 @@ app.post('/api/like',requireAuth,(req,res)=>{
   }
   io.emit('likes-changed',{name:canonical,likes:l,level:level(l)}); res.json({ok:true,likes:l,level:level(l)});
 });
-app.post('/api/admin/grant-like',requireAdmin,(req,res)=>{const n=accountKey(req.body.name),amount=Math.max(1,Math.min(100000,Number(req.body.amount)||1)),u=getUser(n),g=getGuest(n);if(denyHigherRankTarget(req.user,n,res))return;if(!u&&!g)return res.status(404).json({error:'المستخدم غير موجود'});if((isOwnerName(n)||isOwner({name:n,role:(u||g).role}))&&!(isOwner(req.user)&&keyName(req.user.name)===keyName(n)))return res.status(403).json({error:'صاحب الموقع محمي من تعديل اللايكات'});if(u)u.likes=Number(u.likes||0)+amount;else g.likes=Number(g.likes||0)+amount;const likes=Number((u||g).likes||0);save();io.emit('likes-changed',{name:n,likes,level:level(likes)});const likeText='لقد استلمت '+amount+' إعجاب من '+displayName(req.user.name);if(profile(n).notificationsOpen!==false){notify(n,{type:'like-received',from:req.user.name,text:likeText,amount,likes});emitToUser(n,'like-received',{from:req.user.name,text:likeText,amount,likes});}res.json({ok:true,likes,amount});});
-app.post('/api/admin/reset-likes',(req,res,next)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'reset_likes'))return res.status(403).json({error:'ما عندك صلاحية تصفير اللايكات'});const n=accountKey(req.body.name),u=getUser(n),g=getGuest(n);if(denyHigherRankTarget(req.user,n,res))return;if(!u&&!g)return res.status(404).json({error:'المستخدم غير موجود'});if(isOwner({name:n,role:(u||g).role})&&!(isOwner(req.user)&&keyName(req.user.name)===keyName(n)))return res.status(403).json({error:'لا يمكن تعديل لايكات صاحب الموقع'});if(u)u.likes=0;else g.likes=0;save();io.emit('likes-changed',{name:n,likes:0,level:1});res.json({ok:true});});});
-app.post('/api/admin/gift',(req,res)=>{requireAuth(req,res,()=>{if(!siteModuleEnabled('gifts'))return res.status(403).json({error:'الهدايا متوقفة من إدارة الموقع'});if(!hasPermission(req.user,'gifts'))return res.status(403).json({error:'ما عندك صلاحية إرسال الهدايا'});const n=accountKey(req.body.name);if(denyHigherRankTarget(req.user,n,res))return;const gift=cleanName(req.body.gift||'هدية');if(!getUser(n)&&!getGuest(n))return res.status(404).json({error:'المستخدم غير موجود'});if(isOwnerName(n))return res.status(403).json({error:'حساب صاحب الموقع محمي من الهدايا الإدارية'});const giftId=String(req.body.giftId||'').trim().slice(0,120);const category=String(req.body.category||'gift')==='vip'?'vip':'gift';const sourceCatalog=category==='vip'?(db.vipGiftCatalog||[]):(db.giftCatalog||[]);const catalogItem=sourceCatalog.find(x=>String(x.id||'')===giftId);if(!catalogItem)return res.status(400).json({error:'الهدية غير موجودة في كتالوج '+(category==='vip'?'VIP':'الهدايا')+' الحالي'});const giftIcon=String(catalogItem.icon||'🎁').trim().slice(0,24)||'🎁';const giftImage=String(catalogItem.image||'').startsWith('/')?String(catalogItem.image):'';const record={id:crypto.randomBytes(8).toString('hex'),gift,giftIcon,giftId,giftImage,category,from:req.user.name,at:Date.now()};const p=profile(n);if(denyBadgeForRank(n,p,res))return;delete p.vipUntil;p.gifts=[record];save();emitToUser(n,'gift',{name:n,gift,giftIcon,giftId,giftImage,from:req.user.name,fromDisplayName:displayName(req.user.name),fromProfile:profile(req.user.name),fromRole:roleOf(req.user)});io.emit('profile-changed',{name:n,profile:p});emitState();res.json({ok:true,gift,giftIcon,giftId,giftImage});});});
-app.post('/api/admin/gift/delete',(req,res)=>{requireAuth(req,res,()=>{try{if(!hasPermission(req.user,'gifts'))return res.status(403).json({error:'ما عندك صلاحية حذف الهدايا'});const n=accountKey(req.body.name),target=getUser(n)||getGuest(n);if(denyHigherRankTarget(req.user,n,res))return;if(!target)return res.status(404).json({error:'المستخدم غير موجود'});if((isOwnerName(n)||isOwner({name:n,role:target.role}))&&!(isOwner(req.user)&&keyName(req.user.name)===keyName(n)))return res.status(403).json({error:'حساب صاحب الموقع محمي من حذف الهدايا بواسطة الآخرين'});const p=profile(n);p.gifts=Array.isArray(p.gifts)?p.gifts:[];let index=-1;const requestedId=String(req.body.giftId||'');if(requestedId)index=p.gifts.findIndex(g=>String(g.id||'')===requestedId);if(index<0&&req.body.gift&&req.body.from!==undefined){const gift=String(req.body.gift),from=String(req.body.from||''),at=Number(req.body.at)||0;index=p.gifts.findIndex(g=>String(g.gift||'')===gift&&String(g.from||'')===from&&Number(g.at||0)===at);}if(index<0&&!requestedId&&req.body.gift===undefined&&Number.isInteger(Number(req.body.index)))index=Number(req.body.index);if(!Number.isInteger(index)||index<0||index>=p.gifts.length)return res.status(404).json({error:'الهدية المحددة غير موجودة. حدّث النافذة وافتحها من جديد.'});const removed=p.gifts.splice(index,1)[0];save();io.emit('profile-changed',{name:n,profile:p});emitState();return res.json({ok:true,removed,profile:p});}catch(err){console.error('gift-delete failed:',err);return res.status(500).json({error:'تعذر حذف الهدية من الخادم. راجع سجل الخادم.'});}});});
+app.post('/api/admin/grant-like',requireAdmin,(req,res)=>{const n=accountKey(req.body.name),amount=Math.max(1,Math.min(100000,Number(req.body.amount)||1)),u=getUser(n),g=getGuest(n);if(denyHigherRankTarget(req.user,n,res))return;if(!u&&!g)return res.status(404).json({error:'المستخدم غير موجود'});if((isOwnerName(n)||isOwner({name:n,role:(u||g).role}))&&!(isOwner(req.user)&&keyName(req.user.name)===keyName(n)))return res.status(403).json({error:'صاحب الموقع محمي من تعديل اللايكات'});const target=u||g,previous=Number(target.likes||0);target.likes=previous+amount;const likes=Number(target.likes||0);try{save();}catch(error){target.likes=previous;console.error('Admin like grant save failed:',error.message);return res.status(500).json({error:'تعذر حفظ اللايكات'});}io.emit('likes-changed',{name:n,likes,level:level(likes)});const likeText='لقد استلمت '+amount+' إعجاب من '+displayName(req.user.name);if(profile(n).notificationsOpen!==false){notify(n,{type:'like-received',from:req.user.name,text:likeText,amount,likes});emitToUser(n,'like-received',{from:req.user.name,text:likeText,amount,likes});}res.json({ok:true,likes,amount});});
+app.post('/api/admin/reset-likes',requireAdmin,(req,res,next)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'reset_likes'))return res.status(403).json({error:'ما عندك صلاحية تصفير اللايكات'});const n=accountKey(req.body.name),u=getUser(n),g=getGuest(n);if(denyHigherRankTarget(req.user,n,res))return;if(!u&&!g)return res.status(404).json({error:'المستخدم غير موجود'});if(isOwner({name:n,role:(u||g).role})&&!(isOwner(req.user)&&keyName(req.user.name)===keyName(n)))return res.status(403).json({error:'لا يمكن تعديل لايكات صاحب الموقع'});const target=u||g,previous=Number(target.likes||0);target.likes=0;try{save();}catch(error){target.likes=previous;return res.status(500).json({error:'تعذر حفظ تصفير اللايكات'});}io.emit('likes-changed',{name:n,likes:0,level:1});res.json({ok:true});});});
+app.post('/api/admin/gift',requireAdmin,(req,res)=>{requireAuth(req,res,()=>{if(!siteModuleEnabled('gifts'))return res.status(403).json({error:'الهدايا متوقفة من إدارة الموقع'});if(!hasPermission(req.user,'gifts'))return res.status(403).json({error:'ما عندك صلاحية إرسال الهدايا'});const n=accountKey(req.body.name);if(denyHigherRankTarget(req.user,n,res))return;const gift=cleanName(req.body.gift||'هدية');if(!getUser(n)&&!getGuest(n))return res.status(404).json({error:'المستخدم غير موجود'});if(isOwnerName(n))return res.status(403).json({error:'حساب صاحب الموقع محمي من الهدايا الإدارية'});const giftId=String(req.body.giftId||'').trim().slice(0,120);const category=String(req.body.category||'gift')==='vip'?'vip':'gift';const sourceCatalog=category==='vip'?(db.vipGiftCatalog||[]):(db.giftCatalog||[]);const catalogItem=sourceCatalog.find(x=>String(x.id||'')===giftId);if(!catalogItem)return res.status(400).json({error:'الهدية غير موجودة في كتالوج '+(category==='vip'?'VIP':'الهدايا')+' الحالي'});const giftIcon=String(catalogItem.icon||'🎁').trim().slice(0,24)||'🎁';const giftImage=String(catalogItem.image||'').startsWith('/')?String(catalogItem.image):'';const record={id:crypto.randomBytes(8).toString('hex'),gift,giftIcon,giftId,giftImage,category,from:req.user.name,at:Date.now()};const hadProfile=Object.prototype.hasOwnProperty.call(db.profiles,n),p=profile(n);if(denyBadgeForRank(n,p,res))return;const previousGifts=p.gifts,previousVipUntil=p.vipUntil,hadVipUntil=Object.prototype.hasOwnProperty.call(p,'vipUntil');delete p.vipUntil;p.gifts=[record];try{save();}catch(error){p.gifts=previousGifts;if(hadVipUntil)p.vipUntil=previousVipUntil;else delete p.vipUntil;if(!hadProfile)delete db.profiles[n];console.error('Admin gift send save failed:',error.message);return res.status(500).json({error:'تعذر حفظ الهدية'});}emitToUser(n,'gift',{name:n,gift,giftIcon,giftId,giftImage,from:req.user.name,fromDisplayName:displayName(req.user.name),fromProfile:profile(req.user.name),fromRole:roleOf(req.user)});io.emit('profile-changed',{name:n,profile:p});emitState();res.json({ok:true,gift,giftIcon,giftId,giftImage});});});
+app.post('/api/admin/gift/delete',requireAdmin,(req,res)=>{requireAuth(req,res,()=>{try{if(!hasPermission(req.user,'gifts'))return res.status(403).json({error:'ما عندك صلاحية حذف الهدايا'});const n=accountKey(req.body.name),target=getUser(n)||getGuest(n);if(denyHigherRankTarget(req.user,n,res))return;if(!target)return res.status(404).json({error:'المستخدم غير موجود'});if((isOwnerName(n)||isOwner({name:n,role:target.role}))&&!(isOwner(req.user)&&keyName(req.user.name)===keyName(n)))return res.status(403).json({error:'حساب صاحب الموقع محمي من حذف الهدايا بواسطة الآخرين'});const p=db.profiles[n];if(!p||!Array.isArray(p.gifts)||!p.gifts.length)return res.status(404).json({error:'لا توجد هدايا لهذا العضو'});let index=-1;const requestedId=String(req.body.giftId||'');if(requestedId)index=p.gifts.findIndex(g=>String(g.id||'')===requestedId);if(index<0&&req.body.gift&&req.body.from!==undefined){const gift=String(req.body.gift),from=String(req.body.from||''),at=Number(req.body.at)||0;index=p.gifts.findIndex(g=>String(g.gift||'')===gift&&String(g.from||'')===from&&Number(g.at||0)===at);}if(index<0&&!requestedId&&req.body.gift===undefined&&Number.isInteger(Number(req.body.index)))index=Number(req.body.index);if(!Number.isInteger(index)||index<0||index>=p.gifts.length)return res.status(404).json({error:'الهدية المحددة غير موجودة. حدّث النافذة وافتحها من جديد.'});const previousGifts=p.gifts.slice(),removed=p.gifts.splice(index,1)[0];try{save();}catch(saveError){p.gifts=previousGifts;console.error('Gift deletion save failed:',saveError.message);return res.status(500).json({error:'تعذر حفظ حذف الهدية'});}io.emit('profile-changed',{name:n,profile:p});emitState();return res.json({ok:true,removed,profile:p});}catch(err){console.error('gift-delete failed:',err);return res.status(500).json({error:'تعذر حذف الهدية من الخادم. راجع سجل الخادم.'});}});});
 function countGifImageFrames(buffer){try{if(!Buffer.isBuffer(buffer)||buffer.length<14||!/^GIF8[79]a$/.test(buffer.subarray(0,6).toString('ascii')))return 0;let offset=13;const packed=buffer[10];if(packed&0x80)offset+=3*(1<<((packed&7)+1));let frames=0,guard=0;while(offset<buffer.length&&guard++<10000){const marker=buffer[offset++];if(marker===0x3B)break;if(marker===0x21){if(offset>=buffer.length)return 0;const label=buffer[offset++];if(label===0xF9){if(offset>=buffer.length)return 0;const size=buffer[offset++];offset+=size;if(buffer[offset]===0)offset++;}else{while(offset<buffer.length){const size=buffer[offset++];if(size===0)break;offset+=size;}}continue;}if(marker===0x2C){if(offset+9>buffer.length)return 0;const imagePacked=buffer[offset+8];offset+=9;if(imagePacked&0x80)offset+=3*(1<<((imagePacked&7)+1));if(offset>=buffer.length)return 0;offset++;while(offset<buffer.length){const size=buffer[offset++];if(size===0)break;offset+=size;}frames++;continue;}return 0;}return frames;}catch{return 0;}}
-app.post('/api/admin/gifts/catalog/upload',requireAuth,uploadSmallImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!siteModuleEnabled('gifts')){removeUploadedFile(req.file);return res.status(403).json({error:'الهدايا متوقفة من إدارة الموقع'});}if(!hasPermission(req.user,'gift_catalog_manage')){removeUploadedFile(req.file);return res.status(403).json({error:'ما عندك صلاحية تعديل كتالوج الهدايا'});}try{if(!req.file||req.file.mimetype!=='image/gif'){removeUploadedFile(req.file);return res.status(400).json({error:'ارفع ملف GIF متحرك فقط'});}const gifBytes=fs.readFileSync(path.join(UP_DIR,req.file.filename));const gifFrames=countGifImageFrames(gifBytes);if(gifFrames<2){removeUploadedFile(req.file);return res.status(400).json({error:'ملف GIF لازم يحتوي على إطارين أو أكثر حتى يكون متحركاً'});}const name=cleanName(req.body.name||'').slice(0,40);if(!name){removeUploadedFile(req.file);return res.status(400).json({error:'اكتب اسم الهدية'});}const category=String(req.body.category||'gift')==='vip'?'vip':'gift';const targetCatalog=category==='vip'?(db.vipGiftCatalog=Array.isArray(db.vipGiftCatalog)?db.vipGiftCatalog:[]):(db.giftCatalog=Array.isArray(db.giftCatalog)?db.giftCatalog:[]);if(targetCatalog.length>=200){removeUploadedFile(req.file);return res.status(400).json({error:'وصلت للحد الأعلى وهو 200 هدية'});}const item={id:crypto.randomUUID(),name,icon:String(req.body.icon||(category==='vip'?'👑':'🎁')).slice(0,24),image:'/uploads/'+req.file.filename,price:0,builtin:false,category,createdAt:Date.now()};targetCatalog.push(item);try{save()}catch(error){targetCatalog.pop();removeUploadedFile(req.file);throw error;}return res.json({ok:true,gift:item,count:targetCatalog.length,category});}catch(error){console.error('Gift GIF upload failed:',error);removeUploadedFile(req.file);return res.status(500).json({error:'تعذر حفظ الهدية المتحركة'});}});
-app.post('/api/admin/gifts/catalog/delete',requireAuth,(req,res)=>{if(!siteModuleEnabled('gifts'))return res.status(403).json({error:'الهدايا متوقفة من إدارة الموقع'});if(!hasPermission(req.user,'gift_catalog_manage'))return res.status(403).json({error:'ما عندك صلاحية تعديل كتالوج الهدايا'});const category=String(req.body.category||'gift')==='vip'?'vip':'gift';const catalog=category==='vip'?(db.vipGiftCatalog=Array.isArray(db.vipGiftCatalog)?db.vipGiftCatalog:[]):(db.giftCatalog=Array.isArray(db.giftCatalog)?db.giftCatalog:[]);const id=String(req.body.id||'');const index=id?catalog.findIndex(g=>String(g.id)===id):Number(req.body.index);if(!Number.isInteger(index)||index<0||index>=catalog.length)return res.status(404).json({error:'الهدية المحددة غير موجودة'});const removed=catalog.splice(index,1)[0];try{save()}catch(error){catalog.splice(index,0,removed);return res.status(500).json({error:'تعذر حفظ حذف الهدية'});}if(removed?.image?.startsWith('/uploads/')){const file=path.resolve(UP_DIR,path.basename(removed.image));if(file.startsWith(path.resolve(UP_DIR)+path.sep)){try{fs.unlinkSync(file)}catch{}}}return res.json({ok:true,removed,count:catalog.length,category});});
-app.post('/api/admin/gift-vip',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'vip'))return res.status(403).json({error:'ما عندك صلاحية منح VIP'});const n=accountKey(req.body.name);if(denyHigherRankTarget(req.user,n,res))return;if(!getUser(n)&&!getGuest(n))return res.status(404).json({error:'المستخدم غير موجود'});if(isOwnerName(n)||isOwner({name:n,role:(getUser(n)||getGuest(n)).role}))return res.status(403).json({error:'حساب صاحب الموقع محمي'});const days=Number(req.body.durationDays??1);if(!Number.isInteger(days)||days<1||days>365)return res.status(400).json({error:'مدة VIP يجب أن تكون من يوم إلى 365 يوم'});const p=profile(n);if(denyBadgeForRank(n,p,res))return;p.vipGrantedAt=Date.now();p.vipGrantedBy=req.user.name;p.vipUntil=Date.now()+days*24*60*60*1000;p.gifts=[];try{save()}catch(e){return res.status(500).json({error:'تعذر حفظ عضوية VIP'});}emitToUser(n,'vip-changed',{name:n,vipUntil:p.vipUntil,from:req.user.name});emitToUser(n,'admin-action-notice',{title:'👑 عضوية VIP',text:'منحك '+req.user.name+' عضوية VIP لمدة '+days+' يوم'});io.emit('profile-changed',{name:n,profile:p});emitState();res.json({ok:true,vipUntil:p.vipUntil,durationDays:days});});});
-app.post('/api/admin/vip/:name/revoke',requireAuth,(req,res)=>{if(!hasPermission(req.user,'vip'))return res.status(403).json({error:'ما عندك صلاحية إدارة VIP'});const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return;if(isOwnerName(n))return res.status(403).json({error:'حساب صاحب الموقع محمي'});const target=getUser(n)||getGuest(n);if(!target)return res.status(404).json({error:'العضو غير موجود'});const p=profile(n);delete p.vipUntil;delete p.vipGrantedAt;delete p.vipGrantedBy;try{save()}catch(e){return res.status(500).json({error:'تعذر حفظ إزالة VIP'});}emitToUser(n,'vip-changed',{name:n,vipUntil:0,from:req.user.name});io.emit('profile-changed',{name:n,profile:p});emitState();res.json({ok:true});});
-app.post('/api/admin/move-member',requireAuth,(req,res)=>{if(!hasPermission(req.user,'room_move'))return res.status(403).json({error:'ما عندك صلاحية نقل الأعضاء بين الغرف'});const n=accountKey(req.body.name),to=String(req.body.to||'');const target=getUser(n)||getGuest(n);if(!target)return res.status(404).json({error:'العضو غير موجود'});if(isOwnerName(n)||isOwner({name:n,role:target.role})){if(!isOwner(req.user))notifyOwnerProtectedAttempt(req.user,'نقل حسابك إلى غرفة أخرى');return res.status(403).json({error:'صاحب الموقع محمي من النقل الإداري'});}if(denyHigherRankTarget(req.user,n,res))return;const room=db.rooms.find(r=>r.id===to);if(!room)return res.status(404).json({error:'الغرفة الجديدة غير موجودة'});if(req.body.enforceRoomPassword===true&&room.passwordHash&&!bcrypt.compareSync(String(req.body.password||''),room.passwordHash))return res.status(403).json({error:'كلمة مرور الغرفة غير صحيحة'});const active=[...socketUsers.entries()].filter(([,u])=>keyName(u.name)===keyName(n));if(!active.length)return res.status(409).json({error:'العضو غير متصل حالياً؛ حدّث القائمة وجرب مرة ثانية'});const movable=active.filter(([,u])=>(u.room||'public')!==to);if(!movable.length)return res.status(400).json({error:'العضو موجود بالفعل في الغرفة المحددة'});let moved=0;for(const [sid2,u2] of movable){const so=socketBySession(sid2);if(!so)continue;so.emit('admin-moved-room',{room:to,roomName:room.name,from:u2.room||'public'});so.emit('admin-action-notice',{title:'🔀 نقل بين الغرف',text:'تم نقلك إلى '+room.name});moved++;}if(!moved)return res.status(409).json({error:'تعذر نقل العضو؛ حدّث القائمة وجرب مرة ثانية'});emitState();return res.json({ok:true,name:n,to,room:room.name,moved});});
-app.post('/api/admin/member-action',(req,res)=>{requireAuth(req,res,()=>{
+app.post('/api/admin/gifts/catalog/upload',requireAdmin,(req,res,next)=>requireAuth(req,res,()=>{if(!siteModuleEnabled('gifts'))return res.status(403).json({error:'الهدايا متوقفة من إدارة الموقع'});if(!hasPermission(req.user,'gift_catalog_manage'))return res.status(403).json({error:'ما عندك صلاحية تعديل كتالوج الهدايا'});return next();}),uploadSmallImage.single('file'),validateUploadedContent('image'),(req,res)=>{try{if(!req.file||req.file.mimetype!=='image/gif'){removeUploadedFile(req.file);return res.status(400).json({error:'ارفع ملف GIF متحرك فقط'});}const gifBytes=fs.readFileSync(path.join(UP_DIR,req.file.filename));const gifFrames=countGifImageFrames(gifBytes);if(gifFrames<2){removeUploadedFile(req.file);return res.status(400).json({error:'ملف GIF لازم يحتوي على إطارين أو أكثر حتى يكون متحركاً'});}const name=cleanName(req.body.name||'').slice(0,40);if(!name){removeUploadedFile(req.file);return res.status(400).json({error:'اكتب اسم الهدية'});}const category=String(req.body.category||'gift')==='vip'?'vip':'gift';const catalogKey=category==='vip'?'vipGiftCatalog':'giftCatalog',hadCatalog=Object.prototype.hasOwnProperty.call(db,catalogKey),previousCatalog=db[catalogKey];const targetCatalog=Array.isArray(previousCatalog)?previousCatalog:[];if(targetCatalog.length>=200){removeUploadedFile(req.file);return res.status(400).json({error:'وصلت للحد الأعلى وهو 200 هدية'});}const item={id:crypto.randomUUID(),name,icon:String(req.body.icon||(category==='vip'?'👑':'🎁')).slice(0,24),image:'/uploads/'+req.file.filename,price:0,builtin:false,category,createdAt:Date.now()};if(!Array.isArray(previousCatalog))db[catalogKey]=targetCatalog;targetCatalog.push(item);try{save()}catch(error){targetCatalog.pop();if(!Array.isArray(previousCatalog)){if(hadCatalog)db[catalogKey]=previousCatalog;else delete db[catalogKey];}removeUploadedFile(req.file);throw error;}return res.json({ok:true,gift:item,count:targetCatalog.length,category});}catch(error){console.error('Gift GIF upload failed:',error);removeUploadedFile(req.file);return res.status(500).json({error:'تعذر حفظ الهدية المتحركة'});}});
+app.post('/api/admin/gifts/catalog/delete',requireAdmin,(req,res)=>{if(!siteModuleEnabled('gifts'))return res.status(403).json({error:'الهدايا متوقفة من إدارة الموقع'});if(!hasPermission(req.user,'gift_catalog_manage'))return res.status(403).json({error:'ما عندك صلاحية تعديل كتالوج الهدايا'});const category=String(req.body.category||'gift')==='vip'?'vip':'gift';const catalog=category==='vip'?db.vipGiftCatalog:db.giftCatalog;if(!Array.isArray(catalog))return res.status(404).json({error:'كتالوج الهدايا غير موجود'});const id=String(req.body.id||'');const index=id?catalog.findIndex(g=>String(g.id)===id):Number(req.body.index);if(!Number.isInteger(index)||index<0||index>=catalog.length)return res.status(404).json({error:'الهدية المحددة غير موجودة'});const removed=catalog.splice(index,1)[0];try{save()}catch(error){catalog.splice(index,0,removed);return res.status(500).json({error:'تعذر حفظ حذف الهدية'});}if(removed?.image?.startsWith('/uploads/'))removePublicUploadIfUnreferenced(removed.image);return res.json({ok:true,removed,count:catalog.length,category});});
+app.post('/api/admin/gift-vip',requireAdmin,(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'vip'))return res.status(403).json({error:'ما عندك صلاحية منح VIP'});const n=accountKey(req.body.name);if(denyHigherRankTarget(req.user,n,res))return;if(!getUser(n)&&!getGuest(n))return res.status(404).json({error:'المستخدم غير موجود'});if(isOwnerName(n)||isOwner({name:n,role:(getUser(n)||getGuest(n)).role}))return res.status(403).json({error:'حساب صاحب الموقع محمي'});const days=Number(req.body.durationDays??1);if(!Number.isInteger(days)||days<1||days>365)return res.status(400).json({error:'مدة VIP يجب أن تكون من يوم إلى 365 يوم'});const hadProfile=Object.prototype.hasOwnProperty.call(db.profiles,n),p=profile(n),previous={...p};if(denyBadgeForRank(n,p,res))return;p.vipGrantedAt=Date.now();p.vipGrantedBy=req.user.name;p.vipUntil=Date.now()+days*24*60*60*1000;p.gifts=[];try{save();}catch(error){if(hadProfile){for(const key of Object.keys(p))delete p[key];Object.assign(p,previous);}else delete db.profiles[n];return res.status(500).json({error:'تعذر حفظ عضوية VIP'});}emitToUser(n,'vip-changed',{name:n,vipUntil:p.vipUntil,from:req.user.name});emitToUser(n,'admin-action-notice',{title:'👑 عضوية VIP',text:'منحك '+req.user.name+' عضوية VIP لمدة '+days+' يوم'});io.emit('profile-changed',{name:n,profile:p});emitState();res.json({ok:true,vipUntil:p.vipUntil,durationDays:days});});});
+app.post('/api/admin/vip/:name/revoke',requireAdmin,(req,res)=>{if(!hasPermission(req.user,'vip'))return res.status(403).json({error:'ما عندك صلاحية إدارة VIP'});const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return;if(isOwnerName(n))return res.status(403).json({error:'حساب صاحب الموقع محمي'});const target=getUser(n)||getGuest(n);if(!target)return res.status(404).json({error:'العضو غير موجود'});const hadProfile=Object.prototype.hasOwnProperty.call(db.profiles,n),p=profile(n),previous={...p};delete p.vipUntil;delete p.vipGrantedAt;delete p.vipGrantedBy;try{save();}catch(error){if(hadProfile){for(const key of Object.keys(p))delete p[key];Object.assign(p,previous);}else delete db.profiles[n];return res.status(500).json({error:'تعذر حفظ إزالة VIP'});}emitToUser(n,'vip-changed',{name:n,vipUntil:0,from:req.user.name});io.emit('profile-changed',{name:n,profile:p});emitState();res.json({ok:true});});
+app.post('/api/admin/move-member',requireAdmin,(req,res)=>{if(!hasPermission(req.user,'room_move'))return res.status(403).json({error:'ما عندك صلاحية نقل الأعضاء بين الغرف'});const n=accountKey(req.body.name),to=String(req.body.to||'');const target=getUser(n)||getGuest(n);if(!target)return res.status(404).json({error:'العضو غير موجود'});if(isOwnerName(n)||isOwner({name:n,role:target.role})){if(!isOwner(req.user))notifyOwnerProtectedAttempt(req.user,'نقل حسابك إلى غرفة أخرى');return res.status(403).json({error:'صاحب الموقع محمي من النقل الإداري'});}if(denyHigherRankTarget(req.user,n,res))return;const room=db.rooms.find(r=>r.id===to);if(!room)return res.status(404).json({error:'الغرفة الجديدة غير موجودة'});if(req.body.enforceRoomPassword===true&&room.passwordHash&&!bcrypt.compareSync(String(req.body.password||''),room.passwordHash))return res.status(403).json({error:'كلمة مرور الغرفة غير صحيحة'});const active=[...socketUsers.entries()].filter(([,u])=>keyName(u.name)===keyName(n));if(!active.length)return res.status(409).json({error:'العضو غير متصل حالياً؛ حدّث القائمة وجرب مرة ثانية'});const movable=active.filter(([,u])=>(u.room||'public')!==to);if(!movable.length)return res.status(400).json({error:'العضو موجود بالفعل في الغرفة المحددة'});let moved=0;for(const [sid2,u2] of movable){const so=socketBySession(sid2);if(!so)continue;so.emit('admin-moved-room',{room:to,roomName:room.name,from:u2.room||'public'});so.emit('admin-action-notice',{title:'🔀 نقل بين الغرف',text:'تم نقلك إلى '+room.name});moved++;}if(!moved)return res.status(409).json({error:'تعذر نقل العضو؛ حدّث القائمة وجرب مرة ثانية'});emitState();return res.json({ok:true,name:n,to,room:room.name,moved});});
+app.post('/api/admin/member-action',requireAdmin,(req,res)=>{
   const actor=req.user,n=accountKey(req.body.name),action=String(req.body.action||''),room=String(req.body.room||'public');
   if(!n)return res.status(400).json({error:'الاسم مطلوب'});
   const actionPermission=({'global-kick':'global_kick','global-ban':'global_ban','kick':'kick_room','ban':'ban_room','mute':'mute_room','grant-like':'grant_likes','reset-likes':'reset_likes','grant-vip':'vip','gift':'gifts'})[action];if(!actionPermission)return res.status(400).json({error:'الإجراء غير معروف'});if(!hasPermission(actor,actionPermission))return res.status(403).json({error:'ما عندك صلاحية لهذا الإجراء'});
@@ -1337,21 +1738,21 @@ app.post('/api/admin/member-action',(req,res)=>{requireAuth(req,res,()=>{
   if((isOwnerName(n)||isOwner({name:n,role:protectedTarget?.role}))&&!isOwner(actor)){notifyOwnerProtectedAttempt(actor,({ 'global-kick':'الطرد من الدردشة','global-ban':'الحظر من الدردشة',kick:'الطرد من الغرفة',ban:'الحظر من الغرفة',mute:'الكتم في الغرفة','grant-like':'تعديل اللايكات','reset-likes':'تصفير اللايكات','grant-vip':'تغيير عضوية VIP',gift:'إرسال هدية'}[action]||action));return res.status(403).json({error:'حساب صاحب الموقع محمي ولا يمكن للإداري تنفيذ هذا الإجراء'});}
   if(denyHigherRankTarget(actor,n,res))return;
   if(action==='global-kick'){ emitToUser(n,'admin-action-notice',{title:'🚪 طرد من الدردشة',text:'قام '+actor.name+' (admin) بطردك من الدردشة'}); removeFromChat(n,false); return res.json({ok:true}); }
-  if(action==='global-ban'){ emitToUser(n,'admin-action-notice',{title:'⛔ حظر من الدردشة',text:'قام '+actor.name+' (admin) بحظرك من الدردشة لمدة 5 دقائق'}); db.globalBans=db.globalBans||{}; db.globalIpBans=db.globalIpBans||{}; const until=Date.now()+5*60*1000; const targetIps=new Set(); for(const so of io.sockets.sockets.values()){const sid2=so.data?.sid,u2=so.data?.user||socketUsers.get(sid2);if(u2&&keyName(u2.name)===keyName(n)){const ip=socketClientIp(so);if(ip)targetIps.add(ip);}} db.globalBans[keyName(n)]={name:keyName(n),until}; for(const ip of targetIps)db.globalIpBans[ip]={ip,name:keyName(n),until}; save(); removeFromChat(n,true); return res.json({ok:true,until,ipCount:targetIps.size}); }
+  if(action==='global-ban'){const previousGlobalBans=db.globalBans,previousGlobalIpBans=db.globalIpBans;db.globalBans={...(db.globalBans||{})};db.globalIpBans={...(db.globalIpBans||{})};const until=Date.now()+5*60*1000,targetIps=new Set();for(const so of io.sockets.sockets.values()){const sid2=so.data?.sid,u2=so.data?.user||socketUsers.get(sid2);if(u2&&keyName(u2.name)===keyName(n)){const ip=socketClientIp(so);if(ip)targetIps.add(ip);}}db.globalBans[keyName(n)]={name:keyName(n),until};for(const ip of targetIps)db.globalIpBans[ip]={ip,name:keyName(n),until};try{save();}catch(error){if(previousGlobalBans===undefined)delete db.globalBans;else db.globalBans=previousGlobalBans;if(previousGlobalIpBans===undefined)delete db.globalIpBans;else db.globalIpBans=previousGlobalIpBans;console.error('Global ban save failed:',error.message);return res.status(500).json({error:'تعذر حفظ الحظر العام'});}emitToUser(n,'admin-action-notice',{title:'⛔ حظر من الدردشة',text:'قام '+actor.name+' (admin) بحظرك من الدردشة لمدة 5 دقائق'});removeFromChat(n,true);return res.json({ok:true,until,ipCount:targetIps.size});}
   const target=getUser(n)||getGuest(n);
   if(!target && !['kick','ban','mute'].includes(action))return res.status(404).json({error:'المستخدم غير موجود'});
   if(action==='grant-like'&&!hasPermission(actor,'grant_likes'))return res.status(403).json({error:'ما عندك صلاحية منح اللايكات'});
   if(action==='reset-likes'&&!hasPermission(actor,'reset_likes'))return res.status(403).json({error:'ما عندك صلاحية تصفير اللايكات'});
   if(action==='grant-vip'&&!hasPermission(actor,'vip'))return res.status(403).json({error:'ما عندك صلاحية منح VIP'});
-  if(action==='grant-like'){const amount=Math.max(1,Math.min(10000,Number(req.body.amount)||1));target.likes=Number(target.likes||0)+amount;save();io.emit('likes-changed',{name:n,likes:target.likes,level:level(target.likes)});const likeText='لقد استلمت '+amount+' إعجاب من '+displayName(actor.name);if(profile(n).notificationsOpen!==false){notify(n,{type:'like-received',from:actor.name,text:likeText,amount,likes:target.likes});emitToUser(n,'like-received',{from:actor.name,text:likeText,amount,likes:target.likes});}return res.json({ok:true,likes:target.likes,amount});}
-  if(action==='reset-likes'){if(isOwner({name:n,role:target.role})&&!(isOwner(actor)&&keyName(actor.name)===keyName(n)))return res.status(403).json({error:'لا يمكن تعديل لايكات صاحب الموقع'});target.likes=0;save();io.emit('likes-changed',{name:n,likes:0,level:1});return res.json({ok:true});}
-  if(action==='grant-vip'){const until=Date.now()+24*60*60*1000;const p=profile(n);if(denyBadgeForRank(n,p,res))return;p.vipUntil=until;p.gifts=[];save();io.emit('profile-changed',{name:n,profile:p});emitToUser(n,'vip-changed',{name:n,vipUntil:until,from:actor.name});emitToUser(n,'admin-action-notice',{title:'👑 عضوية VIP',text:'منحك '+actor.name+' (admin) عضوية VIP لمدة 24 ساعة'});emitState();return res.json({ok:true,vipUntil:until});}
-  if(action==='gift'){const gift=cleanName(req.body.gift||'هدية');const giftId=String(req.body.giftId||'').trim().slice(0,120);const category=String(req.body.category||'gift')==='vip'?'vip':'gift';const catalog=category==='vip'?(db.vipGiftCatalog||[]):(db.giftCatalog||[]);const item=catalog.find(x=>String(x.id||'')===giftId);if(!item)return res.status(400).json({error:'الهدية غير موجودة في الكتالوج الحالي'});const giftIcon=String(item.icon||'🎁').slice(0,24),giftImage=String(item.image||'').startsWith('/')?item.image:'';const record={id:crypto.randomBytes(8).toString('hex'),gift,giftIcon,giftId,giftImage,category,from:actor.name,at:Date.now()};const p=profile(n);if(denyBadgeForRank(n,p,res))return;delete p.vipUntil;p.gifts=[record];save();io.emit('profile-changed',{name:n,profile:p});emitToUser(n,'gift',{name:n,gift,giftIcon,giftId,giftImage,from:actor.name,fromDisplayName:displayName(actor.name),fromProfile:profile(actor.name),fromRole:roleOf(actor)});emitState();return res.json({ok:true,gift,giftIcon,giftId,giftImage});}
-  if(action==='kick'){emitToUser(n,'admin-action-notice',{title:'🚪 طرد من الغرفة',text:'قام '+actor.name+' (admin) بطردك من الغرفة'});for(const [sid2,u2] of socketUsers){if(keyName(u2.name)===keyName(n)&&u2.room===room){const so=socketBySession(sid2);so?.leave(room);roomSockets.get(room)?.delete(sid2);if(so?.data?.user)so.data.user.room='';if(socketUsers.get(sid2))socketUsers.get(sid2).room='';so?.emit('kicked',{room,banned:false});}}emitState();return res.json({ok:true});}
-  if(action==='ban'){emitToUser(n,'admin-action-notice',{title:'⛔ حظر من الغرفة',text:'قام '+actor.name+' (admin) بحظرك من الغرفة لمدة 15 دقيقة'});const until=Date.now()+15*60*1000;db.roomBans[room]=Array.isArray(db.roomBans[room])?db.roomBans[room]:[];db.roomBans[room]=db.roomBans[room].filter(x=>typeof x==='string'?keyName(x)!==keyName(n):keyName(x?.name)!==keyName(n));db.roomBans[room].push({name:keyName(n),until});save();for(const [sid2,u2] of socketUsers){if(keyName(u2.name)===keyName(n)&&u2.room===room){const so=socketBySession(sid2);so?.leave(room);roomSockets.get(room)?.delete(sid2);if(so?.data?.user)so.data.user.room='';if(socketUsers.get(sid2))socketUsers.get(sid2).room='';so?.emit('kicked',{room,banned:true,until});}}emitState();return res.json({ok:true,until});}
-  if(action==='mute'){db.roomMutes[room]=Array.isArray(db.roomMutes[room])?db.roomMutes[room]:[];const kn=keyName(n);if(!db.roomMutes[room].includes(kn))db.roomMutes[room].push(kn);save();emitToUser(n,'error-msg',{error:'تم كتمك في هذه الغرفة'});emitState();return res.json({ok:true});}
+  if(action==='grant-like'){const amount=Math.max(1,Math.min(10000,Number(req.body.amount)||1)),previous=Number(target.likes||0);target.likes=previous+amount;try{save();}catch(error){target.likes=previous;return res.status(500).json({error:'تعذر حفظ اللايكات'});}io.emit('likes-changed',{name:n,likes:target.likes,level:level(target.likes)});const likeText='لقد استلمت '+amount+' إعجاب من '+displayName(actor.name);if(profile(n).notificationsOpen!==false){notify(n,{type:'like-received',from:actor.name,text:likeText,amount,likes:target.likes});emitToUser(n,'like-received',{from:actor.name,text:likeText,amount,likes:target.likes});}return res.json({ok:true,likes:target.likes,amount});}
+  if(action==='reset-likes'){if(isOwner({name:n,role:target.role})&&!(isOwner(actor)&&keyName(actor.name)===keyName(n)))return res.status(403).json({error:'لا يمكن تعديل لايكات صاحب الموقع'});const previous=Number(target.likes||0);target.likes=0;try{save();}catch(error){target.likes=previous;return res.status(500).json({error:'تعذر حفظ تصفير اللايكات'});}io.emit('likes-changed',{name:n,likes:0,level:1});return res.json({ok:true});}
+  if(action==='grant-vip'){const until=Date.now()+24*60*60*1000;const p=profile(n),previousVipUntil=p.vipUntil,hadVipUntil=Object.prototype.hasOwnProperty.call(p,'vipUntil'),previousGifts=p.gifts,hadGifts=Object.prototype.hasOwnProperty.call(p,'gifts');if(denyBadgeForRank(n,p,res))return;p.vipUntil=until;p.gifts=[];try{save();}catch(error){if(hadVipUntil)p.vipUntil=previousVipUntil;else delete p.vipUntil;if(hadGifts)p.gifts=previousGifts;else delete p.gifts;return res.status(500).json({error:'تعذر حفظ عضوية VIP'});}io.emit('profile-changed',{name:n,profile:p});emitToUser(n,'vip-changed',{name:n,vipUntil:until,from:actor.name});emitToUser(n,'admin-action-notice',{title:'👑 عضوية VIP',text:'منحك '+actor.name+' (admin) عضوية VIP لمدة 24 ساعة'});emitState();return res.json({ok:true,vipUntil:until});}
+  if(action==='gift'){const gift=cleanName(req.body.gift||'هدية');const giftId=String(req.body.giftId||'').trim().slice(0,120);const category=String(req.body.category||'gift')==='vip'?'vip':'gift';const catalog=category==='vip'?(db.vipGiftCatalog||[]):(db.giftCatalog||[]);const item=catalog.find(x=>String(x.id||'')===giftId);if(!item)return res.status(400).json({error:'الهدية غير موجودة في الكتالوج الحالي'});const giftIcon=String(item.icon||'🎁').slice(0,24),giftImage=String(item.image||'').startsWith('/')?item.image:'';const record={id:crypto.randomBytes(8).toString('hex'),gift,giftIcon,giftId,giftImage,category,from:actor.name,at:Date.now()};const p=profile(n),previousVipUntil=p.vipUntil,hadVipUntil=Object.prototype.hasOwnProperty.call(p,'vipUntil'),previousGifts=p.gifts,hadGifts=Object.prototype.hasOwnProperty.call(p,'gifts');if(denyBadgeForRank(n,p,res))return;delete p.vipUntil;p.gifts=[record];try{save();}catch(error){if(hadVipUntil)p.vipUntil=previousVipUntil;else delete p.vipUntil;if(hadGifts)p.gifts=previousGifts;else delete p.gifts;return res.status(500).json({error:'تعذر حفظ الهدية'});}io.emit('profile-changed',{name:n,profile:p});emitToUser(n,'gift',{name:n,gift,giftIcon,giftId,giftImage,from:actor.name,fromDisplayName:displayName(actor.name),fromProfile:profile(actor.name),fromRole:roleOf(actor)});emitState();return res.json({ok:true,gift,giftIcon,giftId,giftImage});}
+  if(action==='kick'){emitToUser(n,'admin-action-notice',{title:'🚪 طرد من الغرفة',text:'قام '+actor.name+' (admin) بطردك من الغرفة'});for(const [sid2,u2] of socketUsers){if(keyName(u2.name)===keyName(n)&&u2.room===room){const so=socketBySession(sid2);so?.leave(room);removeSessionFromRoomRuntime(sid2,room);if(so?.data?.user)so.data.user.room='';if(socketUsers.get(sid2))socketUsers.get(sid2).room='';so?.emit('kicked',{room,banned:false});}}emitState();return res.json({ok:true});}
+  if(action==='ban'){const hadRoom=Object.prototype.hasOwnProperty.call(db.roomBans,room),previousRoom=Array.isArray(db.roomBans[room])?db.roomBans[room].slice():db.roomBans[room],until=Date.now()+15*60*1000;db.roomBans[room]=Array.isArray(db.roomBans[room])?db.roomBans[room]:[];db.roomBans[room]=db.roomBans[room].filter(x=>typeof x==='string'?keyName(x)!==keyName(n):keyName(x?.name)!==keyName(n));db.roomBans[room].push({name:keyName(n),until});try{save();}catch(error){if(hadRoom)db.roomBans[room]=previousRoom;else delete db.roomBans[room];return res.status(500).json({error:'تعذر حفظ حظر الغرفة'});}emitToUser(n,'admin-action-notice',{title:'⛔ حظر من الغرفة',text:'قام '+actor.name+' (admin) بحظرك من الغرفة لمدة 15 دقيقة'});for(const [sid2,u2] of socketUsers){if(keyName(u2.name)===keyName(n)&&u2.room===room){const so=socketBySession(sid2);so?.leave(room);removeSessionFromRoomRuntime(sid2,room);if(so?.data?.user)so.data.user.room='';if(socketUsers.get(sid2))socketUsers.get(sid2).room='';so?.emit('kicked',{room,banned:true,until});}}emitState();return res.json({ok:true,until});}
+  if(action==='mute'){const hadRoom=Object.prototype.hasOwnProperty.call(db.roomMutes,room),previousRoom=Array.isArray(db.roomMutes[room])?db.roomMutes[room].slice():db.roomMutes[room];db.roomMutes[room]=Array.isArray(db.roomMutes[room])?db.roomMutes[room]:[];const kn=keyName(n);if(!db.roomMutes[room].includes(kn))db.roomMutes[room].push(kn);try{save();}catch(error){if(hadRoom)db.roomMutes[room]=previousRoom;else delete db.roomMutes[room];return res.status(500).json({error:'تعذر حفظ كتم الغرفة'});}emitToUser(n,'error-msg',{error:'تم كتمك في هذه الغرفة'});emitState();return res.json({ok:true});}
   return res.status(400).json({error:'إجراء غير معروف'});
-});});
+});
 app.post('/api/admin/broadcast',requireAdmin,(req,res)=>{
   const text=String(req.body.text||'').trim();if(!text)return res.status(400).json({error:'نص الإعلان فارغ'});
   const duration=['5m','15m'].includes(req.body.duration)?'15m':'permanent';
@@ -1362,20 +1763,77 @@ app.post('/api/admin/broadcast',requireAdmin,(req,res)=>{
     :{id:crypto.randomUUID(),title,text:text.slice(0,2000),from:'الإدارة',displayName:'الإدارة',role:'member',at:Date.now(),duration,profile:{}};
   const previousAnnouncements=db.announcements,previousMessages=db.messages;
   db.announcements=[...(db.announcements||[]),item].slice(-100).reverse();
-  try{save()}catch(e){if(previousAnnouncements===undefined)delete db.announcements;else db.announcements=previousAnnouncements;if(previousMessages===undefined)delete db.messages;else db.messages=previousMessages;console.error('Announcement save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الإعلان'});}
-  // Both announcement types publish immediately. Temporary contest/advert
-  // notices expire after 15 minutes; administrative notices repeat 15 minutes
-  // after their actual publication time until explicitly deleted.
-  publishAnnouncement(item);
+  // Commit the announcement record, publication message, and repeat timestamp together.
+  try{const published=publishAnnouncement(item);if(!published.length)throw new Error('Announcement was not published');}
+  catch(error){
+    if(previousAnnouncements===undefined)delete db.announcements;else db.announcements=previousAnnouncements;
+    if(previousMessages===undefined)delete db.messages;else db.messages=previousMessages;
+    console.error('Announcement publication transaction failed:',error.message);
+    return res.status(500).json({error:'تعذر حفظ الإعلان ونشره'});
+  }
   if(temporary)scheduleAnnouncementExpiry(item);else schedulePermanentAnnouncement(item);
   res.json({ok:true,announcement:item});
 });
-app.delete('/api/admin/announcement/:id',requireAdmin,(req,res)=>{const id=String(req.params.id);const existed=(db.announcements||[]).some(x=>String(x.id)===id);const removed=removeAnnouncement(id);res.json({ok:true,removedMessages:removed.length,existed});});
-app.delete('/api/admin/message/:id',requireAdmin,(req,res)=>{const id=req.params.id;db.messages=db.messages.filter(x=>x.id!==id);save();io.emit('message-deleted',{id});res.json({ok:true});});
-app.patch('/api/admin/profile/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);const protectedTarget=getUser(n)||getGuest(n);if((isOwnerName(n)||isOwner({name:n,role:protectedTarget?.role}))&&!isOwner(req.user)){const action=req.body?.displayName!==undefined?'تغيير زخرفة اسمك':(req.body?.nameColor!==undefined||req.body?.fontColor!==undefined||req.body?.bgColor!==undefined?'تغيير ألوان ملفك':'تعديل ملفك');notifyOwnerProtectedAttempt(req.user,action);return res.status(403).json({error:'ملف صاحب الموقع محمي من الإداريين'});}if(denyHigherRankTarget(req.user,n,res))return;if(!getUser(n)&&!getGuest(n))return res.status(404).json({error:'العضو غير موجود'});const p=profile(n);if(req.body.displayName!==undefined){const dn=cleanName(req.body.displayName);if(!dn)return res.status(400).json({error:'الزخرفة لا يمكن أن تكون فارغة'});p.displayName=dn;}if(req.body.nameColor!==undefined){const c=String(req.body.nameColor||'');if(!/^#[0-9a-fA-F]{6}$/.test(c))return res.status(400).json({error:'لون الاسم غير صحيح'});p.nameColor=c;}if(req.body.fontColor!==undefined){const c=String(req.body.fontColor||'');if(!/^#[0-9a-fA-F]{6}$/.test(c))return res.status(400).json({error:'لون الخط غير صحيح'});p.fontColor=c;}if(req.body.bgColor!==undefined){const c=String(req.body.bgColor||'');if(!/^#[0-9a-fA-F]{6}$/.test(c))return res.status(400).json({error:'لون الخلفية غير صحيح'});p.bgColor=c;}save();io.emit('profile-changed',{name:n,profile:p,displayName:p.displayName||cleanName(n)});res.json({ok:true,profile:p,displayName:p.displayName||cleanName(n)});});
-app.patch('/api/admin/member-stats/:name',requireAuth,(req,res)=>{const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return;const field=String(req.body.field||''),value=Number(req.body.value);const user=getUser(n),guest=getGuest(n),target=user||guest;if(!target)return res.status(404).json({error:'العضو غير موجود'});if(isOwner({name:n,role:target.role})&&!(isOwner(req.user)&&keyName(req.user.name)===keyName(n)))return res.status(403).json({error:'حساب صاحب الموقع محمي من تعديل البيانات'});if(!Number.isInteger(value)||value<0||value>1000000)return res.status(400).json({error:'القيمة يجب أن تكون عدداً صحيحاً بين 0 و1000000'});if(field==='likes'){if(!hasPermission(req.user,'grant_likes'))return res.status(403).json({error:'ما عندك صلاحية تعديل اللايكات'});target.likes=value;save();io.emit('likes-changed',{name:n,likes:value,level:level(value)});emitState();return res.json({ok:true,field,likes:value});}if(field==='points'){if(!hasPermission(req.user,'panel_access'))return res.status(403).json({error:'ما عندك صلاحية تعديل النقاط'});target.points=value;save();io.emit('member-stats-changed',{name:n,points:value});emitState();return res.json({ok:true,field,points:value});}return res.status(400).json({error:'نوع القيمة غير معروف'});});
-app.delete('/api/admin/avatar/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);const target=getUser(n)||getGuest(n);const ownerNames=new Set(['owner',keyName(process.env.OWNER_NAME||'owner')]);if((ownerNames.has(keyName(n))||isOwnerName(n)||isOwner({name:n,role:target?.role}))&&!isOwner(req.user)){notifyOwnerProtectedAttempt(req.user,'حذف صورتك الشخصية');return res.status(403).json({error:'صورة صاحب الموقع محمية من الإداريين'});}if(denyHigherRankTarget(req.user,n,res))return;if(!getUser(n)&&!getGuest(n))return res.status(404).json({error:'العضو غير موجود'});const p=profile(n);if(p.avatar&&p.avatar.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(p.avatar)))}catch{}}p.avatar='';save();io.emit('profile-changed',{name:n,profile:p});res.json({ok:true});});
-app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{
+app.delete('/api/admin/announcement/:id',requireAdmin,(req,res)=>{const id=String(req.params.id);const existed=(db.announcements||[]).some(x=>String(x.id)===id);let removed;try{removed=removeAnnouncement(id);}catch(error){console.error('Announcement deletion transaction failed:',error.message);return res.status(500).json({error:'تعذر حفظ حذف الإعلان'});}res.json({ok:true,removedMessages:removed.length,existed});});
+app.delete('/api/admin/message/:id',requireAdmin,(req,res)=>{
+  const id=req.params.id,previousMessages=db.messages;
+  db.messages=(db.messages||[]).filter(x=>x.id!==id);
+  try{save();}catch(error){db.messages=previousMessages;console.error('Admin message deletion save failed:',error.message);return res.status(500).json({error:'تعذر حفظ حذف الرسالة'});}
+  io.emit('message-deleted',{id});res.json({ok:true});
+});
+app.patch('/api/admin/profile/:name',requireAdmin,(req,res)=>{
+  const n=accountKey(req.params.name),protectedTarget=getUser(n)||getGuest(n);
+  if((isOwnerName(n)||isOwner({name:n,role:protectedTarget?.role}))&&!isOwner(req.user)){
+    const action=req.body?.displayName!==undefined?'تغيير زخرفة اسمك':(req.body?.nameColor!==undefined||req.body?.fontColor!==undefined||req.body?.bgColor!==undefined?'تغيير ألوان ملفك':'تعديل ملفك');
+    notifyOwnerProtectedAttempt(req.user,action);return res.status(403).json({error:'ملف صاحب الموقع محمي من الإداريين'});
+  }
+  if(denyHigherRankTarget(req.user,n,res))return;
+  if(!getUser(n)&&!getGuest(n))return res.status(404).json({error:'العضو غير موجود'});
+  const updates={};
+  if(req.body.displayName!==undefined){const dn=cleanName(req.body.displayName);if(!dn)return res.status(400).json({error:'الزخرفة لا يمكن أن تكون فارغة'});updates.displayName=dn;}
+  for(const [field,label] of [['nameColor','لون الاسم'],['fontColor','لون الخط'],['bgColor','لون الخلفية']]){
+    if(req.body[field]===undefined)continue;
+    const color=String(req.body[field]||'');
+    if(!/^#[0-9a-fA-F]{6}$/.test(color))return res.status(400).json({error:label+' غير صحيح'});
+    updates[field]=color;
+  }
+  const p=profile(n),previous={...p};
+  Object.assign(p,updates);
+  try{save();}catch(error){
+    for(const key of Object.keys(p))delete p[key];Object.assign(p,previous);
+    console.error('Admin profile update save failed:',error.message);
+    return res.status(500).json({error:'تعذر حفظ تعديلات الملف الشخصي'});
+  }
+  io.emit('profile-changed',{name:n,profile:p,displayName:p.displayName||cleanName(n)});
+  res.json({ok:true,profile:p,displayName:p.displayName||cleanName(n)});
+});
+app.patch('/api/admin/member-stats/:name',requireAdmin,(req,res)=>{
+  const n=accountKey(req.params.name);
+  if(denyHigherRankTarget(req.user,n,res))return;
+  const field=String(req.body.field||''),value=Number(req.body.value),user=getUser(n),guest=getGuest(n),target=user||guest;
+  if(!target)return res.status(404).json({error:'العضو غير موجود'});
+  if(isOwner({name:n,role:target.role})&&!(isOwner(req.user)&&keyName(req.user.name)===keyName(n)))return res.status(403).json({error:'حساب صاحب الموقع محمي من تعديل البيانات'});
+  if(!Number.isInteger(value)||value<0||value>1000000)return res.status(400).json({error:'القيمة يجب أن تكون عدداً صحيحاً بين 0 و1000000'});
+  if(field!=='likes'&&field!=='points')return res.status(400).json({error:'نوع القيمة غير معروف'});
+  if(field==='likes'&&!hasPermission(req.user,'grant_likes'))return res.status(403).json({error:'ما عندك صلاحية تعديل اللايكات'});
+  if(field==='points'&&!hasPermission(req.user,'panel_access'))return res.status(403).json({error:'ما عندك صلاحية تعديل النقاط'});
+  const previous=target[field];target[field]=value;
+  try{save();}catch(error){target[field]=previous;console.error('Member stats save failed:',error.message);return res.status(500).json({error:'تعذر حفظ بيانات العضو'});}
+  if(field==='likes')io.emit('likes-changed',{name:n,likes:value,level:level(value)});
+  else io.emit('member-stats-changed',{name:n,points:value});
+  emitState();return res.json({ok:true,field,[field]:value});
+});
+app.delete('/api/admin/avatar/:name',requireAdmin,(req,res)=>{
+  const n=accountKey(req.params.name),target=getUser(n)||getGuest(n),ownerNames=new Set(['owner',keyName(process.env.OWNER_NAME||'owner')]);
+  if((ownerNames.has(keyName(n))||isOwnerName(n)||isOwner({name:n,role:target?.role}))&&!isOwner(req.user)){notifyOwnerProtectedAttempt(req.user,'حذف صورتك الشخصية');return res.status(403).json({error:'صورة صاحب الموقع محمية من الإداريين'});}
+  if(denyHigherRankTarget(req.user,n,res))return;
+  if(!target)return res.status(404).json({error:'العضو غير موجود'});
+  const p=profile(n),previous=p.avatar||'';p.avatar='';
+  try{save();}catch(error){p.avatar=previous;console.error('Admin avatar deletion save failed:',error.message);return res.status(500).json({error:'تعذر حفظ حذف الصورة'});}
+  if(previous.startsWith('/uploads/'))removePublicUploadIfUnreferenced(previous);
+  io.emit('profile-changed',{name:n,profile:p});res.json({ok:true});
+});
+app.post('/api/admin/rank',requireAdmin,(req,res)=>{
   const actor=req.user,n=accountKey(cleanName(req.body.name)),rank=String(req.body.rank||'');
   if(!hasPermission(actor,'rank_assign'))return res.status(403).json({error:'ما عندك صلاحية منح الرتب'});
   const user=getUser(n),guest=getGuest(n),target=user||guest;
@@ -1391,8 +1849,10 @@ app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{
     const actorPermissions=ALL_PERMISSION_KEYS.filter(k=>hasPermission(actor,k));
     if(!actorCanGrantElevatedRank&&definition.permissions.some(k=>!actorPermissions.includes(k)))return res.status(403).json({error:'لا يمكنك منح رتبة تحتوي صلاحيات أعلى من صلاحياتك'});
   }
-  const p=profile(n),previousProfile=JSON.parse(JSON.stringify(p));
-  const previousRankAudit=db.rankAudit,previousNotifications=db.notifications?.[n]?JSON.parse(JSON.stringify(db.notifications[n])):undefined;
+  const hadProfile=Object.prototype.hasOwnProperty.call(db.profiles||{},n),p=profile(n),previousProfile=JSON.parse(JSON.stringify(p));
+  const hadRankAudit=Object.prototype.hasOwnProperty.call(db,'rankAudit'),previousRankAudit=db.rankAudit;
+  const hadNotificationsRoot=Object.prototype.hasOwnProperty.call(db,'notifications'),hadMemberNotifications=Object.prototype.hasOwnProperty.call(db.notifications||{},n),previousNotifications=hadMemberNotifications?JSON.parse(JSON.stringify(db.notifications[n])):undefined;
+  db.rankAudit=Array.isArray(db.rankAudit)?db.rankAudit.slice():[];
   const grantedAt=Date.now();
   delete p.rankPreviousRole;
   if(definition){p.gifts=[];delete p.vipUntil;}
@@ -1412,8 +1872,9 @@ app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{
   db.notifications[n]=[inboxItem,...(Array.isArray(db.notifications[n])?db.notifications[n]:[])].slice(0,100);
   try{save();}
   catch(error){
-    db.profiles[n]=previousProfile;db.rankAudit=previousRankAudit;
-    if(previousNotifications===undefined)delete db.notifications[n];else db.notifications[n]=previousNotifications;
+    if(hadProfile)db.profiles[n]=previousProfile;else delete db.profiles[n];
+    if(hadRankAudit)db.rankAudit=previousRankAudit;else delete db.rankAudit;
+    if(hadNotificationsRoot){if(hadMemberNotifications)db.notifications[n]=previousNotifications;else delete db.notifications[n];}else delete db.notifications;
     console.error('Rank assignment persistence failed:',error.message);
     return res.status(500).json({error:'تعذر حفظ منح الرتبة وإشعارها؛ لم يتم تطبيق التغيير'});
   }
@@ -1427,17 +1888,17 @@ app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{
     awardedAt:grantedAt
   });
   res.json({ok:true,rank,rankName:definition?.name||'بدون رتبة إضافية',rankUntil:p.rankUntil||null,name:n,type:guest?'guest':'member',cardQueued:!!definition,notificationId:inboxItem.id});
-});});
-app.get('/api/admin/member-ip/:name' ,requireAuth,(req,res)=>{if(!hasPermission(req.user,'member_ip'))return res.status(403).json({error:'ما عندك صلاحية عرض IP'});const n=keyName(req.params.name);if(isOwnerName(n))return res.status(403).json({error:'معلومات اتصال صاحب الموقع محمية'});const matches=[];for(const so of io.sockets.sockets.values()){const sid2=so.data?.sid,u2=so.data?.user||socketUsers.get(sid2);if(u2&&keyName(u2.name)===n){matches.push({ip:socketClientIp(so),room:u2.room||'',connected:true});}}res.json({name:req.params.name,connections:matches});});
+});
+app.get('/api/admin/member-ip/:name' ,requireAdmin,(req,res)=>{const n=keyName(req.params.name);if(isOwnerName(n))return res.status(403).json({error:'معلومات اتصال صاحب الموقع محمية'});if(denyHigherRankTarget(req.user,n,res))return;const matches=[];for(const so of io.sockets.sockets.values()){const sid2=so.data?.sid,u2=so.data?.user||socketUsers.get(sid2);if(u2&&keyName(u2.name)===n){matches.push({ip:socketClientIp(so),room:u2.room||'',connected:true});}}res.json({name:req.params.name,connections:matches});});
 // Rank artwork and per-member decoration are separate from rank permissions and rank assignment.
 function rankArtItem(id){return (db.rankArtCatalog||[]).find(x=>String(x.id)===String(id))||null;}
 function canManageRankArt(user){return isOwner(user)||hasPermission(user,'rank_art_manage')||hasPermission(user,'member_decoration_manage');}
-app.get('/api/admin/rank-art',requireAuth,(req,res)=>{
+app.get('/api/admin/rank-art',requireAdmin,(req,res)=>{
  if(!canManageRankArt(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة زخارف الرتب'});
  res.set('Cache-Control','no-store');
  res.json({items:(db.rankArtCatalog||[]).map(x=>({id:x.id,name:x.name,image:x.image,mime:x.mime})),ranks:(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).map(r=>({id:r.id,name:r.name,artId:r.artId||'',artUrl:r.artUrl||''}))});
 });
-app.post('/api/admin/rank-art/upload',requireAuth,(req,res,next)=>{if(!hasPermission(req.user,'rank_art_manage'))return res.status(403).json({error:'ما عندك صلاحية إضافة أشكال للرتب'});next();},uploadSmallImage.single('file'),validateUploadedContent('image'),(req,res)=>{
+app.post('/api/admin/rank-art/upload',requireAdmin,(req,res,next)=>{if(!hasPermission(req.user,'rank_art_manage'))return res.status(403).json({error:'ما عندك صلاحية إضافة أشكال للرتب'});next();},uploadSmallImage.single('file'),validateUploadedContent('image'),(req,res)=>{
  try{
   if(!req.file||!['image/gif','image/png','image/jpeg','image/webp'].includes(String(req.file.mimetype||''))){removeUploadedFile(req.file);return res.status(400).json({error:'ارفع GIF أو PNG أو JPG أو WEBP'});}
   if((db.rankArtCatalog||[]).length>=300){removeUploadedFile(req.file);return res.status(400).json({error:'وصلت مكتبة الأشكال إلى 300 ملف'});}
@@ -1448,7 +1909,7 @@ app.post('/api/admin/rank-art/upload',requireAuth,(req,res,next)=>{if(!hasPermis
   res.json({ok:true,item:{id:item.id,name:item.name,image:item.image,mime:item.mime}});
  }catch(error){console.error('Rank artwork upload failed:',error);removeUploadedFile(req.file);res.status(500).json({error:'تعذر حفظ شكل الرتبة'});}
 });
-app.put('/api/admin/rank-art/assign',requireAuth,(req,res)=>{
+app.put('/api/admin/rank-art/assign',requireAdmin,(req,res)=>{
  if(!hasPermission(req.user,'rank_art_manage'))return res.status(403).json({error:'ما عندك صلاحية ربط أشكال الرتب'});
  const rank=String(req.body?.rank||''),artId=String(req.body?.artId||'');if(!RANK_PERMISSION_PROFILES.includes(rank))return res.status(400).json({error:'اختر رتبة من الرتب السبع'});
  const definition=rankDefinition(rank);if(!definition)return res.status(404).json({error:'الرتبة غير موجودة'});
@@ -1457,24 +1918,24 @@ app.put('/api/admin/rank-art/assign',requireAuth,(req,res)=>{
  try{save()}catch(error){if(old.artId!==undefined)definition.artId=old.artId;else delete definition.artId;if(old.artUrl!==undefined)definition.artUrl=old.artUrl;else delete definition.artUrl;return res.status(500).json({error:'تعذر حفظ شكل الرتبة'});}
  io.emit('rank-art-updated',{rank,artUrl:item?.image||''});res.json({ok:true,rank,artId:item?.id||'',artUrl:item?.image||''});
 });
-app.delete('/api/admin/rank-art/:id',requireAuth,(req,res)=>{
+app.delete('/api/admin/rank-art/:id',requireAdmin,(req,res)=>{
  if(!hasPermission(req.user,'rank_art_manage'))return res.status(403).json({error:'ما عندك صلاحية حذف أشكال الرتب'});
  const id=String(req.params.id||''),index=(db.rankArtCatalog||[]).findIndex(x=>String(x.id)===id);if(index<0)return res.status(404).json({error:'الشكل غير موجود'});
  const item=db.rankArtCatalog[index];const previous=db.rankArtCatalog.slice();const oldRanks=(db.rankDefinitions||[]).map(r=>({r,artId:r.artId,artUrl:r.artUrl}));const oldProfiles=Object.entries(db.profiles||{}).map(([name,p])=>({name,customDecorationId:p.customDecorationId,customDecorationImage:p.customDecorationImage,customDecorationName:p.customDecorationName}));db.rankArtCatalog.splice(index,1);
  for(const rank of db.rankDefinitions||[])if(String(rank.artId||'')===id){delete rank.artId;delete rank.artUrl;}
  for(const profileData of Object.values(db.profiles||{}))if(String(profileData.customDecorationId||'')===id){delete profileData.customDecorationId;delete profileData.customDecorationImage;delete profileData.customDecorationName;}
  try{save()}catch(error){db.rankArtCatalog=previous;for(const x of oldRanks){if(x.artId!==undefined)x.r.artId=x.artId;else delete x.r.artId;if(x.artUrl!==undefined)x.r.artUrl=x.artUrl;else delete x.r.artUrl;}for(const x of oldProfiles){const p=db.profiles[x.name];if(!p)continue;for(const k of ['customDecorationId','customDecorationImage','customDecorationName'])if(x[k]!==undefined)p[k]=x[k];else delete p[k];}return res.status(500).json({error:'تعذر حفظ حذف الشكل'});}
- if(item.image?.startsWith('/uploads/')){const file=path.resolve(UP_DIR,path.basename(item.image));if(file.startsWith(path.resolve(UP_DIR)+path.sep)){try{fs.unlinkSync(file)}catch{}}}
+ if(item.image?.startsWith('/uploads/'))removePublicUploadIfUnreferenced(item.image);
  io.emit('rank-art-updated',{deleted:id,ranks:(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).map(r=>({id:r.id,artUrl:r.artUrl||''}))});res.json({ok:true,deleted:id});
 });
 // Chat/rank banners are independent from the small rank artwork library and personal profile banners.
 function canManageChatBanners(user){return isOwner(user)||hasPermission(user,'chat_banners_manage');}
-app.get('/api/admin/chat-banners',requireAuth,(req,res)=>{
+app.get('/api/admin/chat-banners',requireAdmin,(req,res)=>{
  if(!canManageChatBanners(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة بنرات الدردشة'});
  res.set('Cache-Control','no-store');
  res.json({ranks:(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)).map(r=>({id:r.id,name:r.name,bannerUrl:r.bannerUrl||'',bannerName:r.bannerName||''}))});
 });
-app.post('/api/admin/chat-banners/:rank',requireAuth,(req,res,next)=>{if(!canManageChatBanners(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة بنرات الدردشة'});next();},uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{
+app.post('/api/admin/chat-banners/:rank',requireAdmin,(req,res,next)=>{if(!canManageChatBanners(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة بنرات الدردشة'});next();},uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{
  const rank=String(req.params.rank||''),definition=rankDefinition(rank);
  if(!definition){removeUploadedFile(req.file);return res.status(400).json({error:'اختر رتبة صحيحة من الرتب السبع'});}
  if(!req.file||!['image/gif','image/png','image/jpeg','image/webp'].includes(String(req.file.mimetype||''))){removeUploadedFile(req.file);return res.status(400).json({error:'ارفع صورة GIF أو PNG أو JPG أو WEBP'});}
@@ -1482,25 +1943,25 @@ app.post('/api/admin/chat-banners/:rank',requireAuth,(req,res,next)=>{if(!canMan
  definition.bannerUrl='/uploads/'+req.file.filename;
  definition.bannerName=String(req.body?.name||'').trim().slice(0,50)||definition.name;
  try{save()}catch(error){if(previous.url!==undefined)definition.bannerUrl=previous.url;else delete definition.bannerUrl;if(previous.name!==undefined)definition.bannerName=previous.name;else delete definition.bannerName;removeUploadedFile(req.file);console.error('Chat rank banner save failed:',error.message);return res.status(500).json({error:'تعذر حفظ بنر الرتبة'});}
- if(previous.url&&previous.url.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous.url)))}catch{}}
+ if(previous.url&&previous.url.startsWith('/uploads/'))removePublicUploadIfUnreferenced(previous.url);
  const ranks=(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).map(r=>({id:r.id,bannerUrl:r.bannerUrl||'',bannerName:r.bannerName||''}));
  io.emit('rank-banners-updated',{rank,bannerUrl:definition.bannerUrl,bannerName:definition.bannerName,ranks});
  emitState();res.json({ok:true,rank,bannerUrl:definition.bannerUrl,bannerName:definition.bannerName});
 });
-app.delete('/api/admin/chat-banners/:rank',requireAuth,(req,res)=>{
+app.delete('/api/admin/chat-banners/:rank',requireAdmin,(req,res)=>{
  if(!canManageChatBanners(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة بنرات الدردشة'});
  const rank=String(req.params.rank||''),definition=rankDefinition(rank);if(!definition)return res.status(400).json({error:'اختر رتبة صحيحة من الرتب السبع'});
  const previous={url:definition.bannerUrl,name:definition.bannerName};delete definition.bannerUrl;delete definition.bannerName;
  try{save()}catch(error){if(previous.url!==undefined)definition.bannerUrl=previous.url;if(previous.name!==undefined)definition.bannerName=previous.name;return res.status(500).json({error:'تعذر حذف بنر الرتبة'});}
- if(previous.url&&previous.url.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous.url)))}catch{}}
+ if(previous.url&&previous.url.startsWith('/uploads/'))removePublicUploadIfUnreferenced(previous.url);
  const ranks=(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).map(r=>({id:r.id,bannerUrl:r.bannerUrl||'',bannerName:r.bannerName||''}));
  io.emit('rank-banners-updated',{rank,bannerUrl:'',bannerName:'',ranks});emitState();res.json({ok:true,rank});
 });
 
-app.put('/api/admin/member-decoration',requireAuth,(req,res)=>{
+app.put('/api/admin/member-decoration',requireAdmin,(req,res)=>{
  if(!hasPermission(req.user,'member_decoration_manage'))return res.status(403).json({error:'ما عندك صلاحية تخصيص زخرفة الأعضاء'});
  const n=accountKey(cleanName(req.body?.name||''));if(!n)return res.status(400).json({error:'اختر عضواً صالحاً'});if(isOwnerName(n)||isOwner({name:n,role:(getUser(n)||getGuest(n)||{}).role})){if(!isOwner(req.user))notifyOwnerProtectedAttempt(req.user,'تغيير زخرفة/شعار حسابك');return res.status(400).json({error:'حساب صاحب الموقع محمي'});}
- const target=getUser(n)||getGuest(n);if(!target)return res.status(404).json({error:'العضو غير موجود'});
+ const target=getUser(n)||getGuest(n);if(!target)return res.status(404).json({error:'العضو غير موجود'});if(denyHigherRankTarget(req.user,n,res))return;
  const p=profile(n),old={customDecorationId:p.customDecorationId,customDecorationImage:p.customDecorationImage,customDecorationName:p.customDecorationName},artId=String(req.body?.artId||'');if(!artId){delete p.customDecorationId;delete p.customDecorationImage;delete p.customDecorationName;}
  else{const item=rankArtItem(artId);if(!item)return res.status(404).json({error:'الزخرفة المحددة غير موجودة'});p.customDecorationId=item.id;p.customDecorationImage=item.image;p.customDecorationName=item.name;}
  try{save()}catch(error){for(const k of Object.keys(old))if(old[k]!==undefined)p[k]=old[k];else delete p[k];return res.status(500).json({error:'تعذر حفظ زخرفة العضو'});}
@@ -1510,11 +1971,11 @@ app.put('/api/admin/member-decoration',requireAuth,(req,res)=>{
 // Built-in chat bots: durable settings, normalized defaults and permission-checked writes.
 const BOT_DEFAULTS=Object.freeze({welcome:{enabled:false,text:'أهلاً وسهلاً بك في دردشة رماز ❤️'},antiSpam:{enabled:true},games:{enabled:false},stats:{enabled:false},adminCommands:{enabled:false}});
 function normalizedBotSettings(value={}){const b=value&&typeof value==='object'?value:{};return {welcome:{enabled:b.welcome?.enabled===true,text:String(b.welcome?.text||BOT_DEFAULTS.welcome.text).trim().slice(0,240)||BOT_DEFAULTS.welcome.text},antiSpam:{enabled:b.antiSpam?.enabled!==false},games:{enabled:b.games?.enabled===true},stats:{enabled:b.stats?.enabled===true},adminCommands:{enabled:b.adminCommands?.enabled===true}};}
-app.get('/api/admin/bots',requireAuth,(req,res)=>{
+app.get('/api/admin/bots',requireAdmin,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'bots_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة البوتات'});
  res.set('Cache-Control','no-store');res.json({ok:true,bots:normalizedBotSettings(db.botSettings)});
 });
-app.put('/api/admin/bots',requireAuth,(req,res)=>{
+app.put('/api/admin/bots',requireAdmin,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'bots_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة البوتات'});
  const b=req.body?.bots;if(!b||typeof b!=='object'||Array.isArray(b))return res.status(400).json({error:'إعدادات البوتات غير صالحة'});
  const previous=db.botSettings;db.botSettings=normalizedBotSettings(b);
@@ -1523,24 +1984,24 @@ app.put('/api/admin/bots',requireAuth,(req,res)=>{
 });
 
 // Rank definitions are editable independently from chat UI, buttons and colors.
-app.get('/api/admin/ranks' ,requireAuth,(req,res)=>{const canAssign=isOwner(req.user)||hasPermission(req.user,'rank_assign');const canArt=canManageRankArt(req.user);if(!canAssign&&!canArt)return res.status(403).json({error:'ما عندك صلاحية عرض الرتب أو أشكالها'});const ranks=(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)).map(r=>{const item={...r};if(!canAssign)delete item.permissions;return item;});res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:10,permissionKeys:canAssign?ALL_PERMISSION_KEYS:[],ranks,catalog:canAssign?PERMISSION_CATALOG:{}});});
+app.get('/api/admin/ranks' ,requireAdmin,(req,res)=>{const canAssign=isOwner(req.user)||hasPermission(req.user,'rank_assign');const canArt=canManageRankArt(req.user);if(!canAssign&&!canArt)return res.status(403).json({error:'ما عندك صلاحية عرض الرتب أو أشكالها'});const ranks=(db.rankDefinitions||[]).filter(r=>RANK_PERMISSION_PROFILES.includes(r.id)).slice().sort((a,b)=>Number(b.level)-Number(a.level)).map(r=>{const item={...r};if(!canAssign)delete item.permissions;return item;});res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:10,permissionKeys:canAssign?ALL_PERMISSION_KEYS:[],ranks,catalog:canAssign?PERMISSION_CATALOG:{}});});
 // Rank definitions are fixed: only the seven built-in ranks can be assigned or permission-edited.
-app.get('/api/admin/permissions',requireAuth,(req,res)=>{
+app.get('/api/admin/permissions',requireAdmin,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الرتب'});
  const ranks=Object.fromEntries(RANK_PERMISSION_PROFILES.map(id=>[id,[...(rankDefinition(id)?.permissions||[])].filter(p=>Object.hasOwn(PERMISSION_CATALOG,p))]));
  res.json({appVersion:require('./package.json').version||'unknown',permissionSchemaVersion:10,permissionKeys:ALL_PERMISSION_KEYS,catalog:PERMISSION_CATALOG,defaults:DEFAULT_RANK_PERMISSIONS,ranks,rankIds:RANK_PERMISSION_PROFILES});
 });
-app.put('/api/admin/permissions',requireAuth,(req,res)=>{
+app.put('/api/admin/permissions',requireAdmin,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الرتب'});
  const rank=String(req.body.rank||'');if(!RANK_PERMISSION_PROFILES.includes(rank))return res.status(400).json({error:'اختر واحدة من الرتب السبع فقط'});
  const definition=rankDefinition(rank);if(!definition)return res.status(404).json({error:'تعريف الرتبة غير موجود'});
  const requested=Array.isArray(req.body.permissions)?req.body.permissions:[];if(requested.some(p=>!Object.hasOwn(PERMISSION_CATALOG,p)))return res.status(400).json({error:'توجد صلاحية غير معروفة'});
  if(!isOwner(req.user)){const own=effectivePermissionsForUser(req.user);if(requested.some(p=>!own.has(p)))return res.status(403).json({error:'لا يمكنك منح صلاحيات أعلى من صلاحياتك الحالية'});}
- const previous=[...(definition.permissions||[])];definition.permissions=[...new Set(requested)];definition.updatedAt=Date.now();
- try{save()}catch(error){definition.permissions=previous;console.error('Rank permission save failed:',error.message);return res.status(500).json({error:'تعذر حفظ صلاحيات الرتبة؛ لم يتم تطبيق التغيير'});}
+ const previous=[...(definition.permissions||[])],previousUpdatedAt=definition.updatedAt,hadUpdatedAt=Object.prototype.hasOwnProperty.call(definition,'updatedAt');definition.permissions=[...new Set(requested)];definition.updatedAt=Date.now();
+ try{save()}catch(error){definition.permissions=previous;if(hadUpdatedAt)definition.updatedAt=previousUpdatedAt;else delete definition.updatedAt;console.error('Rank permission save failed:',error.message);return res.status(500).json({error:'تعذر حفظ صلاحيات الرتبة؛ لم يتم تطبيق التغيير'});}
  io.emit('permissions-updated',{rank});res.json({ok:true,rank,permissions:definition.permissions});
 });
-app.get('/api/admin/account-permissions/:name',requireAuth,(req,res)=>{
+app.get('/api/admin/account-permissions/:name',requireAdmin,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الأعضاء'});
  const n=accountKey(req.params.name),target=getUser(n);if(!target)return res.status(404).json({error:'الحساب المسجل غير موجود'});if(isOwnerName(n))return res.status(403).json({error:'حساب صاحب الموقع محمي'});
  const key=keyName(n),stored=db.accountPermissions?.[key],custom=Array.isArray(stored);
@@ -1548,21 +2009,21 @@ app.get('/api/admin/account-permissions/:name',requireAuth,(req,res)=>{
  const permissions=custom?[...stored]:inherited;
  res.json({name:n,rank:inheritedRank||'none',customized:custom,permissions,inheritedPermissions:inherited,catalog:PERMISSION_CATALOG});
 });
-app.put('/api/admin/account-permissions/:name',requireAuth,(req,res)=>{
+app.put('/api/admin/account-permissions/:name',requireAdmin,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'permission_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة صلاحيات الأعضاء'});
- const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return;const target=getUser(n);if(!target)return res.status(404).json({error:'الحساب المسجل غير موجود'});if(isOwnerName(n))return res.status(403).json({error:'حساب صاحب الموقع محمي'});
- db.accountPermissions=db.accountPermissions||{};const key=keyName(n);
- if(req.body?.inherit===true){const previous=db.accountPermissions[key];delete db.accountPermissions[key];try{save()}catch(error){if(previous!==undefined)db.accountPermissions[key]=previous;return res.status(500).json({error:'تعذر إرجاع صلاحيات الرتبة'});}io.emit('permissions-updated',{name:n});return res.json({ok:true,name:n,customized:false,permissions:[...(rankDefinition(profile(n).rank)?.permissions||[])]});}
+ const n=accountKey(req.params.name);/* permission_manage is an explicit delegated exception here; requested grants are still capped to the actor's own permissions. */const target=getUser(n);if(!target)return res.status(404).json({error:'الحساب المسجل غير موجود'});if(isOwnerName(n))return res.status(403).json({error:'حساب صاحب الموقع محمي'});
+ const previousMap=db.accountPermissions,key=keyName(n),nextMap={...(db.accountPermissions||{})};
+ if(req.body?.inherit===true){delete nextMap[key];db.accountPermissions=nextMap;try{save();}catch(error){if(previousMap===undefined)delete db.accountPermissions;else db.accountPermissions=previousMap;return res.status(500).json({error:'تعذر إرجاع صلاحيات الرتبة'});}io.emit('permissions-updated',{name:n});return res.json({ok:true,name:n,customized:false,permissions:[...(rankDefinition(profile(n).rank)?.permissions||[])]});}
  const requested=Array.isArray(req.body?.permissions)?req.body.permissions:[];if(requested.some(p=>!Object.hasOwn(PERMISSION_CATALOG,p)))return res.status(400).json({error:'توجد صلاحية غير معروفة'});
  if(!isOwner(req.user)){const own=effectivePermissionsForUser(req.user);if(requested.some(p=>!own.has(p)))return res.status(403).json({error:'لا يمكنك منح صلاحيات أعلى من صلاحياتك الحالية'});}
- const previous=db.accountPermissions[key];db.accountPermissions[key]=[...new Set(requested)];
- try{save()}catch(error){if(previous===undefined)delete db.accountPermissions[key];else db.accountPermissions[key]=previous;return res.status(500).json({error:'تعذر حفظ صلاحيات العضو'});}
+ nextMap[key]=[...new Set(requested)];db.accountPermissions=nextMap;
+ try{save();}catch(error){if(previousMap===undefined)delete db.accountPermissions;else db.accountPermissions=previousMap;return res.status(500).json({error:'تعذر حفظ صلاحيات العضو'});}
  io.emit('permissions-updated',{name:n});res.json({ok:true,name:n,customized:true,permissions:db.accountPermissions[key]});
 });
-app.get('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))return res.status(403).json({error:'ما عندك صلاحية عرض أو تعديل رسائل الترحيب'});res.json({messages:db.welcomeMessages||[]});});
-app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))return res.status(403).json({error:'ما عندك صلاحية تعديل رسائل الترحيب'});try{const raw=Array.isArray(req.body?.messages)?req.body.messages:[];if(raw.length>12)return res.status(400).json({error:'الحد الأعلى 12 رسالة ترحيب'});const messages=[];for(const item of raw){const title=String(item?.title||'').trim().slice(0,80),text=String(item?.text||'').trim().slice(0,1200);if(!title&&!text)continue;if(!text)return res.status(400).json({error:'اكتب نص كل رسالة قبل الحفظ'});messages.push({id:String(item?.id||crypto.randomUUID()).slice(0,80),title:title||'الترحيب',text,enabled:item?.enabled!==false});}const previous=db.welcomeMessages;db.welcomeMessages=messages;try{save()}catch(saveError){db.welcomeMessages=previous;console.error('Welcome messages save failed:',saveError);return res.status(500).json({error:'تعذر حفظ الرسائل على التخزين. تحقق من صلاحية ومسار /data ثم أعد المحاولة.'});}return res.json({ok:true,messages});}catch(error){console.error('Welcome messages update failed:',error);return res.status(500).json({error:'حدث خطأ أثناء معالجة رسائل الترحيب'});}});
+app.get('/api/admin/welcome-messages',requireAdmin,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))return res.status(403).json({error:'ما عندك صلاحية عرض أو تعديل رسائل الترحيب'});res.json({messages:db.welcomeMessages||[]});});
+app.put('/api/admin/welcome-messages',requireAdmin,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))return res.status(403).json({error:'ما عندك صلاحية تعديل رسائل الترحيب'});try{const raw=Array.isArray(req.body?.messages)?req.body.messages:[];if(raw.length>12)return res.status(400).json({error:'الحد الأعلى 12 رسالة ترحيب'});const messages=[];for(const item of raw){const title=String(item?.title||'').trim().slice(0,80),text=String(item?.text||'').trim().slice(0,1200);if(!title&&!text)continue;if(!text)return res.status(400).json({error:'اكتب نص كل رسالة قبل الحفظ'});messages.push({id:String(item?.id||crypto.randomUUID()).slice(0,80),title:title||'الترحيب',text,enabled:item?.enabled!==false});}const previous=db.welcomeMessages;db.welcomeMessages=messages;try{save()}catch(saveError){db.welcomeMessages=previous;console.error('Welcome messages save failed:',saveError);return res.status(500).json({error:'تعذر حفظ الرسائل على التخزين. تحقق من صلاحية ومسار /data ثم أعد المحاولة.'});}return res.json({ok:true,messages});}catch(error){console.error('Welcome messages update failed:',error);return res.status(500).json({error:'حدث خطأ أثناء معالجة رسائل الترحيب'});}});
 app.get('/api/chat-tools',requireAuth,(req,res)=>res.json({shortcuts:(db.chatShortcuts||[]).map(x=>({id:x.id,title:x.title,text:x.text})),smileys:(db.customSmileys||[]).map(x=>({id:x.id,icon:x.icon,name:x.name,shortcut:x.shortcut||''})),gifts:hasPermission(req.user,'gifts')?(db.giftCatalog||[]):[],vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]}));
-app.post('/api/admin/chat-tools/smiley-upload',requirePermission('smileys_manage'),uploadSmallImage.single('file'),validateUploadedContent('image'),(req,res)=>{
+app.post('/api/admin/chat-tools/smiley-upload',requireAdmin,uploadSmallImage.single('file'),validateUploadedContent('image'),(req,res)=>{
   try{
     if(!req.file||!/^image\/(gif|png|jpeg|webp)$/i.test(req.file.mimetype)){removeUploadedFile(req.file);return res.status(400).json({error:'ارفع صورة GIF أو PNG أو JPG أو WEBP'});}
     if((db.customSmileys||[]).length>=450){removeUploadedFile(req.file);return res.status(400).json({error:'وصلت إلى الحد الأعلى 450 سميل'});}
@@ -1576,7 +2037,7 @@ app.post('/api/admin/chat-tools/smiley-upload',requirePermission('smileys_manage
     res.json({ok:true,smiley:item});
   }catch(e){console.error('smiley upload failed:',e);res.status(500).json({error:'تعذر حفظ السميل المرفوع'});}
 });
-app.put('/api/admin/chat-tools',requireAuth,(req,res)=>{try{const shortcuts=Array.isArray(req.body?.shortcuts)?req.body.shortcuts:[],smileys=Array.isArray(req.body?.smileys)?req.body.smileys:[];const same=(a,b)=>JSON.stringify(a||[])===JSON.stringify(b||[]);if(!same(shortcuts,db.chatShortcuts||[])&&!hasPermission(req.user,'shortcuts_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة الاختصارات'});if(!same(smileys,db.customSmileys||[])&&!hasPermission(req.user,'smileys_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة السميلات'});if(shortcuts.length>100)return res.status(400).json({error:'الحد الأعلى 100 اختصار'});if(smileys.length>450)return res.status(400).json({error:'الحد الأعلى 450 سميل'});const cleanShortcuts=[];for(const x of shortcuts){const title=String(x?.title||'').trim().slice(0,50),text=String(x?.text||'').trim().slice(0,500);if(!title&&!text)continue;if(!title||!text)return res.status(400).json({error:'كل اختصار يحتاج اسماً ونصاً'});cleanShortcuts.push({id:String(x.id||crypto.randomUUID()).slice(0,80),title,text});}const cleanSmileys=[];for(const x of smileys){const icon=String(x?.icon||'').trim().slice(0,12000),name=String(x?.name||'').trim().slice(0,40),shortcut=String(x?.shortcut||'').trim().slice(0,24);if(!icon&&!name)continue;if(!icon)return res.status(400).json({error:'رمز السميل مطلوب'});cleanSmileys.push({id:String(x.id||crypto.randomUUID()).slice(0,80),icon,name:name||'سميل',shortcut});}const oldS=db.chatShortcuts,oldM=db.customSmileys;db.chatShortcuts=cleanShortcuts;db.customSmileys=cleanSmileys;try{save()}catch(e){db.chatShortcuts=oldS;db.customSmileys=oldM;throw e;}return res.json({ok:true,shortcuts:cleanShortcuts,smileys:cleanSmileys});}catch(e){console.error('chat-tools save failed:',e);return res.status(500).json({error:'تعذر حفظ الاختصارات والسميلات'});}});
+app.put('/api/admin/chat-tools',requireAdmin,(req,res)=>{try{const shortcuts=Array.isArray(req.body?.shortcuts)?req.body.shortcuts:[],smileys=Array.isArray(req.body?.smileys)?req.body.smileys:[];const same=(a,b)=>JSON.stringify(a||[])===JSON.stringify(b||[]);if(!same(shortcuts,db.chatShortcuts||[])&&!hasPermission(req.user,'shortcuts_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة الاختصارات'});if(!same(smileys,db.customSmileys||[])&&!hasPermission(req.user,'smileys_manage'))return res.status(403).json({error:'ما عندك صلاحية إدارة السميلات'});if(shortcuts.length>100)return res.status(400).json({error:'الحد الأعلى 100 اختصار'});if(smileys.length>450)return res.status(400).json({error:'الحد الأعلى 450 سميل'});const cleanShortcuts=[];for(const x of shortcuts){const title=String(x?.title||'').trim().slice(0,50),text=String(x?.text||'').trim().slice(0,500);if(!title&&!text)continue;if(!title||!text)return res.status(400).json({error:'كل اختصار يحتاج اسماً ونصاً'});cleanShortcuts.push({id:String(x.id||crypto.randomUUID()).slice(0,80),title,text});}const cleanSmileys=[];for(const x of smileys){const icon=String(x?.icon||'').trim().slice(0,12000),name=String(x?.name||'').trim().slice(0,40),shortcut=String(x?.shortcut||'').trim().slice(0,24);if(!icon&&!name)continue;if(!icon)return res.status(400).json({error:'رمز السميل مطلوب'});cleanSmileys.push({id:String(x.id||crypto.randomUUID()).slice(0,80),icon,name:name||'سميل',shortcut});}const oldS=db.chatShortcuts,oldM=db.customSmileys;db.chatShortcuts=cleanShortcuts;db.customSmileys=cleanSmileys;try{save()}catch(e){db.chatShortcuts=oldS;db.customSmileys=oldM;throw e;}return res.json({ok:true,shortcuts:cleanShortcuts,smileys:cleanSmileys});}catch(e){console.error('chat-tools save failed:',e);return res.status(500).json({error:'تعذر حفظ الاختصارات والسميلات'});}});
 app.put('/api/admin/chat-filter',requireAdmin,(req,res)=>{try{const enabled=req.body?.enabled===true;const raw=Array.isArray(req.body?.words)?req.body.words:[];if(raw.length>200)return res.status(400).json({error:'الحد الأعلى 200 كلمة'});const words=[...new Set(raw.map(x=>String(x||'').trim().replace(/\s+/g,' ').slice(0,60)).filter(Boolean))];const old=db.chatFilter;db.chatFilter={enabled,words};try{save()}catch(e){db.chatFilter=old;throw e;}res.json({ok:true,chatFilter:db.chatFilter});}catch(e){console.error('chat filter save failed:',e);res.status(500).json({error:'تعذر حفظ إعدادات الفلتر'});}});
 app.get('/api/admin/audit-logs',requireAdmin,(req,res)=>{res.set('Cache-Control','no-store');res.json({items:(db.adminAuditLogs||[]).slice(0,500),total:(db.adminAuditLogs||[]).length});});
 // Stream a standards-compliant USTAR archive without loading uploads into RAM.
@@ -1587,15 +2048,36 @@ function tarHeader(name,size,mtime){
  if(Buffer.byteLength(fileName)>100||Buffer.byteLength(prefix)>155)throw new Error('Backup path is too long');
  header.write(fileName,0,100,'utf8');tarOctal(0o600,8).copy(header,100);tarOctal(0,8).copy(header,108);tarOctal(0,8).copy(header,116);tarOctal(size,12).copy(header,124);tarOctal(mtime,12).copy(header,136);header.fill(32,148,156);header[156]=48;header.write('ustar\0',257,6,'ascii');header.write('00',263,2,'ascii');header.write('rimaz',265,32,'ascii');header.write('rimaz',297,32,'ascii');if(prefix)header.write(prefix,345,155,'utf8');let sum=0;for(const byte of header)sum+=byte;header.write(sum.toString(8).padStart(6,'0')+'\0 ',148,8,'ascii');return header;
 }
+function createDatabaseBackupTempFile(snapshot,purpose){
+ const tempFile=DB_FILE+'.'+process.pid+'.'+String(purpose||'backup')+'.'+crypto.randomBytes(8).toString('hex')+'.tmp';
+ let fd=null;
+ try{
+  fd=fs.openSync(tempFile,'wx',0o600);
+  writeJsonSync(fd,snapshot,{space:2});
+  fs.fsyncSync(fd);
+  fs.closeSync(fd);fd=null;
+  return tempFile;
+ }catch(error){
+  if(fd!==null){try{fs.closeSync(fd);}catch(_){}}
+  try{fs.unlinkSync(tempFile);}catch(_){}
+  throw error;
+ }
+}
 async function* fullBackupTarEntries(){
- const snapshot={format:'rimaz-full-backup',version:1,createdAt:new Date().toISOString(),appVersion:require('./package.json').version||'unknown',database:{...db,sessions:{}}};
- const dbBytes=Buffer.from(JSON.stringify(snapshot,null,2));yield {name:'database/rimaz-database.json',buffer:dbBytes,size:dbBytes.length,mtime:Date.now()};
- const roots=[['uploads',UP_DIR],['private-media',PRIVATE_MEDIA_DIR]];
- for(const [archiveRoot,diskRoot] of roots){
-  const pending=[{disk:diskRoot,archive:archiveRoot}];
-  while(pending.length){const current=pending.pop();let items=[];try{items=fs.readdirSync(current.disk,{withFileTypes:true});}catch(error){if(error.code!=='ENOENT')throw error;continue;}
-   for(const item of items){const disk=path.join(current.disk,item.name),archive=current.archive+'/'+item.name;if(item.isSymbolicLink())continue;if(item.isDirectory()){pending.push({disk,archive});continue;}if(!item.isFile())continue;const stat=fs.statSync(disk);yield {name:archive,disk,size:stat.size,mtime:stat.mtimeMs};}
-  }
+ let databaseBackupFile='';
+ let mediaSnapshot=null;
+ try{
+  const snapshot={format:'rimaz-full-backup',version:1,createdAt:new Date().toISOString(),appVersion:require('./package.json').version||'unknown',database:{...db,sessions:{},privateMessages:[]}};
+  // Capture the database and referenced public uploads before yielding to the response stream.
+  // Hard links preserve each file if normal retention/deletion removes its original path later.
+  databaseBackupFile=createDatabaseBackupTempFile(snapshot,'full-backup');
+  mediaSnapshot=createBackupMediaSnapshot({database:snapshot.database,uploadDirectory:UP_DIR,dataDirectory:DATA_DIR});
+  const databaseStat=fs.statSync(databaseBackupFile);
+  yield {name:'database/rimaz-database.json',disk:databaseBackupFile,size:databaseStat.size,mtime:databaseStat.mtimeMs};
+  for(const entry of mediaSnapshot.entries)yield entry;
+ }finally{
+  if(mediaSnapshot){try{mediaSnapshot.cleanup();}catch(error){console.error('Full backup media snapshot cleanup failed:',error.message);}}
+  if(databaseBackupFile){try{fs.unlinkSync(databaseBackupFile);}catch(error){if(error.code!=='ENOENT')console.error('Full backup temporary database cleanup failed:',error.message);}}
  }
 }
 async function* fullBackupTar(){
@@ -1611,35 +2093,85 @@ async function* fullBackupTar(){
 // intentionally do not expose password hashes or active session tokens to staff.
 // Subscription plans and member subscriptions. This is manual administration; no payment gateway is implied.
 function canManageSubscriptions(user){return !!(user&&(isOwner(user)||hasPermission(user,'subscriptions_manage')));}
-function subscriptionAudit(actor,action,target,details='',route='/api/admin/subscriptions'){db.adminAuditLogs=db.adminAuditLogs||[];db.adminAuditLogs.unshift({id:crypto.randomUUID(),at:Date.now(),actor:String(actor?.name||'إدارة').slice(0,32),method:'ADMIN',path:route,status:200,target:String(target||'').slice(0,40),action:String(action||'').slice(0,80),details:String(details||'').slice(0,180)});db.adminAuditLogs=db.adminAuditLogs.slice(0,500);}
-app.get('/api/admin/subscriptions',(req,res)=>{requireAuth(req,res,()=>{if(!canManageSubscriptions(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة الاشتراكات'});res.set('Cache-Control','no-store');res.json({plans:db.subscriptionPlans||[],subscriptions:(db.subscriptions||[]).slice().sort((a,b)=>Number(b.updatedAt||b.createdAt)-Number(a.updatedAt||a.createdAt)),users:Object.keys(db.users||{}).map(name=>({name,subscription:(db.subscriptions||[]).find(x=>keyName(x.name)===keyName(name)&&x.status==='active'&&Number(x.expiresAt)>Date.now())||null}))});});});
-app.post('/api/admin/subscriptions/plans',(req,res)=>{requireAuth(req,res,()=>{if(!canManageSubscriptions(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة الخطط'});const b=req.body||{},name=String(b.name||'').trim().slice(0,50),days=Math.max(1,Math.min(3650,Math.floor(Number(b.days)||0)));if(name.length<2||!days)return res.status(400).json({error:'اسم الخطة والمدة بالأيام مطلوبان'});const id=String(b.id||'').trim()||('plan_'+crypto.randomBytes(6).toString('hex'));let plan=(db.subscriptionPlans||[]).find(x=>x.id===id);if(!plan){plan={id,createdAt:Date.now()};db.subscriptionPlans.push(plan);}Object.assign(plan,{name,days,description:String(b.description||'').trim().slice(0,180),priceLabel:String(b.priceLabel||'').trim().slice(0,40),enabled:b.enabled!==false,grantsVip:b.grantsVip!==false,updatedAt:Date.now()});subscriptionAudit(req.user,'حفظ خطة اشتراك',id,name+' · '+days+' يوم');try{save()}catch(e){return res.status(500).json({error:'تعذر حفظ الخطة'});}res.json({ok:true,plan});});});
-app.delete('/api/admin/subscriptions/plans/:id',(req,res)=>{requireAuth(req,res,()=>{if(!canManageSubscriptions(req.user))return res.status(403).json({error:'ما عندك صلاحية حذف الخطط'});const i=(db.subscriptionPlans||[]).findIndex(x=>x.id===req.params.id);if(i<0)return res.status(404).json({error:'الخطة غير موجودة'});const [plan]=db.subscriptionPlans.splice(i,1);subscriptionAudit(req.user,'حذف خطة اشتراك',plan.id,plan.name);try{save()}catch(e){db.subscriptionPlans.splice(i,0,plan);return res.status(500).json({error:'تعذر حذف الخطة'});}res.json({ok:true});});});
-app.post('/api/admin/subscriptions/assign',(req,res)=>{requireAuth(req,res,()=>{if(!canManageSubscriptions(req.user))return res.status(403).json({error:'ما عندك صلاحية منح الاشتراكات'});const name=cleanName(req.body?.name||''),user=getUser(name),plan=(db.subscriptionPlans||[]).find(x=>x.id===String(req.body?.planId||'')&&x.enabled!==false);if(!user)return res.status(404).json({error:'الحساب المسجل غير موجود'});if(isOwnerName(name))return res.status(403).json({error:'حساب صاحب الموقع محمي'});if(!plan)return res.status(404).json({error:'خطة الاشتراك غير موجودة أو متوقفة'});const days=Math.max(1,Math.min(3650,Math.floor(Number(req.body?.days)||Number(plan.days)||0)));if(!days)return res.status(400).json({error:'مدة الاشتراك غير صحيحة'});const key=keyName(name),now=Date.now();let sub=(db.subscriptions||[]).find(x=>keyName(x.name)===key&&x.status==='active'&&Number(x.expiresAt)>now);if(!sub){sub={id:crypto.randomUUID(),name,createdAt:now,history:[]};db.subscriptions.push(sub);}const start=Math.max(now,Number(sub.expiresAt)||now);sub.planId=plan.id;sub.planName=plan.name;sub.startsAt=sub.startsAt||now;sub.expiresAt=start+days*86400000;sub.status='active';sub.updatedAt=now;sub.updatedBy=req.user.name;sub.history=Array.isArray(sub.history)?sub.history:[];sub.history.unshift({at:now,action:'grant-or-renew',days,plan:plan.name,by:req.user.name});if(plan.grantsVip!==false){const memberProfile=profile(name);memberProfile.vipUntil=sub.expiresAt;memberProfile.vipSubscriptionId=sub.id;memberProfile.vipGrantedAt=now;memberProfile.vipGrantedBy=req.user.name;}else{const memberProfile=profile(name);if(memberProfile.vipSubscriptionId===sub.id){delete memberProfile.vipSubscriptionId;delete memberProfile.vipUntil;delete memberProfile.vipGrantedAt;delete memberProfile.vipGrantedBy;}}subscriptionAudit(req.user,'منح أو تجديد اشتراك',name,plan.name+' · '+days+' يوم');try{save()}catch(e){return res.status(500).json({error:'تعذر حفظ الاشتراك'});}res.json({ok:true,subscription:sub});});});
-app.post('/api/admin/subscriptions/cancel',(req,res)=>{requireAuth(req,res,()=>{if(!canManageSubscriptions(req.user))return res.status(403).json({error:'ما عندك صلاحية إلغاء الاشتراكات'});const name=cleanName(req.body?.name||''),sub=(db.subscriptions||[]).find(x=>keyName(x.name)===keyName(name)&&x.status==='active');if(!sub)return res.status(404).json({error:'لا يوجد اشتراك فعال لهذا الحساب'});if(isOwnerName(name))return res.status(403).json({error:'حساب صاحب الموقع محمي'});sub.status='cancelled';sub.expiresAt=Date.now();sub.updatedAt=Date.now();sub.updatedBy=req.user.name;sub.history=Array.isArray(sub.history)?sub.history:[];sub.history.unshift({at:Date.now(),action:'cancel',by:req.user.name});const memberProfile=profile(name);if(memberProfile.vipSubscriptionId===sub.id){delete memberProfile.vipSubscriptionId;delete memberProfile.vipUntil;delete memberProfile.vipGrantedAt;delete memberProfile.vipGrantedBy;}subscriptionAudit(req.user,'إلغاء اشتراك',name,sub.planName||'');try{save()}catch(e){return res.status(500).json({error:'تعذر إلغاء الاشتراك'});}res.json({ok:true});});});
+function subscriptionAudit(actor,action,target,details='',route='/api/admin/subscriptions'){const previous=db.adminAuditLogs;db.adminAuditLogs=[{id:crypto.randomUUID(),at:Date.now(),actor:String(actor?.name||'إدارة').slice(0,32),method:'ADMIN',path:route,status:200,target:String(target||'').slice(0,40),action:String(action||'').slice(0,80),details:String(details||'').slice(0,180)},...(Array.isArray(previous)?previous:[])].slice(0,500);}
+app.get('/api/admin/subscriptions',requireAdmin,(req,res)=>{requireAuth(req,res,()=>{if(!canManageSubscriptions(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة الاشتراكات'});res.set('Cache-Control','no-store');res.json({plans:db.subscriptionPlans||[],subscriptions:(db.subscriptions||[]).slice().sort((a,b)=>Number(b.updatedAt||b.createdAt)-Number(a.updatedAt||a.createdAt)),users:Object.keys(db.users||{}).map(name=>({name,subscription:(db.subscriptions||[]).find(x=>keyName(x.name)===keyName(name)&&x.status==='active'&&Number(x.expiresAt)>Date.now())||null}))});});});
+app.post('/api/admin/subscriptions/plans',requireAdmin,(req,res)=>{requireAuth(req,res,()=>{if(!canManageSubscriptions(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة الخطط'});const b=req.body||{},name=String(b.name||'').trim().slice(0,50),days=Math.max(1,Math.min(3650,Math.floor(Number(b.days)||0)));if(name.length<2||!days)return res.status(400).json({error:'اسم الخطة والمدة بالأيام مطلوبان'});const id=String(b.id||'').trim()||('plan_'+crypto.randomBytes(6).toString('hex')),previousPlans=db.subscriptionPlans,previousAudit=db.adminAuditLogs;db.subscriptionPlans=(db.subscriptionPlans||[]).map(x=>({...x}));let plan=db.subscriptionPlans.find(x=>x.id===id);if(!plan){plan={id,createdAt:Date.now()};db.subscriptionPlans.push(plan);}Object.assign(plan,{name,days,description:String(b.description||'').trim().slice(0,180),priceLabel:String(b.priceLabel||'').trim().slice(0,40),enabled:b.enabled!==false,grantsVip:b.grantsVip!==false,updatedAt:Date.now()});subscriptionAudit(req.user,'حفظ خطة اشتراك',id,name+' · '+days+' يوم');try{save();}catch(error){if(previousPlans===undefined)delete db.subscriptionPlans;else db.subscriptionPlans=previousPlans;if(previousAudit===undefined)delete db.adminAuditLogs;else db.adminAuditLogs=previousAudit;return res.status(500).json({error:'تعذر حفظ الخطة'});}res.json({ok:true,plan});});});
+app.delete('/api/admin/subscriptions/plans/:id',requireAdmin,(req,res)=>{requireAuth(req,res,()=>{if(!canManageSubscriptions(req.user))return res.status(403).json({error:'ما عندك صلاحية حذف الخطط'});const previousPlans=db.subscriptionPlans,previousAudit=db.adminAuditLogs,plan=(db.subscriptionPlans||[]).find(x=>x.id===req.params.id);if(!plan)return res.status(404).json({error:'الخطة غير موجودة'});db.subscriptionPlans=(db.subscriptionPlans||[]).filter(x=>x.id!==req.params.id);subscriptionAudit(req.user,'حذف خطة اشتراك',plan.id,plan.name);try{save();}catch(error){if(previousPlans===undefined)delete db.subscriptionPlans;else db.subscriptionPlans=previousPlans;if(previousAudit===undefined)delete db.adminAuditLogs;else db.adminAuditLogs=previousAudit;return res.status(500).json({error:'تعذر حذف الخطة'});}res.json({ok:true});});});
+app.post('/api/admin/subscriptions/assign',requireAdmin,(req,res)=>{requireAuth(req,res,()=>{if(!canManageSubscriptions(req.user))return res.status(403).json({error:'ما عندك صلاحية منح الاشتراكات'});const name=cleanName(req.body?.name||''),user=getUser(name),plan=(db.subscriptionPlans||[]).find(x=>x.id===String(req.body?.planId||'')&&x.enabled!==false);if(!user)return res.status(404).json({error:'الحساب المسجل غير موجود'});if(isOwnerName(name))return res.status(403).json({error:'حساب صاحب الموقع محمي'});if(!plan)return res.status(404).json({error:'خطة الاشتراك غير موجودة أو متوقفة'});const days=Math.max(1,Math.min(3650,Math.floor(Number(req.body?.days)||Number(plan.days)||0)));if(!days)return res.status(400).json({error:'مدة الاشتراك غير صحيحة'});const previousSubscriptions=db.subscriptions,previousAudit=db.adminAuditLogs,hadProfile=Object.prototype.hasOwnProperty.call(db.profiles,name),originalProfile=db.profiles[name],profileSnapshot=originalProfile?{...originalProfile}:null;db.subscriptions=(db.subscriptions||[]).map(x=>({...x,history:Array.isArray(x.history)?x.history.slice():[]}));const key=keyName(name),now=Date.now();let sub=db.subscriptions.find(x=>keyName(x.name)===key&&x.status==='active'&&Number(x.expiresAt)>now);if(!sub){sub={id:crypto.randomUUID(),name,createdAt:now,history:[]};db.subscriptions.push(sub);}const start=Math.max(now,Number(sub.expiresAt)||now);sub.planId=plan.id;sub.planName=plan.name;sub.startsAt=sub.startsAt||now;sub.expiresAt=start+days*86400000;sub.status='active';sub.updatedAt=now;sub.updatedBy=req.user.name;sub.history=Array.isArray(sub.history)?sub.history:[];sub.history.unshift({at:now,action:'grant-or-renew',days,plan:plan.name,by:req.user.name});sub.history=sub.history.slice(0,100);const memberProfile=profile(name);if(plan.grantsVip!==false){memberProfile.vipUntil=sub.expiresAt;memberProfile.vipSubscriptionId=sub.id;memberProfile.vipGrantedAt=now;memberProfile.vipGrantedBy=req.user.name;}else if(memberProfile.vipSubscriptionId===sub.id){delete memberProfile.vipSubscriptionId;delete memberProfile.vipUntil;delete memberProfile.vipGrantedAt;delete memberProfile.vipGrantedBy;}subscriptionAudit(req.user,'منح أو تجديد اشتراك',name,plan.name+' · '+days+' يوم');try{save();}catch(error){if(previousSubscriptions===undefined)delete db.subscriptions;else db.subscriptions=previousSubscriptions;if(hadProfile)db.profiles[name]=originalProfile;else delete db.profiles[name];if(originalProfile&&profileSnapshot){for(const key of Object.keys(originalProfile))delete originalProfile[key];Object.assign(originalProfile,profileSnapshot);}if(previousAudit===undefined)delete db.adminAuditLogs;else db.adminAuditLogs=previousAudit;return res.status(500).json({error:'تعذر حفظ الاشتراك'});}res.json({ok:true,subscription:sub});});});
+app.post('/api/admin/subscriptions/cancel',requireAdmin,(req,res)=>{requireAuth(req,res,()=>{if(!canManageSubscriptions(req.user))return res.status(403).json({error:'ما عندك صلاحية إلغاء الاشتراكات'});const name=cleanName(req.body?.name||''),subExists=(db.subscriptions||[]).find(x=>keyName(x.name)===keyName(name)&&x.status==='active');if(!subExists)return res.status(404).json({error:'لا يوجد اشتراك فعال لهذا الحساب'});if(isOwnerName(name))return res.status(403).json({error:'حساب صاحب الموقع محمي'});const previousSubscriptions=db.subscriptions,previousAudit=db.adminAuditLogs,hadProfile=Object.prototype.hasOwnProperty.call(db.profiles,name),originalProfile=db.profiles[name],profileSnapshot=originalProfile?{...originalProfile}:null;db.subscriptions=(db.subscriptions||[]).map(x=>({...x,history:Array.isArray(x.history)?x.history.slice():[]}));const sub=db.subscriptions.find(x=>x.id===subExists.id);sub.status='cancelled';sub.expiresAt=Date.now();sub.updatedAt=Date.now();sub.updatedBy=req.user.name;sub.history=Array.isArray(sub.history)?sub.history:[];sub.history.unshift({at:Date.now(),action:'cancel',by:req.user.name});sub.history=sub.history.slice(0,100);const memberProfile=profile(name);if(memberProfile.vipSubscriptionId===sub.id){delete memberProfile.vipSubscriptionId;delete memberProfile.vipUntil;delete memberProfile.vipGrantedAt;delete memberProfile.vipGrantedBy;}subscriptionAudit(req.user,'إلغاء اشتراك',name,sub.planName||'');try{save();}catch(error){if(previousSubscriptions===undefined)delete db.subscriptions;else db.subscriptions=previousSubscriptions;if(hadProfile)db.profiles[name]=originalProfile;else delete db.profiles[name];if(originalProfile&&profileSnapshot){for(const key of Object.keys(originalProfile))delete originalProfile[key];Object.assign(originalProfile,profileSnapshot);}if(previousAudit===undefined)delete db.adminAuditLogs;else db.adminAuditLogs=previousAudit;return res.status(500).json({error:'تعذر إلغاء الاشتراك'});}res.json({ok:true});});});
 
 // Campaign ads: image uploads are stored in uploads; campaign scheduling is enforced by the public feed.
 function canManageAds(user){return !!(user&&(isOwner(user)||hasPermission(user,'ads_manage')));}
-app.get('/api/admin/ads',(req,res)=>{requireAuth(req,res,()=>{if(!canManageAds(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة الحملات الإعلانية'});res.set('Cache-Control','no-store');res.json({items:db.adCampaigns||[]});});});
-app.post('/api/admin/ads',(req,res,next)=>requireAuth(req,res,next),uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!canManageAds(req.user)){removeUploadedFile(req.file);return res.status(403).json({error:'ما عندك صلاحية إدارة الإعلانات'});}const b=req.body||{},title=String(b.title||'').trim().slice(0,60),url=String(b.url||'').trim().slice(0,500),startsAt=b.startsAt?Date.parse(b.startsAt):Date.now(),endsAt=b.endsAt?Date.parse(b.endsAt):0;if(title.length<2){removeUploadedFile(req.file);return res.status(400).json({error:'عنوان الإعلان مطلوب'});}if(url&&!/^https?:\/\//i.test(url)){removeUploadedFile(req.file);return res.status(400).json({error:'رابط الإعلان يجب أن يبدأ بـ https:// أو http://'});}if(!Number.isFinite(startsAt)|| (endsAt&&(!Number.isFinite(endsAt)||endsAt<=startsAt))){removeUploadedFile(req.file);return res.status(400).json({error:'مدة الحملة غير صحيحة'});}const image=req.file?'/uploads/'+req.file.filename:String(b.image||'');if(!image){removeUploadedFile(req.file);return res.status(400).json({error:'ارفع صورة الإعلان أولاً'});}const item={id:crypto.randomUUID(),title,url,image,startsAt,endsAt,enabled:b.enabled!=='false',createdAt:Date.now(),createdBy:req.user.name,impressions:0,clicks:0};db.adCampaigns=db.adCampaigns||[];db.adCampaigns.unshift(item);subscriptionAudit(req.user,'إنشاء حملة إعلانية',item.id,title,'/api/admin/ads');try{save()}catch(e){db.adCampaigns=db.adCampaigns.filter(x=>x.id!==item.id);removeUploadedFile(req.file);return res.status(500).json({error:'تعذر حفظ الحملة'});}res.json({ok:true,item});});
-app.patch('/api/admin/ads/:id',(req,res)=>{requireAuth(req,res,()=>{if(!canManageAds(req.user))return res.status(403).json({error:'ما عندك صلاحية تعديل الإعلانات'});const item=(db.adCampaigns||[]).find(x=>x.id===req.params.id);if(!item)return res.status(404).json({error:'الحملة غير موجودة'});if(req.body?.enabled!==undefined)item.enabled=req.body.enabled===true;if(req.body?.title!==undefined)item.title=String(req.body.title).trim().slice(0,60);item.updatedAt=Date.now();subscriptionAudit(req.user,'تعديل حملة إعلانية',item.id,item.title,'/api/admin/ads');try{save()}catch(e){return res.status(500).json({error:'تعذر حفظ الحملة'});}res.json({ok:true,item});});});
-app.delete('/api/admin/ads/:id',(req,res)=>{requireAuth(req,res,()=>{if(!canManageAds(req.user))return res.status(403).json({error:'ما عندك صلاحية حذف الإعلانات'});const i=(db.adCampaigns||[]).findIndex(x=>x.id===req.params.id);if(i<0)return res.status(404).json({error:'الحملة غير موجودة'});const [item]=db.adCampaigns.splice(i,1);subscriptionAudit(req.user,'حذف حملة إعلانية',item.id,item.title,'/api/admin/ads');try{save()}catch(e){db.adCampaigns.splice(i,0,item);return res.status(500).json({error:'تعذر حذف الحملة'});}if(item.image?.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(item.image)))}catch{}}res.json({ok:true});});});
+app.get('/api/admin/ads',requireAdmin,(req,res)=>{requireAuth(req,res,()=>{if(!canManageAds(req.user))return res.status(403).json({error:'ما عندك صلاحية إدارة الحملات الإعلانية'});res.set('Cache-Control','no-store');res.json({items:db.adCampaigns||[]});});});
+app.post('/api/admin/ads',requireAdmin,(req,res,next)=>requireAuth(req,res,()=>canManageAds(req.user)?next():res.status(403).json({error:'ما عندك صلاحية إدارة الإعلانات'})),uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{const b=req.body||{},title=String(b.title||'').trim().slice(0,60),url=String(b.url||'').trim().slice(0,500),startsAt=b.startsAt?Date.parse(b.startsAt):Date.now(),endsAt=b.endsAt?Date.parse(b.endsAt):0;if(title.length<2){removeUploadedFile(req.file);return res.status(400).json({error:'عنوان الإعلان مطلوب'});}if(url&&!/^https?:\/\//i.test(url)){removeUploadedFile(req.file);return res.status(400).json({error:'رابط الإعلان يجب أن يبدأ بـ https:// أو http://'});}if(!Number.isFinite(startsAt)|| (endsAt&&(!Number.isFinite(endsAt)||endsAt<=startsAt))){removeUploadedFile(req.file);return res.status(400).json({error:'مدة الحملة غير صحيحة'});}const image=req.file?'/uploads/'+req.file.filename:String(b.image||'');if(!image){removeUploadedFile(req.file);return res.status(400).json({error:'ارفع صورة الإعلان أولاً'});}const item={id:crypto.randomUUID(),title,url,image,startsAt,endsAt,enabled:b.enabled!=='false',createdAt:Date.now(),createdBy:req.user.name,impressions:0,clicks:0},previousCampaigns=db.adCampaigns,previousAudit=db.adminAuditLogs;db.adCampaigns=[item,...(Array.isArray(previousCampaigns)?previousCampaigns:[])];subscriptionAudit(req.user,'إنشاء حملة إعلانية',item.id,title,'/api/admin/ads');try{save();}catch(error){if(previousCampaigns===undefined)delete db.adCampaigns;else db.adCampaigns=previousCampaigns;if(previousAudit===undefined)delete db.adminAuditLogs;else db.adminAuditLogs=previousAudit;removeUploadedFile(req.file);return res.status(500).json({error:'تعذر حفظ الحملة'});}res.json({ok:true,item});});
+app.patch('/api/admin/ads/:id',requireAdmin,(req,res)=>{requireAuth(req,res,()=>{if(!canManageAds(req.user))return res.status(403).json({error:'ما عندك صلاحية تعديل الإعلانات'});const previousCampaigns=db.adCampaigns,previousAudit=db.adminAuditLogs;db.adCampaigns=(db.adCampaigns||[]).map(x=>x.id===req.params.id?{...x}:x);const item=db.adCampaigns.find(x=>x.id===req.params.id);if(!item){if(previousCampaigns===undefined)delete db.adCampaigns;else db.adCampaigns=previousCampaigns;return res.status(404).json({error:'الحملة غير موجودة'});}if(req.body?.enabled!==undefined)item.enabled=req.body.enabled===true;if(req.body?.title!==undefined)item.title=String(req.body.title).trim().slice(0,60);item.updatedAt=Date.now();subscriptionAudit(req.user,'تعديل حملة إعلانية',item.id,item.title,'/api/admin/ads');try{save();}catch(error){if(previousCampaigns===undefined)delete db.adCampaigns;else db.adCampaigns=previousCampaigns;if(previousAudit===undefined)delete db.adminAuditLogs;else db.adminAuditLogs=previousAudit;return res.status(500).json({error:'تعذر حفظ الحملة'});}res.json({ok:true,item});});});
+app.delete('/api/admin/ads/:id',requireAdmin,(req,res)=>{requireAuth(req,res,()=>{if(!canManageAds(req.user))return res.status(403).json({error:'ما عندك صلاحية حذف الإعلانات'});const previousCampaigns=db.adCampaigns,previousAudit=db.adminAuditLogs,item=(db.adCampaigns||[]).find(x=>x.id===req.params.id);if(!item)return res.status(404).json({error:'الحملة غير موجودة'});db.adCampaigns=(db.adCampaigns||[]).filter(x=>x.id!==req.params.id);subscriptionAudit(req.user,'حذف حملة إعلانية',item.id,item.title,'/api/admin/ads');try{save();}catch(error){if(previousCampaigns===undefined)delete db.adCampaigns;else db.adCampaigns=previousCampaigns;if(previousAudit===undefined)delete db.adminAuditLogs;else db.adminAuditLogs=previousAudit;return res.status(500).json({error:'تعذر حذف الحملة'});}if(item.image?.startsWith('/uploads/'))removePublicUploadIfUnreferenced(item.image);res.json({ok:true});});});
 app.get('/api/public/ads',(req,res)=>{const now=Date.now(),items=(db.adCampaigns||[]).filter(x=>x.enabled!==false&&Number(x.startsAt||0)<=now&&(!Number(x.endsAt)||Number(x.endsAt)>now)).slice(0,5).map(({id,title,url,image})=>({id,title,url,image}));res.set('Cache-Control','public, max-age=30');res.json({items});});
 
 // Granular control center is separate from site identity/security and is permission-gated.
-app.get('/api/admin/control-center',(req,res)=>{requireAuth(req,res,()=>{if(!isOwner(req.user)&&!hasPermission(req.user,'control_center_manage'))return res.status(403).json({error:'ما عندك صلاحية مركز التحكم'});res.set('Cache-Control','no-store');res.json({settings:db.siteSettings||{},modules:{...DEFAULT_SITE_MODULES,...(db.siteSettings?.modules||{})}});});});
-app.put('/api/admin/control-center',(req,res)=>{requireAuth(req,res,()=>{if(!isOwner(req.user)&&!hasPermission(req.user,'control_center_manage'))return res.status(403).json({error:'ما عندك صلاحية مركز التحكم'});const allowed=Object.keys(DEFAULT_SITE_MODULES),next={...(db.siteSettings?.modules||DEFAULT_SITE_MODULES)};for(const key of allowed)if(Object.prototype.hasOwnProperty.call(req.body?.modules||{},key))next[key]=req.body.modules[key]===true;const old=db.siteSettings.modules;db.siteSettings.modules=next;subscriptionAudit(req.user,'تغيير وحدات مركز التحكم','',Object.entries(next).map(([k,v])=>k+':'+(v?'on':'off')).join(', '),'/api/admin/control-center');try{save()}catch(e){db.siteSettings.modules=old;return res.status(500).json({error:'تعذر حفظ مركز التحكم'});}io.emit('site-settings-changed',{modules:next});res.json({ok:true,modules:next});});});
+app.get('/api/admin/control-center',requireAdmin,(req,res)=>{requireAuth(req,res,()=>{if(!isOwner(req.user)&&!hasPermission(req.user,'control_center_manage'))return res.status(403).json({error:'ما عندك صلاحية مركز التحكم'});res.set('Cache-Control','no-store');res.json({settings:db.siteSettings||{},modules:{...DEFAULT_SITE_MODULES,...(db.siteSettings?.modules||{})}});});});
+app.put('/api/admin/control-center',requireAdmin,(req,res)=>{requireAuth(req,res,()=>{if(!isOwner(req.user)&&!hasPermission(req.user,'control_center_manage'))return res.status(403).json({error:'ما عندك صلاحية مركز التحكم'});const allowed=Object.keys(DEFAULT_SITE_MODULES),next={...(db.siteSettings?.modules||DEFAULT_SITE_MODULES)},previousSettings=db.siteSettings,previousAudit=db.adminAuditLogs;for(const key of allowed)if(Object.prototype.hasOwnProperty.call(req.body?.modules||{},key))next[key]=req.body.modules[key]===true;db.siteSettings={...(db.siteSettings||{}),modules:next};subscriptionAudit(req.user,'تغيير وحدات مركز التحكم','',Object.entries(next).map(([k,v])=>k+':'+(v?'on':'off')).join(', '),'/api/admin/control-center');try{save();}catch(error){if(previousSettings===undefined)delete db.siteSettings;else db.siteSettings=previousSettings;if(previousAudit===undefined)delete db.adminAuditLogs;else db.adminAuditLogs=previousAudit;return res.status(500).json({error:'تعذر حفظ مركز التحكم'});}io.emit('site-settings-changed',{modules:next});res.json({ok:true,modules:next});});});
 
 // Existing site settings, login history and backup endpoints.
 app.get('/api/public/settings',(req,res)=>{const s=db.siteSettings||{};res.set('Cache-Control','no-store');res.json({siteName:s.siteName||'دردشة ريماز عراقية',tagline:s.tagline||'',notice:s.notice||'',allowRegistration:s.allowRegistration!==false,allowGuests:s.allowGuests!==false,modules:{...(s.modules||{})}});});
-app.get('/api/admin/site-settings',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية إدارة الموقع'});res.set('Cache-Control','no-store');res.json({settings:db.siteSettings||{}});});
-app.put('/api/admin/site-settings',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية إدارة الموقع'});const b=req.body||{};const modules={...(db.siteSettings?.modules||DEFAULT_SITE_MODULES)};for(const key of Object.keys(DEFAULT_SITE_MODULES))if(Object.prototype.hasOwnProperty.call(b.modules||{},key))modules[key]=b.modules[key]===true;const next={siteName:String(b.siteName||'').trim().slice(0,60),tagline:String(b.tagline||'').trim().slice(0,300),notice:String(b.notice||'').trim().slice(0,300),allowRegistration:b.allowRegistration!==false,allowGuests:b.allowGuests!==false,modules};if(!next.siteName)return res.status(400).json({error:'اسم الموقع مطلوب'});const old=db.siteSettings;db.siteSettings=next;db.adminAuditLogs=db.adminAuditLogs||[];db.adminAuditLogs.unshift({id:crypto.randomUUID(),at:Date.now(),actor:String(req.user.name||'المالك').slice(0,32),method:'PUT',path:'/api/admin/site-settings',status:200});db.adminAuditLogs=db.adminAuditLogs.slice(0,500);try{save()}catch(e){db.siteSettings=old;return res.status(500).json({error:'تعذر حفظ إعدادات الموقع'});}io.emit('site-settings-changed',{siteName:next.siteName,tagline:next.tagline,notice:next.notice,modules:next.modules});res.json({ok:true,settings:next});});
-app.get('/api/admin/login-history',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية عرض سجل الدخول'});res.set('Cache-Control','no-store');res.json({items:(db.loginHistory||[]).slice(0,500),total:(db.loginHistory||[]).length});});
-app.get('/api/admin/health',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'health_view')&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية فحص النظام'});const walk=(dir)=>{let files=0,bytes=0;try{for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const full=path.join(dir,entry.name);if(entry.isDirectory()){const child=walk(full);files+=child.files;bytes+=child.bytes;}else if(entry.isFile()){const st=fs.statSync(full);files++;bytes+=st.size;}}}catch{}return {files,bytes};};let dbBytes=0;try{dbBytes=fs.statSync(DB_FILE).size}catch{}const uploads=walk(UP_DIR),memory=process.memoryUsage();res.set('Cache-Control','no-store');res.json({appVersion:require('./package.json').version||'unknown',node:process.version,uptimeSeconds:Math.floor(process.uptime()),dbBytes,uploads,heapUsed:memory.heapUsed,heapTotal:memory.heapTotal,external:memory.external,arrayBuffers:memory.arrayBuffers||0,rss:memory.rss,online:getOnlineUsers(req.user).length,rooms:(db.rooms||[]).length,modules:{...DEFAULT_SITE_MODULES,...(db.siteSettings?.modules||{})}});});
-app.get('/api/admin/backup/database',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخ الاحتياطي'});try{const snapshot={format:'rimaz-database-backup',version:1,createdAt:new Date().toISOString(),appVersion:require('./package.json').version||'unknown',database:{...db,sessions:{}}};const body=JSON.stringify(snapshot,null,2);res.set('Cache-Control','no-store, no-cache, must-revalidate');res.set('Content-Type','application/json; charset=utf-8');res.set('Content-Disposition',`attachment; filename="rimaz-database-backup-${new Date().toISOString().slice(0,10)}.json"`);res.send(body);}catch(e){console.error('Database backup failed:',e);res.status(500).json({error:'تعذر إنشاء النسخة الاحتياطية'});}});
-app.get('/api/admin/backup/full',requireAuth,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخة الاحتياطية الكاملة'});res.set('Cache-Control','no-store, no-cache, must-revalidate');res.set('Content-Type','application/gzip');res.set('Content-Disposition',`attachment; filename=\"rimaz-full-backup-${new Date().toISOString().slice(0,10)}.tar.gz\"`);const source=Readable.from(fullBackupTar()),archive=zlib.createGzip({level:6});source.on('error',error=>archive.destroy(error));archive.on('error',error=>{console.error('Full backup stream failed:',error);if(!res.headersSent)res.status(500).json({error:'تعذر إنشاء النسخة الاحتياطية الكاملة'});else res.destroy(error);});source.pipe(archive).pipe(res);});
-app.post('/api/admin/restore/database/preview',requireAuth,(req,res)=>{
+app.get('/api/admin/site-settings',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية إدارة الموقع'});res.set('Cache-Control','no-store');res.json({settings:db.siteSettings||{}});});
+app.put('/api/admin/site-settings',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية إدارة الموقع'});const b=req.body||{};const modules={...(db.siteSettings?.modules||DEFAULT_SITE_MODULES)};for(const key of Object.keys(DEFAULT_SITE_MODULES))if(Object.prototype.hasOwnProperty.call(b.modules||{},key))modules[key]=b.modules[key]===true;const next={siteName:String(b.siteName||'').trim().slice(0,60),tagline:String(b.tagline||'').trim().slice(0,300),notice:String(b.notice||'').trim().slice(0,300),allowRegistration:b.allowRegistration!==false,allowGuests:b.allowGuests!==false,modules};if(!next.siteName)return res.status(400).json({error:'اسم الموقع مطلوب'});const old=db.siteSettings,oldAudit=Array.isArray(db.adminAuditLogs)?db.adminAuditLogs.slice():db.adminAuditLogs;db.siteSettings=next;db.adminAuditLogs=db.adminAuditLogs||[];db.adminAuditLogs.unshift({id:crypto.randomUUID(),at:Date.now(),actor:String(req.user.name||'المالك').slice(0,32),method:'PUT',path:'/api/admin/site-settings',status:200});db.adminAuditLogs=db.adminAuditLogs.slice(0,500);try{save()}catch(e){if(old===undefined)delete db.siteSettings;else db.siteSettings=old;if(oldAudit===undefined)delete db.adminAuditLogs;else db.adminAuditLogs=oldAudit;return res.status(500).json({error:'تعذر حفظ إعدادات الموقع'});}io.emit('site-settings-changed',{siteName:next.siteName,tagline:next.tagline,notice:next.notice,modules:next.modules});res.json({ok:true,settings:next});});
+app.get('/api/admin/login-history',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية عرض سجل الدخول'});res.set('Cache-Control','no-store');res.json({items:(db.loginHistory||[]).slice(0,500),total:(db.loginHistory||[]).length});});
+app.get('/api/admin/health',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'health_view')&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية فحص النظام'});const walk=(dir)=>{let files=0,bytes=0;try{for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const full=path.join(dir,entry.name);if(entry.isDirectory()){const child=walk(full);files+=child.files;bytes+=child.bytes;}else if(entry.isFile()){const st=fs.statSync(full);files++;bytes+=st.size;}}}catch{}return {files,bytes};};let dbBytes=0;try{dbBytes=fs.statSync(DB_FILE).size}catch{}const uploads=walk(UP_DIR),memory=process.memoryUsage(),cgroup=readCgroupMetrics();res.set('Cache-Control','no-store');res.json({appVersion:require('./package.json').version||'unknown',node:process.version,uptimeSeconds:Math.floor(process.uptime()),dbBytes,uploads,heapUsed:memory.heapUsed,heapTotal:memory.heapTotal,external:memory.external,arrayBuffers:memory.arrayBuffers||0,rss:memory.rss,cgroup,ipAttribution:{trustedProxyConfigured:!!process.env.TRUSTED_PROXY_CIDRS&&!!trustedProxyHeader,trustedProxyRangesCount:String(process.env.TRUSTED_PROXY_CIDRS||'').split(',').map(x=>x.trim()).filter(Boolean).length,trustedProxyHeader:trustedProxyHeader||null},online:getOnlineUsers(req.user).length,rooms:(db.rooms||[]).length,modules:{...DEFAULT_SITE_MODULES,...(db.siteSettings?.modules||{})}});});
+app.get('/api/admin/backup/database',requireAdmin,(req,res)=>{
+ if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخ الاحتياطي'});
+ let backupFile='';
+ try{
+  const snapshot={format:'rimaz-database-backup',version:1,createdAt:new Date().toISOString(),appVersion:require('./package.json').version||'unknown',database:{...db,sessions:{},privateMessages:[]}};
+  backupFile=createDatabaseBackupTempFile(snapshot,'database-backup');
+  const stream=fs.createReadStream(backupFile);
+  const cleanup=()=>{if(!backupFile)return;const file=backupFile;backupFile='';try{fs.unlinkSync(file);}catch(error){if(error.code!=='ENOENT')console.error('Database backup temporary file cleanup failed:',error.message);}};
+  stream.once('close',cleanup);
+  stream.once('error',error=>{cleanup();console.error('Database backup stream failed:',error);if(!res.headersSent)res.status(500).json({error:'تعذر إنشاء النسخة الاحتياطية'});else res.destroy(error);});
+  res.once('close',()=>{if(!stream.destroyed)stream.destroy();});
+  res.set('Cache-Control','no-store, no-cache, must-revalidate');
+  res.set('Content-Type','application/json; charset=utf-8');
+  res.set('Content-Disposition','attachment; filename="rimaz-database-backup-'+new Date().toISOString().slice(0,10)+'.json"');
+  stream.pipe(res);
+ }catch(e){
+  if(backupFile){try{fs.unlinkSync(backupFile);}catch(_){}}
+  console.error('Database backup failed:',e);
+  if(!res.headersSent)res.status(500).json({error:'تعذر إنشاء النسخة الاحتياطية'});
+  else res.destroy(e);
+ }
+});
+app.post('/api/admin/backup/full-ticket',requireAdmin,(req,res)=>{
+ if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخة الاحتياطية الكاملة'});
+ const now=Date.now();
+ for(const [token,ticket] of adminBackupDownloadTickets)if(ticket.expiresAt<=now)adminBackupDownloadTickets.delete(token);
+ if(adminBackupDownloadTickets.size>=MAX_ADMIN_BACKUP_DOWNLOAD_TICKETS)return res.status(429).json({error:'هناك تنزيلات نسخ احتياطية قيد البدء؛ حاول بعد قليل'});
+ const sid=String(req.get('x-session')||'');
+ if(!sid)return res.status(401).json({error:'انتهت الجلسة؛ سجل الدخول مجدداً'});
+ const token=crypto.randomBytes(32).toString('hex');
+ adminBackupDownloadTickets.set(token,{sid,account:keyName(req.user.name),expiresAt:now+ADMIN_BACKUP_DOWNLOAD_TTL_MS});
+ res.set('Referrer-Policy','no-referrer').json({url:'/api/admin/backup/full-download/'+token});
+});
+app.get('/api/admin/backup/full-download/:token',(req,res)=>{
+ const token=String(req.params.token||'');
+ if(!/^[a-f0-9]{64}$/.test(token))return res.status(404).json({error:'رابط التنزيل غير صالح أو منتهي'});
+ const ticket=adminBackupDownloadTickets.get(token);
+ if(!ticket)return res.status(404).json({error:'رابط التنزيل غير صالح أو منتهي'});
+ adminBackupDownloadTickets.delete(token);
+ if(ticket.expiresAt<=Date.now())return res.status(410).json({error:'انتهت صلاحية رابط التنزيل؛ اطلب رابطاً جديداً'});
+ const user=sessionUser(ticket.sid);
+ if(!user||keyName(user.name)!==ticket.account||(!isOwner(user)&&!hasPermission(user,'site_admin')))return res.status(403).json({error:'انتهت الجلسة أو لم تعد تملك صلاحية النسخ الاحتياطي'});
+ res.set('Referrer-Policy','no-referrer');
+ res.set('Cache-Control','no-store, no-cache, must-revalidate');
+ res.set('Content-Type','application/gzip');
+ res.set('Content-Disposition',`attachment; filename="rimaz-full-backup-${new Date().toISOString().slice(0,10)}.tar.gz"`);
+ const source=Readable.from(fullBackupTar()),archive=zlib.createGzip({level:6});
+ pipeline(source,archive,res,error=>{if(error&&error.code!=='ERR_STREAM_PREMATURE_CLOSE')console.error('Full backup pipeline failed:',error);});
+});
+app.get('/api/admin/backup/full',requireAdmin,(req,res)=>{if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية النسخة الاحتياطية الكاملة'});res.set('Cache-Control','no-store, no-cache, must-revalidate');res.set('Content-Type','application/gzip');res.set('Content-Disposition',`attachment; filename=\"rimaz-full-backup-${new Date().toISOString().slice(0,10)}.tar.gz\"`);const source=Readable.from(fullBackupTar()),archive=zlib.createGzip({level:6});pipeline(source,archive,res,error=>{if(error&&error.code!=='ERR_STREAM_PREMATURE_CLOSE')console.error('Full backup pipeline failed:',error);});});
+app.post('/api/admin/restore/database/preview',requireAdmin,restoreUploadGate,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية استعادة النسخة'});
+ purgeExpiredDatabaseRestores();
+ if(!restorePreviewCapacityAvailable(req.user.name))return res.status(400).json({error:'توجد معاينات استعادة أخرى قيد الانتظار؛ أكمل إحداها أو انتظر انتهاء صلاحيتها'});
  restoreUpload.single('backup')(req,res,error=>{
   if(error)return res.status(400).json({error:error.code==='LIMIT_FILE_SIZE'?'حجم ملف النسخة أكبر من 20MB':(error.message||'تعذر قراءة ملف النسخة')});
   if(!req.file)return res.status(400).json({error:'اختر ملف نسخة JSON أولاً'});
@@ -1647,50 +2179,104 @@ app.post('/api/admin/restore/database/preview',requireAuth,(req,res)=>{
   try{
    try{fs.chmodSync(uploadedFile.path,0o600);}catch(_){}
    purgeExpiredDatabaseRestores();
-   const checked=validateDatabaseRestoreFile(fs.readFileSync(uploadedFile.path,'utf8'));
-   const protectedOwnerName=process.env.OWNER_NAME||'owner';if(!restoreContainsOwner(checked.clean,protectedOwnerName))throw new Error('النسخة لا تحتوي حساب صاحب الموقع؛ رُفضت لحماية إمكانية الدخول للإدارة');
+   const summary=inspectDatabaseRestoreFile(uploadedFile.path,{
+    template:defaults(),
+    maxBytes:20*1024*1024,
+    ownerName:req.user.name,
+    configuredOwnerName:process.env.OWNER_NAME||'',
+    normalizeName:keyName
+   });
    for(const [oldToken,oldPreview] of pendingDatabaseRestores)if(oldPreview.owner===keyName(req.user.name))discardDatabaseRestorePreview(oldToken,oldPreview);
    if(pendingDatabaseRestores.size>=MAX_PENDING_DATABASE_RESTORES)throw new Error('توجد معاينات استعادة أخرى قيد الانتظار؛ أكمل إحداها أو انتظر انتهاء صلاحيتها');
    const token=crypto.randomBytes(32).toString('hex');
-   pendingDatabaseRestores.set(token,{filePath:uploadedFile.path,summary:checked.summary,owner:keyName(req.user.name),expiresAt:Date.now()+5*60*1000});
+   pendingDatabaseRestores.set(token,{filePath:uploadedFile.path,summary,owner:keyName(req.user.name),expiresAt:Date.now()+5*60*1000});
    uploadedFile.path='';
    res.set('Cache-Control','no-store');
-   res.json({ok:true,token,expiresInSeconds:300,summary:checked.summary,warning:'سيتم استبدال بيانات قاعدة البيانات الحالية. الجلسات النشطة والرسائل الخاصة المؤقتة لن تُستعاد.'});
+   res.json({ok:true,token,expiresInSeconds:300,summary,warning:'سيتم استبدال بيانات قاعدة البيانات الحالية. الجلسات النشطة والرسائل الخاصة المؤقتة لن تُستعاد.'});
   }catch(e){removeUploadedFile(uploadedFile);res.status(400).json({error:e.message||'ملف النسخة غير صالح'});}
  });
 });
-app.post('/api/admin/restore/database/confirm',requireAuth,(req,res)=>{
+app.post('/api/admin/restore/database/confirm',requireAdmin,(req,res)=>{
  if(!isOwner(req.user)&&!hasPermission(req.user,'site_admin'))return res.status(403).json({error:'ما عندك صلاحية استعادة النسخة'});
  purgeExpiredDatabaseRestores();
  const token=String(req.body?.token||''),confirmation=String(req.body?.confirmation||'');
  const pending=pendingDatabaseRestores.get(token);
  if(!pending||pending.owner!==keyName(req.user.name))return res.status(400).json({error:'انتهت صلاحية المعاينة؛ ارفع الملف مرة ثانية'});
  if(confirmation!=='استعادة ريماز')return res.status(400).json({error:'اكتب عبارة استعادة ريماز للتأكيد'});
- const previous=db;
+ let previous=db;
+ let previousPrivateMessages=null;
+ let databaseReleased=false;
+ let databasePersisted=false;
  let recoveryFile='';
+ let recoveryReady=false;
+ const hadDatabaseFile=fs.existsSync(DB_FILE);
  try{
-  const checked=validateDatabaseRestoreFile(fs.readFileSync(pending.filePath,'utf8'));
+  if(hadDatabaseFile){
+   // Flush the current in-memory snapshot before making the rollback copy.
+   save();
+   recoveryFile=DB_FILE+'.pre-restore-'+Date.now()+'.json';
+   // Copy disk-to-disk so the live database is never duplicated into a full RAM Buffer.
+   try{
+    fs.copyFileSync(DB_FILE,recoveryFile,fs.constants.COPYFILE_EXCL);
+    fs.chmodSync(recoveryFile,0o600);
+    const recoveryFd=fs.openSync(recoveryFile,'r+');
+    try{fs.fsyncSync(recoveryFd);}finally{fs.closeSync(recoveryFd);}
+   }catch(recoveryError){try{fs.unlinkSync(recoveryFile);}catch(_){}throw recoveryError;}
+   try{const recoveryDirFd=fs.openSync(DATA_DIR,'r');try{fs.fsyncSync(recoveryDirFd);}finally{fs.closeSync(recoveryDirFd);}}catch(syncError){console.error('Recovery database directory sync unavailable:',syncError.message);}
+   recoveryReady=true;
+   // Keep only intentionally transient private messages in RAM; the full prior
+   // database is now recoverable from disk and can be released before parsing.
+   previousPrivateMessages=previous.privateMessages;
+   previous=null;
+   db=null;
+   databaseReleased=true;
+  }
+  const checked=validateDatabaseRestoreData(readJsonFile(pending.filePath,{maxBytes:20*1024*1024}));
   const protectedOwnerName=process.env.OWNER_NAME||'owner';if(!restoreContainsOwner(checked.clean,protectedOwnerName))throw new Error('النسخة لا تحتوي حساب صاحب الموقع؛ رُفضت لحماية إمكانية الدخول للإدارة');
-  if(fs.existsSync(DB_FILE)){recoveryFile=DB_FILE+'.pre-restore-'+Date.now()+'.json';fs.copyFileSync(DB_FILE,recoveryFile,fs.constants.COPYFILE_EXCL);}
   db=checked.clean;
   db.sessions={};db.privateMessages=[];
   db.adminAuditLogs=Array.isArray(db.adminAuditLogs)?db.adminAuditLogs:[];
   db.adminAuditLogs.unshift({id:crypto.randomUUID(),at:Date.now(),actor:String(req.user.name||'المالك').slice(0,32),method:'POST',path:'/api/admin/restore/database/confirm',status:200});
   db.adminAuditLogs=db.adminAuditLogs.slice(0,500);
   save();
+  databasePersisted=true;
   discardDatabaseRestorePreview(token,pending);
+  // Invalidate every pre-restore in-memory identity before disconnect callbacks run.
+  // Otherwise the old sessions Map can continue authenticating stale session IDs during
+  // the normal disconnect grace period, even though the restored database has no sessions.
   for(const timer of sessionDisconnectTimers.values())clearTimeout(timer);
   sessionDisconnectTimers.clear();
-  botMessageWindows.clear();callSignalWindows.clear();voiceSignalWindows.clear();welcomeSentSessions.clear();
+  for(const timer of privateDisconnectTimers.values())clearTimeout(timer);
+  privateDisconnectTimers.clear();
+  sessions.clear();
+  socketUsers.clear();
+  roomSockets.clear();
+  activeCallPairs.clear();
+  activeVoicePairs.clear();
+  botMessageWindows.clear();privateMessageWindows.clear();callSignalWindows.clear();voiceSignalWindows.clear();welcomeSentSessions.clear();
+  voiceSpeakers.clear();
+  privateMediaPlaybackTickets.clear();
   try{io.disconnectSockets(true);}catch(e){console.warn('Could not disconnect restored sessions:',e.message);}
   res.json({ok:true,message:'تمت استعادة قاعدة البيانات. تم إنهاء الجلسات النشطة.',recoveryFile:path.basename(recoveryFile||DB_FILE)});
  }catch(e){
-  db=previous;
-  try{save();}catch(rollbackError){console.error('Database restore rollback failed:',rollbackError);}
+  if(recoveryFile&&!recoveryReady){try{fs.unlinkSync(recoveryFile);}catch(_){}}
+  try{
+   if(databaseReleased){
+    if(databasePersisted)restoreDatabaseFileFromRecovery(recoveryFile);
+    db=readJsonFile(recoveryFile);
+    db.privateMessages=previousPrivateMessages||[];
+   }else{
+    db=previous;
+    if(!hadDatabaseFile&&databasePersisted){try{fs.unlinkSync(DB_FILE);}catch(unlinkError){if(unlinkError.code!=='ENOENT')throw unlinkError;}}
+   }
+  }catch(rollbackError){
+   console.error('FATAL: database restore rollback could not reload the preserved snapshot:',rollbackError);
+   process.exit(1);
+  }
   res.status(500).json({error:'فشلت الاستعادة وتمت محاولة الرجوع للبيانات السابقة. احتفظ بنسخة الاسترداد قبل أي محاولة أخرى.'});
  }
 });
-app.get('/api/admin/data',requireAuth,(req,res)=>{
+app.get('/api/admin/data',requireAdmin,(req,res)=>{
  const allowed=Object.keys(PERMISSION_CATALOG).some(p=>hasPermission(req.user,p));
  if(!allowed)return res.status(403).json({error:'ما عندك صلاحية لهذا القسم'});
  const presence=buildPresenceContext();
@@ -1728,20 +2314,22 @@ app.post('/api/rooms',requireAuth,(req,res)=>{const name=cleanName(req.body.name
 app.post('/api/admin/room',requireAdmin,(req,res)=>{const name=cleanName(req.body.name).slice(0,40),kind=req.body.kind==='voice'?'voice':req.body.kind==='private'?'private':'public';if(name.length<2)return res.status(400).json({error:'اسم الغرفة لازم يكون حرفين على الأقل'});if(db.rooms.length>=250)return res.status(400).json({error:'وصل الموقع إلى الحد الأعلى للغرف حالياً'});if(db.rooms.some(r=>keyName(r.name)===keyName(name)))return res.status(409).json({error:'اسم الغرفة مستخدم بالفعل'});const id='r_'+crypto.randomBytes(5).toString('hex');const room={id,name,desc:String(req.body.desc||'غرفة جديدة').trim().slice(0,160),kind,capacity:Math.max(2,Math.min(200,Number(req.body.capacity)||50)),mics:kind==='voice'?Math.max(1,Math.min(20,Number(req.body.mics)||5)):0,owner:req.user.name,created:Date.now()};db.rooms.push(room);try{save()}catch(error){db.rooms=db.rooms.filter(item=>item.id!==id);console.error('Admin room creation save failed:',error);return res.status(500).json({error:'تعذر حفظ الغرفة على السيرفر'})}emitState();return res.json({ok:true,id,room});});
 app.post('/api/admin/room/:id/lock',requireAdmin,(req,res)=>{const r=db.rooms.find(x=>x.id===req.params.id);if(!r)return res.status(404).json({error:'الغرفة غير موجودة'});const password=String(req.body.password||'');if(password.length<1)return res.status(400).json({error:'اكتب باسورد الغرفة أولاً'});if(password.length>128)return res.status(400).json({error:'الباسورد طويل جداً'});const previous=r.passwordHash;r.passwordHash=bcrypt.hashSync(password,12);try{save()}catch(error){if(previous===undefined)delete r.passwordHash;else r.passwordHash=previous;console.error('Room lock save failed:',error);return res.status(500).json({error:'تعذر حفظ قفل الغرفة'})}emitState();return res.json({ok:true,locked:true});});
 app.delete('/api/admin/room/:id/lock',requireAdmin,(req,res)=>{const r=db.rooms.find(x=>x.id===req.params.id);if(!r)return res.status(404).json({error:'الغرفة غير موجودة'});const previous=r.passwordHash;delete r.passwordHash;try{save()}catch(error){if(previous!==undefined)r.passwordHash=previous;console.error('Room unlock save failed:',error);return res.status(500).json({error:'تعذر حفظ إزالة قفل الغرفة'})}emitState();return res.json({ok:true,locked:false});});
-app.post('/api/admin/room/:id/image',requireAdmin,uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{const r=db.rooms.find(x=>x.id===req.params.id);if(!r){removeUploadedFile(req.file);return res.status(404).json({error:'الغرفة غير موجودة'});}if(!req.file||!req.file.mimetype.startsWith('image/')){removeUploadedFile(req.file);return res.status(400).json({error:'اختر صورة للغرفة'});}const previous=r.image;r.image='/uploads/'+req.file.filename;try{save()}catch(e){r.image=previous;removeUploadedFile(req.file);console.error('Admin room image save failed:',e.message);return res.status(500).json({error:'تعذر حفظ صورة الغرفة'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}emitState();res.json({ok:true,image:r.image,room:r});});
-app.post('/api/rooms/:id/image',requireAuth,uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{const r=db.rooms.find(x=>x.id===req.params.id);if(!r){removeUploadedFile(req.file);return res.status(404).json({error:'الغرفة غير موجودة'});}const owner=keyName(r.owner||'')===keyName(req.user.name||'');if(!owner&&!isOwner(req.user)&&!hasPermission(req.user,'room_image_manage')){removeUploadedFile(req.file);return res.status(403).json({error:'صورة الغرفة يگدر يغيرها منشئ الغرفة أو من يملك صلاحية إدارة صور الغرف'});}if(!req.file||!req.file.mimetype.startsWith('image/'))return res.status(400).json({error:'اختار ملف صورة صالح للغرفة'});const previous=r.image; r.image='/uploads/'+req.file.filename;try{save()}catch(err){r.image=previous;try{fs.unlinkSync(path.join(UP_DIR,req.file.filename))}catch{}console.error('Public room image save failed:',err);return res.status(500).json({error:'تعذر حفظ صورة الغرفة على السيرفر'})}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}emitState();return res.json({ok:true,image:r.image,room:r});});
-function clearRoomImage(req,res){const r=db.rooms.find(x=>x.id===req.params.id);if(!r)return res.status(404).json({error:'الغرفة غير موجودة'});const oldImage=String(r.image||'');delete r.image;try{save()}catch(e){r.image=oldImage;console.error('Room image reset save failed:',e);return res.status(500).json({error:'تعذر حفظ حذف الصورة؛ تحقق من صلاحية التخزين'})}if(oldImage.startsWith('/uploads/')){const file=path.resolve(UP_DIR,path.basename(oldImage));try{if(file.startsWith(path.resolve(UP_DIR)+path.sep)&&fs.existsSync(file))fs.unlinkSync(file)}catch(e){console.warn('Room image file cleanup failed:',e.message)}}emitState();return res.json({ok:true,image:null,room:r});}
+app.post('/api/admin/room/:id/image',requireAdmin,uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{const r=db.rooms.find(x=>x.id===req.params.id);if(!r){removeUploadedFile(req.file);return res.status(404).json({error:'الغرفة غير موجودة'});}if(!req.file||!req.file.mimetype.startsWith('image/')){removeUploadedFile(req.file);return res.status(400).json({error:'اختر صورة للغرفة'});}const previous=r.image;r.image='/uploads/'+req.file.filename;try{save()}catch(e){r.image=previous;removeUploadedFile(req.file);console.error('Admin room image save failed:',e.message);return res.status(500).json({error:'تعذر حفظ صورة الغرفة'});}if(previous&&previous.startsWith('/uploads/'))removePublicUploadIfUnreferenced(previous);emitState();res.json({ok:true,image:r.image,room:r});});
+app.post('/api/rooms/:id/image',(req,res,next)=>requireAuth(req,res,()=>{const room=db.rooms.find(x=>x.id===req.params.id);if(!room)return res.status(404).json({error:'الغرفة غير موجودة'});const owner=keyName(room.owner||'')===keyName(req.user.name||'');if(!owner&&!isOwner(req.user)&&!hasPermission(req.user,'room_image_manage'))return res.status(403).json({error:'صورة الغرفة يگدر يغيرها منشئ الغرفة أو من يملك صلاحية إدارة صور الغرف'});return next();}),uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{const r=db.rooms.find(x=>x.id===req.params.id);if(!r){removeUploadedFile(req.file);return res.status(404).json({error:'الغرفة غير موجودة'});}const owner=keyName(r.owner||'')===keyName(req.user.name||'');if(!owner&&!isOwner(req.user)&&!hasPermission(req.user,'room_image_manage')){removeUploadedFile(req.file);return res.status(403).json({error:'صورة الغرفة يگدر يغيرها منشئ الغرفة أو من يملك صلاحية إدارة صور الغرف'});}if(!req.file||!req.file.mimetype.startsWith('image/')){removeUploadedFile(req.file);return res.status(400).json({error:'اختار ملف صورة صالح للغرفة'});}const previous=r.image; r.image='/uploads/'+req.file.filename;try{save()}catch(err){r.image=previous;removeUploadedFile(req.file);console.error('Public room image save failed:',err);return res.status(500).json({error:'تعذر حفظ صورة الغرفة على السيرفر'})}if(previous&&previous.startsWith('/uploads/'))removePublicUploadIfUnreferenced(previous);emitState();return res.json({ok:true,image:r.image,room:r});});
+function clearRoomImage(req,res){const r=db.rooms.find(x=>x.id===req.params.id);if(!r)return res.status(404).json({error:'الغرفة غير موجودة'});const oldImage=String(r.image||'');delete r.image;try{save()}catch(e){r.image=oldImage;console.error('Room image reset save failed:',e);return res.status(500).json({error:'تعذر حفظ حذف الصورة؛ تحقق من صلاحية التخزين'})}if(oldImage.startsWith('/uploads/'))removePublicUploadIfUnreferenced(oldImage);emitState();return res.json({ok:true,image:null,room:r});}
 app.delete('/api/admin/room/:id/image',requireAdmin,clearRoomImage);
 // POST fallback for hosting/proxies that block DELETE requests.
 app.post('/api/admin/room/:id/image/delete',requireAdmin,clearRoomImage);
 app.patch('/api/admin/room/:id',requireAdmin,(req,res)=>{const r=db.rooms.find(x=>x.id===req.params.id);if(!r)return res.status(404).json({error:'الغرفة غير موجودة'});const previous={...r};if(req.body.name!==undefined){const name=cleanName(req.body.name).slice(0,40);if(name.length<2)return res.status(400).json({error:'اسم الغرفة لازم يكون حرفين على الأقل'});if(db.rooms.some(item=>item.id!==r.id&&keyName(item.name)===keyName(name)))return res.status(409).json({error:'اسم الغرفة مستخدم بالفعل'});r.name=name;}if(req.body.desc!==undefined)r.desc=String(req.body.desc).trim().slice(0,160);if(req.body.capacity!==undefined)r.capacity=Math.max(2,Math.min(200,Number(req.body.capacity)||r.capacity));if(req.body.mics!==undefined&&r.kind==='voice')r.mics=Math.max(1,Math.min(20,Number(req.body.mics)||r.mics));try{save()}catch(error){Object.keys(r).forEach(key=>delete r[key]);Object.assign(r,previous);console.error('Room update save failed:',error);return res.status(500).json({error:'تعذر حفظ تعديلات الغرفة'})}emitState();return res.json({ok:true,room:r});});
-app.delete('/api/admin/room/:id',requireAdmin,(req,res)=>{if(['public','voice'].includes(req.params.id))return res.status(400).json({error:'الغرفة الأساسية محمية ولا تحذف'});const index=db.rooms.findIndex(r=>r.id===req.params.id);if(index<0)return res.status(404).json({error:'الغرفة غير موجودة'});const [removed]=db.rooms.splice(index,1),oldBans=db.roomBans[req.params.id],oldMutes=db.roomMutes[req.params.id];delete db.roomBans[req.params.id];delete db.roomMutes[req.params.id];try{save()}catch(error){db.rooms.splice(index,0,removed);if(oldBans!==undefined)db.roomBans[req.params.id]=oldBans;if(oldMutes!==undefined)db.roomMutes[req.params.id]=oldMutes;console.error('Room deletion save failed:',error);return res.status(500).json({error:'تعذر حفظ حذف الغرفة'})}emitState();return res.json({ok:true});});
-app.post('/api/admin/unmute',(req,res,next)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'mute_room'))return res.status(403).json({error:'ما عندك صلاحية رفع الكتم'});const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});if(denyHigherRankTarget(req.user,name,res))return;db.roomMutes[room]=(db.roomMutes[room]||[]).filter(x=>keyName(x)!==name);save();res.json({ok:true});});});
+app.delete('/api/admin/room/:id',requireAdmin,(req,res)=>{if(['public','voice'].includes(req.params.id))return res.status(400).json({error:'الغرفة الأساسية محمية ولا تحذف'});const index=db.rooms.findIndex(r=>r.id===req.params.id);if(index<0)return res.status(404).json({error:'الغرفة غير موجودة'});const [removed]=db.rooms.splice(index,1),oldBans=db.roomBans[req.params.id],oldMutes=db.roomMutes[req.params.id];delete db.roomBans[req.params.id];delete db.roomMutes[req.params.id];try{save()}catch(error){db.rooms.splice(index,0,removed);if(oldBans!==undefined)db.roomBans[req.params.id]=oldBans;if(oldMutes!==undefined)db.roomMutes[req.params.id]=oldMutes;console.error('Room deletion save failed:',error);return res.status(500).json({error:'تعذر حفظ حذف الغرفة'})}clearDeletedRoomRuntime(req.params.id);emitState();return res.json({ok:true});});
+app.post('/api/admin/unmute',requireAdmin,(req,res)=>{const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});if(denyHigherRankTarget(req.user,name,res))return;const had=Object.prototype.hasOwnProperty.call(db.roomMutes,room),previous=db.roomMutes[room];db.roomMutes[room]=(previous||[]).filter(x=>keyName(x)!==name);try{save();}catch(error){if(had)db.roomMutes[room]=previous;else delete db.roomMutes[room];return res.status(500).json({error:'تعذر حفظ رفع الكتم'});}res.json({ok:true});});
 function roomAction(type,req,res){
   const room=String(req.body.room||'public'),name=keyName(req.body.name);
   if(!name)return res.status(400).json({error:'الاسم مطلوب'});
   if((isOwnerName(name)||isOwner({name,role:(getUser(name)||getGuest(name)||{}).role}))&&!isOwner(req.user)){notifyOwnerProtectedAttempt(req.user,type==='roomBans'?'حظرك في الغرفة':'كتمك في الغرفة');return res.status(403).json({error:'حساب صاحب الموقع محمي ولا يحق للإداري اتخاذ إجراء عليه'});}
   if(denyHigherRankTarget(req.user,name,res))return;
+  const hadRoom=Object.prototype.hasOwnProperty.call(db[type],room);
+  const previousRoom=Array.isArray(db[type][room])?db[type][room].slice():db[type][room];
   db[type][room]=db[type][room]||[];
   if(type==='roomMutes'){
     if(!db[type][room].includes(name))db[type][room].push(name);
@@ -1749,12 +2337,12 @@ function roomAction(type,req,res){
     db[type][room]=db[type][room].filter(x=>typeof x==='string'?x!==name:keyName(x?.name)!==name);
     db[type][room].push({name,until:Date.now()+15*60*1000});
   }else db[type][room]=db[type][room].filter(x=>x!==name);
-  save();
+  try{save();}catch(error){if(hadRoom)db[type][room]=previousRoom;else delete db[type][room];console.error('Room moderation save failed:',error.message);return res.status(500).json({error:'تعذر حفظ إجراء الغرفة'});}
   for(const [sid,u] of socketUsers){
     if(keyName(u.name)!==name||u.room!==room)continue;
     const s=io.sockets.sockets.get(sid);
     if(type==='roomBans'){
-      s?.leave(room); roomSockets.get(room)?.delete(sid);
+      s?.leave(room); removeSessionFromRoomRuntime(sid,room);if(s?.data?.user)s.data.user.room='';if(socketUsers.get(sid))socketUsers.get(sid).room='';
       s?.emit('kicked',{room,banned:true});
     }else if(type==='roomMutes'){
       s?.emit('error-msg',{error:'تم كتمك في هذه الغرفة'});
@@ -1763,39 +2351,37 @@ function roomAction(type,req,res){
   emitState();res.json({ok:true});
 }
 
-app.post('/api/admin/kick',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'kick_room'))return res.status(403).json({error:'ما عندك صلاحية الطرد'});const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});if((isOwnerName(name)||isOwner({name,role:(getUser(name)||getGuest(name)||{}).role}))&&!isOwner(req.user)){notifyOwnerProtectedAttempt(req.user,'طردك من الغرفة');return res.status(403).json({error:'حساب صاحب الموقع محمي ولا يحق للإداري اتخاذ إجراء عليه'});}if(denyHigherRankTarget(req.user,name,res))return;for(const [sid2,u2] of socketUsers){if(keyName(u2.name)===name&&u2.room===room){const so=socketBySession(sid2);so?.leave(room);roomSockets.get(room)?.delete(sid2);so?.emit('kicked',{room});}}emitState();res.json({ok:true});});});
-app.post('/api/admin/profile/status',requireAdmin,(req,res)=>{const name=accountKey(cleanName(req.body?.name));const target=getUser(name)||getGuest(name);if(!name||!target)return res.status(404).json({error:'العضو غير موجود'});if(isOwnerName(name)||roleOf({name,role:target.role})==='owner'){if(!isOwner(req.user))notifyOwnerProtectedAttempt(req.user,'تغيير حالتك الشخصية');return res.status(403).json({error:'حالة صاحب الموقع محمية'});}if(denyHigherRankTarget(req.user,name,res))return;const status=String(req.body?.status||'').trim().slice(0,100);const p=profile(name);p.status=status||defaultStatus(name);p.statusUpdatedAt=Date.now();p.statusUpdatedBy=String(req.user?.name||'').slice(0,32);try{save()}catch(e){return res.status(500).json({error:'تعذر حفظ الحالة'});}io.emit('profile-changed',{name,profile:p,displayName:p.displayName||cleanName(name)});res.json({ok:true,name,status:p.status});});
+app.post('/api/admin/kick',requireAdmin,(req,res)=>{const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});if((isOwnerName(name)||isOwner({name,role:(getUser(name)||getGuest(name)||{}).role}))&&!isOwner(req.user)){notifyOwnerProtectedAttempt(req.user,'طردك من الغرفة');return res.status(403).json({error:'حساب صاحب الموقع محمي ولا يحق للإداري اتخاذ إجراء عليه'});}if(denyHigherRankTarget(req.user,name,res))return;for(const [sid2,u2] of socketUsers){if(keyName(u2.name)===name&&u2.room===room){const so=socketBySession(sid2);so?.leave(room);removeSessionFromRoomRuntime(sid2,room);if(so?.data?.user)so.data.user.room='';if(socketUsers.get(sid2))socketUsers.get(sid2).room='';so?.emit('kicked',{room});}}emitState();res.json({ok:true});});
+app.post('/api/admin/profile/status',requireAdmin,(req,res)=>{const name=accountKey(cleanName(req.body?.name)),target=getUser(name)||getGuest(name);if(!name||!target)return res.status(404).json({error:'العضو غير موجود'});if(isOwnerName(name)||roleOf({name,role:target.role})==='owner'){if(!isOwner(req.user))notifyOwnerProtectedAttempt(req.user,'تغيير حالتك الشخصية');return res.status(403).json({error:'حالة صاحب الموقع محمية'});}if(denyHigherRankTarget(req.user,name,res))return;const hadProfile=Object.prototype.hasOwnProperty.call(db.profiles,name),p=profile(name),previous={...p},status=String(req.body?.status||'').trim().slice(0,100);p.status=status||defaultStatus(name);p.statusUpdatedAt=Date.now();p.statusUpdatedBy=String(req.user?.name||'').slice(0,32);try{save();}catch(error){if(hadProfile){for(const key of Object.keys(p))delete p[key];Object.assign(p,previous);}else delete db.profiles[name];return res.status(500).json({error:'تعذر حفظ الحالة'});}io.emit('profile-changed',{name,profile:p,displayName:p.displayName||cleanName(name)});res.json({ok:true,name,status:p.status});});
 
-app.post('/api/admin/mute',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'mute_room'))return res.status(403).json({error:'ما عندك صلاحية الكتم'});roomAction('roomMutes',req,res);});});
-app.post('/api/admin/ban',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'ban_room'))return res.status(403).json({error:'ما عندك صلاحية الحظر'});roomAction('roomBans',req,res);});});
-app.post('/api/admin/unban',(req,res)=>{requireAuth(req,res,()=>{if(!hasPermission(req.user,'ban_room'))return res.status(403).json({error:'ما عندك صلاحية رفع الحظر'});const room=String(req.body.room||'public'),name=keyName(req.body.name);if(denyHigherRankTarget(req.user,name,res))return;db.roomBans[room]=(db.roomBans[room]||[]).filter(x=>typeof x==='string'?x!==name:keyName(x?.name)!==name);save();res.json({ok:true});});});
+app.post('/api/admin/mute',requireAdmin,(req,res)=>roomAction('roomMutes',req,res));
+app.post('/api/admin/ban',requireAdmin,(req,res)=>roomAction('roomBans',req,res));
+app.post('/api/admin/unban',requireAdmin,(req,res)=>{const room=String(req.body.room||'public'),name=keyName(req.body.name);if(!name)return res.status(400).json({error:'الاسم مطلوب'});if(denyHigherRankTarget(req.user,name,res))return;const had=Object.prototype.hasOwnProperty.call(db.roomBans,room),previous=db.roomBans[room];db.roomBans[room]=(previous||[]).filter(x=>typeof x==='string'?x!==name:keyName(x?.name)!==name);try{save();}catch(error){if(had)db.roomBans[room]=previous;else delete db.roomBans[room];return res.status(500).json({error:'تعذر حفظ رفع الحظر'});}res.json({ok:true});});
 
-app.post('/api/ignore',requireAuth,(req,res)=>{const n=cleanName(req.body.name);if(!n||keyName(n)===keyName(req.user.name))return res.status(400).json({error:'اسم غير صحيح'});db.ignored=db.ignored||{};const me=keyName(req.user.name),other=keyName(n);db.ignored[me]=Array.isArray(db.ignored[me])?db.ignored[me]:[];const i=db.ignored[me].findIndex(x=>keyName(x)===other);if(i>=0)db.ignored[me].splice(i,1);else db.ignored[me].push(other);save();res.json({ok:true,ignored:i<0});});
+app.post('/api/ignore',requireAuth,(req,res)=>{const n=cleanName(req.body.name);if(!n||keyName(n)===keyName(req.user.name))return res.status(400).json({error:'اسم غير صحيح'});const me=keyName(req.user.name),other=keyName(n),previous=db.ignored,next={...(db.ignored||{})},list=Array.isArray(next[me])?next[me].slice():[],i=list.findIndex(x=>keyName(x)===other);if(i>=0)list.splice(i,1);else list.push(other);next[me]=list;db.ignored=next;try{save();}catch(error){if(previous===undefined)delete db.ignored;else db.ignored=previous;return res.status(500).json({error:'تعذر حفظ قائمة التجاهل'});}res.json({ok:true,ignored:i<0});});
 app.post('/api/profile',requireAuth,(req,res)=>{
-  const u=req.user,p=profile(u.name);
-  if(req.body.displayName!==undefined){
-    const dn=cleanName(req.body.displayName);
-    if(!dn)return res.status(400).json({error:'الاسم المزخرف لا يمكن أن يكون فارغاً'});
-    p.displayName=dn;
-  }
-  if(req.body.status!==undefined)p.status=String(req.body.status).slice(0,100)||defaultStatus(u.name);
-  if(req.body.bio!==undefined)p.bio=String(req.body.bio).slice(0,300);
-  if(req.body.nameColor!==undefined)p.nameColor=String(req.body.nameColor).slice(0,20);
-  if(req.body.fontColor!==undefined)p.fontColor=String(req.body.fontColor).slice(0,20);
-  if(req.body.bgColor!==undefined)p.bgColor=String(req.body.bgColor).slice(0,20);
-  if(req.body.privateOpen!==undefined)p.privateOpen=!!req.body.privateOpen;
-  if(req.body.notificationsOpen!==undefined)p.notificationsOpen=!!req.body.notificationsOpen;
-  save();io.emit('profile-changed',{name:u.name,profile:p,displayName:p.displayName||cleanName(u.name)});emitState();res.json({ok:true,profile:p,displayName:p.displayName||cleanName(u.name)});
+  const u=req.user,p=profile(u.name),updates={};
+  if(req.body.displayName!==undefined){const dn=cleanName(req.body.displayName);if(!dn)return res.status(400).json({error:'الاسم المزخرف لا يمكن أن يكون فارغاً'});updates.displayName=dn;}
+  if(req.body.status!==undefined)updates.status=String(req.body.status).slice(0,100)||defaultStatus(u.name);
+  if(req.body.bio!==undefined)updates.bio=String(req.body.bio).slice(0,300);
+  for(const field of ['nameColor','fontColor','bgColor'])if(req.body[field]!==undefined)updates[field]=String(req.body[field]).slice(0,20);
+  if(req.body.privateOpen!==undefined)updates.privateOpen=!!req.body.privateOpen;
+  if(req.body.notificationsOpen!==undefined)updates.notificationsOpen=!!req.body.notificationsOpen;
+  const previous={...p};Object.assign(p,updates);
+  try{save();}catch(error){for(const key of Object.keys(p))delete p[key];Object.assign(p,previous);console.error('Profile update save failed:',error.message);return res.status(500).json({error:'تعذر حفظ الملف الشخصي'});}
+  io.emit('profile-changed',{name:u.name,profile:p,displayName:p.displayName||cleanName(u.name)});emitState();res.json({ok:true,profile:p,displayName:p.displayName||cleanName(u.name)});
 });
-app.post('/api/profile/avatar',requireAuth,uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!isOwner(req.user)&&Number(getUser(req.user.name)?.likes??getGuest(req.user.name)?.likes??0)<10){removeUploadedFile(req.file);return res.status(403).json({error:'تغيير الصورة يفتح عند 10 إعجابات'});}if(!req.file||!req.file.mimetype.startsWith('image/')){removeUploadedFile(req.file);return res.status(400).json({error:'اختر صورة'});}const p=profile(req.user.name),previous=p.avatar;p.avatar='/uploads/'+req.file.filename;try{save()}catch(e){p.avatar=previous;removeUploadedFile(req.file);console.error('Avatar save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الصورة'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}res.json({ok:true,avatar:p.avatar});});
-app.delete('/api/profile/avatar',requireAuth,(req,res)=>{if(isOwner(req.user))return res.status(403).json({error:'حذف صورة صاحب الموقع محمي'});const p=profile(req.user.name),previous=p.avatar;p.avatar='';try{save()}catch(e){p.avatar=previous;return res.status(500).json({error:'تعذر حفظ حذف الصورة'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}res.json({ok:true,avatar:''});});
+app.post('/api/profile/avatar',(req,res,next)=>requireAuth(req,res,()=>{if(!isOwner(req.user)&&Number(getUser(req.user.name)?.likes??getGuest(req.user.name)?.likes??0)<10)return res.status(403).json({error:'تغيير الصورة يفتح عند 10 إعجابات'});return next();}),uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!isOwner(req.user)&&Number(getUser(req.user.name)?.likes??getGuest(req.user.name)?.likes??0)<10){removeUploadedFile(req.file);return res.status(403).json({error:'تغيير الصورة يفتح عند 10 إعجابات'});}if(!req.file||!req.file.mimetype.startsWith('image/')){removeUploadedFile(req.file);return res.status(400).json({error:'اختر صورة'});}const p=profile(req.user.name),previous=p.avatar;p.avatar='/uploads/'+req.file.filename;try{save()}catch(e){p.avatar=previous;removeUploadedFile(req.file);console.error('Avatar save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الصورة'});}if(previous&&previous.startsWith('/uploads/'))removePublicUploadIfUnreferenced(previous);res.json({ok:true,avatar:p.avatar});});
+app.delete('/api/profile/avatar',requireAuth,(req,res)=>{if(isOwner(req.user))return res.status(403).json({error:'حذف صورة صاحب الموقع محمي'});const p=profile(req.user.name),previous=p.avatar;p.avatar='';try{save()}catch(e){p.avatar=previous;return res.status(500).json({error:'تعذر حفظ حذف الصورة'});}if(previous&&previous.startsWith('/uploads/'))removePublicUploadIfUnreferenced(previous);res.json({ok:true,avatar:''});});
 // Personal banners are intentionally separate from rank artwork and member decorations.
-app.post('/api/profile/banner',requireAuth,(req,res,next)=>{if(!hasPermission(req.user,'personal_banner'))return res.status(403).json({error:'ما عندك صلاحية رفع البنر'});next();},uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!req.file){return res.status(400).json({error:'اختر صورة للبنر'});}const p=profile(req.user.name),previous=p.banner;p.banner='/uploads/'+req.file.filename;try{save()}catch(e){p.banner=previous;removeUploadedFile(req.file);return res.status(500).json({error:'تعذر حفظ البنر'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}io.emit('profile-changed',{name:req.user.name,profile:p,displayName:p.displayName||cleanName(req.user.name)});emitState();res.json({ok:true,banner:p.banner});});
-app.delete('/api/profile/banner',requireAuth,(req,res)=>{if(!hasPermission(req.user,'personal_banner'))return res.status(403).json({error:'ما عندك صلاحية حذف البنر'});const p=profile(req.user.name),previous=p.banner;p.banner='';try{save()}catch(e){p.banner=previous;return res.status(500).json({error:'تعذر حذف البنر'});}if(previous&&previous.startsWith('/uploads/')){try{fs.unlinkSync(path.join(UP_DIR,path.basename(previous)))}catch{}}io.emit('profile-changed',{name:req.user.name,profile:p,displayName:p.displayName||cleanName(req.user.name)});emitState();res.json({ok:true,banner:''});});
+app.post('/api/profile/banner',requireAuth,(req,res,next)=>{if(!hasPermission(req.user,'personal_banner'))return res.status(403).json({error:'ما عندك صلاحية رفع البنر'});next();},uploadImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!req.file){return res.status(400).json({error:'اختر صورة للبنر'});}const p=profile(req.user.name),previous=p.banner;p.banner='/uploads/'+req.file.filename;try{save()}catch(e){p.banner=previous;removeUploadedFile(req.file);return res.status(500).json({error:'تعذر حفظ البنر'});}if(previous&&previous.startsWith('/uploads/'))removePublicUploadIfUnreferenced(previous);io.emit('profile-changed',{name:req.user.name,profile:p,displayName:p.displayName||cleanName(req.user.name)});emitState();res.json({ok:true,banner:p.banner});});
+app.delete('/api/profile/banner',requireAuth,(req,res)=>{if(!hasPermission(req.user,'personal_banner'))return res.status(403).json({error:'ما عندك صلاحية حذف البنر'});const p=profile(req.user.name),previous=p.banner;p.banner='';try{save()}catch(e){p.banner=previous;return res.status(500).json({error:'تعذر حذف البنر'});}if(previous&&previous.startsWith('/uploads/'))removePublicUploadIfUnreferenced(previous);io.emit('profile-changed',{name:req.user.name,profile:p,displayName:p.displayName||cleanName(req.user.name)});emitState();res.json({ok:true,banner:''});});
 
 app.post('/api/media',requireAuth,upload.single('file'),validateUploadedContent('media'),(req,res)=>{
   const u=req.user, to=cleanName(req.body.to||''), scope=String(req.body.scope||'private');
   if(!req.file)return res.status(400).json({error:'لم يتم اختيار ملف'});
+  if(scope==='private'&&!siteModuleEnabled('privateChat')){removeUploadedFile(req.file);return res.status(403).json({error:'المحادثات الخاصة متوقفة من إدارة الموقع'});}
+  if(scope==='wall'&&!siteModuleEnabled('wall')){removeUploadedFile(req.file);return res.status(403).json({error:'ميزة الحائط متوقفة من إدارة الموقع'});}
   if(globalBanned(u.name,requestClientIp(req))){removeUploadedFile(req.file);return res.status(403).json({error:'لا يمكنك إرسال الوسائط أثناء الحظر العام'});}
   if(scope==='private'&&!canMedia(u)){removeUploadedFile(req.file);return res.status(403).json({error:`الصور والفيديو والصوت والاتصال تفتح عند ${PRIVATE_MEDIA_LIKES_REQUIRED} إعجاب من المرسل`});}
   if(scope==='wall'&&db.wallEnabled===false){removeUploadedFile(req.file);return res.status(403).json({error:'الجدار متوقف مؤقتاً من الإدارة'});}
@@ -1825,49 +2411,82 @@ app.post('/api/media',requireAuth,upload.single('file'),validateUploadedContent(
 function normalizeChatFilterText(value){return String(value||'').normalize('NFKC').toLocaleLowerCase('ar').replace(/[\u064B-\u065F\u0670\u0640\u200B-\u200F\uFEFF]/g,'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/[\s\u00A0]+/g,' ').trim();}
 function blockedChatTerm(text){const f=db.chatFilter||{};if(f.enabled!==true)return '';const normalized=normalizeChatFilterText(text);return (Array.isArray(f.words)?f.words:[]).find(w=>{const term=normalizeChatFilterText(w);return term&&normalized.includes(term)})||'';}
 const botMessageWindows=new Map();
+function roomMessageRateLimitError(sid,text,now=Date.now()){
+  const config=normalizedBotSettings(db.botSettings).antiSpam;
+  if(!config.enabled)return '';
+  if(!sid)return 'تعذر التحقق من جلسة الدردشة';
+  const message=String(text||'').trim();
+  if(!message)return '';
+  const state=botMessageWindows.get(sid)||{start:now,count:0,lastText:'',repeat:0};
+  if(now-state.start>5000){state.start=now;state.count=0;state.lastText='';state.repeat=0;}
+  state.count++;
+  state.repeat=state.lastText===message?state.repeat+1:1;
+  state.lastText=message;
+  botMessageWindows.set(sid,state);
+  return state.count>7||state.repeat>3?'🤖 بوت الحماية: تم إيقاف الرسائل المتكررة أو السريعة، انتظر قليلاً':'';
+}
+const privateMessageWindows=new Map();
+const PRIVATE_MESSAGE_WINDOW_MS=5000,PRIVATE_MESSAGE_WINDOW_LIMIT=7,PRIVATE_MESSAGE_REPEAT_LIMIT=3;
+function allowPrivateMessage(sid,text,now=Date.now()){
+  if(!sid)return false;
+  const key=String(sid),message=String(text||'').trim();
+  if(!message)return false;
+  const state=privateMessageWindows.get(key)||{start:now,count:0,lastText:'',repeat:0};
+  if(now-state.start>PRIVATE_MESSAGE_WINDOW_MS){state.start=now;state.count=0;state.lastText='';state.repeat=0;}
+  state.count++;
+  state.repeat=state.lastText===message?state.repeat+1:1;
+  state.lastText=message;
+  privateMessageWindows.set(key,state);
+  return state.count<=PRIVATE_MESSAGE_WINDOW_LIMIT&&state.repeat<=PRIVATE_MESSAGE_REPEAT_LIMIT;
+}
 function clearSessionTransientState(sid){
   if(!sid)return;
   botMessageWindows.delete(sid);
+  privateMessageWindows.delete(sid);
   callSignalWindows.delete(sid);
   voiceSignalWindows.delete(sid);
   welcomeSentSessions.delete(sid);
 }
 function pruneOrphanedSessionState(){
   for(const sid of botMessageWindows.keys())if(!sessions.has(sid)||(!socketUsers.has(sid)&&!sessionDisconnectTimers.has(sid)))botMessageWindows.delete(sid);
+  for(const sid of privateMessageWindows.keys())if(!sessions.has(sid)||(!socketUsers.has(sid)&&!sessionDisconnectTimers.has(sid)))privateMessageWindows.delete(sid);
   for(const sid of callSignalWindows.keys())if(!socketUsers.has(sid))callSignalWindows.delete(sid);
   for(const sid of voiceSignalWindows.keys())if(!socketUsers.has(sid))voiceSignalWindows.delete(sid);
   for(const sid of welcomeSentSessions)if(!sessions.has(sid))welcomeSentSessions.delete(sid);
 }
 const sessionTransientCleanupTimer=setInterval(pruneOrphanedSessionState,5*60*1000);
 sessionTransientCleanupTimer.unref?.();
-function emitRoomBotMessage(room,text){const message={id:crypto.randomUUID(),room,from:'رماز بوت',displayName:'🤖 رماز بوت',type:'text',text:String(text||'').slice(0,1000),at:Date.now(),role:'bot',bot:true};try{addMessage(message);io.to(room).emit('message',message);}catch(error){console.warn('Chat bot response failed:',error.message);}}
-function processBuiltInBotCommand(socket,user,room,text){
+async function emitRoomBotMessage(room,text){const message={id:crypto.randomUUID(),room,from:'رماز بوت',displayName:'🤖 رماز بوت',type:'text',text:String(text||'').slice(0,1000),at:Date.now(),role:'bot',bot:true};try{await addMessage(message);io.to(room).emit('message',message);}catch(error){console.warn('Chat bot response failed:',error.message);}}
+async function processBuiltInBotCommand(socket,user,room,text,onError=null){
  const settings=normalizedBotSettings(db.botSettings),raw=String(text||'').trim();if(!/^[!/]/.test(raw))return false;
  const [head,...tail]=raw.slice(1).trim().split(/\s+/),cmd=String(head||'').toLowerCase(),arg=tail.join(' ').trim();if(!cmd)return false;
- if(['مساعدة','help','بوتات'].includes(cmd)){const lines=['🤖 أوامر بوت رماز:'];if(settings.games.enabled)lines.push('/نرد — رمية نرد','/عملة — رمي العملة','/رقم — رقم عشوائي');if(settings.stats.enabled)lines.push('/احصائياتي — معلومات حسابك','/المتواجدين — عدد المتصلين','/احصائيات — إحصائيات الدردشة');if(settings.adminCommands.enabled&&canNotice(user))lines.push('/تنبيه نص الرسالة — إعلان إداري للغرفة');if(lines.length===1)lines.push('لا توجد بوتات تفاعلية مفعّلة حالياً.');emitRoomBotMessage(room,lines.join('\n'));return true;}
+ if(['مساعدة','help','بوتات'].includes(cmd)){const lines=['🤖 أوامر بوت رماز:'];if(settings.games.enabled)lines.push('/نرد — رمية نرد','/عملة — رمي العملة','/رقم — رقم عشوائي');if(settings.stats.enabled)lines.push('/احصائياتي — معلومات حسابك','/المتواجدين — عدد المتصلين','/احصائيات — إحصائيات الدردشة');if(settings.adminCommands.enabled&&canNotice(user))lines.push('/تنبيه نص الرسالة — إعلان إداري للغرفة');if(lines.length===1)lines.push('لا توجد بوتات تفاعلية مفعّلة حالياً.');await emitRoomBotMessage(room,lines.join('\n'));return true;}
  if(settings.games.enabled&&['نرد','dice','عملة','coin','رقم','random'].includes(cmd)){
-  if(['نرد','dice'].includes(cmd))emitRoomBotMessage(room,`🎲 ${displayName(user.name)} رمى النرد والنتيجة: ${1+Math.floor(Math.random()*6)}`);
-  else if(['عملة','coin'].includes(cmd))emitRoomBotMessage(room,`🪙 ${displayName(user.name)}: ${Math.random()<.5?'وجه':'كتابة'}`);
-  else emitRoomBotMessage(room,`🎯 ${displayName(user.name)} حصل على الرقم: ${1+Math.floor(Math.random()*100)}`);
+  if(['نرد','dice'].includes(cmd))await emitRoomBotMessage(room,`🎲 ${displayName(user.name)} رمى النرد والنتيجة: ${1+Math.floor(Math.random()*6)}`);
+  else if(['عملة','coin'].includes(cmd))await emitRoomBotMessage(room,`🪙 ${displayName(user.name)}: ${Math.random()<.5?'وجه':'كتابة'}`);
+  else await emitRoomBotMessage(room,`🎯 ${displayName(user.name)} حصل على الرقم: ${1+Math.floor(Math.random()*100)}`);
   return true;
  }
  if(settings.stats.enabled&&['احصائياتي','me','المتواجدين','online','احصائيات','stats'].includes(cmd)){
-  if(['احصائياتي','me'].includes(cmd)){const likes=userLikes(user);emitRoomBotMessage(room,`📊 ${displayName(user.name)}\nالرتبة: ${rankDefinition(profile(user.name).rank)?.name||'عضو'}\nالإعجابات: ${likes}\nالمستوى: ${level(likes)}\nالغرفة: ${db.rooms.find(r=>r.id===room)?.name||'الدردشة'}`);}
-  else if(['المتواجدين','online'].includes(cmd))emitRoomBotMessage(room,`👥 عدد المتواجدين حالياً: ${getOnlineUsers().length}`);
-  else emitRoomBotMessage(room,`📊 إحصائيات رماز: ${Object.keys(db.users||{}).length} عضو مسجل، ${Object.keys(db.guests||{}).length} زائر، ${getOnlineUsers().length} متصل حالياً.`);
+  if(['احصائياتي','me'].includes(cmd)){const likes=userLikes(user);await emitRoomBotMessage(room,`📊 ${displayName(user.name)}\nالرتبة: ${rankDefinition(profile(user.name).rank)?.name||'عضو'}\nالإعجابات: ${likes}\nالمستوى: ${level(likes)}\nالغرفة: ${db.rooms.find(r=>r.id===room)?.name||'الدردشة'}`);}
+  else if(['المتواجدين','online'].includes(cmd))await emitRoomBotMessage(room,`👥 عدد المتواجدين حالياً: ${getOnlineUsers().length}`);
+  else await emitRoomBotMessage(room,`📊 إحصائيات رماز: ${Object.keys(db.users||{}).length} عضو مسجل، ${Object.keys(db.guests||{}).length} زائر، ${getOnlineUsers().length} متصل حالياً.`);
   return true;
  }
  if(settings.adminCommands.enabled&&['تنبيه','announce'].includes(cmd)){
-  if(!canNotice(user)){socket.emit('error-msg',{error:'هذا الأمر يحتاج صلاحية إرسال التنبيهات الإدارية'});return true;}
-  if(!arg){socket.emit('error-msg',{error:'اكتب نص التنبيه بعد الأمر /تنبيه'});return true;}
-  io.to(room).emit('admin-notice',{from:user.name,text:arg.slice(0,500)});emitRoomBotMessage(room,`📢 تم إرسال التنبيه بواسطة ${displayName(user.name)}.`);return true;
+  if(!canNotice(user)){const message='هذا الأمر يحتاج صلاحية إرسال التنبيهات الإدارية';if(onError)onError(message,403);else socket.emit('error-msg',{error:message});return true;}
+  if(!arg){const message='اكتب نص التنبيه بعد الأمر /تنبيه';if(onError)onError(message,400);else socket.emit('error-msg',{error:message});return true;}
+  io.to(room).emit('admin-notice',{from:user.name,text:arg.slice(0,500)});await emitRoomBotMessage(room,`📢 تم إرسال التنبيه بواسطة ${displayName(user.name)}.`);return true;
  }
  return false;
 }
 
 io.on('connection',socket=>{
-  socket.on('join',({sid,room='public',password=''}={})=>{
-    const u=sessionUser(sid); if(!u)return;
+  socket.on('join',async({sid,room='public',password=''}={})=>{
+    // A socket may join initially or move rooms, but a superseded socket must never reclaim the same session.
+    const requestedSid=String(sid||'');
+    if(socket.data.sid&&(socket.data.sid!==requestedSid||!isCurrentSessionSocket(socket)))return;
+    const u=sessionUser(requestedSid); if(!u)return;
     const targetRoom=db.rooms.find(r=>r.id===room); if(!targetRoom){socket.emit('join-error',{error:'الغرفة غير موجودة'});return;}if(targetRoom.kind==='voice'&&!siteModuleEnabled('voiceRooms')){socket.emit('join-error',{error:'الغرف الصوتية متوقفة من إدارة الموقع'});return;}
     if(targetRoom.passwordHash&&!bcrypt.compareSync(String(password||''),targetRoom.passwordHash)){socket.emit('join-error',{error:'الغرفة مقفلة؛ أدخل الباسورد الصحيح'});return;} 
     // Validate access before changing the active room, then move this socket atomically.
@@ -1883,22 +2502,21 @@ io.on('connection',socket=>{
     const alreadyInTargetRoom=previousRoom===room||[...socketUsers.entries()].some(([otherSid,active])=>otherSid!==sid&&active.room===room&&keyName(active.name)===keyName(u.name));
     if(previousRoom && previousRoom!==room){
       if(replacingSocket)previousSocket.leave(previousRoom);else socket.leave(previousRoom);
-      roomSockets.get(previousRoom)?.delete(sid);
-      voiceSpeakers.get(previousRoom)?.delete(sid);clearVoicePairsForSession(previousRoom,sid);for(const peerSid of (roomSockets.get(previousRoom)||new Set()))if(peerSid!==sid)socketBySession(peerSid)?.emit('voice-peer-left',{room:previousRoom,sid});
-      if(!u.ghost&&!alreadyInPreviousRoom){const leaveNotice={id:crypto.randomUUID(),room:previousRoom,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'move',exitKind:'room',targetRoom:room,text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{addMessage(leaveNotice)}catch(e){console.warn('Room-move presence could not be saved:',e.message)}emitPresenceToRoom(previousRoom,leaveNotice);}
+      removeSessionFromRoomRuntime(sid,previousRoom);
+      if(!u.ghost&&!alreadyInPreviousRoom){const leaveNotice={id:crypto.randomUUID(),room:previousRoom,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'move',exitKind:'room',targetRoom:room,text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{await addMessage(leaveNotice);emitPresenceToRoom(previousRoom,leaveNotice)}catch(e){console.warn('Room-move presence could not be saved:',e.message)}}
       emitVoiceState(previousRoom);
       const oldMembers=roomSockets.get(previousRoom)||new Set();
       for(const memberSid of [...oldMembers]){const active=socketUsers.get(memberSid);if(!active||active.room!==previousRoom)oldMembers.delete(memberSid);}
       if(oldMembers.size===0)roomSockets.delete(previousRoom);
     }
-    if(replacingSocket&&previousRoom){voiceSpeakers.get(previousRoom)?.delete(sid);clearVoicePairsForSession(previousRoom,sid);for(const peerSid of (roomSockets.get(previousRoom)||new Set()))if(peerSid!==sid)socketBySession(peerSid)?.emit('voice-peer-left',{room:previousRoom,sid});emitVoiceState(previousRoom);}
+    if(replacingSocket&&previousRoom===room){removeSessionFromRoomRuntime(sid,previousRoom);}
     cancelSessionDisconnectCleanup(sid);cancelPrivateConversationCleanup(u.name);socket.data.sid=sid;socket.data.user={...u,room};socketUsers.set(sid,{...u,room,socketId:socket.id,joinedAt:Date.now()});
     if(replacingSocket)previousSocket.disconnect(true);
     socket.join(room); if(!roomSockets.has(room))roomSockets.set(room,new Set());roomSockets.get(room).add(sid);
     socket.emit('room-joined',{room});
     // Deliver welcome cards before the room history so the entry sequence is stable and predictable.
     if(!welcomeSentSessions.has(sid)){for(const item of (db.welcomeMessages||[]).filter(x=>x.enabled!==false&&String(x.text||'').trim())){const welcome={id:'welcome-'+crypto.randomUUID(),room,from:'شات ريماز',displayName:item.title||'الترحيب',type:'welcome',text:item.text,at:Date.now(),profile:{nameColor:'#2877b9',bgColor:'#eaf5ff'}};socket.emit('message',welcome);}welcomeSentSessions.add(sid);}
-    socket.emit('history',{room,items:roomHistoryWithAnnouncements(room,u,Number(u.created)||0)}); if(!u.ghost&&!alreadyInTargetRoom){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'join',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{addMessage(pm)}catch(e){console.warn('Join presence could not be saved:',e.message)}emitPresenceToRoom(room,pm);const bot=normalizedBotSettings(db.botSettings).welcome;if(bot.enabled===true&&room==='public'){const welcomeText=String(bot.text||'أهلاً وسهلاً بك في دردشة رماز ❤️').slice(0,240);const welcomeMessage={id:crypto.randomUUID(),room,from:'رماز بوت',displayName:'🤖 رماز بوت',type:'text',text:welcomeText.replace(/\{name\}/g,displayName(u.name)),at:Date.now(),role:'bot',bot:true};try{addMessage(welcomeMessage);io.to(room).emit('message',welcomeMessage)}catch(error){console.warn('Welcome bot message failed:',error.message)}}} emitState(); const joinedRoom=db.rooms.find(r=>r.id===room); if(joinedRoom?.kind==='voice'){for(const [speakerSid,speaker] of (voiceSpeakers.get(room)||new Map()))socketBySession(speakerSid)?.emit('voice-peer-joined',{room,sid,name:u.name});emitVoiceState(room);}
+    socket.emit('history',{room,items:roomHistoryWithAnnouncements(room,u,Number(u.created)||0)}); if(!u.ghost&&!alreadyInTargetRoom){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'join',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{await addMessage(pm);emitPresenceToRoom(room,pm)}catch(e){console.warn('Join presence could not be saved:',e.message)}const bot=normalizedBotSettings(db.botSettings).welcome;if(bot.enabled===true&&room==='public'){const welcomeText=String(bot.text||'أهلاً وسهلاً بك في دردشة رماز ❤️').slice(0,240);const welcomeMessage={id:crypto.randomUUID(),room,from:'رماز بوت',displayName:'🤖 رماز بوت',type:'text',text:welcomeText.replace(/\{name\}/g,displayName(u.name)),at:Date.now(),role:'bot',bot:true};try{await addMessage(welcomeMessage);io.to(room).emit('message',welcomeMessage)}catch(error){console.warn('Welcome bot message failed:',error.message)}}} emitState(); const joinedRoom=db.rooms.find(r=>r.id===room); if(joinedRoom?.kind==='voice'){for(const [speakerSid,speaker] of (voiceSpeakers.get(room)||new Map()))socketBySession(speakerSid)?.emit('voice-peer-joined',{room,sid,name:u.name});emitVoiceState(room);}
   });
   socket.on('request-mic',({room,raised,seatIndex}={})=>{
     if(!isCurrentSessionSocket(socket))return;
@@ -1914,21 +2532,28 @@ io.on('connection',socket=>{
       const occupied=[...speakers.entries()].find(([peerSid,x])=>peerSid!==sid&&Number(x.seatIndex)===requested);
       if(occupied){const error='هذا المقعد مشغول، اختَر مقعداً فارغاً';socket.emit('voice-mic-denied',{error});return socket.emit('error-msg',{error});}
       if(speakers.size>=limit&&!speakers.has(sid)){const error='اكتمل عدد المايكات في هذه الغرفة';socket.emit('voice-mic-denied',{error});return socket.emit('error-msg',{error});}
-      const previous=speakers.get(sid);if(previous&&Number(previous.seatIndex)!==requested){const error='أنت مرفوع على مقعد آخر؛ اخفض المايك أولاً';socket.emit('voice-mic-denied',{error});return socket.emit('error-msg',{error});}
+      const previous=speakers.get(sid);
+      if(previous&&Number(previous.seatIndex)===requested){
+        const peers=[...(roomSockets.get(room)||new Set())].filter(peerSid=>peerSid!==sid).map(peerSid=>({sid:peerSid,name:socketUsers.get(peerSid)?.name||''}));
+        socket.emit('voice-mic-granted',{room,peers});
+        return;
+      }
+      if(previous&&Number(previous.seatIndex)!==requested){const error='أنت مرفوع على مقعد آخر؛ اخفض المايك أولاً';socket.emit('voice-mic-denied',{error});return socket.emit('error-msg',{error});}
       speakers.set(sid,{sid,name:u.name,displayName:displayName(u.name),avatar:profile(u.name).avatar||'',seatIndex:requested,at:Date.now()});voiceSpeakers.set(room,speakers);
       const peers=[...(roomSockets.get(room)||new Set())].filter(peerSid=>peerSid!==sid).map(peerSid=>({sid:peerSid,name:socketUsers.get(peerSid)?.name||''}));
       socket.emit('voice-mic-granted',{room,peers});
     }else{
+      if(!speakers.has(sid)){socket.emit('voice-mic-lowered',{room});return;}
       speakers.delete(sid);if(!speakers.size)voiceSpeakers.delete(room);
       socket.emit('voice-mic-lowered',{room});
     }
     emitVoiceState(room);
   });
-  socket.on('voice-peer-offer',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validSessionDescription(d.offer,'offer'))return;const speakers=voiceSpeakers.get(room),members=roomSockets.get(room);if(!speakers?.has(sid)||!members?.has(d.to)||d.to===sid)return;const target=socketUsers.get(d.to);if(!target||target.room!==room)return;activeVoicePairs.set(voiceRoomPairKey(room,sid,d.to),{room,a:sid,b:d.to,offerer:sid,created:Date.now()});socketBySession(d.to)?.emit('voice-peer-offer',{room,from:sid,fromName:u.name,offer:d.offer});});
-  socket.on('voice-peer-answer',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validSessionDescription(d.answer,'answer'))return;const speakers=voiceSpeakers.get(room),members=roomSockets.get(room),state=activeVoicePairs.get(voiceRoomPairKey(room,d.to,sid));if(!members?.has(sid)||!speakers?.has(d.to)||!state||state.offerer!==d.to||state.b!==sid)return;socketBySession(d.to)?.emit('voice-peer-answer',{room,from:sid,answer:d.answer});});
-  socket.on('voice-peer-ice',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validIceCandidate(d.candidate))return;const members=roomSockets.get(room),state=activeVoicePairs.get(voiceRoomPairKey(room,sid,d.to));if(!members?.has(sid)||!members?.has(d.to)||!state)return;socketBySession(d.to)?.emit('voice-peer-ice',{room,from:sid,candidate:d.candidate});});
-  socket.on('leave-room',({room}={})=>{const u=socket.data.user,sid=socket.data.sid;if(!isCurrentSessionSocket(socket)||!u||!room)return;const accountStillInRoom=[...socketUsers.entries()].some(([otherSid,active])=>otherSid!==sid&&active.room===room&&keyName(active.name)===keyName(u.name));socket.leave(room);roomSockets.get(room)?.delete(sid);voiceSpeakers.get(room)?.delete(sid);clearVoicePairsForSession(room,sid);for(const peerSid of (roomSockets.get(room)||new Set()))socketBySession(peerSid)?.emit('voice-peer-left',{room,sid});emitVoiceState(room);if(socketUsers.get(sid))socketUsers.get(sid).room='';if(socket.data.user)socket.data.user.room='';if(!u.ghost&&!accountStillInRoom){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',exitKind:'room',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{addMessage(pm)}catch(e){console.warn('Leave presence could not be saved:',e.message)}emitPresenceToRoom(room,pm);}{const members=roomSockets.get(room)||new Set();for(const memberSid of [...members]){const active=socketUsers.get(memberSid);if(!active||active.room!==room)members.delete(memberSid);}if(members.size===0){roomSockets.delete(room);try{save()}catch(e){console.error('Room state save failed:',e.message)}}}emitState();});
-  socket.on('send-message',d=>{const u=socket.data.user;if(!u||!isCurrentSessionSocket(socket))return;const room=String(d?.room||'');if(!room||u.room!==room||!socket.rooms.has(room))return socket.emit('error-msg',{error:'أنت خارج الغرفة'});const targetRoom=db.rooms.find(r=>r.id===room);if(!targetRoom)return socket.emit('error-msg',{error:'الغرفة غير موجودة'});if(roomMuted(u.name,room)||roomBanned(u.name,room))return socket.emit('error-msg',{error:'لا يمكنك الكتابة هنا'});const text=String(d?.text||'').trim();if(!text)return;const botConfig=normalizedBotSettings(db.botSettings).antiSpam;if(botConfig.enabled){const now=Date.now(),windowState=botMessageWindows.get(socket.data.sid)||{start:now,count:0,lastText:'',repeat:0};if(now-windowState.start>5000){windowState.start=now;windowState.count=0;windowState.lastText='';windowState.repeat=0;}windowState.count++;windowState.repeat=windowState.lastText===text?windowState.repeat+1:1;windowState.lastText=text;botMessageWindows.set(socket.data.sid,windowState);if(windowState.count>7||windowState.repeat>3)return socket.emit('error-msg',{error:'🤖 بوت الحماية: تم إيقاف الرسائل المتكررة أو السريعة، انتظر قليلاً'});}if(processBuiltInBotCommand(socket,u,room,text))return;if(blockedChatTerm(text))return socket.emit('error-msg',{error:'رسالتك تحتوي على كلمة غير مسموح بها'});const m={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'text',text:text.slice(0,2000),at:Date.now(),likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)};try{addMessage(m)}catch(e){console.error('Socket room message save failed:',e.message);return socket.emit('error-msg',{error:'تعذر حفظ الرسالة، حاول مرة أخرى'});}io.to(room).emit('message',m);});
+  socket.on('voice-peer-offer',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validSessionDescription(d.offer,'offer'))return;const speakers=voiceSpeakers.get(room),members=roomSockets.get(room);if(!speakers?.has(sid)||!members?.has(d.to)||d.to===sid)return;const target=socketUsers.get(d.to);if(!target||target.room!==room)return;pruneActiveVoicePairs();const pairKey=voiceRoomPairKey(room,sid,d.to);if(!activeVoicePairs.has(pairKey)&&activeVoicePairs.size>=MAX_ACTIVE_VOICE_PAIRS)return;activeVoicePairs.set(pairKey,{room,a:sid,b:d.to,offerer:sid,created:Date.now()});socketBySession(d.to)?.emit('voice-peer-offer',{room,from:sid,fromName:u.name,offer:d.offer});});
+  socket.on('voice-peer-answer',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validSessionDescription(d.answer,'answer'))return;const speakers=voiceSpeakers.get(room),members=roomSockets.get(room),state=activeVoicePairs.get(voiceRoomPairKey(room,d.to,sid));if(!members?.has(sid)||!speakers?.has(d.to)||!state||Date.now()-state.created>VOICE_PAIR_TTL_MS||state.offerer!==d.to||state.b!==sid)return;socketBySession(d.to)?.emit('voice-peer-answer',{room,from:sid,answer:d.answer});});
+  socket.on('voice-peer-ice',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))return;const u=socket.data.user,sid=socket.data.sid,room=u?.room;if(!u||!sid||!d||d.room!==room||!socket.rooms.has(room)||!allowVoiceSignal(sid)||!validIceCandidate(d.candidate))return;const members=roomSockets.get(room),state=activeVoicePairs.get(voiceRoomPairKey(room,sid,d.to));if(!members?.has(sid)||!members?.has(d.to)||!state||Date.now()-state.created>VOICE_PAIR_TTL_MS||(state.a!==sid&&state.b!==sid)||(state.a!==d.to&&state.b!==d.to))return;socketBySession(d.to)?.emit('voice-peer-ice',{room,from:sid,candidate:d.candidate});});
+  socket.on('leave-room',async({room}={})=>{const u=socket.data.user,sid=socket.data.sid;if(!isCurrentSessionSocket(socket)||!u||!room||room!==u.room||!socket.rooms.has(room))return;const accountStillInRoom=[...socketUsers.entries()].some(([otherSid,active])=>otherSid!==sid&&active.room===room&&keyName(active.name)===keyName(u.name));socket.leave(room);removeSessionFromRoomRuntime(sid,room);if(socketUsers.get(sid))socketUsers.get(sid).room='';if(socket.data.user)socket.data.user.room='';if(!u.ghost&&!accountStillInRoom){const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',exitKind:'room',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};try{await addMessage(pm);emitPresenceToRoom(room,pm)}catch(e){console.warn('Leave presence could not be saved:',e.message)}}{const members=roomSockets.get(room)||new Set();for(const memberSid of [...members]){const active=socketUsers.get(memberSid);if(!active||active.room!==room)members.delete(memberSid);}if(members.size===0){roomSockets.delete(room);try{save()}catch(e){console.error('Room state save failed:',e.message)}}}emitState();});
+  socket.on('send-message',async d=>{const u=socket.data.user;if(!u||!isCurrentSessionSocket(socket))return;const room=String(d?.room||'');if(!room||u.room!==room||!socket.rooms.has(room))return socket.emit('error-msg',{error:'أنت خارج الغرفة'});const targetRoom=db.rooms.find(r=>r.id===room);if(!targetRoom)return socket.emit('error-msg',{error:'الغرفة غير موجودة'});if(globalBanned(u.name,socketClientIp(socket)))return socket.emit('error-msg',{error:'لا يمكنك الكتابة أثناء الحظر العام'});if(roomMuted(u.name,room)||roomBanned(u.name,room))return socket.emit('error-msg',{error:'لا يمكنك الكتابة هنا'});const text=String(d?.text||'').trim().slice(0,2000);if(!text)return;if(blockedChatTerm(text))return socket.emit('error-msg',{error:'رسالتك تحتوي على كلمة غير مسموح بها'});const rateError=roomMessageRateLimitError(socket.data.sid,text);if(rateError)return socket.emit('error-msg',{error:rateError});if(await processBuiltInBotCommand(socket,u,room,text))return;const m={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'text',text,at:Date.now(),likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)};try{await addMessage(m)}catch(e){console.error('Socket room message save failed:',e.message);const queueFull=e?.message==='Message persistence queue is full; message was not accepted';return socket.emit('error-msg',{error:queueFull?'الخادم مشغول بحفظ الرسائل، حاول بعد قليل':'تعذر حفظ الرسالة، حاول مرة أخرى'});}io.to(room).emit('message',m);});
   socket.on('private-typing',d=>{
     const user=socket.data.user,sid=socket.data.sid;
     if(!user||!sid||!isCurrentSessionSocket(socket)||!siteModuleEnabled('privateChat'))return;
@@ -1961,13 +2586,13 @@ io.on('connection',socket=>{
     socket.data.privateTypingTimer.unref?.();
     emitToUser(recipient,'private-typing',{from:user.name,typing:true});
   });
-  socket.on('private-message',d=>{const u=socket.data.user;if(!u||!isCurrentSessionSocket(socket)||!d?.to)return;if(!siteModuleEnabled('privateChat'))return socket.emit('error-msg',{error:'المحادثات الخاصة متوقفة من إدارة الموقع'});if(globalBanned(u.name,socketClientIp(socket)))return socket.emit('error-msg',{error:'لا يمكنك المراسلة أثناء الحظر العام'});const toKey=keyName(d.to),to=accountKey(d.to),text=String(d.text||'').trim().slice(0,2000);if(!text)return;if(blockedChatTerm(text))return socket.emit('error-msg',{error:'رسالتك تحتوي على كلمة غير مسموح بها'});const tp=profile(to);if(tp.privateOpen===false&&!canMessageClosedPrivate(u))return socket.emit('error-msg',{error:`لقد أغلق ${displayName(to)} المحادثة الخاصة`});const ignored=(db.ignored?.[keyName(to)]||[]).some(x=>keyName(x)===keyName(u.name));if(ignored)return socket.emit('error-msg',{error:`لقد قام ${displayName(to)} بتجاهلك`});if(!getUser(to)&&!getGuest(to))return socket.emit('error-msg',{error:'هذا المستخدم غير موجود'});if(!hasConnectedSessionForUser(to))return socket.emit('error-msg',{error:'العضو غير متصل؛ المحادثات الخاصة مؤقتة بين المتصلين فقط'});if(socket.data.privateTypingTimer){clearTimeout(socket.data.privateTypingTimer);socket.data.privateTypingTimer=null;}if(socket.data.privateTypingTo){emitToUser(socket.data.privateTypingTo,'private-typing',{from:u.name,typing:false});socket.data.privateTypingTo='';}const m={id:crypto.randomUUID(),from:u.name,fromDisplayName:displayName(u.name),to,toDisplayName:displayName(to),type:'text',text,at:Date.now(),profile:profile(u.name),role:roleOf(u),vip:vipActive(u.name),likes:userLikes(u)};const previousPrivateMessages=db.privateMessages;const fromKey=keyName(u.name);const previousHiddenTo=db.privateHidden?.[toKey];const previousHiddenFrom=db.privateHidden?.[fromKey];db.privateMessages=[...(db.privateMessages||[]),m].slice(-5000);if(db.privateHidden?.[toKey])db.privateHidden[toKey]=db.privateHidden[toKey].filter(x=>keyName(x)!==fromKey);if(db.privateHidden?.[fromKey])db.privateHidden[fromKey]=db.privateHidden[fromKey].filter(x=>keyName(x)!==toKey);emitToUser(to,'private-message',m);socket.emit('private-message',m);});
+  socket.on('private-message',d=>{const u=socket.data.user,sid=socket.data.sid;if(!u||!isCurrentSessionSocket(socket)||!d?.to)return;if(!siteModuleEnabled('privateChat'))return socket.emit('error-msg',{error:'المحادثات الخاصة متوقفة من إدارة الموقع'});if(globalBanned(u.name,socketClientIp(socket)))return socket.emit('error-msg',{error:'لا يمكنك المراسلة أثناء الحظر العام'});const toKey=keyName(d.to),to=accountKey(d.to),text=String(d.text||'').trim().slice(0,2000);if(!text)return;if(blockedChatTerm(text))return socket.emit('error-msg',{error:'رسالتك تحتوي على كلمة غير مسموح بها'});if(!getUser(to)&&!getGuest(to))return socket.emit('error-msg',{error:'هذا المستخدم غير موجود'});const tp=profile(to);if(tp.privateOpen===false&&!canMessageClosedPrivate(u))return socket.emit('error-msg',{error:`لقد أغلق ${displayName(to)} المحادثة الخاصة`});const ignored=(db.ignored?.[toKey]||[]).some(x=>keyName(x)===keyName(u.name));if(ignored)return socket.emit('error-msg',{error:`لقد قام ${displayName(to)} بتجاهلك`});if(!hasConnectedSessionForUser(to))return socket.emit('error-msg',{error:'العضو غير متصل؛ المحادثات الخاصة مؤقتة بين المتصلين فقط'});const fromKey=keyName(u.name),previousHidden=db.privateHidden,nextHidden={...(db.privateHidden||{})};let hiddenChanged=false;for(const [owner,other] of [[toKey,fromKey],[fromKey,toKey]]){if(Array.isArray(nextHidden[owner])){const filtered=nextHidden[owner].filter(x=>keyName(x)!==other);if(filtered.length!==nextHidden[owner].length){nextHidden[owner]=filtered;hiddenChanged=true;}}}if(hiddenChanged){db.privateHidden=nextHidden;try{save();}catch(error){if(previousHidden===undefined)delete db.privateHidden;else db.privateHidden=previousHidden;console.error('Private conversation unhide save failed:',error.message);return socket.emit('error-msg',{error:'تعذر حفظ فتح المحادثة الخاصة؛ أعد المحاولة'});}}if(!allowPrivateMessage(sid,text))return socket.emit('error-msg',{error:'الرسائل الخاصة سريعة أو متكررة جداً؛ انتظر قليلاً ثم حاول مجدداً'});if(socket.data.privateTypingTimer){clearTimeout(socket.data.privateTypingTimer);socket.data.privateTypingTimer=null;}if(socket.data.privateTypingTo){emitToUser(socket.data.privateTypingTo,'private-typing',{from:u.name,typing:false});socket.data.privateTypingTo='';}const m={id:crypto.randomUUID(),from:u.name,fromDisplayName:displayName(u.name),to,toDisplayName:displayName(to),type:'text',text,at:Date.now(),profile:profile(u.name),role:roleOf(u),vip:vipActive(u.name),likes:userLikes(u)};db.privateMessages=[...(db.privateMessages||[]),m].slice(-5000);emitToUser(to,'private-message',m);socket.emit('private-message',m);});
   socket.on('call-offer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))return socket.emit('call-failed',{error:'المكالمات متوقفة من إدارة الموقع'});const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!d?.to)return;if(!canMedia(u))return socket.emit('call-failed',{error:`الاتصال الصوتي والكاميرا يفتحان عند ${PRIVATE_MEDIA_LIKES_REQUIRED} إعجاب من المتصل`});if(!allowCallSignal(sid))return socket.emit('call-failed',{error:'طلبات الاتصال كثيرة جداً، حاول بعد قليل'});if(!validSessionDescription(d.offer,'offer'))return socket.emit('call-failed',{error:'بيانات الاتصال غير صالحة'});const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return socket.emit('call-failed',{error:'المستخدم غير متصل'});for(const [oldPair,oldState] of activeCallPairs){const pendingCallee=socketUsers.get(oldState.callee),waitingOnRoomMic=!!pendingCallee&&voiceSpeakers.get(pendingCallee.room)?.has(oldState.callee);if(!oldState.answered&&Date.now()-oldState.created>120000&&!waitingOnRoomMic)activeCallPairs.delete(oldPair);else if(oldState.caller===sid||oldState.callee===sid||oldState.caller===target[0]||oldState.callee===target[0])return socket.emit('call-failed',{error:'أحد الطرفين مشغول باتصال آخر'});}const pair=callPairKey(sid,target[0]),state={caller:sid,callee:target[0],created:Date.now(),video:!!d.video,answered:false};activeCallPairs.set(pair,state);const timeoutCall=()=>{if(activeCallPairs.get(pair)!==state||state.answered)return;const callee=socketUsers.get(target[0]);if(callee&&voiceSpeakers.get(callee.room)?.has(target[0])){const next=setTimeout(timeoutCall,60000);next.unref?.();return;}activeCallPairs.delete(pair);socket.emit('call-timeout',{from:target[1].name});socketBySession(target[0])?.emit('call-timeout',{from:u.name})};const timeout=setTimeout(timeoutCall,60000);timeout.unref?.();socketBySession(target[0])?.emit('call-offer',{from:u.name,fromDisplayName:displayName(u.name),fromProfile:(()=>{const p=profile(u.name);return {avatar:p.avatar||'',displayName:p.displayName||'',rank:p.rank||'',rankUntil:p.rankUntil||0,gifts:(p.gifts||[]).slice(0,1),vipUntil:p.vipUntil||0}})(),fromRole:roleOf(u),fromVip:vipActive(u.name),fromLikes:userLikes(u),offer:d.offer,video:!!d.video});});
-  socket.on('call-answer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))return;const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!d?.to)return;if(!allowCallSignal(sid))return socket.emit('error-msg',{error:'طلبات الاتصال كثيرة جداً، حاول بعد قليل'});if(!validSessionDescription(d.answer,'answer'))return socket.emit('error-msg',{error:'بيانات الرد غير صالحة'});if(voiceSpeakers.get(u.room)?.has(sid))return socket.emit('call-answer-denied',{reason:'room-mic'});const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||state.callee!==sid||state.caller!==target[0])return;if(!canMedia(target[1])){activeCallPairs.delete(pair);socket.emit('call-answer-denied',{reason:'sender-likes'});socketBySession(target[0])?.emit('call-failed',{error:`الاتصال يحتاج ${PRIVATE_MEDIA_LIKES_REQUIRED} إعجاب من المتصل`});return;}state.answered=true;socket.emit('call-answer-accepted');socketBySession(target[0])?.emit('call-answer',{from:u.name,answer:d.answer,video:state.video});});
+  socket.on('call-answer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))return;const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!d?.to)return;if(!allowCallSignal(sid))return socket.emit('error-msg',{error:'طلبات الاتصال كثيرة جداً، حاول بعد قليل'});if(!validSessionDescription(d.answer,'answer'))return socket.emit('error-msg',{error:'بيانات الرد غير صالحة'});if(voiceSpeakers.get(u.room)?.has(sid))return socket.emit('call-answer-denied',{reason:'room-mic'});const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||state.callee!==sid||state.caller!==target[0])return;if(Date.now()-state.created>120000){activeCallPairs.delete(pair);socket.emit('call-timeout',{from:target[1].name});socketBySession(target[0])?.emit('call-timeout',{from:u.name});return;}if(!socketBySession(state.caller)){activeCallPairs.delete(pair);return;}if(!canMedia(target[1])){activeCallPairs.delete(pair);socket.emit('call-answer-denied',{reason:'sender-likes'});socketBySession(target[0])?.emit('call-failed',{error:`الاتصال يحتاج ${PRIVATE_MEDIA_LIKES_REQUIRED} إعجاب من المتصل`});return;}state.answered=true;socket.emit('call-answer-accepted');socketBySession(target[0])?.emit('call-answer',{from:u.name,answer:d.answer,video:state.video});});
   socket.on('call-reject',d=>{const u=socket.data.user,sid=socket.data.sid;if(!isCurrentSessionSocket(socket)||!u||!d?.to||!allowCallSignal(sid))return;const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||state.callee!==sid||state.caller!==target[0])return;activeCallPairs.delete(pair);socketBySession(target[0])?.emit('call-rejected',{from:u.name,reason:String(d.reason||'declined').slice(0,32)});});
   socket.on('call-end',d=>{const u=socket.data.user,sid=socket.data.sid;if(!isCurrentSessionSocket(socket)||!u||!sid||!d?.to)return;const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const pair=callPairKey(sid,target[0]),state=activeCallPairs.get(pair);if(!state||(state.caller!==sid&&state.callee!==sid))return;activeCallPairs.delete(pair);socketBySession(target[0])?.emit('call-ended',{from:u.name});});
   socket.on('ice',d=>{const u=socket.data.user,sid=socket.data.sid;if(!isCurrentSessionSocket(socket)||!u||!sid||!d?.to)return;if(!allowCallSignal(sid))return;if(!validIceCandidate(d.candidate))return;const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return;const state=activeCallPairs.get(callPairKey(sid,target[0]));if(!state||(!state.answered&&Date.now()-state.created>120000))return;socketBySession(target[0])?.emit('ice',{from:u.name,candidate:d.candidate});});
-  socket.on('disconnect',()=>{
+  socket.on('disconnect',async()=>{
     if(socket.data.privateTypingTimer){clearTimeout(socket.data.privateTypingTimer);socket.data.privateTypingTimer=null;}if(socket.data.privateTypingTo){emitToUser(socket.data.privateTypingTo,'private-typing',{from:socket.data.user?.name||'',typing:false});socket.data.privateTypingTo='';}
     const sid=socket.data.sid,u=socket.data.user,active=sid?socketUsers.get(sid):null;
     // A late disconnect from a superseded socket must never evict the new live session.
@@ -1978,15 +2603,12 @@ io.on('connection',socket=>{
     for(const [pair,state] of activeVoicePairs){if(state.a===sid||state.b===sid)activeVoicePairs.delete(pair);}
     callSignalWindows.delete(sid);voiceSignalWindows.delete(sid);
     if(room){
-      roomSockets.get(room)?.delete(sid);voiceSpeakers.get(room)?.delete(sid);clearVoicePairsForSession(room,sid);
-      for(const peerSid of (roomSockets.get(room)||new Set()))socketBySession(peerSid)?.emit('voice-peer-left',{room,sid});
-      emitVoiceState(room);
+      removeSessionFromRoomRuntime(sid,room);
     }
     const accountStillInRoom=!!room&&[...socketUsers.values()].some(other=>other.room===room&&keyName(other.name)===keyName(u?.name));
     if(u&&room&&!u.ghost&&!accountStillInRoom){
       const pm={id:crypto.randomUUID(),room,from:u.name,displayName:displayName(u.name),type:'presence',presenceAction:'leave',exitKind:'chat',text:'',at:Date.now(),profile:profile(u.name),role:u.role,presenceVisibility:u.hidden?'staff':'public'};
-      try{addMessage(pm)}catch(e){console.warn('Disconnect presence could not be saved:',e.message)}
-      emitPresenceToRoom(room,pm);
+      try{await addMessage(pm);emitPresenceToRoom(room,pm)}catch(e){console.warn('Disconnect presence could not be saved:',e.message)}
     }
     if(room){
       const members=roomSockets.get(room)||new Set();
@@ -2010,11 +2632,63 @@ app.use((err,req,res,next)=>{
 });
 app.get(/.*/,(req,res)=>sendSeoIndex(req,res));
 server.listen(PORT,()=>console.log(`Rimaz server listening on ${PORT}`));
-function gracefulShutdown(signal){
+async function persistPendingMessagesDuringShutdown(maxAttempts=8,retryDelayMs=250){
   if(messageSaveTimer){clearTimeout(messageSaveTimer);messageSaveTimer=null;}
-  try{save();}catch(error){console.error(`Final database save failed during ${signal}:`,error.message);}
-  io.close(()=>process.exit(0));
-  const forceExit=setTimeout(()=>process.exit(1),10000);forceExit.unref?.();
+  for(let attempt=1;pendingMessageWrites.length&&attempt<=maxAttempts;attempt++){
+    const batch=pendingMessageWrites.slice();
+    const previousMessages=db.messages;
+    db.messages=[...previousMessages,...batch.map(entry=>entry.message)].slice(-1000);
+    try{
+      save();
+      pendingMessageWrites.splice(0,batch.length);
+      messageSaveAttempts=0;
+      for(const entry of batch)entry.resolve();
+    }catch(error){
+      db.messages=previousMessages;
+      console.error(`Shutdown message flush failed (attempt ${attempt}/${maxAttempts}):`,error.message);
+      if(attempt<maxAttempts)await new Promise(resolve=>setTimeout(resolve,retryDelayMs));
+    }
+  }
+  return pendingMessageWrites.length===0;
+}
+function gracefulShutdown(signal){
+  if(shutdownStarted)return;
+  shutdownStarted=true;
+  if(messageSaveTimer){clearTimeout(messageSaveTimer);messageSaveTimer=null;}
+  const forceExit=setTimeout(()=>process.exit(1),10000);
+  let transportsClosed=false,messagesSaved=null,finished=false;
+  const finishShutdown=()=>{
+    if(finished||!transportsClosed||messagesSaved===null)return;
+    finished=true;
+    let finalSaveSucceeded=messagesSaved;
+    try{save();}catch(error){finalSaveSucceeded=false;console.error(`Final database save failed during ${signal}:`,error.message);}
+    if(pendingMessageWrites.length)console.error(`Shutdown aborted with ${pendingMessageWrites.length} uncommitted chat message(s); process will exit nonzero.`);
+    clearTimeout(forceExit);
+    process.exit(finalSaveSucceeded&&pendingMessageWrites.length===0?0:1);
+  };
+  const rejectUncommittedMessages=()=>{
+    const error=new Error('Server shutdown: chat message could not be committed to storage');
+    for(const entry of pendingMessageWrites){try{entry.reject(error);}catch(rejectError){console.error('Could not reject a pending chat request during shutdown:',rejectError.message);}}
+  };
+  // Initiate transport closure, but drain the message queue immediately rather
+  // than waiting for the HTTP close callback: active HTTP message handlers may
+  // themselves be waiting for these queued writes to finish.
+  try{
+    io.close(()=>{transportsClosed=true;finishShutdown();});
+  }catch(error){
+    console.error(`Transport shutdown failed during ${signal}:`,error.message);
+    transportsClosed=true;
+  }
+  persistPendingMessagesDuringShutdown(8,250).then(saved=>{
+    messagesSaved=saved;
+    if(!saved)rejectUncommittedMessages();
+    finishShutdown();
+  }).catch(error=>{
+    messagesSaved=false;
+    console.error(`Unexpected shutdown persistence failure during ${signal}:`,error.message);
+    rejectUncommittedMessages();
+    finishShutdown();
+  });
 }
 process.once('SIGTERM',()=>gracefulShutdown('SIGTERM'));
 process.once('SIGINT',()=>gracefulShutdown('SIGINT'));
