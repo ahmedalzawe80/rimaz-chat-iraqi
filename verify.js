@@ -444,7 +444,7 @@ try {
       profiles:{member:{avatar:'/uploads/shared.png',banner:'/uploads/shared-existing.png'}}
     };
     let saves=0;
-    const context={db,fs,path,UP_DIR:uploads,PRIVATE_MEDIA_DIR:privateMedia,save:()=>{saves++;},console:{log:()=>{},error:(...args)=>{throw new Error(args.join(' '));}}};
+    const context={db,fs,path,UP_DIR:uploads,PRIVATE_MEDIA_DIR:privateMedia,syncFileAndDirectory,syncDirectory,save:()=>{saves++;},console:{log:()=>{},error:(...args)=>{throw new Error(args.join(' '));}}};
     vm.createContext(context);
     vm.runInContext(contains+'\n'+migration+'\nmigratePrivateMediaToProtectedStorage();',context);
     assert.equal(fs.readFileSync(path.join(uploads,'shared.png')).compare(sharedBytes),0,'shared public asset must remain at its public path');
