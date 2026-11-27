@@ -1435,7 +1435,7 @@ function removeRestoreStagedFile(filePath){
  const restoreRoot=path.resolve(RESTORE_TMP_DIR);
  const name=path.basename(resolved);
  // Only remove files created by this restore uploader inside its private staging directory.
- if(path.dirname(resolved)!==restoreRoot||!/^restore-\\d+-[a-f0-9]{32}\\.json$/.test(name)){
+ if(path.dirname(resolved)!==restoreRoot||!/^restore-\d+-[a-f0-9]{32}\.json$/.test(name)){
   console.warn('Restore staging cleanup skipped an unrecognized path:',name);
   return false;
  }
