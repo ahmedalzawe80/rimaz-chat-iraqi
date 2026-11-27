@@ -234,3 +234,13 @@ The PR filename list includes changed paths whether added, modified, renamed, or
 - Re-scanned all 17 Markdown files after the workflow/docs changes: **zero broken relative links**. The five exact duplicate groups remain intentionally preserved. No nested project directory, extra root ZIP, or tracked database dump exists.
 - Exact candidate commit `ad4aed52394f5344c3697a1a767c49a616413453` passed Actions run [#45947902148](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45947902148), including the updated repository regression assertions, Docker build, and constrained HTTP/Socket.IO smoke. Archive refresh was skipped intentionally on this ordinary push.
 - This checkpoint-only correction will itself trigger another source-validation run; the archive refresh remains intentionally manual and must not be described as current until explicitly rebuilt and audited.
+
+
+### Release ZIP moved out of Git — 2026-11-27
+
+- Removed the 16 MB `rimaz-final-deep-audit-46.93.72.zip` from the tracked tree. It is a generated binary release package, not application source or a production-data backup; keeping it in Git had caused repeated archive-only commits and unnecessary root clutter.
+- Removed the separate `audit-rootfix-archive.yml` workflow and consolidated safe-path, symlink, duplicate, CRC, compression-ratio, expanded-size, and exact tracked-file parity checks into `validate-project.yml`'s `build-release-archive` job.
+- The release ZIP is now built only on explicit `workflow_dispatch` after the source-validation job passes, stored in runner temporary storage, extracted and tested with locked dependencies, regression tests, and Docker build, then uploaded as a 30-day GitHub Actions artifact. It is not committed to Git.
+- The artifact job has `contents: read` permission and no Git push, bot commit, main synchronization, deployment, or live-data operations. Ordinary source pushes still update the branch directly and run source CI; they do not require a manual ZIP edit/upload.
+- Added `.gitignore` protection and updated regression tests, README, repository structure, deployment reference, changelog, and checkpoint to enforce and explain this lifecycle.
+- This is a candidate-branch packaging/organization change only. `main` and Deplexo remain untouched. Exact new-tree counts and CI results must be refreshed after this commit.

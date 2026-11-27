@@ -111,61 +111,81 @@ jobs:
           STATE="$(docker inspect --format '{{.State.OOMKilled}} {{.State.Running}} {{.HostConfig.Memory}} {{.HostConfig.NanoCpus}}' rimaz-smoke)"
           test "$STATE" = "false true 134217728 250000000"
 
-  refresh-release-archive:
-    # Keep ordinary source validation fast and history clean. Rebuild/commit the
-    # tracked release ZIP only on an explicit workflow_dispatch after validation.
-    # This avoids a binary archive commit for every docs, test, or source push.
+  build-release-archive:
+    # Produce a downloadable release artifact only on explicit dispatch and
+    # only after the exact branch source has passed the validation job.
+    # The archive is built in runner temp storage, never committed to Git.
     if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/fix/bound-private-media-ticket-cache' || github.ref == 'refs/heads/fix/persistent-data-symlink-boundary')
     needs: validate
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Checkout validated branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.ref }}
-          fetch-depth: 0
-
-      - name: Rebuild and verify exact tracked-file archive
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import os, re, stat, subprocess, zipfile
-          archive='rimaz-final-deep-audit-46.93.72.zip'
-          tracked=subprocess.check_output(['git','ls-files','-z']).decode().split('\0')
-          paths=sorted(p for p in tracked if p and p != archive and os.path.isfile(p))
-          with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:
-              for path in paths:
-                  info=zipfile.ZipInfo(path,date_time=(2024,1,1,0,0,0))
-                  info.external_attr=(stat.S_IFREG|stat.S_IMODE(os.stat(path).st_mode))<<16
-                  info.compress_type=zipfile.ZIP_DEFLATED
-                  with open(path,'rb') as f:z.writestr(info,f.read(),compress_type=zipfile.ZIP_DEFLATED,compresslevel=9)
-          with zipfile.ZipFile(archive) as z:
-              if z.testzip():raise SystemExit('ZIP CRC failure')
-              actual=set()
-              total=0
-              for item in z.infolist():
-                  name=item.filename.replace('\\','/')
-                  if name.startswith('/') or re.match(r'^[A-Za-z]:',name) or any(p in ('.','..') for p in name.split('/')):raise SystemExit('Unsafe path: '+name)
-                  if ((item.external_attr>>16)&0o170000)==stat.S_IFLNK:raise SystemExit('Symlink: '+name)
-                  if not item.is_dir():
-                      if name in actual:raise SystemExit('Duplicate path: '+name)
-                      actual.add(name)
-                  total+=item.file_size
-                  if item.compress_size and item.file_size/item.compress_size>250:raise SystemExit('Suspicious compression ratio: '+name)
-              if actual!=set(paths):raise SystemExit(f'Parity mismatch missing={sorted(set(paths)-actual)[:10]} extra={sorted(actual-set(paths))[:10]}')
-              if total>500*1024*1024:raise SystemExit('Expanded archive too large')
-          print(f'Exact archive rebuilt and verified: {len(actual)} files, {os.path.getsize(archive)} bytes')
-          PY
 
       - name: Set up Node.js for extracted archive validation
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
 
-      - name: Install locked dependencies and test the rebuilt archive
+      - name: Build and verify exact tracked-file archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ARCHIVE="$RUNNER_TEMP/rimaz-final-deep-audit-46.93.72.zip"
+          python3 - <<'PY'
+          import os, re, stat, subprocess, zipfile
+          archive=os.environ['ARCHIVE']
+          tracked=subprocess.check_output(['git','ls-files','-z']).decode().split('\\0')
+          paths=sorted(p for p in tracked if p)
+          required={'package.json','package-lock.json','Dockerfile','server.js','verify.js','index.html','public/index.html'}
+          if not required.issubset(paths):
+              raise SystemExit(f'Missing required release files: {sorted(required-set(paths))}')
+          roots=sorted(p for p in paths if p=='package.json' or p.endswith('/package.json'))
+          if roots!=['package.json']:
+              raise SystemExit(f'Expected one flat project root, found: {roots}')
+          with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for path in paths:
+                  if os.path.islink(path):
+                      raise SystemExit('Tracked symlink is not allowed: '+path)
+                  if not os.path.isfile(path):
+                      raise SystemExit('Tracked file is missing or not regular: '+path)
+                  info=zipfile.ZipInfo(path,date_time=(2024,1,1,0,0,0))
+                  info.external_attr=(stat.S_IFREG|stat.S_IMODE(os.stat(path).st_mode))<<16
+                  info.compress_type=zipfile.ZIP_DEFLATED
+                  with open(path,'rb') as f:
+                      z.writestr(info,f.read(),compress_type=zipfile.ZIP_DEFLATED,compresslevel=9)
+          with zipfile.ZipFile(archive) as z:
+              if z.testzip():
+                  raise SystemExit('ZIP CRC failure')
+              actual=set()
+              total=0
+              for item in z.infolist():
+                  name=item.filename.replace('\\\\','/')
+                  if name.startswith('/') or re.match(r'^[A-Za-z]:',name) or any(p in ('.','..') for p in name.split('/')):
+                      raise SystemExit('Unsafe path: '+name)
+                  if ((item.external_attr>>16)&0o170000)==stat.S_IFLNK:
+                      raise SystemExit('Symlink: '+name)
+                  if not item.is_dir():
+                      if name in actual:
+                          raise SystemExit('Duplicate path: '+name)
+                      actual.add(name)
+                  total+=item.file_size
+                  if item.file_size and not item.compress_size:
+                      raise SystemExit('Invalid compressed size: '+name)
+                  if item.compress_size and item.file_size/item.compress_size>250:
+                      raise SystemExit('Suspicious compression ratio: '+name)
+              if actual!=set(paths):
+                  raise SystemExit(f'Parity mismatch missing={sorted(set(paths)-actual)[:10]} extra={sorted(actual-set(paths))[:10]}')
+              if total>500*1024*1024:
+                  raise SystemExit('Expanded archive too large')
+          print(f'Exact release artifact built and verified: {len(paths)} files, {os.path.getsize(archive)} bytes')
+          PY
+
+      - name: Extract and test release archive
         shell: bash
         run: |
           set -euo pipefail
@@ -173,22 +193,28 @@ jobs:
           mkdir -p "$PROJECT"
           python3 - <<'PY'
           import os, re, stat, zipfile
-          archive='rimaz-final-deep-audit-46.93.72.zip'
+          archive=os.environ['RUNNER_TEMP']+'/rimaz-final-deep-audit-46.93.72.zip'
           target=os.environ['RUNNER_TEMP']+'/rimaz-release-archive'
           with zipfile.ZipFile(archive) as z:
-              if z.testzip():raise SystemExit('ZIP CRC failure')
+              if z.testzip():
+                  raise SystemExit('ZIP CRC failure')
               seen=set()
               total=0
               for item in z.infolist():
-                  name=item.filename.replace('\\','/')
-                  if name.startswith('/') or re.match(r'^[A-Za-z]:',name) or any(p in ('.','..') for p in name.split('/')):raise SystemExit('Unsafe path: '+name)
-                  if ((item.external_attr>>16)&0o170000)==stat.S_IFLNK:raise SystemExit('Symlink: '+name)
+                  name=item.filename.replace('\\\\','/')
+                  if name.startswith('/') or re.match(r'^[A-Za-z]:',name) or any(p in ('.','..') for p in name.split('/')):
+                      raise SystemExit('Unsafe path: '+name)
+                  if ((item.external_attr>>16)&0o170000)==stat.S_IFLNK:
+                      raise SystemExit('Symlink: '+name)
                   if not item.is_dir():
-                      if name in seen:raise SystemExit('Duplicate path: '+name)
+                      if name in seen:
+                          raise SystemExit('Duplicate path: '+name)
                       seen.add(name)
                   total+=item.file_size
-                  if item.compress_size and item.file_size/item.compress_size>250:raise SystemExit('Suspicious compression ratio: '+name)
-              if total>500*1024*1024:raise SystemExit('Expanded archive too large')
+                  if item.compress_size and item.file_size/item.compress_size>250:
+                      raise SystemExit('Suspicious compression ratio: '+name)
+              if total>500*1024*1024:
+                  raise SystemExit('Expanded archive too large')
               z.extractall(target)
           PY
           cd "$PROJECT"
@@ -200,16 +226,10 @@ jobs:
           cmp -s index.html public/index.html
           docker build --pull -t rimaz-chat-iraqi:release-archive .
 
-      - name: Commit refreshed archive
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+users.noreply.github.com"
-          git add rimaz-final-deep-audit-46.93.72.zip
-          if git diff --cached --quiet; then
-            echo "Archive already matches the validated source."
-            exit 0
-          fi
-          git commit -m "build: refresh audited archive after validated changes"
-          git push origin "HEAD:${GITHUB_REF}"
+      - name: Upload validated release archive artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rimaz-release-archive
+          path: ${{ runner.temp }}/rimaz-final-deep-audit-46.93.72.zip
+          if-no-files-found: error
+          retention-days: 30

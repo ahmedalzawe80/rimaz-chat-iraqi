@@ -4,7 +4,7 @@
 
 ## Application package
 
-The audited source archive is `rimaz-final-deep-audit-46.93.72.zip`. Its project root is flat and contains `package.json`, `server.js`, `index.html`, `public/`, and `verify.js`. Extract the archive contents directly into the application root; do not add an extra wrapper directory.
+The release ZIP is generated on demand as a GitHub Actions artifact after source validation. Its project root is flat and contains `package.json`, `server.js`, `index.html`, `public/`, and `verify.js`. The ZIP is not tracked in Git; download the artifact from the successful workflow run if a package is needed.
 
 The Git repository's incomplete `rimaz-chat-iraqi-main/` duplicate is not part of the application and has been removed by the repository-maintenance change.
 
@@ -12,7 +12,7 @@ The Git repository's incomplete `rimaz-chat-iraqi-main/` duplicate is not part o
 
 The former `.github/workflows/unzip-upload.yml` workflow has been removed from the maintenance candidate. It required the ZIP to match the current `main` application files, `public/`, and `lib/` exactly before copying those same files back to `main`. That precondition made it incapable of promoting a feature-branch candidate; the later copy, `rsync --delete`, rollback-branch creation, and Git push were unnecessary write operations.
 
-Use the reviewed pull-request process to integrate application changes. For an archive refresh, explicitly dispatch **Validate Rimaz Project** on the intended branch. Its source-validation job must pass before the ZIP refresh job runs. Then confirm **Audit Rootfix Archive** passes; it checks safe archive paths, a single project root, and exact parity with the branch source. These workflows do not merge branches, update `main`, deploy to Deplexo, or modify live data. No manual ZIP file editing or upload is required.
+Use the reviewed pull-request process to integrate application changes. For an archive build, explicitly dispatch **Validate Rimaz Project** on the intended branch. Its source-validation job must pass before `build-release-archive` creates the ZIP in runner temporary storage, validates safe paths and exact tracked-file parity, tests the extracted project, builds the Docker image, and uploads the 30-day artifact. No archive file is committed to the repository. This workflow does not merge branches, update `main`, deploy to Deplexo, or modify live data. No manual ZIP file editing or upload is required.
 
 ## Hosting and persistent storage
 

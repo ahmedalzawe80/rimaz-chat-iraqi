@@ -35,6 +35,9 @@ Thumbs.db
 .npmrc
 !.npmrc.example
 
+# Generated release packages (CI publishes these as workflow artifacts)
+/rimaz-final-deep-audit-46.93.72.zip
+
 # Local database exports, credentials, and backups
 *.sqlite
 *.sqlite3

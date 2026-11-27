@@ -43,12 +43,11 @@ This guide explains why each top-level area exists and which files must remain i
 ├── index.html
 ├── package-lock.json         # exact npm dependency graph
 ├── package.json
-├── rimaz-final-deep-audit-46.93.72.zip
 ├── server.js
 └── verify.js
 ```
 
-The repository root currently has 17 tracked files. Each has an identified runtime, dependency, editor/Git, documentation, domain-verification, build, test, or audited-release role; the root is intentionally not a dumping ground. Keep these entry points at the root rather than moving them merely to reduce the visible file count. The two HTML entry copies and two domain-verification copies have separate serving/verification roles and must remain synchronized.
+The repository root currently has 16 tracked files. Each has an identified runtime, dependency, editor/Git, documentation, domain-verification, build, test, or audited-release role; the root is intentionally not a dumping ground. Keep these entry points at the root rather than moving them merely to reduce the visible file count. The two HTML entry copies and two domain-verification copies have separate serving/verification roles and must remain synchronized.
 
 ## Root files that must not be moved casually
 
@@ -68,7 +67,6 @@ The repository root currently has 17 tracked files. Each has an identified runti
 | `index.html` | Main browser entry file and server SEO integration |
 | `Dockerfile` | Hosting and CI build from the repository root |
 | `verify.js` | Current npm test script runs this file |
-| `rimaz-final-deep-audit-46.93.72.zip` | Generated release archive refreshed after explicit CI dispatch and checked by the read-only archive audit; not a data backup or source-promotion mechanism |
 | `data.json` | Tracked warning placeholder retained for repository/workflow compatibility; it is not production data |
 | `google1a84d9d1dec7b85d.html` | Domain verification endpoint; keep it byte-identical to the copy under `public/` |
 
@@ -116,7 +114,7 @@ Git history and rollback branches cover tracked repository files only. They do n
 
 ## Verified tree snapshot — 2026-11-27
 
-A fresh recursive Git tree inspection of the current PR #3 branch (`fix/bound-private-media-ticket-cache`) returned 416 entries without truncation: 404 tracked file blobs and 12 directory entries. The root contains 17 files and five directories. The 17 root files are intentional application, build, dependency, verification, documentation, or release entry points; the root is not a loose collection of old project copies.
+A fresh recursive Git tree inspection of the current PR #3 branch (`fix/bound-private-media-ticket-cache`) returned 416 entries without truncation: 404 tracked file blobs and 12 directory entries. The root contains 17 files and five directories. The 16 root files are intentional application, build, dependency, verification, documentation, or release entry points; the root is not a loose collection of old project copies.
 
 The current tree has 17 Markdown documentation files, organized by audit, operations, and project continuity. Public assets remain in the three catalog directories and other required `public/` paths; the current public asset/file count is 360. No nested second application directory, extra root ZIP, or backup/temp dump was found.
 
@@ -127,8 +125,6 @@ These counts are a dated snapshot and should be refreshed after structural chang
 
 ## Release archive lifecycle — 2026-11-27
 
-The root `rimaz-final-deep-audit-46.93.72.zip` remains because the guarded main-branch source-sync procedure and archive audit currently consume that exact path. It is a generated release artifact, not an application source file or production-data backup.
+The release ZIP is no longer tracked in the repository. It is generated in GitHub Actions runner temporary storage only after explicit dispatch and successful source validation, then uploaded as a downloadable workflow artifact. This keeps the 16-file repository root free of generated binary archives and avoids archive-only Git commits.
 
-To keep the Git history reviewable, the `refresh-release-archive` job now runs only after an explicit `workflow_dispatch` on `main` or an approved maintenance branch, and only after the source validation job succeeds. Ordinary pushes still run source validation but no longer create an archive-only commit. The archive audit also watches `main` so an explicitly refreshed main-branch archive is checked.
-
-Do not delete or relocate the ZIP until the release-archive builder and audit are redesigned together. For a future package refresh, dispatch **Validate Rimaz Project** on the intended branch, wait for source validation and archive refresh, then confirm **Audit Rootfix Archive** succeeds. This refreshes the ZIP on that branch only; it does not promote code to `main` or deploy. Integrate application changes through the reviewed pull-request process.
+The `build-release-archive` job runs only after an explicit `workflow_dispatch` on `main` or an approved maintenance branch, and only after the source-validation job succeeds. It builds the archive outside the repository, checks safe paths and exact tracked-file parity, tests the extracted project, builds the Docker image, and uploads a 30-day Actions artifact. Ordinary pushes do not create ZIP files or binary commits. This process does not promote code to `main` or deploy; integrate application changes through the reviewed pull-request process.

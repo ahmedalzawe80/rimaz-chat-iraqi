@@ -1,3 +1,9 @@
+## Release packaging modernization — 2026-11-27
+
+- Removed the 16 MB generated release ZIP from the tracked repository and removed the separate archive-audit workflow. The release ZIP is now built in GitHub Actions runner temporary storage only after an explicit dispatch and successful source validation, then uploaded as a 30-day workflow artifact.
+- The artifact job validates exact tracked-file parity, safe paths, symlink/duplicate/CRC/compression limits, extracts and tests the archive, and builds its Docker image before upload. It has read-only repository permissions and creates no binary Git commits.
+- Added regression assertions for the artifact-only release lifecycle and updated repository navigation and release documentation. Ordinary source pushes remain direct repository updates and do not require manual ZIP editing or upload.
+
 ## Repository automation safety — 2026-11-27
 
 - Removed the obsolete write-enabled ZIP self-sync workflow. Its exact-`main` parity precondition meant it could not promote a feature-branch candidate, while its rollback-branch creation, `rsync --delete`, and Git-push steps added unnecessary write capability.
