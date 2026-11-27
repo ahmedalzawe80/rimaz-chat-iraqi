@@ -1,5 +1,7 @@
 # Runtime resource audit — 2026-11-24
 
+> **Dated source audit (2026-11-24).** Findings below are tied to the reviewed snapshot and do not represent a fresh production measurement. Consult the [2026-11-27 checkpoint](../project/CHECKPOINT-2026-11-27.md) for the latest candidate and remaining production evidence gaps.
+
 ## Scope and limits
 
 This review inspected the checked-in server.js and its resource lifecycles. It did not inspect the live Deplexo container filesystem or measure production memory. The findings below identify concrete code paths; they do not establish the cause of the previously observed container restarts or prove an out-of-memory event.
