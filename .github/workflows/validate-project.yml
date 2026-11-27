@@ -112,9 +112,10 @@ jobs:
           test "$STATE" = "false true 134217728 250000000"
 
   refresh-release-archive:
-    # Archive writes must run only once per branch push. PR validation remains read-only,
-    # preventing concurrent push/PR jobs from racing to commit the same ZIP file.
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/fix/bound-private-media-ticket-cache' || github.ref == 'refs/heads/fix/persistent-data-symlink-boundary')
+    # Keep ordinary source validation fast and history clean. Rebuild/commit the
+    # tracked release ZIP only on an explicit workflow_dispatch after validation.
+    # This avoids a binary archive commit for every docs, test, or source push.
+    if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/fix/bound-private-media-ticket-cache' || github.ref == 'refs/heads/fix/persistent-data-symlink-boundary')
     needs: validate
     runs-on: ubuntu-latest
     permissions:
