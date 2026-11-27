@@ -139,7 +139,7 @@ jobs:
           python3 - <<'PY'
           import os, re, stat, subprocess, zipfile
           archive=os.environ['ARCHIVE']
-          tracked=subprocess.check_output(['git','ls-files','-z']).decode().split('\\0')
+          tracked=subprocess.check_output(['git','ls-files','-z']).decode().split(chr(0))
           paths=sorted(p for p in tracked if p)
           required={'package.json','package-lock.json','Dockerfile','server.js','verify.js','index.html','public/index.html'}
           if not required.issubset(paths):
@@ -164,7 +164,7 @@ jobs:
               actual=set()
               total=0
               for item in z.infolist():
-                  name=item.filename.replace('\\\\','/')
+                  name=item.filename.replace(chr(92),'/')
                   if name.startswith('/') or re.match(r'^[A-Za-z]:',name) or any(p in ('.','..') for p in name.split('/')):
                       raise SystemExit('Unsafe path: '+name)
                   if ((item.external_attr>>16)&0o170000)==stat.S_IFLNK:
@@ -201,7 +201,7 @@ jobs:
               seen=set()
               total=0
               for item in z.infolist():
-                  name=item.filename.replace('\\\\','/')
+                  name=item.filename.replace(chr(92),'/')
                   if name.startswith('/') or re.match(r'^[A-Za-z]:',name) or any(p in ('.','..') for p in name.split('/')):
                       raise SystemExit('Unsafe path: '+name)
                   if ((item.external_attr>>16)&0o170000)==stat.S_IFLNK:
