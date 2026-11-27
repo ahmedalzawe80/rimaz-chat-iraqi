@@ -3527,7 +3527,25 @@ try {
     const leftover=fs.readdirSync(temp).filter(name=>name.startsWith('data.json.')||name.startsWith('.rimaz-backup-media-'));
     checks.push(['full-backup TAR generator cleans database and media snapshots when snapshot creation fails',rejected&&leftover.length===0]);
   }finally{
-    fs.rmSync(temp,{recursive:true,force:true});
+    // Cover every persisted public-upload field currently written by server routes.
+   const fieldFixture={
+     profiles:{member:{avatar:'/uploads/avatar.png',banner:'/uploads/banner.png',customDecorationImage:'/uploads/decoration.png',gifts:[{giftImage:'/uploads/gift.png'}]}},
+     rooms:[{image:'/uploads/room.png'}],
+     messages:[{media:{url:'/uploads/message.png'}}],
+     wall:[{media:{url:'/uploads/wall.png'}}],
+     giftCatalog:[{image:'/uploads/catalog.png'}],
+     vipGiftCatalog:[{image:'/uploads/vip-catalog.png'}],
+     customSmileys:[{icon:'/uploads/smiley.png'}],
+     rankDefinitions:[{artUrl:'/uploads/rank-art.png',bannerUrl:'/uploads/rank-banner.png'}]
+   };
+   const fieldNames=collectReferencedUploadNames(fieldFixture);
+   const expectedFieldNames=['avatar.png','banner.png','catalog.png','decoration.png','gift.png','message.png','rank-art.png','rank-banner.png','room.png','smiley.png','vip-catalog.png','wall.png'].sort();
+   assert.deepEqual(fieldNames,expectedFieldNames);
+   pass('backup media reference discovery covers persisted public-upload fields used by current application routes');
+   assert.throws(()=>createBackupMediaSnapshot({database:{messages:[{media:{url:'/uploads/missing-reference.png'}}]},uploadDirectory:uploads,dataDirectory:temp}),/Referenced public upload is missing or unreadable/);
+   assert.deepEqual(fs.readdirSync(temp).sort(),['orphan.png','uploads']);
+   pass('backup refuses missing referenced media and removes partial snapshot staging without deleting source uploads');
+   fs.rmSync(temp,{recursive:true,force:true});
   }
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 })().catch(error=>{fail('full-backup TAR generator cleanup lifecycle tests',error.message);process.exitCode=1;});
