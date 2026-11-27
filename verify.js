@@ -13,7 +13,30 @@ const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
 const { normalizeTrustedProxyHeader, createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
 const { readCgroupMetrics } = require('./lib/cgroup-metrics');
 const { cleanupStaleBackupTemps } = require('./lib/backup-temp-cleanup');
+const { syncFileAndDirectory, syncDirectory } = require('./lib/durable-file');
 const { isWithinPersistentRoot, resolveDataDirectory, canInitializeEmptyDatabase } = require('./lib/data-directory');
+
+// Public uploads must be flushed to disk before their URLs can be committed.
+try {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-durable-upload-'));
+  const file = path.join(temp, 'media.jpg');
+  try {
+    fs.writeFileSync(file, Buffer.from('durable-media-test'));
+    syncFileAndDirectory(file, temp);
+    syncDirectory(temp);
+    assert.equal(fs.readFileSync(file, 'utf8'), 'durable-media-test');
+    assert.throws(() => syncFileAndDirectory(file, path.dirname(temp)), /containing directory do not match/);
+    const link = path.join(temp, 'media-link.jpg');
+    fs.symlinkSync(file, link);
+    assert.throws(() => syncFileAndDirectory(link, temp), /regular file/);
+    pass('uploaded media file contents and directory entries are synchronously committed before database references');
+    pass('durable upload sync rejects path mismatches and symbolic-link substitution');
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+} catch (error) {
+  fail('durable uploaded-media persistence tests', error.message);
+}
 
 const root = __dirname;
 const failures = [];
