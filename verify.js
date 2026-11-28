@@ -3652,7 +3652,7 @@ try {
  const helperStart=runtimeSource.indexOf('const SOCKET_MESSAGE_REQUEST_LIMIT=');
  const helperEnd=runtimeSource.indexOf("\nio.on('connection'",helperStart);
  if(helperStart<0||helperEnd<0)throw new Error('request idempotency helper boundaries not found');
- const fixture={Map,Date,Promise,console};
+ const fixture={Map,Date,Promise,console,crypto:require('node:crypto')};
  vm.runInNewContext(runtimeSource.slice(helperStart,helperEnd)+';globalThis.execute=executeSocketMessageRequest;globalThis.cache=socketMessageRequestCache;globalThis.limit=SOCKET_MESSAGE_REQUEST_LIMIT;',fixture);
  const resolvers=[],pending=[];
  for(let i=0;i<fixture.limit;i++)pending.push(fixture.execute('session-test',`pending_${i}`,'public',()=>new Promise(resolve=>resolvers.push(resolve))));
@@ -3661,5 +3661,12 @@ try {
  for(const resolve of resolvers)resolve({ok:true});
  await Promise.all(pending);
  if(fixture.cache.size!==fixture.limit)throw new Error('request cache capacity changed after pending requests settled');
+ let conflictingTaskRan=false;
+ const firstResult=await fixture.execute('session-test','same_request_001','public',()=>({ok:true,value:'original'}),'payload-original');
+ const conflictingResult=await fixture.execute('session-test','same_request_001','public',()=>{conflictingTaskRan=true;return {ok:true,value:'conflict'};},'payload-conflict');
+ if(firstResult?.value!=='original'||conflictingResult?.ok!==false||conflictingTaskRan)throw new Error('reusing a request ID with a different payload was not rejected');
+ const retryResult=await fixture.execute('session-test','same_request_001','public',()=>({ok:true,value:'unexpected'}),'payload-original');
+ if(retryResult?.value!=='original')throw new Error('same-payload retry did not reuse the original result');
+ pass('idempotency request cache binds each request ID to its payload fingerprint');
  pass('idempotency request cache enforces its hard cap under fully concurrent pending load');
 })().catch(error=>{fail('idempotency request cache hard-cap runtime test',error.message);process.exitCode=1;});
