@@ -1423,11 +1423,11 @@ try {
   const vip = source.match(/app\.post\('\/api\/admin\/gift-vip',[\s\S]*?\n\}\);/);
   const rank = source.match(/app\.post\('\/api\/admin\/rank',[\s\S]*?\n\}\);/);
   const css = fs.readFileSync(mainPath, 'utf8');
-  if (gift && gift[0].includes('denyBadgeForRank(n,p,res)') && gift[0].includes('delete p.vipUntil') && gift[0].includes('p.gifts=[record]')) pass('new gift replaces the previous gift/VIP but never replaces an active rank');
+  if (gift && gift[0].includes('denyBadgeForRank(n,p,res)') && gift[0].includes('delete p.vipManualUntil') && gift[0].includes('p.gifts=[record]')) pass('new gift replaces the previous gift/VIP but never replaces an active rank');
   else fail('new gift replaces the previous gift/VIP but never replaces an active rank');
-  if (vip && vip[0].includes('denyBadgeForRank(n,p,res)') && vip[0].includes('p.gifts=[]') && vip[0].includes('p.vipUntil=')) pass('VIP replaces a previous gift but never replaces an active rank');
+  if (vip && vip[0].includes('denyBadgeForRank(n,p,res)') && vip[0].includes('p.gifts=[]') && vip[0].includes('p.vipManualUntil=')) pass('VIP replaces a previous gift but never replaces an active rank');
   else fail('VIP replaces a previous gift but never replaces an active rank');
-  if (rank && rank[0].includes('p.gifts=[]') && rank[0].includes('delete p.vipUntil')) pass('new visual rank replaces previous gift and VIP');
+  if (rank && rank[0].includes('p.gifts=[]') && rank[0].includes('delete p.vipManualUntil')) pass('new visual rank replaces previous gift and VIP');
   else fail('new visual rank replaces previous gift and VIP');
   if (css.includes('rimaz-identity-layout-canonical-v469314') && css.includes('function personalBannerIdentity') && css.includes('onlineIdentity') && css.includes('.memberNameLine') && css.includes('.memberSub')) pass('online-members panel uses one layout with name and status beside rank');
   else fail('online-members status/name/rank unified layout');
