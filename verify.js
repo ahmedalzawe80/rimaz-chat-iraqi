@@ -1433,6 +1433,8 @@ try {
   else fail('new gift replaces the previous gift/VIP but never replaces an active rank');
   if (vip && vip[0].includes('denyBadgeForRank(n,p,res)') && vip[0].includes('p.gifts=[]') && vip[0].includes('p.vipManualUntil=')) pass('VIP replaces a previous gift but never replaces an active rank');
   else fail('VIP replaces a previous gift but never replaces an active rank');
+  if (css.includes('Number(x?.profile?.vipManualUntil)>Date.now()') && css.includes('!x?.profile?.vipSubscriptionId&&Number(x?.profile?.vipUntil)>Date.now()')) pass('member VIP badge uses manual expiry and never treats a stale linked subscription expiry as manual VIP');
+  else fail('member VIP badge uses manual expiry and never treats a stale linked subscription expiry as manual VIP');
   if (rank && rank[0].includes('p.gifts=[]') && rank[0].includes('delete p.vipManualUntil')) pass('new visual rank replaces previous gift and VIP');
   else fail('new visual rank replaces previous gift and VIP');
   if (css.includes('rimaz-identity-layout-canonical-v469314') && css.includes('function personalBannerIdentity') && css.includes('onlineIdentity') && css.includes('.memberNameLine') && css.includes('.memberSub')) pass('online-members panel uses one layout with name and status beside rank');
