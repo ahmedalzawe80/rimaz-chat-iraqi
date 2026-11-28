@@ -945,16 +945,34 @@ function level(l){ l=Number(l)||0; return l>=500?3:l>=400?2:1; }
 function canNotice(u){ return !!u&&(isFullPermissionAdmin(u)||userLikes(u)>=NOTICE_LIKES_REQUIRED); }
 function canMedia(u){ return !!u&&(isFullPermissionAdmin(u)||userLikes(u)>=PRIVATE_MEDIA_LIKES_REQUIRED); }
 function canRaiseRoomMic(u){ return !!u&&(isFullPermissionAdmin(u)||userLikes(u)>=ROOM_MIC_LIKES_REQUIRED); }
+let vipSubscriptionIndexSource=null;
+let vipSubscriptionIndex=new Map();
+function rebuildVipSubscriptionIndex(now=Date.now()){
+  const index=new Map();
+  for(const sub of Array.isArray(db.subscriptions)?db.subscriptions:[]){
+    const accountKey=keyName(sub?.name),expiresAt=Number(sub?.expiresAt);
+    if(!accountKey||sub?.status!=='active'||!Number.isFinite(expiresAt)||expiresAt<=now)continue;
+    let records=index.get(accountKey);
+    if(!records){records=[];index.set(accountKey,records);}
+    records.push(sub);
+  }
+  vipSubscriptionIndex=index;
+  vipSubscriptionIndexSource=db.subscriptions;
+}
+function hasActiveVipSubscription(name,p,now){
+  const subscriptions=Array.isArray(db.subscriptions)?db.subscriptions:[];
+  if(vipSubscriptionIndexSource!==subscriptions)rebuildVipSubscriptionIndex(now);
+  const records=vipSubscriptionIndex.get(keyName(name))||[];
+  return records.some(sub=>{
+    const expiresAt=Number(sub?.expiresAt);
+    if(sub?.status!=='active'||!Number.isFinite(expiresAt)||expiresAt<=now)return false;
+    return sub.grantsVip===true||(sub.grantsVip!==false&&String(p.vipSubscriptionId||'')===String(sub.id||''));
+  });
+}
 function vipActive(name){
   const now=Date.now(),p=profile(name),manualUntil=Math.max(Number(p.vipManualUntil)||0,p.vipSubscriptionId?0:(Number(p.vipUntil)||0));
   if(manualUntil>now)return true;
-  const normalized=keyName(name);
-  for(const sub of Array.isArray(db.subscriptions)?db.subscriptions:[]){
-    const expiresAt=Number(sub?.expiresAt);
-    if(keyName(sub?.name)!==normalized||sub.status!=='active'||!Number.isFinite(expiresAt)||expiresAt<=now)continue;
-    if(sub.grantsVip===true||(sub.grantsVip!==false&&String(p.vipSubscriptionId||'')===String(sub.id||'')))return true;
-  }
-  return false;
+  return hasActiveVipSubscription(name,p,now);
 }
 function defaultStatus(name){ return getGuest(name) ? '(غير مسجل)' : '(عضو جديد)'; }
 function profile(name){
