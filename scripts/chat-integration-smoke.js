@@ -150,6 +150,12 @@ async function assertNoEvent(client, name, emit, timeout = 300) {
 async function main() {
   const clients = [];
   try {
+    const oversizedJsonResponse = await fetch(baseUrl + '/api/wall/read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payload: 'x'.repeat(600 * 1024) })
+    });
+    assert.equal(oversizedJsonResponse.status, 413, 'oversized JSON requests must be rejected before route handling');
     const alpha = await createAccount('/api/register', 'admin', 'Rimaz-CI-Admin-Password-2026!');
     const beta = await createAccount('/api/guest', 'integration-peer', undefined);
     const intruder = await createAccount('/api/guest', 'integration-outsider', undefined);
