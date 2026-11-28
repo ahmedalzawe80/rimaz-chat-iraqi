@@ -1299,6 +1299,33 @@ try {
   else fail('room mic state is updated immediately on grant');
 } catch (error) { fail('incoming call persistence checks', error.message); }
 
+// Completed private calls must release their timeout handles and captured socket closures immediately.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function clearActiveCallPair(');
+  const end=source.indexOf('\nconst activeVoicePairs',start);
+  assert.ok(start>=0&&end>start,'active-call cleanup helper must exist');
+  const cleared=[];
+  const context={activeCallPairs:new Map(),clearTimeout:timer=>cleared.push(timer)};
+  vm.createContext(context);
+  vm.runInContext(source.slice(start,end)+';globalThis.run=clearActiveCallPair;',context);
+  const timer={id:'call-timeout'};
+  const state={timeout:timer};
+  context.activeCallPairs.set('a::b',state);
+  assert.equal(context.run('a::b'),true);
+  assert.deepEqual(cleared,[timer]);
+  assert.equal(state.timeout,null);
+  assert.equal(context.activeCallPairs.size,0);
+  assert.equal(context.run('missing'),false);
+  const offerLine=source.split('\n').find(line=>line.includes("socket.on('call-offer'"));
+  const answerLine=source.split('\n').find(line=>line.includes("socket.on('call-answer'"));
+  assert.ok(offerLine&&offerLine.includes('state.timeout=setTimeout(timeoutCall,60000)'));
+  assert.ok(answerLine&&answerLine.includes('if(state.timeout){clearTimeout(state.timeout);state.timeout=null;}'));
+  for(const line of source.split('\n').filter(line=>line.includes("socket.on('call-reject'")||line.includes("socket.on('call-end'")||line.includes("socket.on('disconnect'")))assert.ok(!line.includes('activeCallPairs.delete('));
+  assert.ok(source.includes('for(const pair of activeCallPairs.keys())clearActiveCallPair(pair);'));
+  pass('private-call timeout handles are cancelled on answer, rejection, end, disconnect, expiry, and database restore');
+} catch(error) { fail('private-call timer memory cleanup',error.message); }
+
 // Exit-room control matches the supplied door-arrow reference and keeps its action.
 try {
   const html = fs.readFileSync(mainPath, 'utf8');
