@@ -893,7 +893,7 @@ function vipActive(name){
   for(const sub of Array.isArray(db.subscriptions)?db.subscriptions:[]){
     const expiresAt=Number(sub?.expiresAt);
     if(keyName(sub?.name)!==normalized||sub.status!=='active'||!Number.isFinite(expiresAt)||expiresAt<=now)continue;
-    if(sub.grantsVip===true||String(p.vipSubscriptionId||'')===String(sub.id||''))return true;
+    if(sub.grantsVip===true||(sub.grantsVip!==false&&String(p.vipSubscriptionId||'')===String(sub.id||'')))return true;
   }
   return false;
 }
