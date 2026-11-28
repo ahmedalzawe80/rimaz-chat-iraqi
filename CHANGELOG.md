@@ -1,3 +1,11 @@
+## Subscription lifecycle and constrained-runtime validation — 2026-11-28 (no application version change)
+
+- Reuse the latest prior subscription record when an account is reactivated after cancellation or expiry, instead of creating a new database row on every lifecycle; preserve the existing per-record history and its 100-event limit.
+- Clone only the target subscription history during grant/cancellation transactions, avoiding unnecessary copies of unrelated account histories while preserving rollback behavior.
+- Added runtime regression fixtures for active renewal, expired/cancelled reactivation, new-account creation, history isolation, and unrelated-record preservation.
+- Validated the exact review branch with passing regression tests, production Docker build, and HTTP/Socket.IO integration smoke tests under 128 MiB RAM and 0.25 vCPU. CI cgroup peaks varied from 80.6 MiB to 100.2 MiB across two successful runs; these are CI measurements, not live Deplexo readings.
+- Campaign creation/deletion remains explicit administration; no arbitrary campaign or historical-subscription deletion/retention cap was introduced.
+
 ## Release packaging modernization — 2026-11-27
 
 - Removed the 16 MB generated release ZIP from the tracked repository and removed the separate archive-audit workflow. The release ZIP is now built in GitHub Actions runner temporary storage only after an explicit dispatch and successful source validation, then uploaded as a 30-day workflow artifact.
