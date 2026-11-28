@@ -579,6 +579,39 @@ function removePublicUploadIfUnreferenced(url){
   try{fs.unlinkSync(path.join(UP_DIR,filename));}
   catch(error){if(error.code!=='ENOENT')console.warn('Expired public media cleanup failed:',error.message);}
 }
+const MAX_WALL_POSTS=300;
+function appendWallPost(post){
+  const previousWall=db.wall;
+  const previousWallLikes=db.wallLikes;
+  const previousWallComments=db.wallComments;
+  const next=[...(Array.isArray(db.wall)?db.wall:[]),post];
+  const overflow=Math.max(0,next.length-MAX_WALL_POSTS);
+  const removed=overflow?next.slice(0,overflow):[];
+  db.wall=next.slice(-MAX_WALL_POSTS);
+  if(removed.length){
+    const nextLikes={...(db.wallLikes||{})};
+    const nextComments={...(db.wallComments||{})};
+    for(const item of removed){
+      const id=String(item?.id??'');
+      if(!id)continue;
+      delete nextLikes[id];
+      delete nextComments[id];
+    }
+    db.wallLikes=nextLikes;
+    db.wallComments=nextComments;
+  }
+  try{save();}
+  catch(error){
+    if(previousWall===undefined)delete db.wall;else db.wall=previousWall;
+    if(previousWallLikes===undefined)delete db.wallLikes;else db.wallLikes=previousWallLikes;
+    if(previousWallComments===undefined)delete db.wallComments;else db.wallComments=previousWallComments;
+    throw error;
+  }
+  // Files and client state are changed only after the bounded wall snapshot is durable.
+  for(const item of removed)if(item?.media?.url)removePublicUploadIfUnreferenced(item.media.url);
+  return removed;
+}
+
 function cleanupExpiredPublicContent(now=Date.now()){
   const cutoff=now-PUBLIC_RETENTION_MS;
   const expiredMessageIds=[];
@@ -1670,7 +1703,7 @@ app.get('/api/wall/status',requireAuth,(req,res)=>{res.set('Cache-Control','no-s
 app.get('/api/wall/unread',requireAuth,(req,res)=>{const me=keyName(req.user.name),started=Number(req.user.created)||0,readAt=Number(db.wallReadAt?.[me]||0);const count=siteModuleEnabled('wall')?db.wall.filter(p=>Number(p.at||0)>=started&&Number(p.at||0)>readAt&&keyName(p.from)!==me).length:0;res.set('Cache-Control','no-store');res.json({count});});
 app.post('/api/wall/read',requireAuth,(req,res)=>{const me=keyName(req.user.name),requested=Number(req.body?.throughAt),throughAt=Number.isFinite(requested)?Math.min(Date.now(),Math.max(0,requested)):0;db.wallReadAt=db.wallReadAt||{};const previous=Number(db.wallReadAt[me]||0);if(throughAt>previous){db.wallReadAt[me]=throughAt;try{save();}catch(error){db.wallReadAt[me]=previous;return res.status(500).json({error:'تعذر تحديث قراءة الحائط'});}}const started=Number(req.user.created)||0,readAt=Number(db.wallReadAt[me]||0),count=siteModuleEnabled('wall')?db.wall.filter(p=>Number(p.at||0)>=started&&Number(p.at||0)>readAt&&keyName(p.from)!==me).length:0;res.json({ok:true,count,readAt});});
 app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))return res.status(403).json({error:'ميزة الحائط متوقفة من إدارة الموقع'});const started=Number(req.user.created)||0;res.set('Cache-Control','no-store');res.json(db.wall.filter(x=>Number(x.at||0)>=started).slice(-100).reverse());});
-app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))return res.status(403).json({error:'ميزة الحائط متوقفة من إدارة الموقع'});if(db.wallEnabled===false)return res.status(403).json({error:'الجدار متوقف مؤقتاً من الإدارة'});const text=String(req.body.text||'').trim();if(!text)return res.status(400).json({error:'اكتب منشورك'});const previous=db.wall.slice();const p={id:crypto.randomUUID(),from:req.user.name,text:text.slice(0,2000),media:null,at:Date.now(),likes:0};db.wall.push(p);db.wall=db.wall.slice(-300);try{save()}catch(e){db.wall=previous;console.error('Wall post save failed:',e.message);return res.status(500).json({error:'تعذر حفظ المنشور'});}io.emit('wall-new',p);res.json(p);});
+app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))return res.status(403).json({error:'ميزة الحائط متوقفة من إدارة الموقع'});if(db.wallEnabled===false)return res.status(403).json({error:'الجدار متوقف مؤقتاً من الإدارة'});const text=String(req.body.text||'').trim();if(!text)return res.status(400).json({error:'اكتب منشورك'});const p={id:crypto.randomUUID(),from:req.user.name,text:text.slice(0,2000),media:null,at:Date.now(),likes:0};let removed;try{removed=appendWallPost(p)}catch(e){console.error('Wall post save failed:',e.message);return res.status(500).json({error:'تعذر حفظ المنشور'});}if(removed.length)io.emit('wall-retention-cleaned',{ids:removed.map(item=>String(item.id))});io.emit('wall-new',p);res.json(p);});
 app.post('/api/wall/like',requireAuth,(req,res)=>{
   if(!siteModuleEnabled('wall'))return res.status(403).json({error:'ميزة الحائط متوقفة من إدارة الموقع'});
   const p=db.wall.find(x=>x.id===req.body.id);
@@ -2488,7 +2521,7 @@ app.post('/api/media',requireAuth,upload.single('file'),validateUploadedContent(
     emitToUser(to,'private-media',m); return res.json(m);
   }
   if(scope!=='wall'){removeUploadedFile(req.file);return res.status(400).json({error:'نوع إرسال الوسائط غير صحيح'});}
-  const previousWall=db.wall.slice();const post={id:crypto.randomUUID(),from:u.name,text:'',media,at:Date.now(),likes:0}; db.wall.push(post);try{save()}catch(e){db.wall=previousWall;removeUploadedFile(req.file);console.error('Wall media save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الوسائط على الحائط'});} io.emit('wall-new',post); res.json(post);
+  const post={id:crypto.randomUUID(),from:u.name,text:'',media,at:Date.now(),likes:0};let removed;try{removed=appendWallPost(post)}catch(e){removeUploadedFile(req.file);console.error('Wall media save failed:',e.message);return res.status(500).json({error:'تعذر حفظ الوسائط على الحائط'});}if(removed.length)io.emit('wall-retention-cleaned',{ids:removed.map(item=>String(item.id))});io.emit('wall-new',post);res.json(post);
 });
 
 function normalizeChatFilterText(value){return String(value||'').normalize('NFKC').toLocaleLowerCase('ar').replace(/[\u064B-\u065F\u0670\u0640\u200B-\u200F\uFEFF]/g,'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/[\s\u00A0]+/g,' ').trim();}
