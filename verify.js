@@ -1679,7 +1679,7 @@ try {
   const offer = source.match(/socket\.on\('call-offer',[\s\S]*?\n/);
   const answer = source.match(/socket\.on\('call-answer',[\s\S]*?\n/);
   const ice = source.match(/socket\.on\('ice',[\s\S]*?\n/);
-  const disconnect = source.includes("socket.on('disconnect'") && source.includes('activeCallPairs.delete(pair)');
+  const disconnect = source.includes("socket.on('disconnect'") && source.includes('clearActiveCallPair(pair)');
   const ok = source.includes('const activeCallPairs = new Map()') && source.includes('function allowCallSignal(') && source.includes('function validSessionDescription(') && source.includes('function validIceCandidate(')
     && offer && offer[0].includes("validSessionDescription(d.offer,'offer')") && offer[0].includes('allowCallSignal(sid)')
     && answer && answer[0].includes("validSessionDescription(d.answer,'answer')") && answer[0].includes('state.callee!==sid')
