@@ -167,6 +167,10 @@ async function main() {
     await publicMessage;
     const duplicatePublicAck = await first.emitWithAck('send-message', { room: 'public', text: publicMarker, requestId: publicRequestId });
     assert.equal(duplicatePublicAck.messageId, publicAck.messageId, 'public retry must reuse original result');
+    const conflictingPublicEvent = second.waitFor('message', value => value?.text === publicMarker + '-different');
+    const conflictingPublicAck = await first.emitWithAck('send-message', { room: 'public', text: publicMarker + '-different', requestId: publicRequestId });
+    assert.equal(conflictingPublicAck?.ok, false, 'public request ID must not be reusable for different content');
+    await assert.rejects(conflictingPublicEvent, /Timed out waiting for Socket.IO event: message/);
     const duplicatePublicBroadcast = first.waitFor('message', value => value?.id === publicAck.messageId, 300);
     first.emit('send-message', { room: 'public', text: publicMarker, requestId: publicRequestId });
     await assert.rejects(duplicatePublicBroadcast, /Timed out waiting for Socket.IO event: message/);
@@ -182,6 +186,10 @@ async function main() {
     await privateMessage;
     const duplicatePrivateAck = await first.emitWithAck('private-message', { to: 'integration-peer', text: privateMarker, requestId: privateRequestId });
     assert.equal(duplicatePrivateAck.messageId, privateAck.messageId, 'private retry must reuse original result');
+    const conflictingPrivateEvent = second.waitFor('private-message', value => value?.text === privateMarker + '-different');
+    const conflictingPrivateAck = await first.emitWithAck('private-message', { to: 'integration-peer', text: privateMarker + '-different', requestId: privateRequestId });
+    assert.equal(conflictingPrivateAck?.ok, false, 'private request ID must not be reusable for different content');
+    await assert.rejects(conflictingPrivateEvent, /Timed out waiting for Socket.IO event: private-message/);
     const duplicatePrivateDelivery = second.waitFor('private-message', value => value?.id === privateAck.messageId, 300);
     first.emit('private-message', { to: 'integration-peer', text: privateMarker, requestId: privateRequestId });
     await assert.rejects(duplicatePrivateDelivery, /Timed out waiting for Socket.IO event: private-message/);
