@@ -494,9 +494,9 @@ try {
   const source = fs.readFileSync(server, 'utf8');
   const appInit = source.indexOf('const app = express();');
   const serverInit = source.indexOf('const server = http.createServer(app);');
-  const ioInit = source.indexOf('const io = new Server(server);');
+  const ioInit = source.indexOf('const io = new Server(server, {');
   const firstUse = source.indexOf("app.disable('x-powered-by');");
-  if (appInit >= 0 && serverInit > appInit && ioInit > serverInit && firstUse > ioInit) pass('Express, HTTP, and Socket.IO are initialized before first use');
+  if (appInit >= 0 && serverInit > appInit && ioInit > serverInit && firstUse > ioInit && /maxHttpBufferSize:\s*SOCKET_MAX_PACKET_BYTES/.test(source) && /perMessageDeflate:\s*false/.test(source)) pass('Express, HTTP, and Socket.IO are initialized before first use with bounded packet buffers');
   else fail('server bootstrap initialization order');
   const smileyDir = path.join(root, 'public', 'smileys');
   const names = fs.readdirSync(smileyDir).filter(name => /^smiley-\d+\.(?:gif|png|jpe?g|webp)$/i.test(name));
