@@ -1009,6 +1009,38 @@ try {
 } catch(error) { fail('subscription and ad transaction checks',error.message); }
 
 
+// Subscription lifecycle record selection must be deterministic and avoid per-renewal row growth.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function prepareSubscriptionGrant(');
+  const end=source.indexOf("\\napp.get('/api/admin/subscriptions'",start);
+  const helper=source.slice(start,end);
+  assert.ok(start>=0&&end>start,'subscription grant helper must be present');
+  let generated=0;
+  const context={keyName:value=>String(value||'').trim().toLowerCase(),crypto:{randomUUID:()=> 'generated-'+(++generated)}};
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.run=prepareSubscriptionGrant;',context);
+  const activeHistory=[{at:10,action:'grant-or-renew'}],active={id:'active-1',name:'Alice',status:'active',expiresAt:500,updatedAt:20,history:activeHistory},unrelated={id:'other-1',name:'Bob',status:'cancelled',updatedAt:30,history:[{at:30}]};
+  const activeResult=context.run([active,unrelated],'ALICE',100);
+  assert.equal(activeResult.subscriptions.length,2);
+  assert.equal(activeResult.subscription.id,'active-1');
+  assert.equal(activeResult.wasActive,true);
+  assert.notEqual(activeResult.subscription.history,activeHistory);
+  assert.equal(active.history.length,1);
+  assert.equal(activeResult.subscriptions[1],unrelated);
+  const old={id:'old-cancelled',name:'Alice',status:'cancelled',updatedAt:10,history:[{at:10}]},latest={id:'latest-expired',name:'alice',status:'active',expiresAt:50,updatedAt:20,history:[{at:20}]};
+  const reactivated=context.run([old,latest],'Alice',100);
+  assert.equal(reactivated.subscriptions.length,2);
+  assert.equal(reactivated.subscription.id,'latest-expired');
+  assert.equal(reactivated.wasActive,false);
+  const created=context.run([], 'Charlie', 100);
+  assert.equal(created.subscriptions.length,1);
+  assert.equal(created.subscription.id,'generated-1');
+  assert.equal(created.wasActive,false);
+  pass('subscription grants reuse active or latest historical account records, preserve unrelated rows, and create only for new accounts');
+} catch(error) { fail('subscription lifecycle record selection',error.message); }
+
+
 // Private chat read cursors and hide lists must be durable, bounded, and rollback-safe.
 try {
   const source=fs.readFileSync(server,'utf8');
