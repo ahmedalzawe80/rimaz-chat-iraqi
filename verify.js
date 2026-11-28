@@ -1291,7 +1291,7 @@ try {
 try {
   const source = fs.readFileSync(server, 'utf8');
   const html = fs.readFileSync(mainPath, 'utf8');
-  if (source.includes('const timeoutCall=()=>{if(activeCallPairs.get(pair)!==state||state.answered)return;const callee=socketUsers.get(target[0]);if(callee&&voiceSpeakers.get(callee.room)?.has(target[0]))') && source.includes('waitingOnRoomMic') && source.includes('if(!state||state.callee!==sid||state.caller!==target[0])return;') && source.includes('if(!canMedia(target[1]))')) pass('incoming call timeout is extended while the callee is speaking on a room mic');
+  if (source.includes('const timeoutCall=()=>{if(activeCallPairs.get(pair)!==state||state.answered)return;if(Date.now()-state.created>120000){clearActiveCallPair(pair)') && source.includes('const callee=socketUsers.get(target[0]);if(callee&&voiceSpeakers.get(callee.room)?.has(target[0]))') && source.includes('waitingOnRoomMic') && source.includes('if(!state||state.callee!==sid||state.caller!==target[0])return;') && source.includes('if(!canMedia(target[1]))')) pass('incoming call stays pending during room-mic use but is hard-expired after its maximum lifetime');
   else fail('incoming call remains pending during room-mic use');
   if (source.includes("if(voiceSpeakers.get(u.room)?.has(sid))return socket.emit('call-answer-denied',{reason:'room-mic'})") && html.includes("socket.on('call-answer-denied'") && html.includes('acceptedIncomingCallForRetry')) pass('server blocks call answers during room-mic use and restores the incoming card');
   else fail('server-side room-mic call-answer guard');
