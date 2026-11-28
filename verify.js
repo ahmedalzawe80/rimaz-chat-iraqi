@@ -3033,6 +3033,36 @@ try{
   else fail('bounded wall commit rollback fixture',JSON.stringify({rejected,sameWall:db.wall===wall,sameLikes:db.wallLikes===likes,sameComments:db.wallComments===comments,events}));
 }catch(error){fail('bounded wall commit rollback fixture',error.message);}
 
+// Permanent member-number lookups must use a rebuilt-once index, not rescan the registry for every account.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function memberNumberIdentity(name,type)');
+  const end=source.indexOf('function getMemberNumber(name,type)',start);
+  if(start<0||end<0)throw new Error('member-number allocator block not found');
+  const allocator=source.slice(start,end);
+  const registry={'member:alice':5,'member:bob':5,'guest:former-visitor':9};
+  const db={memberNumbers:registry,nextMemberNumber:10};
+  let valuesCalls=0;
+  const objectApi={values:value=>{valuesCalls++;return Object.values(value);}};
+  const context={db,Object:objectApi,Map,Number,Math,String,keyName:value=>String(value||'').trim().toLowerCase()};
+  vm.createContext(context);
+  vm.runInContext(allocator+';globalThis.allocate=allocateMemberNumber;globalThis.getIndexSource=()=>memberNumberIndexSource;',context);
+  const alice=context.allocate('alice','member',{});
+  const bob=context.allocate('bob','member',{});
+  const charlie=context.allocate('charlie','member',{});
+  const charlieAgain=context.allocate('charlie','member',{memberNumber:charlie});
+  const duplicateRepair=alice===10&&bob===5&&new Set([alice,bob,charlie]).size===3;
+  const orphanReservation=db.memberNumbers['guest:former-visitor']===9&&charlie!==9;
+  const fastRepeatedLookup=charlieAgain===charlie&&valuesCalls===1&&context.getIndexSource()===registry;
+  db.memberNumbers={'member:restored':12};db.nextMemberNumber=13;
+  const restored=context.allocate('restored','member',{});
+  const afterRestore=context.allocate('new-account','member',{});
+  const indexRebuilt=restored===12&&afterRestore===13&&valuesCalls===2;
+  if(duplicateRepair&&orphanReservation&&fastRepeatedLookup&&indexRebuilt)
+    pass('member-number index avoids per-account registry scans, repairs duplicate IDs once, preserves orphan reservations, and rebuilds after database replacement');
+  else fail('indexed member-number allocation',JSON.stringify({alice,bob,charlie,charlieAgain,valuesCalls,orphanReservation,restored,afterRestore}));
+} catch(error) { fail('indexed member-number allocation',error.message); }
+
 // v46.93.55: permanent member/visitor numbers and number-first online-member search.
 try {
   const source=fs.readFileSync(server,'utf8');
