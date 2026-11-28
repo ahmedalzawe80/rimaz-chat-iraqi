@@ -4,7 +4,8 @@
 
 - Repository: `ahmedalzawe80/rimaz-chat-iraqi`.
 - Working branch: `review/rimaz-clean-integration-2026-11-27`.
-- Latest reviewed branch head: `da444af14525fdf6c94f22a2e05a8833728b2149`.
+- Latest reviewed application/runtime candidate: `da444af14525fdf6c94f22a2e05a8833728b2149`. The subsequent checkpoint and documentation-index commits (`e94420d799d1e2ab0511d82b3ccc9ecd7af5cb24` and `6bf91ed10524c277d87da28c166f436e989dc2c4`) are documentation-only and do not change application behavior.
+- Exact-head CI also passed on the documentation-index head `6bf91ed10524c277d87da28c166f436e989dc2c4`: push run [#46121898038](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/46121898038) and pull-request run [#46121903091](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/46121903091).
 - PR #9 remains **open, draft, and unmerged**. Its head is the review branch and its base is `safety/validate-and-backup-before-sync`, not production `main`. Do not merge, change its base, synchronize/rewrite it, or deploy without the user's explicit approval. The previous 2026-11-27 checkpoint recorded a mergeability conflict after the safety base advanced; obtain a fresh comparison before any integration decision.
 - Exact-head GitHub Actions validation succeeded on commit `da444af14525fdf6c94f22a2e05a8833728b2149`:
   - Push run [#46121771554](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/46121771554) — success.
