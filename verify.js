@@ -1000,7 +1000,7 @@ try {
     ['subscription grant and cancellation histories are capped at 100 records',assign.includes("sub.history=sub.history.slice(0,100)")&&cancel.includes("sub.history=sub.history.slice(0,100)")],
     ['subscription reactivation reuses the latest prior account record instead of appending another row',source.includes('function prepareSubscriptionGrant(records,name,now)')&&assign.includes('prepareSubscriptionGrant(previousSubscriptions,name,now)')&&assign.includes('sub.startsAt=prepared.wasActive?(sub.startsAt||now):now;')],
     ['subscription grant preparation copies only the target history and preserves unrelated records',source.includes('subscription={...existing,history:Array.isArray(existing.history)?existing.history.slice():[]}')&&source.includes('const subscriptions=Array.isArray(records)?records.slice():[]')],
-    ['subscription grant preparation selects the latest prior cancelled or expired record when no active term exists',source.includes('if(index<0){\\n    let newestAt=-Infinity;')&&source.includes('if(updatedAt>=newestAt){newestAt=updatedAt;index=i;}')],
+    ['subscription grant preparation selects the latest prior cancelled or expired record when no active term exists',source.includes('let newestAt=-Infinity;')&&source.includes('if(updatedAt>=newestAt){newestAt=updatedAt;index=i;}')],
     ['subscription cancellation clones only the target history rather than every account history',cancel.includes('x.id===subExists.id?{...x,history:Array.isArray(x.history)?x.history.slice():[]}:x')&&!cancel.includes('.map(x=>({...x,history:Array.isArray(x.history)?x.history.slice():[]}))')],
     ['ad create/update/delete restore campaign and audit state on failed save',adsCreate.includes('previousCampaigns=db.adCampaigns,previousAudit=db.adminAuditLogs')&&adsCreate.includes('db.adCampaigns=previousCampaigns')&&adsPatch.includes('db.adCampaigns=previousCampaigns')&&adsDelete.includes('db.adCampaigns=previousCampaigns')&&adsDelete.includes('db.adminAuditLogs=previousAudit')],
     ['control-center module changes restore the previous settings and audit state on failed save',control.includes('previousSettings=db.siteSettings,previousAudit=db.adminAuditLogs')&&control.includes('db.siteSettings=previousSettings')&&control.includes('db.adminAuditLogs=previousAudit')]
@@ -1013,7 +1013,7 @@ try {
 try {
   const source=fs.readFileSync(server,'utf8');
   const start=source.indexOf('function prepareSubscriptionGrant(');
-  const end=source.indexOf("\\napp.get('/api/admin/subscriptions'",start);
+  const end=source.indexOf("app.get('/api/admin/subscriptions'",start);
   const helper=source.slice(start,end);
   assert.ok(start>=0&&end>start,'subscription grant helper must be present');
   let generated=0;
