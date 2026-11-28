@@ -871,9 +871,62 @@ function cancelPrivateConversationCleanup(name){const key=keyName(name),timer=pr
 function cleanName(v){ return String(v||'').trim().replace(/\s+/g,' ').slice(0,32); }
 function keyName(n){ return cleanName(n).toLowerCase(); }
 function memberNumberIdentity(name,type){return `${type==='guest'?'guest':'member'}:${keyName(name)}`;}
-function allocateMemberNumber(name,type,account){if(!db.memberNumbers||typeof db.memberNumbers!=='object'||Array.isArray(db.memberNumbers))db.memberNumbers={};const identity=memberNumberIdentity(name,type);let value=Number(db.memberNumbers[identity]||account?.memberNumber||0);const used=new Set(Object.entries(db.memberNumbers).filter(([k])=>k!==identity).map(([,v])=>Number(v)).filter(v=>Number.isSafeInteger(v)&&v>0));if(!Number.isSafeInteger(value)||value<1||used.has(value)){value=Math.max(1,Number(db.nextMemberNumber)||1);while(used.has(value))value++;}db.memberNumbers[identity]=value;db.nextMemberNumber=Math.max(Number(db.nextMemberNumber)||1,value+1);if(account)account.memberNumber=value;return value;}
+let memberNumberIndexSource=null;
+let memberNumberCounts=new Map();
+function rebuildMemberNumberIndex(){
+  const counts=new Map();
+  for(const raw of Object.values(db.memberNumbers||{})){
+    const value=Number(raw);
+    if(Number.isSafeInteger(value)&&value>0)counts.set(value,(counts.get(value)||0)+1);
+  }
+  memberNumberCounts=counts;
+  memberNumberIndexSource=db.memberNumbers;
+}
+function ensureMemberNumberIndex(){
+  if(memberNumberIndexSource!==db.memberNumbers)rebuildMemberNumberIndex();
+}
+function decrementMemberNumberCount(value){
+  const count=memberNumberCounts.get(value)||0;
+  if(count<=1)memberNumberCounts.delete(value);
+  else memberNumberCounts.set(value,count-1);
+}
+function allocateMemberNumber(name,type,account){
+  if(!db.memberNumbers||typeof db.memberNumbers!=='object'||Array.isArray(db.memberNumbers))db.memberNumbers={};
+  ensureMemberNumberIndex();
+  const identity=memberNumberIdentity(name,type);
+  const storedValue=db.memberNumbers[identity];
+  let value=Number(storedValue||account?.memberNumber||0);
+  const valid=Number.isSafeInteger(value)&&value>0;
+  const ownsStoredValue=!!storedValue&&Number.isSafeInteger(Number(storedValue))&&Number(storedValue)>0;
+  const otherOwners=(memberNumberCounts.get(value)||0)-(ownsStoredValue?1:0);
+  if(!valid||otherOwners>0){
+    if(ownsStoredValue)decrementMemberNumberCount(Number(storedValue));
+    value=Math.max(1,Number(db.nextMemberNumber)||1);
+    while(memberNumberCounts.has(value))value++;
+    memberNumberCounts.set(value,(memberNumberCounts.get(value)||0)+1);
+  }else if(!ownsStoredValue){
+    memberNumberCounts.set(value,(memberNumberCounts.get(value)||0)+1);
+  }
+  db.memberNumbers[identity]=value;
+  db.nextMemberNumber=Math.max(Number(db.nextMemberNumber)||1,value+1);
+  if(account)account.memberNumber=value;
+  return value;
+}
 function getMemberNumber(name,type){const account=type==='guest'?getGuest(name):getUser(name);return allocateMemberNumber(name,type,account);}
-let memberNumbersMigrated=false;for(const [name,account] of Object.entries(db.users||{})){const identity=memberNumberIdentity(name,'member');if(!Number.isSafeInteger(Number(db.memberNumbers?.[identity]))||Number(db.memberNumbers?.[identity])<1||Number(account?.memberNumber)!==Number(db.memberNumbers?.[identity])){allocateMemberNumber(name,'member',account);memberNumbersMigrated=true;}}for(const [name,account] of Object.entries(db.guests||{})){const identity=memberNumberIdentity(name,'guest');if(!Number.isSafeInteger(Number(db.memberNumbers?.[identity]))||Number(db.memberNumbers?.[identity])<1||Number(account?.memberNumber)!==Number(db.memberNumbers?.[identity])){allocateMemberNumber(name,'guest',account);memberNumbersMigrated=true;}}if(memberNumbersMigrated){try{save();}catch(error){console.error('Could not persist member-number migration:',error.message);}}
+let memberNumbersMigrated=false;
+for(const [name,account] of Object.entries(db.users||{})){
+  const identity=memberNumberIdentity(name,'member');
+  const previousRegistryValue=db.memberNumbers?.[identity],previousAccountValue=account?.memberNumber;
+  const assigned=allocateMemberNumber(name,'member',account);
+  if(Number(previousRegistryValue)!==assigned||Number(previousAccountValue)!==assigned)memberNumbersMigrated=true;
+}
+for(const [name,account] of Object.entries(db.guests||{})){
+  const identity=memberNumberIdentity(name,'guest');
+  const previousRegistryValue=db.memberNumbers?.[identity],previousAccountValue=account?.memberNumber;
+  const assigned=allocateMemberNumber(name,'guest',account);
+  if(Number(previousRegistryValue)!==assigned||Number(previousAccountValue)!==assigned)memberNumbersMigrated=true;
+}
+if(memberNumbersMigrated){try{save();}catch(error){console.error('Could not persist member-number migration:',error.message);}}
 function isOwnerName(name){ const n=keyName(name); if(n==='owner'||(!!process.env.OWNER_NAME&&n===keyName(process.env.OWNER_NAME)))return true; const userEntry=Object.entries(db.users||{}).find(([k])=>keyName(k)===n); if(userEntry&&String(userEntry[1]?.role||'')==='owner')return true; const guestEntry=Object.entries(db.guests||{}).find(([k])=>keyName(k)===n); return !!(guestEntry&&String(guestEntry[1]?.role||'')==='owner'); }
 function roleOf(u){if(!u)return 'member';return isOwnerName(u.name)?'owner':'member';}
 function canMessageClosedPrivate(u){return !!(u&&(isOwner(u)||hasPermission(u,'private_chat_override')));}
