@@ -1038,6 +1038,24 @@ try {
   assert.equal(created.subscription.id,'generated-1');
   assert.equal(created.wasActive,false);
   pass('subscription grants reuse active or latest historical account records, preserve unrelated rows, and create only for new accounts');
+  const diagnosticStart=source.indexOf('function summarizeActiveSubscriptionDuplicates(');
+  const diagnosticEnd=source.indexOf('function prepareSubscriptionGrant(',diagnosticStart);
+  assert.ok(diagnosticStart>=0&&diagnosticEnd>diagnosticStart,'active subscription duplicate diagnostic must be present');
+  const diagnosticContext={keyName:value=>String(value||'').trim().toLowerCase()};
+  vm.createContext(diagnosticContext);
+  vm.runInContext(source.slice(diagnosticStart,diagnosticEnd)+';globalThis.run=summarizeActiveSubscriptionDuplicates;',diagnosticContext);
+  const duplicates=diagnosticContext.run([
+    {id:'a1',name:'Alice',status:'active',expiresAt:500},
+    {id:'a2',name:' alice ',status:'active',expiresAt:600},
+    {id:'a3',name:'ALICE',status:'cancelled',expiresAt:900},
+    {id:'b1',name:'Bob',status:'active',expiresAt:50},
+    {id:'c1',name:'Charlie',status:'active',expiresAt:500}
+  ],100);
+  assert.equal(duplicates.length,1);
+  assert.equal(duplicates[0].name,'Alice');
+  assert.equal(duplicates[0].count,2);
+  assert.deepEqual(Array.from(duplicates[0].ids),['a1','a2']);
+  pass('subscription duplicate diagnostics report only overlapping active records and never mutate source data');
 } catch(error) { fail('subscription lifecycle record selection',error.message); }
 
 
