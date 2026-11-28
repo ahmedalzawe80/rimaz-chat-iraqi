@@ -21,7 +21,11 @@ const { Server } = require('socket.io');
 // registering middleware, routes, or socket handlers below.
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const SOCKET_MAX_PACKET_BYTES = 256 * 1024;
+const io = new Server(server, {
+  maxHttpBufferSize: SOCKET_MAX_PACKET_BYTES,
+  perMessageDeflate: false
+});
 
 // Built-in media assets are individual files, not Base64 JSON packs.
 // This keeps startup from parsing/duplicating ~20 MB of image payloads in RAM.
@@ -107,8 +111,11 @@ for(const item of staleBackupTemps.errors)console.warn(`Could not remove stale b
 
 app.disable('x-powered-by');
 app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','SAMEORIGIN');res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');res.setHeader('Permissions-Policy','camera=(self), microphone=(self), geolocation=()');if(req.path.startsWith('/api/'))res.setHeader('Cache-Control','no-store');next();});
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true }));
+// Chat and control APIs exchange small structured payloads; uploads use disk-backed multipart routes.
+// A strict parser ceiling prevents concurrent oversized JSON requests from multiplying RSS.
+const HTTP_JSON_BODY_LIMIT = '512kb';
+app.use(express.json({ limit: HTTP_JSON_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: '64kb', parameterLimit: 100 }));
 app.use('/uploads', express.static(UP_DIR, { maxAge: '7d' }));
 app.get('/smileys/:file', (req,res)=>{const target=SMILEY_FILE_ALIASES[String(req.params.file||'')];if(target)return res.redirect(301,'/smileys/'+target);return res.sendStatus(404);});
 // Serve bundled image directories directly from disk; Express streams the files
@@ -2809,6 +2816,7 @@ io.on('connection',socket=>{
 
 app.use((err,req,res,next)=>{
   if(res.headersSent)return next(err);
+  if(err?.type==='entity.too.large')return res.status(413).json({error:'حجم بيانات الطلب أكبر من الحد المسموح'});
   if(err instanceof multer.MulterError){
     const tooLarge=err.code==='LIMIT_FILE_SIZE';
     return res.status(tooLarge?413:400).json({error:tooLarge?'حجم الملف أكبر من الحد المسموح':'تعذر استقبال الملف؛ تحقق من الملف وحاول مجدداً'});
