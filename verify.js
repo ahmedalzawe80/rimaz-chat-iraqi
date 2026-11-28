@@ -1103,13 +1103,13 @@ try {
 // VIP entitlement resolution combines manual grants with every valid VIP subscription.
 try {
   const source=fs.readFileSync(server,'utf8');
-  const start=source.indexOf('function vipActive(name){');
+  const start=source.indexOf('let vipSubscriptionIndexSource=null;');
   const end=source.indexOf('\nfunction defaultStatus',start);
   assert.ok(start>=0&&end>start,'vipActive helper must be present');
-  let now=1000;
+  let now=1000,keyNameCalls=0;
   const context={
     Date:{now:()=>now},
-    keyName:value=>String(value||'').trim().toLowerCase(),
+    keyName:value=>{keyNameCalls++;return String(value||'').trim().toLowerCase();},
     db:{subscriptions:[]},
     profile:name=>context.profiles[String(name).toLowerCase()]||{},
     profiles:{alice:{}}
@@ -1146,7 +1146,20 @@ try {
   ];
   assert.equal(run(),false,'missing, malformed, and non-finite expiry values never grant VIP');
   assert.equal(context.profiles.alice.vipSubscriptionId,'legacy-sub','read-only VIP resolution does not mutate profile data');
-  pass('VIP resolution preserves manual grants and recognizes any active VIP subscription without mutating stored data');
+  const bulkSubscriptions=Array.from({length:300},(_,index)=>({id:'bulk-'+index,name:'member-'+index,status:'active',expiresAt:5000,grantsVip:true}));
+  bulkSubscriptions.push({id:'alice-bulk',name:'Alice',status:'active',expiresAt:1800,grantsVip:true});
+  context.db.subscriptions=bulkSubscriptions;
+  const callsBeforeBulk=keyNameCalls;
+  for(let i=0;i<8;i++)assert.equal(run(),true);
+  const bulkIndexCost=keyNameCalls-callsBeforeBulk===bulkSubscriptions.length+8;
+  now=2000;
+  assert.equal(run(),false,'cached subscription candidates still expire against the current clock');
+  context.db.subscriptions=[{id:'replacement',name:'Alice',status:'active',expiresAt:3000,grantsVip:true}];
+  now=2000;
+  const replacementWorks=run()===true;
+  const replacementIndexCost=keyNameCalls-callsBeforeBulk===bulkSubscriptions.length+8+1+2;
+  assert.ok(bulkIndexCost&&replacementWorks&&replacementIndexCost,'subscription scan should happen once per array generation, with expiry checked on every lookup');
+  pass('VIP resolution preserves manual grants, indexes active subscriptions once per database generation, refreshes on replacement, checks live expiry, and never mutates profile data');
 } catch(error) { fail('VIP entitlement resolution',error.message); }
 
 // Private chat read cursors and hide lists must be durable, bounded, and rollback-safe.
