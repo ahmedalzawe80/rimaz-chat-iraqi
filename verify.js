@@ -96,6 +96,18 @@ try {
 
 
 const server = path.join(root, 'server.js');
+const serverSourceForResourceLimits=fs.readFileSync(server,'utf8');
+try{
+  assert.match(serverSourceForResourceLimits,/const SOCKET_MAX_PACKET_BYTES\s*=\s*256\s*\*\s*1024/);
+  assert.match(serverSourceForResourceLimits,/maxHttpBufferSize:\s*SOCKET_MAX_PACKET_BYTES/);
+  assert.match(serverSourceForResourceLimits,/perMessageDeflate:\s*false/);
+  assert.match(serverSourceForResourceLimits,/const HTTP_JSON_BODY_LIMIT\s*=\s*'512kb'/);
+  assert.match(serverSourceForResourceLimits,/express\.json\(\{\s*limit:\s*HTTP_JSON_BODY_LIMIT\s*\}\)/);
+  assert.match(serverSourceForResourceLimits,/express\.urlencoded\(\{\s*extended:\s*true,\s*limit:\s*'64kb',\s*parameterLimit:\s*100\s*\}\)/);
+  assert.match(serverSourceForResourceLimits,/err\?\.type===['\"]entity\.too\.large['\"]/);
+  pass('HTTP and Socket.IO payload ceilings bound per-request memory and disable WebSocket compression buffers');
+}catch(error){fail('HTTP and Socket.IO payload memory ceilings',error.message);}
+
 const serverCheck = spawnSync(process.execPath, ['--check', server], { encoding: 'utf8' });
 if (serverCheck.status === 0) pass('server.js syntax');
 else fail('server.js syntax', serverCheck.stderr || serverCheck.stdout);
