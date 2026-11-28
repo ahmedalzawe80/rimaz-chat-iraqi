@@ -887,7 +887,7 @@ function canNotice(u){ return !!u&&(isFullPermissionAdmin(u)||userLikes(u)>=NOTI
 function canMedia(u){ return !!u&&(isFullPermissionAdmin(u)||userLikes(u)>=PRIVATE_MEDIA_LIKES_REQUIRED); }
 function canRaiseRoomMic(u){ return !!u&&(isFullPermissionAdmin(u)||userLikes(u)>=ROOM_MIC_LIKES_REQUIRED); }
 function vipActive(name){
-  const now=Date.now(),p=profile(name),manualUntil=Number(p.vipManualUntil)||(p.vipSubscriptionId?0:Number(p.vipUntil)||0);
+  const now=Date.now(),p=profile(name),manualUntil=Math.max(Number(p.vipManualUntil)||0,p.vipSubscriptionId?0:(Number(p.vipUntil)||0));
   if(manualUntil>now)return true;
   const normalized=keyName(name);
   for(const sub of Array.isArray(db.subscriptions)?db.subscriptions:[]){
