@@ -1095,6 +1095,12 @@ try {
   assert.equal(run(),true,'another active VIP subscription preserves entitlement');
   context.db.subscriptions=context.db.subscriptions.filter(x=>x.id!=='other-sub'&&x.id!=='legacy-sub');
   assert.equal(run(),false,'a stale linked subscription does not grant VIP');
+  context.db.subscriptions=[
+    {id:'missing-expiry',name:'Alice',status:'active',grantsVip:true},
+    {id:'invalid-expiry',name:'Alice',status:'active',expiresAt:'not-a-date',grantsVip:true},
+    {id:'infinite-expiry',name:'Alice',status:'active',expiresAt:'Infinity',grantsVip:true}
+  ];
+  assert.equal(run(),false,'missing, malformed, and non-finite expiry values never grant VIP');
   assert.equal(context.profiles.alice.vipSubscriptionId,'legacy-sub','read-only VIP resolution does not mutate profile data');
   pass('VIP resolution preserves manual grants and recognizes any active VIP subscription without mutating stored data');
 } catch(error) { fail('VIP entitlement resolution',error.message); }
