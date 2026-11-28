@@ -891,7 +891,8 @@ function vipActive(name){
   if(manualUntil>now)return true;
   const normalized=keyName(name);
   for(const sub of Array.isArray(db.subscriptions)?db.subscriptions:[]){
-    const expiresAt=Number(sub?.expiresAt);\n    if(keyName(sub?.name)!==normalized||sub.status!=='active'||!Number.isFinite(expiresAt)||expiresAt<=now)continue;
+    const expiresAt=Number(sub?.expiresAt);
+    if(keyName(sub?.name)!==normalized||sub.status!=='active'||!Number.isFinite(expiresAt)||expiresAt<=now)continue;
     if(sub.grantsVip===true||String(p.vipSubscriptionId||'')===String(sub.id||''))return true;
   }
   return false;
