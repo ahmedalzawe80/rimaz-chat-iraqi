@@ -1857,6 +1857,7 @@ try {
   ['health monitor permission is grouped in rank editor',html.includes("'stats_view','health_view','chat_filter_manage'")],
   ['health permission is removed from automatic full-admin grants and requires opt-in',src.includes('healthViewPermissionMigrationVersion||0)<2')&&src.includes("filter(permission=>permission!=='health_view')")&&src.includes("filter(key=>key!=='health_view')")&&src.includes('db.healthViewPermissionMigrationVersion=2')],
   ['health diagnostics expose V8 heap and external memory metrics',src.includes('heapTotal:memory.heapTotal,external:memory.external,arrayBuffers:memory.arrayBuffers||0')],
+  ['health diagnostics expose wall/media, retained admin collections, and transient timer/cache counts',src.includes('wallPosts:(db.wall||[]).length')&&src.includes('wallMediaPosts:(db.wall||[]).filter(post=>!!post?.media?.url).length')&&src.includes('adCampaigns:(db.adCampaigns||[]).length')&&src.includes('subscriptions:(db.subscriptions||[]).length')&&src.includes('permanentAnnouncementTimers:permanentAnnouncementTimers.size')&&src.includes('privateMessageWindows:privateMessageWindows.size')],
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error){fail('v46.93 health monitor permission checks',error.message)}
 
