@@ -2565,7 +2565,7 @@ function sendSocketMessageResponse(socket,acknowledge,result){
   if(typeof acknowledge==='function'){acknowledge(result);return;}
   if(!result?.ok)socket.emit('error-msg',{error:result?.error||'تعذر إرسال الرسالة، حاول مرة أخرى'});
 }
-async function executeSocketMessageRequest(sid,requestId,scope,task){
+async function executeSocketMessageRequest(sid,requestId,scope,task,payloadFingerprint=''){
   const run=()=>Promise.resolve().then(task).catch(error=>{
     console.error('Socket message request failed:',error.message);
     return {ok:false,error:'تعذر إرسال الرسالة، حاول مرة أخرى'};
@@ -2576,14 +2576,18 @@ async function executeSocketMessageRequest(sid,requestId,scope,task){
   for(const [key,entry] of socketMessageRequestCache){if(entry.expiresAt<=now)socketMessageRequestCache.delete(key);}
   const cacheKey=`${sid}:${scope}:${id}`;
   const cached=socketMessageRequestCache.get(cacheKey);
-  if(cached){socketMessageRequestCache.delete(cacheKey);socketMessageRequestCache.set(cacheKey,cached);return cached.promise;}
+  const fingerprint=crypto.createHash('sha256').update(String(payloadFingerprint)).digest('hex');
+  if(cached){
+    if(cached.fingerprint!==fingerprint)return Promise.resolve({ok:false,error:'معرّف الطلب مستخدم لمحتوى مختلف'});
+    socketMessageRequestCache.delete(cacheKey);socketMessageRequestCache.set(cacheKey,cached);return cached.promise;
+  }
   if(socketMessageRequestCache.size>=SOCKET_MESSAGE_REQUEST_LIMIT){
     let evictableKey=null;
     for(const [key,entry] of socketMessageRequestCache){if(!entry.pending){evictableKey=key;break;}}
     if(evictableKey===null)return Promise.resolve({ok:false,error:'الخادم مشغول بمعالجة رسائل أخرى، حاول بعد قليل'});
     socketMessageRequestCache.delete(evictableKey);
   }
-  const entry={expiresAt:now+SOCKET_MESSAGE_REQUEST_TTL_MS,pending:true,promise:null};
+  const entry={expiresAt:now+SOCKET_MESSAGE_REQUEST_TTL_MS,pending:true,fingerprint,promise:null};
   entry.promise=run().then(result=>{entry.pending=false;entry.expiresAt=Date.now()+SOCKET_MESSAGE_REQUEST_TTL_MS;return result;});
   socketMessageRequestCache.set(cacheKey,entry);
   return entry.promise;
@@ -2690,7 +2694,7 @@ io.on('connection',socket=>{
       }
       io.to(room).emit('message',message);
       return {ok:true,messageId:message.id};
-    });
+    },JSON.stringify([String(d?.room||''),String(d?.text||'').trim().slice(0,2000)]));
     sendSocketMessageResponse(socket,acknowledge,result);
   });
   socket.on('private-typing',d=>{
@@ -2767,7 +2771,7 @@ io.on('connection',socket=>{
       emitToUser(to,'private-message',message);
       socket.emit('private-message',message);
       return {ok:true,messageId:message.id};
-    });
+    },JSON.stringify([keyName(d?.to||''),String(d?.text||'').trim().slice(0,2000)]));
     sendSocketMessageResponse(socket,acknowledge,result);
   });
   socket.on('call-offer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))return socket.emit('call-failed',{error:'المكالمات متوقفة من إدارة الموقع'});const u=socket.data.user,sid=socket.data.sid;if(!u||!sid||!d?.to)return;if(!canMedia(u))return socket.emit('call-failed',{error:`الاتصال الصوتي والكاميرا يفتحان عند ${PRIVATE_MEDIA_LIKES_REQUIRED} إعجاب من المتصل`});if(!allowCallSignal(sid))return socket.emit('call-failed',{error:'طلبات الاتصال كثيرة جداً، حاول بعد قليل'});if(!validSessionDescription(d.offer,'offer'))return socket.emit('call-failed',{error:'بيانات الاتصال غير صالحة'});const target=[...socketUsers.entries()].find(([targetSid,x])=>targetSid!==sid&&keyName(x.name)===keyName(d.to));if(!target)return socket.emit('call-failed',{error:'المستخدم غير متصل'});for(const [oldPair,oldState] of activeCallPairs){const pendingCallee=socketUsers.get(oldState.callee),waitingOnRoomMic=!!pendingCallee&&voiceSpeakers.get(pendingCallee.room)?.has(oldState.callee);if(!oldState.answered&&Date.now()-oldState.created>120000&&!waitingOnRoomMic)activeCallPairs.delete(oldPair);else if(oldState.caller===sid||oldState.callee===sid||oldState.caller===target[0]||oldState.callee===target[0])return socket.emit('call-failed',{error:'أحد الطرفين مشغول باتصال آخر'});}const pair=callPairKey(sid,target[0]),state={caller:sid,callee:target[0],created:Date.now(),video:!!d.video,answered:false};activeCallPairs.set(pair,state);const timeoutCall=()=>{if(activeCallPairs.get(pair)!==state||state.answered)return;const callee=socketUsers.get(target[0]);if(callee&&voiceSpeakers.get(callee.room)?.has(target[0])){const next=setTimeout(timeoutCall,60000);next.unref?.();return;}activeCallPairs.delete(pair);socket.emit('call-timeout',{from:target[1].name});socketBySession(target[0])?.emit('call-timeout',{from:u.name})};const timeout=setTimeout(timeoutCall,60000);timeout.unref?.();socketBySession(target[0])?.emit('call-offer',{from:u.name,fromDisplayName:displayName(u.name),fromProfile:(()=>{const p=profile(u.name);return {avatar:p.avatar||'',displayName:p.displayName||'',rank:p.rank||'',rankUntil:p.rankUntil||0,gifts:(p.gifts||[]).slice(0,1),vipUntil:p.vipUntil||0}})(),fromRole:roleOf(u),fromVip:vipActive(u.name),fromLikes:userLikes(u),offer:d.offer,video:!!d.video});});
