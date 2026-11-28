@@ -4,26 +4,499 @@ const path = require('node:path');
 const vm = require('node:vm');
 const os = require('node:os');
 const crypto = require('node:crypto');
+const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
+const { writeJsonSync } = require('./lib/json-writer');
+const { readJsonFile, validateJsonFile } = require('./lib/json-reader');
+const { inspectDatabaseRestoreFile } = require('./lib/restore-inspector');
+const { createBackupMediaSnapshot } = require('./lib/backup-media-snapshot');
+const { normalizeTrustedProxyHeader, createTrustedProxyTrust, resolveClientIp } = require('./lib/client-ip');
+const { readCgroupMetrics } = require('./lib/cgroup-metrics');
+const { cleanupStaleBackupTemps } = require('./lib/backup-temp-cleanup');
+const { syncFileAndDirectory, syncDirectory } = require('./lib/durable-file');
+const { isWithinPersistentRoot, resolveDataDirectory, canInitializeEmptyDatabase } = require('./lib/data-directory');
 
 const root = __dirname;
 const failures = [];
 const pass = (label) => console.log(`✓ ${label}`);
 const fail = (label, detail) => { failures.push(label); console.error(`✗ ${label}${detail ? `: ${detail}` : ''}`); };
 
+// Public uploads must be flushed to disk before their URLs can be committed.
+try {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-durable-upload-'));
+  const file = path.join(temp, 'media.jpg');
+  try {
+    fs.writeFileSync(file, Buffer.from('durable-media-test'));
+    syncFileAndDirectory(file, temp);
+    syncDirectory(temp);
+    assert.equal(fs.readFileSync(file, 'utf8'), 'durable-media-test');
+    assert.throws(() => syncFileAndDirectory(file, path.dirname(temp)), /containing directory do not match/);
+    const link = path.join(temp, 'media-link.jpg');
+    fs.symlinkSync(file, link);
+    assert.throws(() => syncFileAndDirectory(link, temp), /regular file/);
+    pass('uploaded media file contents and directory entries are synchronously committed before database references');
+    pass('durable upload sync rejects path mismatches and symbolic-link substitution');
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+} catch (error) {
+  fail('durable uploaded-media persistence tests', error.message);
+}
+
+ 
+// Persistent data-directory selection must never silently redirect an existing site to an ephemeral path.
+try {
+  const persistent = path.resolve('/data');
+  assert.equal(resolveDataDirectory({ persistentRoot: persistent, configuredPath: '/app/data', defaultPath: '/app/data' }), path.join(persistent, 'rimaz'));
+  assert.equal(resolveDataDirectory({ persistentRoot: persistent, configuredPath: '/data/custom', defaultPath: '/app/data' }), path.join(persistent, 'custom'));
+  assert.equal(resolveDataDirectory({ persistentRoot: null, configuredPath: '/app/data', defaultPath: '/app/data' }), path.resolve('/app/data'));
+  assert.equal(isWithinPersistentRoot(persistent, '/data/rimaz'), true);
+  assert.equal(isWithinPersistentRoot(persistent, '/data-old/rimaz'), false);
+  assert.equal(canInitializeEmptyDatabase({ persistentRoot: persistent }), false);
+  assert.equal(canInitializeEmptyDatabase({ persistentRoot: persistent, allowEmpty: true }), true);
+  assert.equal(canInitializeEmptyDatabase({ persistentRoot: persistent, allowEmpty: true, legacyDatabaseExists: true }), false);
+  assert.equal(canInitializeEmptyDatabase({ persistentRoot: null }), true);
+  const symlinkRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-data-boundary-'));
+  const externalData = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-data-external-'));
+  try {
+    fs.mkdirSync(path.join(symlinkRoot, 'inside'));
+    fs.symlinkSync(path.join(symlinkRoot, 'inside'), path.join(symlinkRoot, 'inside-link'), 'dir');
+    fs.symlinkSync(externalData, path.join(symlinkRoot, 'escape'), 'dir');
+    const danglingTarget = path.join(os.tmpdir(), 'rimaz-dangling-target-not-created', 'future');
+    fs.rmSync(path.dirname(danglingTarget), { recursive: true, force: true });
+    fs.symlinkSync(danglingTarget, path.join(symlinkRoot, 'dangling'), 'dir');
+    assert.equal(isWithinPersistentRoot(symlinkRoot, path.join(symlinkRoot, 'inside-link', 'future')), true);
+    assert.equal(isWithinPersistentRoot(symlinkRoot, path.join(symlinkRoot, 'escape', 'future')), false);
+    assert.equal(isWithinPersistentRoot(symlinkRoot, path.join(symlinkRoot, 'dangling', 'future')), false);
+    assert.equal(resolveDataDirectory({
+      persistentRoot: symlinkRoot,
+      configuredPath: path.join(symlinkRoot, 'escape'),
+      defaultPath: path.join(symlinkRoot, 'escape')
+    }), path.join(symlinkRoot, 'rimaz'));
+    fs.symlinkSync(externalData, path.join(symlinkRoot, 'rimaz'), 'dir');
+    assert.throws(() => resolveDataDirectory({
+      persistentRoot: symlinkRoot,
+      configuredPath: path.join(symlinkRoot, 'escape'),
+      defaultPath: path.join(symlinkRoot, 'escape')
+    }), /outside the persistent storage root/);
+    fs.unlinkSync(path.join(symlinkRoot, 'rimaz'));
+    fs.symlinkSync(danglingTarget, path.join(symlinkRoot, 'rimaz'), 'dir');
+    assert.throws(() => resolveDataDirectory({
+      persistentRoot: symlinkRoot,
+      configuredPath: path.join(symlinkRoot, 'escape'),
+      defaultPath: path.join(symlinkRoot, 'escape')
+    }), /outside the persistent storage root/);
+  } finally {
+    fs.rmSync(symlinkRoot, { recursive: true, force: true });
+    fs.rmSync(externalData, { recursive: true, force: true });
+  }
+  pass('persistent data paths reject symlink escapes while allowing in-root symlinks');
+  pass('persistent data path is enforced and missing member databases fail closed unless first-install initialization is explicit');
+} catch (error) { fail('persistent member database path and empty-initialization guard', error.message); }
+
+
 const server = path.join(root, 'server.js');
+const serverSourceForResourceLimits=fs.readFileSync(server,'utf8');
+try{
+  assert.match(serverSourceForResourceLimits,/const SOCKET_MAX_PACKET_BYTES\s*=\s*256\s*\*\s*1024/);
+  assert.match(serverSourceForResourceLimits,/maxHttpBufferSize:\s*SOCKET_MAX_PACKET_BYTES/);
+  assert.match(serverSourceForResourceLimits,/perMessageDeflate:\s*false/);
+  assert.match(serverSourceForResourceLimits,/const HTTP_JSON_BODY_LIMIT\s*=\s*'512kb'/);
+  assert.match(serverSourceForResourceLimits,/express\.json\(\{\s*limit:\s*HTTP_JSON_BODY_LIMIT\s*\}\)/);
+  assert.match(serverSourceForResourceLimits,/express\.urlencoded\(\{\s*extended:\s*true,\s*limit:\s*'64kb',\s*parameterLimit:\s*100\s*\}\)/);
+  assert.match(serverSourceForResourceLimits,/err\?\.type===['\"]entity\.too\.large['\"]/);
+  assert.match(serverSourceForResourceLimits,/const runtimeCounts=\{activeSockets:io\.sockets\.sockets\.size/);
+  assert.match(serverSourceForResourceLimits,/pendingMessageWrites:pendingMessageWrites\.length/);
+  assert.match(serverSourceForResourceLimits,/activeVoicePairs:activeVoicePairs\.size/);
+  pass('HTTP and Socket.IO payload ceilings bound per-request memory and disable WebSocket compression buffers');
+}catch(error){fail('HTTP and Socket.IO payload memory ceilings',error.message);}
+
 const serverCheck = spawnSync(process.execPath, ['--check', server], { encoding: 'utf8' });
 if (serverCheck.status === 0) pass('server.js syntax');
 else fail('server.js syntax', serverCheck.stderr || serverCheck.stdout);
+
+// The streaming JSON reader must match JSON.parse semantics without materializing the source text.
+try {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-json-reader-'));
+  try {
+    const file = path.join(tempDir, 'database.json');
+    const value = { text: 'x'.repeat(1013) + '💚' + 'ع'.repeat(2048), nested: [{ok:true}, null, 42] };
+    Object.defineProperty(value, '__proto__', { value: { safe: true }, enumerable: true, configurable: true, writable: true });
+    const source = JSON.stringify(value);
+    fs.writeFileSync(file, source);
+    const parsed = readJsonFile(file, { chunkSize: 1024, maxBytes: Buffer.byteLength(source) });
+    assert.equal(JSON.stringify(parsed), source);
+    assert.equal(Object.getPrototypeOf(parsed), Object.prototype);
+    assert.equal(Object.prototype.hasOwnProperty.call(parsed, '__proto__'), true);
+    assert.equal(parsed.__proto__.safe, true);
+
+    fs.writeFileSync(file, '{"duplicate":1,"duplicate":2}');
+    assert.equal(readJsonFile(file).duplicate, 2);
+    fs.writeFileSync(file, '{"broken":');
+    assert.throws(() => readJsonFile(file), SyntaxError);
+    fs.writeFileSync(file, '');
+    assert.throws(() => readJsonFile(file), SyntaxError);
+    fs.writeFileSync(file, String.fromCharCode(0xfeff) + '{"bom":true}');
+    assert.throws(() => readJsonFile(file), SyntaxError);
+    fs.writeFileSync(file, '{"too":"large"}');
+    assert.throws(() => readJsonFile(file, { maxBytes: 4 }), RangeError);
+    fs.writeFileSync(file, '['.repeat(6) + '0' + ']'.repeat(6));
+    assert.throws(() => readJsonFile(file, { maxDepth: 5 }), SyntaxError);
+
+    const largeFile = path.join(tempDir, 'large.json');
+    const largeValue = 'R'.repeat(4 * 1024 * 1024);
+    fs.writeFileSync(largeFile, JSON.stringify({ payload: largeValue }));
+    assert.equal(readJsonFile(largeFile).payload.length, largeValue.length);
+    pass('streaming JSON reader handles chunk boundaries, Unicode, __proto__, duplicate keys, limits, invalid input, and multi-megabyte files');
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+} catch (error) { fail('streaming JSON reader regression fixtures', error.message); }
+
+// Validate complete JSON object files without retaining a second database object graph.
+try{
+  const tempDir=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-json-validator-'));
+  try{
+    const file=path.join(tempDir,'candidate.json');
+    const valid='{"users":{},"messages":[]}';
+    fs.writeFileSync(file,valid);
+    assert.deepEqual(validateJsonFile(file),{bytes:Buffer.byteLength(valid)});
+    for(const invalid of ['','{broken','[]','null','{"unfinished":']){
+      fs.writeFileSync(file,invalid);
+      assert.throws(()=>validateJsonFile(file));
+    }
+    pass('streaming JSON integrity validator accepts complete object roots and rejects malformed, empty, and non-object files');
+  }finally{fs.rmSync(tempDir,{recursive:true,force:true});}
+}catch(error){fail('streaming JSON integrity validator fixtures',error.message);}
+
+// Last-known-good recovery rotation must validate, restrict, sync, and atomically replace its candidate.
+try{
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function refreshLastKnownGoodDatabase(){');
+  const end=source.indexOf('\nfunction save(){',start);
+  if(start<0||end<0)throw new Error('last-known-good rotation function not found');
+  const fn=source.slice(start,end);
+  const tempDir=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-last-known-good-'));
+  try{
+    const databaseFile=path.join(tempDir,'data.json');
+    const previousFile=databaseFile+'.previous';
+    fs.writeFileSync(databaseFile,'{"generation":1}');
+    const context={
+      fs,crypto,validateJsonFile,Date,
+      DB_FILE:databaseFile,DATA_DIR:tempDir,LAST_KNOWN_GOOD_FILE:previousFile,
+      LAST_KNOWN_GOOD_INTERVAL_MS:60000,lastKnownGoodDatabaseBackupAt:0,
+      process:{pid:process.pid},console:{error(){}}
+    };
+    vm.createContext(context);
+    vm.runInContext(fn+';globalThis.rotateLastKnownGood=refreshLastKnownGoodDatabase;',context);
+    context.rotateLastKnownGood();
+    const original=fs.readFileSync(previousFile,'utf8');
+    const mode=fs.statSync(previousFile).mode&0o777;
+    context.lastKnownGoodDatabaseBackupAt=0;
+    fs.writeFileSync(databaseFile,'{corrupt');
+    assert.throws(()=>context.rotateLastKnownGood());
+    assert.equal(fs.readFileSync(previousFile,'utf8'),original);
+    assert.equal(mode,0o600);
+    assert.deepEqual(fs.readdirSync(tempDir).sort(),['data.json','data.json.previous']);
+    pass('last-known-good rotation preserves a verified restrictive prior generation and rejects corrupt candidates without replacing it');
+  }finally{fs.rmSync(tempDir,{recursive:true,force:true});}
+}catch(error){fail('last-known-good recovery rotation fixture',error.message);}
+
+// Database save must validate its candidate and preserve only a parseable previous generation.
+try{
+  const source=fs.readFileSync(server,'utf8');
+  const saveStart=source.indexOf('function save(){');
+  const saveEnd=source.indexOf('// v46.82.0:',saveStart);
+  const saveBody=source.slice(saveStart,saveEnd);
+  const startupHasCandidate=source.includes('fs.existsSync(LAST_KNOWN_GOOD_FILE)')&&source.includes('It was NOT applied automatically');
+  const checks=[
+    ['database candidate JSON is validated before atomic promotion',saveBody.includes('validateJsonFile(tempFile)')&&saveBody.indexOf('validateJsonFile(tempFile)')<saveBody.indexOf('fs.renameSync(tempFile, DB_FILE)')],
+    ['database save preserves the previous verified generation before replacing the live file',saveBody.includes('refreshLastKnownGoodDatabase()')&&saveBody.indexOf('refreshLastKnownGoodDatabase()')<saveBody.indexOf('fs.renameSync(tempFile, DB_FILE)')],
+    ['invalid startup database never auto-applies an older recovery candidate',startupHasCandidate]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+}catch(error){fail('database integrity/recovery guard checks',error.message);}
+
+// Restore preview inspection must validate the complete file while retaining no database object graph.
+try {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-restore-inspector-'));
+  try {
+    const file = path.join(tempDir, 'backup.json');
+    const template = {
+      users: {}, guests: {}, sessions: {}, privateMessages: [], rooms: [], messages: [],
+      wall: [], label: '', count: 0, enabled: false, nullable: null
+    };
+    const options = { template, ownerName: 'admin', normalizeName: value => String(value || '').trim().toLowerCase() };
+    const backup = {
+      format: 'rimaz-database-backup', version: 1, createdAt: '2026-11-25T12:00:00Z', appVersion: '46.93.72',
+      database: {
+        users: { owner: { role: 'owner' }, member: { role: 'member' } },
+        guests: { visitor: { role: 'guest' } },
+        sessions: { ignored: true }, privateMessages: [{ ignored: true }],
+        rooms: [{ id: 1 }, { id: 2 }], messages: [{ id: 1 }, { id: 2 }, { id: 3 }],
+        wall: [{ id: 1 }], label: 'ok', count: 7, enabled: true, nullable: null
+      }
+    };
+    fs.writeFileSync(file, JSON.stringify(backup));
+    const summary = inspectDatabaseRestoreFile(file, options);
+    assert.deepEqual(summary, {
+      members: 2, guests: 1, rooms: 2, messages: 3, wall: 1,
+      createdAt: '2026-11-25T12:00:00Z', appVersion: '46.93.72'
+    });
+
+    const configuredOwnerBackup = {
+      format: 'rimaz-full-backup', version: 1,
+      database: { users: { Boss: { role: 'member' } }, guests: {}, rooms: [], messages: [] }
+    };
+    fs.writeFileSync(file, JSON.stringify(configuredOwnerBackup));
+    assert.equal(inspectDatabaseRestoreFile(file, { ...options, configuredOwnerName: 'boss' }).members, 1);
+    assert.throws(() => inspectDatabaseRestoreFile(file, { ...options, configuredOwnerName: 'missing' }), /النسخة لا تحتوي حساب صاحب الموقع/);
+
+    fs.writeFileSync(file, '{"format":"rimaz-database-backup","version":1,"database":{"users":{"admin":{"role":"owner"}},"guests":{},"rooms":[],"messages":[]}}');
+    assert.equal(inspectDatabaseRestoreFile(file, options).members, 1);
+
+    fs.writeFileSync(file, '{"format":"rimaz-database-backup","version":1,"database":{"users":{"owner":{"role":"owner"},"owner":{"role":"member"},"member":{}},"guests":{},"rooms":[],"messages":[]}}');
+    assert.equal(inspectDatabaseRestoreFile(file, options).members, 2);
+
+    const invalidType = { ...backup, database: { ...backup.database, label: {} } };
+    fs.writeFileSync(file, JSON.stringify(invalidType));
+    assert.throws(() => inspectDatabaseRestoreFile(file, options), /نوع بيانات غير صالح داخل النسخة: label/);
+
+    // Missing core collections must be rejected before restore can fill them
+    // from defaults and silently replace existing rooms or chat history.
+    for (const missingField of ['users', 'guests', 'rooms', 'messages']) {
+      const incompleteBackup = { ...backup, database: { ...backup.database } };
+      delete incompleteBackup.database[missingField];
+      fs.writeFileSync(file, JSON.stringify(incompleteBackup));
+      assert.throws(
+        () => inspectDatabaseRestoreFile(file, options),
+        /النسخة لا تحتوي البنية الأساسية لقاعدة بيانات ريماز/,
+        'restore preview must reject a backup missing ' + missingField
+      );
+    }
+
+    for (const invalidAccount of [null, [], 'not-an-account', 17]) {
+      const malformedAccountBackup = {
+        format: 'rimaz-database-backup', version: 1,
+        database: { users: { owner: invalidAccount }, guests: {}, rooms: [], messages: [] }
+      };
+      fs.writeFileSync(file, JSON.stringify(malformedAccountBackup));
+      assert.throws(() => inspectDatabaseRestoreFile(file, options), /سجل حساب غير صالح داخل النسخة/);
+    }
+
+    fs.writeFileSync(file, '{"format":"rimaz-database-backup","version":1,"database":{"users":{"owner":{"role":"owner"}},"users":{"member":{"role":"member"}},"guests":{},"rooms":[],"messages":[]}}');
+    assert.throws(() => inspectDatabaseRestoreFile(file, options), /النسخة لا تحتوي حساب صاحب الموقع/);
+
+    fs.writeFileSync(file, '{"format":"rimaz-database-backup","version":1,"database":{"users":{"administrator":{"role":"owner","role":"member"}},"guests":{},"rooms":[],"messages":[]}}');
+    assert.throws(() => inspectDatabaseRestoreFile(file, options), /النسخة لا تحتوي حساب صاحب الموقع/);
+
+    fs.writeFileSync(file, '{"format":"rimaz-database-backup","version":1,"database":{"users":{"administrator":{"role":"OWNER"}},"guests":{},"rooms":[],"messages":[]}}');
+    assert.throws(() => inspectDatabaseRestoreFile(file, options), /النسخة لا تحتوي حساب صاحب الموقع/);
+
+    const largeMessages = '[' + Array.from({ length: 5000 }, (_, index) => JSON.stringify({ id: index, text: 'x'.repeat(256) })).join(',') + ']';
+    fs.writeFileSync(file, '{"format":"rimaz-database-backup","version":1,"database":{"users":{"owner":{}},"guests":{},"rooms":[],"messages":' + largeMessages + '}}');
+    assert.equal(inspectDatabaseRestoreFile(file, options).messages, 5000);
+    pass('restore preview inspector validates schema, owner, duplicate-key semantics, counts, metadata and large streams');
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+} catch (error) { fail('restore preview streaming inspector fixtures', error.message); }
+
+
+try {
+  const validationSource = fs.readFileSync(server, 'utf8');
+  const validationStart = validationSource.indexOf('function validateDatabaseRestoreData');
+  const validationEnd = validationSource.indexOf('function restoreContainsOwner', validationStart);
+  if (validationStart < 0 || validationEnd <= validationStart) throw new Error('validateDatabaseRestoreData implementation not found');
+  const validationFunction = validationSource.slice(validationStart, validationEnd).trim();
+  const validationContext = { defaults: () => ({ users: {}, guests: {}, rooms: [], messages: [] }) };
+  vm.createContext(validationContext);
+  vm.runInContext(validationFunction + '\nglobalThis.validateRestoreData = validateDatabaseRestoreData;', validationContext);
+  for (const invalidAccount of [null, [], 'not-an-account', 17]) {
+    assert.throws(() => validationContext.validateRestoreData({
+      format: 'rimaz-database-backup', version: 1,
+      database: { users: { owner: invalidAccount }, guests: {}, rooms: [], messages: [] }
+    }), /سجل حساب غير صالح داخل النسخة/);
+  }
+  pass('restore confirmation rejects malformed account records');
+} catch (error) { fail('restore confirmation account-record validation', error.message); }
+
+// The bounded-memory writer must preserve native JSON output for persisted values.
+try {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-json-writer-'));
+  try {
+    const shared = { label: 'مشترك', value: 42 };
+    const sparse = [];
+    sparse.length = 4;
+    sparse[1] = undefined;
+    sparse[2] = NaN;
+    sparse[3] = Infinity;
+    const value = {
+      arabic: 'دردشة ريماز عراقية',
+      unicode: '💚🌹'.repeat(12000),
+      escaped: 'quotes " slash \\ newline\n tab\t',
+      sparse,
+      date: new Date('2026-11-24T12:34:56.000Z'),
+      bytes: Buffer.from([0, 1, 127, 128, 255]),
+      first: shared,
+      second: shared,
+      omitted: undefined
+    };
+    for (const space of [0, 2, '  ']) {
+      const file = path.join(tempDir, 'snapshot-' + String(space).length + '-' + String(space).replace(/\s/g, 's') + '.json');
+      const fd = fs.openSync(file, 'wx', 0o600);
+      let count;
+      try { count = writeJsonSync(fd, value, { space, chunkSize: 1024 }); }
+      finally { fs.closeSync(fd); }
+      const actual = fs.readFileSync(file, 'utf8');
+      const expected = JSON.stringify(value, null, space);
+      if (actual !== expected || count !== Buffer.byteLength(expected, 'utf8')) { let index=0; while(index<actual.length&&index<expected.length&&actual[index]===expected[index])index++; throw new Error('streamed JSON differs from native JSON.stringify at space='+JSON.stringify(space)+' index='+index+' expected='+JSON.stringify(expected.slice(index,index+50))+' actual='+JSON.stringify(actual.slice(index,index+50))+' bytes='+count+'/'+Buffer.byteLength(expected,'utf8')); }
+    }
+    const cycle = {}; cycle.self = cycle;
+    const fd = fs.openSync(path.join(tempDir, 'cycle.json'), 'wx', 0o600);
+    let cycleRejected = false;
+    try { writeJsonSync(fd, cycle); } catch (error) { cycleRejected = /circular/i.test(error.message); }
+    finally { fs.closeSync(fd); }
+    if (!cycleRejected) throw new Error('circular values were not rejected');
+    pass('bounded-memory JSON writer matches native serialization across Unicode, arrays, dates, buffers, and shared references');
+    pass('bounded-memory JSON writer rejects circular values before atomic replacement');
+  } finally { fs.rmSync(tempDir, { recursive: true, force: true }); }
+} catch (error) { fail('bounded-memory JSON writer regression checks', error.message); }
+
+// Startup expiry cleanup must use the canonical atomic save path, which also keeps private DMs off disk.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const cleanupStart = source.indexOf('// Remove expired timed announcements after restarts;');
+  const cleanupEnd = source.indexOf('// Direct private conversations and the wall are separate', cleanupStart);
+  const cleanup = cleanupStart >= 0 && cleanupEnd > cleanupStart ? source.slice(cleanupStart, cleanupEnd) : '';
+  const saveStart = source.indexOf('function save(){');
+  const saveEnd = source.indexOf('// v46.82.0:', saveStart);
+  const saveBody = saveStart >= 0 && saveEnd > saveStart ? source.slice(saveStart, saveEnd) : '';
+  if (cleanup.includes('try{save()}') && !cleanup.includes('fs.writeFileSync(DB_FILE') && saveBody.includes('privateMessages: []') && saveBody.includes('fs.renameSync(tempFile, DB_FILE)')) pass('startup announcement cleanup uses atomic save and never persists private messages');
+  else fail('startup announcement cleanup must preserve atomic and private-message persistence contracts');
+} catch (error) { fail('startup announcement persistence regression check', error.message); }
+
+// Full backup browser download must use a one-use ticket and native navigation, not a buffered Blob.
+try {
+  const serverText = fs.readFileSync(server, 'utf8');
+  const htmlText = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const start = htmlText.indexOf('async function downloadFullBackup(){');
+  const end = htmlText.indexOf('function loadAdminMemberStatus(){', start);
+  const downloadFunction = start >= 0 && end > start ? htmlText.slice(start, end) : '';
+  const ok = serverText.includes("app.post('/api/admin/backup/full-ticket',requireAdmin") &&
+    serverText.includes("app.get('/api/admin/backup/full-download/:token'") &&
+    serverText.includes('adminBackupDownloadTickets.delete(token)') &&
+    serverText.includes('sessionUser(ticket.sid)') &&
+    downloadFunction.includes("fetch('/api/admin/backup/full-ticket'") &&
+    downloadFunction.includes('location.assign(result.url)') &&
+    !downloadFunction.includes('r.blob()');
+  if (ok) pass('full backup browser download uses a short-lived one-use ticket and native navigation instead of buffering the archive with response.blob()');
+  else fail('full backup browser download must use a short-lived one-use ticket and native navigation');
+} catch (error) { fail('full backup browser download regression check', error.message); }
+
+// Rank-art assignment must restore the exact prior definition state when save fails.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const start = source.indexOf("app.put('/api/admin/rank-art/assign'");
+  const end = source.indexOf("\n});", start);
+  const route = start >= 0 && end > start ? source.slice(start, end) : '';
+  const saveIndex = route.indexOf('try{save()}catch(error)');
+  const catchStart = route.indexOf('catch(error){', saveIndex);
+  const checks = [
+    ['rank-art assignment captures prior art ID and URL before mutation',route.includes('const old={artId:definition.artId,artUrl:definition.artUrl}')],
+    ['rank-art assignment restores prior art ID or removes newly introduced ID on save failure',route.includes('if(old.artId!==undefined)definition.artId=old.artId;else delete definition.artId;')],
+    ['rank-art assignment restores prior art URL or removes newly introduced URL on save failure',route.includes('if(old.artUrl!==undefined)definition.artUrl=old.artUrl;else delete definition.artUrl;')],
+    ['rank-art assignment emits update only after durable save succeeds',saveIndex>=0&&route.indexOf("io.emit('rank-art-updated'")>saveIndex&&catchStart>=0]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+} catch (error) { fail('rank-art assignment exact rollback regression checks', error.message); }
+
+
+// Startup private-history purge must durably save notification-only cleanup.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function purgePrivateHistoryAtStartup(){');
+  const end=source.indexOf('\npurgePrivateHistoryAtStartup();',start);
+  const fn=start>=0&&end>start?source.slice(start,end):'';
+  if(!fn)throw new Error('startup private-history purge function not found');
+  const db={privateMessages:[],notifications:{member:[{type:'private-message'},{type:'welcome'}]}};
+  const files={readdirSync:()=>[]};
+  let saves=0;
+  const context={db,fs:files,path:{join:(...parts)=>parts.join('/')},PRIVATE_MEDIA_DIR:'/private-media',save:()=>{saves++;},console:{log:()=>{},warn:()=>{}}};
+  vm.createContext(context);
+  vm.runInContext(fn+';purgePrivateHistoryAtStartup();',context);
+  const cleaned=db.notifications.member.length===1&&db.notifications.member[0].type==='welcome';
+  const checks=[
+    ['startup purge removes stale private notifications even when no private messages or media remain',cleaned],
+    ['startup purge persists notification-only cleanup to disk',saves===1]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('startup private-history notification persistence regression checks',error.message); }
+
+// Legacy private-media migration must preserve public assets shared by other database records.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const migration=source.match(/function migratePrivateMediaToProtectedStorage\(\)\{[\s\S]*?\n\}/)?.[0];
+  const contains=source.match(/function containsStoredUrl\(value,url,seen=new Set\(\)\)\{[\s\S]*?\n\}/)?.[0];
+  if(!migration||!contains)throw new Error('private-media migration or reference scanner not found');
+  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-private-media-migration-'));
+  try {
+    const uploads=path.join(temp,'uploads'),privateMedia=path.join(temp,'private-media');
+    fs.mkdirSync(uploads);fs.mkdirSync(privateMedia);
+    const sharedBytes=Buffer.from('shared-public-and-private-media');
+    const privateBytes=Buffer.from('private-only-media');
+    const existingBytes=Buffer.from('existing-protected-media');
+    fs.writeFileSync(path.join(uploads,'shared.png'),sharedBytes);
+    fs.writeFileSync(path.join(uploads,'private-only.png'),privateBytes);
+    fs.writeFileSync(path.join(uploads,'shared-existing.png'),Buffer.from('public-copy'));
+    fs.writeFileSync(path.join(privateMedia,'shared-existing.png'),existingBytes);
+    const db={
+      privateMessages:[
+        {media:{url:'/uploads/shared.png'}},
+        {media:{url:'/uploads/private-only.png'}},
+        {media:{url:'/uploads/shared-existing.png'}}
+      ],
+      profiles:{member:{avatar:'/uploads/shared.png',banner:'/uploads/shared-existing.png'}}
+    };
+    let saves=0;
+    const context={db,fs,path,UP_DIR:uploads,PRIVATE_MEDIA_DIR:privateMedia,syncFileAndDirectory,syncDirectory,save:()=>{saves++;},console:{log:()=>{},error:(...args)=>{throw new Error(args.join(' '));}}};
+    vm.createContext(context);
+    vm.runInContext(contains+'\n'+migration+'\nmigratePrivateMediaToProtectedStorage();',context);
+    assert.equal(fs.readFileSync(path.join(uploads,'shared.png')).compare(sharedBytes),0,'shared public asset must remain at its public path');
+    assert.equal(fs.readFileSync(path.join(privateMedia,'shared.png')).compare(sharedBytes),0,'shared public asset must also be copied into protected storage');
+    assert.equal(fs.existsSync(path.join(uploads,'private-only.png')),false,'private-only public copy should be moved out of public storage');
+    assert.equal(fs.readFileSync(path.join(privateMedia,'private-only.png')).compare(privateBytes),0,'private-only media must be preserved in protected storage');
+    assert.equal(fs.readFileSync(path.join(uploads,'shared-existing.png')).toString(),'public-copy','existing private copy must not cause deletion of a still-referenced public asset');
+    assert.equal(fs.readFileSync(path.join(privateMedia,'shared-existing.png')).compare(existingBytes),0,'existing protected media must remain unchanged');
+    assert.deepEqual(db.privateMessages.map(x=>x.media.url),[
+      '/api/private/media/shared.png','/api/private/media/private-only.png','/api/private/media/shared-existing.png'
+    ]);
+    assert.equal(saves,1,'all URL changes must be committed once');
+    pass('legacy private-media migration protects private copies without breaking shared public upload references');
+  } finally { fs.rmSync(temp,{recursive:true,force:true}); }
+} catch(error) { fail('legacy private-media shared-upload migration regression',error.message); }
+
+
+// Startup data migrations must fail closed when their durable commit fails.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const checks = [
+    ['smiley gallery migration aborts startup when persistence fails', source.includes("FATAL: could not persist smiley gallery migration; startup stopped:") && source.includes('Smiley gallery migration could not be persisted; refusing to start with uncommitted startup state.')],
+    ['welcome-message migration aborts startup when persistence fails', source.includes("FATAL: could not persist welcome-message defaults/migration; startup stopped:") && source.includes('Welcome-message migration could not be persisted; refusing to start with uncommitted startup state.')],
+    ['expired-announcement cleanup aborts startup when persistence fails', source.includes("FATAL: could not persist expired-announcement cleanup; startup stopped:") && source.includes('Expired-announcement cleanup could not be persisted; refusing to start with uncommitted startup state.')],
+    ['gift catalogue migration aborts startup when persistence fails', source.includes("FATAL: could not persist gift catalogue migration; startup stopped:") && source.includes('Gift catalogue migration could not be persisted; refusing to start with uncommitted startup state.')]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+} catch (error) { fail('startup migration fail-closed regression checks', error.message); }
 
 // Regression checks for the production startup bootstrap and packed smiley assets.
 try {
   const source = fs.readFileSync(server, 'utf8');
   const appInit = source.indexOf('const app = express();');
   const serverInit = source.indexOf('const server = http.createServer(app);');
-  const ioInit = source.indexOf('const io = new Server(server);');
+  const ioInit = source.indexOf('const io = new Server(server, {');
   const firstUse = source.indexOf("app.disable('x-powered-by');");
-  if (appInit >= 0 && serverInit > appInit && ioInit > serverInit && firstUse > ioInit) pass('Express, HTTP, and Socket.IO are initialized before first use');
+  if (appInit >= 0 && serverInit > appInit && ioInit > serverInit && firstUse > ioInit && /maxHttpBufferSize:\s*SOCKET_MAX_PACKET_BYTES/.test(source) && /perMessageDeflate:\s*false/.test(source)) pass('Express, HTTP, and Socket.IO are initialized before first use with bounded packet buffers');
   else fail('server bootstrap initialization order');
   const smileyDir = path.join(root, 'public', 'smileys');
   const names = fs.readdirSync(smileyDir).filter(name => /^smiley-\d+\.(?:gif|png|jpe?g|webp)$/i.test(name));
@@ -158,7 +631,7 @@ try {
   const checks = [
     ['registration rejects names already held by registered members or guests', source.includes('function nameTaken(name)') && source.includes("Object.keys(db.users||{}).some(x=>keyName(x)===n)") && source.includes("Object.keys(db.guests||{}).some(x=>keyName(x)===n)") && source.includes('if(nameTaken(n)&&!ownerRequested)')],
     ['guest entry rejects names already held by members or guests', source.includes("app.post('/api/guest'") && source.includes('if(nameTaken(n))return res.status(409)')],
-    ['all entry routes return remaining global-ban time', routes.every(route => { const m=source.match(new RegExp("app\\.post\\('"+route.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')+"',[\\s\\S]*?\\n\\}\\);")); return m && m[0].includes('globalBanResponse(res,n,requestClientIp(req))'); })],
+    ['all entry routes return remaining global-ban time', routes.every(route => { const start=source.indexOf("app.post('"+route+"',"), end=source.indexOf('\n});',start); const block=start>=0&&end>start?source.slice(start,end):''; return !!block&&block.includes('globalBanResponse(res,n,requestClientIp(req))'); })],
     ['global-ban response calculates remaining minutes and seconds from stored expiry', source.includes('function globalBanStatus(name,ip,now=Date.now())') && source.includes('remainingSeconds:totalSeconds') && source.includes('remainingText') && source.includes('GLOBAL_BAN_ACTIVE')],
     ['login forms show actionable errors without leaving the entry screen', html.includes('async function doRegister()') && html.includes('async function doLogin()') && html.includes('async function doGuest()') && html.includes("document.getElementById('ln')?.focus()") && html.includes('الوقت المتبقي|دقيقة|ثانية|الاسم موجود')],
     ['duplicate-name response uses the requested exact Arabic message', source.includes("error:'هذا الاسم موجود'") && !source.includes('هذا الاسم موجود بالفعل، اختار اسماً آخر')],
@@ -178,22 +651,52 @@ try {
 try {
   const source = fs.readFileSync(server, 'utf8');
   const httpRoute = source.match(/app\.post\('\/api\/message',[\s\S]*?\n\}\);/);
-  const socketRoute = source.match(/socket\.on\('send-message',[\s\S]*?\n/);
-  const privateRoute = source.match(/socket\.on\('private-message',[\s\S]*?\n/);
+  const socketStart=source.indexOf("socket.on('send-message',async(d,acknowledge)=>");
+  const socketEnd=source.indexOf("socket.on('private-typing'",socketStart);
+  const socketRoute=socketStart>=0&&socketEnd>socketStart?[source.slice(socketStart,socketEnd)]:null;
+  const privateStart=source.indexOf("socket.on('private-message',async(d,acknowledge)=>");
+  const privateEnd=source.indexOf("socket.on('call-offer'",privateStart);
+  const privateRoute=privateStart>=0&&privateEnd>privateStart?[source.slice(privateStart,privateEnd)]:null;
   if (httpRoute && httpRoute[0].includes('blockedChatTerm(text)') && httpRoute[0].includes('.slice(0,2000)')) pass('HTTP room messages enforce chat filter and 2000-character limit');
-  else fail('HTTP room messages enforce chat filter');
+  else fail('HTTP room messages enforce chat filter and 2000-character limit');
+  if (httpRoute && httpRoute[0].includes('globalBanResponse(res,u.name,requestClientIp(req))') && httpRoute[0].indexOf('globalBanResponse') < httpRoute[0].indexOf('const room=')) pass('HTTP room messages reject global bans before room checks or message creation');
+  else fail('HTTP room messages reject global bans before message creation');
   if (socketRoute && socketRoute[0].includes('blockedChatTerm(text)')) pass('Socket room messages enforce chat filter');
   else fail('Socket room messages enforce chat filter');
   if (privateRoute && privateRoute[0].includes('blockedChatTerm(text)')) pass('private messages enforce chat filter');
   else fail('private messages enforce chat filter');
+  if (socketRoute && socketRoute[0].includes('globalBanned(u.name,socketClientIp(socket))') && socketRoute[0].includes("return {ok:false,error:'لا يمكنك الكتابة أثناء الحظر العام'}")) pass('public room messages recheck global bans at send time, not only on room join');
+  else fail('public room messages recheck global bans at send time');
+  if (httpRoute && httpRoute[0].includes('roomMessageRateLimitError(sessionId,text)') && socketRoute && socketRoute[0].includes('roomMessageRateLimitError(sid,text)')) pass('HTTP and Socket.IO public messages share the same anti-spam policy');
+  else fail('HTTP and Socket.IO public messages share the same anti-spam policy');
+  if (httpRoute && httpRoute[0].includes('isCurrentSessionSocket(so)') && httpRoute[0].includes("keyName(so.data?.user?.name||'')===keyName(u.name)")) pass('HTTP fallback requires the current socket and matching authenticated account');
+  else fail('HTTP fallback requires the current socket and matching authenticated account');
+  if (socketRoute && socketRoute[0].includes("String(d?.text||'').trim().slice(0,2000)") && socketRoute[0].includes('roomMessageRateLimitError')) pass('Socket.IO normalizes the same 2000-character message before anti-spam and filtering');
+  else fail('Socket.IO normalizes the same 2000-character message before anti-spam and filtering');
 } catch (error) { fail('chat filter route checks', error.message); }
+
+// Exercise the shared public-room anti-spam limiter independently of either transport.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const helper=source.match(/function roomMessageRateLimitError\(sid,text,now=Date\.now\(\)\)\s*\{[\s\S]*?\n\}/);
+  if(!helper)throw new Error('shared room anti-spam helper not found');
+  const context={db:{botSettings:{}},botMessageWindows:new Map(),normalizedBotSettings:()=>({antiSpam:{enabled:true}})};
+  vm.createContext(context);
+  vm.runInContext(helper[0]+'\nglobalThis.checkRate=(sid,text,now)=>roomMessageRateLimitError(sid,text,now);',context);
+  const firstSeven=Array.from({length:7},(_,i)=>context.checkRate('session-a','message-'+i,1000)).every(x=>x==='');
+  const eighth=!!context.checkRate('session-a','message-8',1000);
+  const repeats=Array.from({length:3},()=>context.checkRate('session-b','same text',1000)).every(x=>x==='')&&!!context.checkRate('session-b','same text',1000);
+  const reset=context.checkRate('session-a','after-window',7001)==='';
+  if(firstSeven&&eighth&&repeats&&reset)pass('shared room anti-spam limiter enforces burst/repeat limits and resets its five-second window');
+  else fail('shared room anti-spam runtime fixture',JSON.stringify({firstSeven,eighth,repeats,reset}));
+} catch(error) { fail('shared room anti-spam runtime fixture',error.message); }
 
 // Upload hardening: whitelist client MIME values, derive safe stored extensions,
 // apply smaller image limits, and clean files rejected by post-upload policy checks.
 try {
   const source = fs.readFileSync(server, 'utf8');
   const checks = [
-    ['upload extension is derived from safe MIME allow-list', source.includes('SAFE_UPLOAD_TYPES[file.mimetype]') && !source.includes("path.extname(file.originalname||'')")],
+    ['upload extension lookup normalizes MIME casing exactly like the allow-list filter', source.includes("SAFE_UPLOAD_TYPES[String(file.mimetype||'').toLowerCase()]") && source.includes('Object.hasOwn(SAFE_UPLOAD_TYPES,String(file.mimetype||\'\').toLowerCase())') && !source.includes("path.extname(file.originalname||'')")],
     ['general upload size is capped at 50 MB', source.includes('fileSize:50*1024*1024')],
     ['image upload size is capped at 8 MB', source.includes('fileSize:8*1024*1024')],
     ['image endpoints use image-only upload middleware', (source.match(/uploadImage\.single\('file'\)/g)||[]).length >= 3],
@@ -202,6 +705,34 @@ try {
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
 } catch (error) { fail('upload security checks', error.message); }
+
+
+// Upload cleanup must be confined to direct Multer children of UP_DIR.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const fn=source.match(/function removeUploadedFile\(file\)\{[\s\S]*?\n\}/)?.[0];
+  const contains=source.match(/function containsStoredUrl\(value,url,seen=new Set\(\)\)\{[\s\S]*?\n\}/)?.[0];
+  if(!fn||!contains)throw new Error('upload cleanup or database reference scanner not found');
+  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-upload-cleanup-'));
+  try {
+    const uploads=path.join(temp,'uploads'),protectedDir=path.join(temp,'private-media');
+    fs.mkdirSync(uploads);fs.mkdirSync(protectedDir);
+    const referenced=path.join(uploads,'referenced.jpg');
+    const orphan=path.join(uploads,'orphan.jpg');
+    const protectedFile=path.join(protectedDir,'protected.jpg');
+    for(const file of [referenced,orphan,protectedFile])fs.writeFileSync(file,'keep-or-delete');
+    const context={fs,path,UP_DIR:uploads,db:{profiles:{member:{avatar:'/uploads/referenced.jpg'}}},console:{warn:()=>{}}};
+    vm.createContext(context);
+    vm.runInContext(contains+'\n'+fn,context);
+    context.removeUploadedFile({path:referenced});
+    context.removeUploadedFile({path:orphan});
+    context.removeUploadedFile({path:protectedFile});
+    assert.equal(fs.existsSync(referenced),true,'database-referenced upload must remain');
+    assert.equal(fs.existsSync(orphan),false,'unreferenced upload inside UP_DIR should be removed');
+    assert.equal(fs.existsSync(protectedFile),true,'file outside UP_DIR must never be removed');
+    pass('upload cleanup is confined to unreferenced files directly inside UP_DIR');
+  } finally { fs.rmSync(temp,{recursive:true,force:true}); }
+} catch(error) { fail('upload cleanup path-boundary regression checks',error.message); }
 
 try {
   const source = fs.readFileSync(server, 'utf8');
@@ -265,6 +796,473 @@ try {
   pass('saved admin description, canonical URL, Open Graph, Twitter, Schema, robots and sitemap share one SEO source');
 } catch (error) { fail('server-rendered SEO description integration', error.message); }
 
+
+
+// Admin member changes must not leave memory ahead of durable storage after a failed save.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const messageStart=source.indexOf("app.delete('/api/admin/message/:id'");
+  const profileStart=source.indexOf("app.patch('/api/admin/profile/:name'");
+  const statsStart=source.indexOf("app.patch('/api/admin/member-stats/:name'");
+  const avatarStart=source.indexOf("app.delete('/api/admin/avatar/:name'");
+  const message=source.slice(messageStart,source.indexOf("\napp.patch",messageStart));
+  const profile=source.slice(profileStart,statsStart);
+  const stats=source.slice(statsStart,avatarStart);
+  const avatar=source.slice(avatarStart,source.indexOf("\napp.post('/api/admin/rank'",avatarStart));
+  const checks=[
+    ['admin message deletion restores the original message collection when save fails and emits only after commit',message.includes('previousMessages=db.messages')&&message.includes('catch(error){db.messages=previousMessages')&&message.indexOf('try{save();}')<message.indexOf("io.emit('message-deleted'")],
+    ['admin profile updates validate all fields before mutation and restore the full profile on save failure',profile.includes('const updates={}')&&profile.indexOf('for(const [field,label]')<profile.indexOf('Object.assign(p,updates)')&&profile.includes('for(const key of Object.keys(p))delete p[key];Object.assign(p,previous)')],
+    ['admin likes and points changes restore the prior value on save failure and emit only after commit',stats.includes('const previous=target[field];target[field]=value')&&stats.includes('catch(error){target[field]=previous')&&stats.indexOf('try{save();}')<stats.indexOf("io.emit('likes-changed'")],
+    ['admin avatar deletion saves the profile first and removes only an unreferenced upload after commit',avatar.indexOf('try{save();}')>=0&&avatar.indexOf('try{save();}')<avatar.indexOf('removePublicUploadIfUnreferenced(previous)')&&avatar.includes('catch(error){p.avatar=previous')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('admin member mutation transaction checks',error.message); }
+
+
+// Room moderation, ignore lists, and notification-read state must roll back on failed persistence.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const roomStart=source.indexOf('function roomAction(type,req,res){');
+  const roomEnd=source.indexOf("\napp.post('/api/admin/kick'",roomStart);
+  const room=source.slice(roomStart,roomEnd);
+  const unmuteStart=source.indexOf("app.post('/api/admin/unmute'");
+  const unmute=source.slice(unmuteStart,source.indexOf("\nfunction roomAction",unmuteStart));
+  const unbanStart=source.indexOf("app.post('/api/admin/unban'");
+  const unban=source.slice(unbanStart,source.indexOf("\n\napp.post('/api/ignore'",unbanStart));
+  const ignoreStart=source.indexOf("app.post('/api/ignore'");
+  const ignore=source.slice(ignoreStart,source.indexOf("\napp.post('/api/profile'",ignoreStart));
+  const notifyStart=source.indexOf("app.post('/api/notifications/read'");
+  const notify=source.slice(notifyStart,source.indexOf("\n\napp.post('/api/message'",notifyStart));
+  const checks=[
+    ['room mute/ban operations restore their original per-room lists if saving fails before disconnecting members',room.includes('previousRoom=Array.isArray(db[type][room])?db[type][room].slice():db[type][room]')&&room.includes('catch(error){if(hadRoom)db[type][room]=previousRoom;else delete db[type][room]')&&room.indexOf('try{save();}')<room.indexOf('for(const [sid,u] of socketUsers)')],
+    ['unmute and unban preserve the previous list when durable save fails',unmute.includes('catch(error){if(had)db.roomMutes[room]=previous')&&unban.includes('catch(error){if(had)db.roomBans[room]=previous')],
+    ['ignore-list toggles replace a copied map and restore the original map on save failure',ignore.includes('previous=db.ignored,next={...(db.ignored||{})')&&ignore.includes('catch(error){if(previous===undefined)delete db.ignored;else db.ignored=previous')],
+    ['notification read-all restores the previous unread list if save fails',notify.includes('had=Object.prototype.hasOwnProperty.call(db.notifications,key),previous=db.notifications[key]')&&notify.includes('catch(error){if(had)db.notifications[key]=previous;else delete db.notifications[key]')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('room moderation and chat state transaction checks',error.message); }
+
+
+// Likes, gifts, profile settings, and wall administration commit before notifying clients.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const likeStart=source.indexOf("app.post('/api/like'");
+  const grantStart=source.indexOf("app.post('/api/admin/grant-like'");
+  const resetStart=source.indexOf("app.post('/api/admin/reset-likes'");
+  const giftStart=source.indexOf("app.post('/api/admin/gift'");
+  const giftDeleteStart=source.indexOf("app.post('/api/admin/gift/delete'");
+  const wallStart=source.indexOf("app.post('/api/admin/wall/control'");
+  const profileStart=source.indexOf("app.post('/api/profile',requireAuth");
+  const avatarStart=source.indexOf("app.post('/api/profile/avatar'");
+  const like=source.slice(likeStart,grantStart),grant=source.slice(grantStart,resetStart),reset=source.slice(resetStart,giftStart),gift=source.slice(giftStart,giftDeleteStart),giftDelete=source.slice(giftDeleteStart,source.indexOf('\nfunction countGifImageFrames',giftDeleteStart)),wall=source.slice(wallStart,source.indexOf("\napp.post('/api/notify'",wallStart)),profile=source.slice(profileStart,avatarStart);
+  const checks=[
+    ['member likes restore both the count and rate-limit timestamp when saving fails',like.includes('previousLastLike=last,previousLikes=')&&like.includes("console.error('Like save failed:'")&&like.indexOf('try{save();}')<like.indexOf('io.emit(\'likes-changed\'')],
+    ['admin like grants and resets restore the previous count when saving fails',grant.includes('catch(error){target.likes=previous')&&reset.includes('catch(error){target.likes=previous')],
+    ['sending and deleting gifts restore the prior gift/VIP state when saving fails',gift.includes('previousGifts=p.gifts')&&gift.includes("console.error('Admin gift send save failed:'")&&giftDelete.includes('catch(saveError){p.gifts=previousGifts')],
+    ['wall stop/restart/clear/delete restore previous state when saving fails',wall.includes('db.wallEnabled=previous')&&wall.includes('db.wall=previous')&&wall.includes('تعذر حفظ حالة الحائط')],
+    ['member profile settings validate before mutation and restore the profile on save failure',profile.includes('const u=req.user,p=profile(u.name),updates={}')&&profile.indexOf('const previous={...p};Object.assign(p,updates)')>profile.indexOf('if(req.body.displayName!==undefined)')&&profile.includes('catch(error){for(const key of Object.keys(p))delete p[key];Object.assign(p,previous)')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('likes gifts profile and wall transaction checks',error.message); }
+
+
+// Member-card moderation actions persist bans, mutes, likes, VIP and gifts before side effects.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf("app.post('/api/admin/member-action'");
+  const end=source.indexOf("\napp.post('/api/admin/broadcast'",start);
+  const route=source.slice(start,end);
+  const globalBan=route.slice(route.indexOf("if(action==='global-ban')"),route.indexOf("\n  const target="));
+  const grant=route.slice(route.indexOf("if(action==='grant-like')"),route.indexOf("if(action==='reset-likes')"));
+  const reset=route.slice(route.indexOf("if(action==='reset-likes')"),route.indexOf("if(action==='grant-vip')"));
+  const vip=route.slice(route.indexOf("if(action==='grant-vip')"),route.indexOf("if(action==='gift')"));
+  const gift=route.slice(route.indexOf("if(action==='gift')"),route.indexOf("if(action==='kick')"));
+  const ban=route.slice(route.indexOf("if(action==='ban')"),route.indexOf("if(action==='mute')"));
+  const mute=route.slice(route.indexOf("if(action==='mute')"));
+  const checks=[
+    ['global ban restores both name/IP ban maps and notifies only after save',globalBan.includes('previousGlobalBans=db.globalBans,previousGlobalIpBans=db.globalIpBans')&&globalBan.includes('catch(error){if(previousGlobalBans===undefined)delete db.globalBans')&&globalBan.indexOf('try{save();}')<globalBan.indexOf("emitToUser(n,'admin-action-notice'")],
+    ['member-card like and reset actions restore the old count after failed save',grant.includes('catch(error){target.likes=previous')&&reset.includes('catch(error){target.likes=previous')],
+    ['member-card VIP and gift actions restore manual VIP and gift fields after failed save',vip.includes('hadGifts=Object.prototype.hasOwnProperty.call(p,\'gifts\')')&&vip.includes('hadVipUntil=Object.prototype.hasOwnProperty.call(p,\'vipManualUntil\')')&&vip.includes('catch(error){if(hadVipUntil)p.vipManualUntil=previousVipUntil')&&gift.includes('catch(error){if(hadVipUntil)p.vipManualUntil=previousVipUntil')],
+    ['member-card room ban/mute restore room lists and notify only after save',ban.includes('catch(error){if(hadRoom)db.roomBans[room]=previousRoom')&&ban.indexOf('try{save();}')<ban.indexOf("emitToUser(n,'admin-action-notice'")&&mute.includes('catch(error){if(hadRoom)db.roomMutes[room]=previousRoom')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('member-card moderation transaction checks',error.message); }
+
+
+// Upload replacement/deletion must not unlink a file while another database record still references it.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const routes=[
+    ["app.delete('/api/admin/avatar/:name'", "app.post('/api/admin/rank'"],
+    ["app.delete('/api/admin/rank-art/:id'", "// Chat/rank banners"],
+    ["app.post('/api/admin/chat-banners/:rank'", "app.put('/api/admin/member-decoration'"],
+    ["app.delete('/api/admin/ads/:id'", "app.get('/api/public/ads'"],
+    ["app.post('/api/admin/gifts/catalog/delete'", "app.post('/api/admin/gift-vip'"],
+    ["app.post('/api/admin/room/:id/image'", "app.post('/api/rooms/:id/image'"],
+    ["app.post('/api/rooms/:id/image'", "function clearRoomImage"],
+    ["function clearRoomImage", "app.delete('/api/admin/room/:id/image'"],
+    ["app.post('/api/profile/avatar'", "app.delete('/api/profile/avatar'"],
+    ["app.delete('/api/profile/avatar'", "// Personal banners"],
+    ["app.post('/api/profile/banner'", "app.delete('/api/profile/banner'"],
+    ["app.delete('/api/profile/banner'", "app.post('/api/media'"]
+  ];
+  const missing=routes.filter(([start,end])=>{const a=source.indexOf(start),b=source.indexOf(end,a);return a<0||b<0||!source.slice(a,b).includes('removePublicUploadIfUnreferenced(');});
+  const chatBannerDeleteStart=source.indexOf("app.delete('/api/admin/chat-banners/:rank'");
+  const chatBannerDelete=source.slice(chatBannerDeleteStart,source.indexOf("app.put('/api/admin/member-decoration'",chatBannerDeleteStart));
+  const helper=source.slice(source.indexOf('function removePublicUploadIfUnreferenced('),source.indexOf('\n}',source.indexOf('function removePublicUploadIfUnreferenced('))+2);
+  const ok=missing.length===0&&chatBannerDelete.includes('removePublicUploadIfUnreferenced(previous.url)')&&helper.includes("value.startsWith('/uploads/')")&&helper.includes('containsStoredUrl(db,value)')&&helper.includes('path.basename');
+  if(ok)pass('media replacement/deletion uses reference-aware upload cleanup and protects shared files');
+  else fail('reference-aware upload cleanup',JSON.stringify({missing,helper}));
+} catch(error) { fail('reference-aware upload cleanup checks',error.message); }
+
+
+// Authentication sessions and notification/ban expiry helpers must roll back when storage fails.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const sessionFn=source.match(/function makeSession\(name,type,visibility=\{\}\)\{[\s\S]*?\n\}/)?.[0];
+  const notifyFn=source.match(/function notify\(name,item\)\{[\s\S]*?\n\}/)?.[0];
+  const roomFn=source.match(/function roomBanned\(name,room\)\{[\s\S]*?\n\}/)?.[0];
+  const globalFn=source.match(/function globalBanStatus\(name,ip,now=Date\.now\(\)\)\{[\s\S]*?\n\}/)?.[0];
+  if(!sessionFn||!notifyFn||!roomFn||!globalFn)throw new Error('transaction helper source missing');
+  let cleanupScheduled=false;
+  const sessionContext={sessions:new Map(),db:{sessions:{}},crypto:{randomBytes:()=>({toString:()=> 'sid-1'})},Date,getMemberNumber:()=>7,cancelPrivateConversationCleanup:()=>{},schedulePrivateConversationCleanup:()=>{cleanupScheduled=true;},save:()=>{throw new Error('disk failure');}};
+  vm.createContext(sessionContext);vm.runInContext(sessionFn+';globalThis.run=makeSession;',sessionContext);
+  let sessionThrew=false;try{sessionContext.run('member','member');}catch{sessionThrew=true;}
+  const sessionRollback=sessionThrew&&sessionContext.sessions.size===0&&!Object.hasOwn(sessionContext.db.sessions,'sid-1')&&cleanupScheduled;
+  const notifications={member:[{id:'old'}]},previousNotifications=notifications.member;
+  const notifyContext={db:{notifications},accountKey:x=>x,crypto:{randomUUID:()=> 'new'},Date,save:()=>{throw new Error('disk failure');},console:{error:()=>{}}};
+  vm.createContext(notifyContext);vm.runInContext(notifyFn+';globalThis.run=notify;',notifyContext);
+  const notifyRollback=notifyContext.run('member',{text:'new'})===false&&notifyContext.db.notifications.member===previousNotifications;
+  const roomList=[{name:'member',until:1}],roomContext={db:{roomBans:{public:roomList}},Date:{now:()=>100},keyName:x=>x,save:()=>{throw new Error('disk failure');},console:{error:()=>{}}};
+  vm.createContext(roomContext);vm.runInContext(roomFn+';globalThis.run=roomBanned;',roomContext);
+  const roomRollback=roomContext.run('member','public')===false&&roomContext.db.roomBans.public===roomList;
+  const nameBan={until:1},ipBan={until:1},globalContext={db:{globalBans:{member:nameBan},globalIpBans:{'1.2.3.4':ipBan}},keyName:x=>x,normalizeIp:x=>x,save:()=>{throw new Error('disk failure');},console:{error:()=>{}}};
+  vm.createContext(globalContext);vm.runInContext(globalFn+';globalThis.run=globalBanStatus;',globalContext);
+  const globalRollback=globalContext.run('member','1.2.3.4',100)===null&&globalContext.db.globalBans.member===nameBan&&globalContext.db.globalIpBans['1.2.3.4']===ipBan;
+  if(sessionRollback&&notifyRollback&&roomRollback&&globalRollback)pass('session creation, notification writes, and expired room/global ban cleanup restore prior state on save failure');
+  else fail('auth/notification/ban rollback fixture',JSON.stringify({sessionRollback,notifyRollback,roomRollback,globalRollback}));
+} catch(error) { fail('auth/notification/ban transaction checks',error.message); }
+
+
+// Central admin route permissions and audit history must remain fail-closed and rollback-safe.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const mapping=source.match(/function permissionForAdminPath\(req\)\{[\s\S]*?\n\}/)?.[0]||'';
+  const guard=source.match(/function requireAdmin\(req,res,next\)\{[\s\S]*?\n\}/)?.[0]||'';
+  const checks=[
+    ['admin route permission map separates message deletion, announcement deletion, profile, avatar, and room operations',mapping.includes("if(p.startsWith('/api/admin/message/'))return 'messages_delete'")&&mapping.includes("if(p.startsWith('/api/admin/announcement/'))return 'announcement_delete'")&&mapping.includes("if(p.startsWith('/api/admin/profile/'))return 'profile_edit'")&&mapping.includes("if(p.startsWith('/api/admin/avatar/'))return 'avatar_delete'")&&mapping.includes("return 'room_delete'")&&mapping.includes("return 'room_lock'")],
+    ['admin guard rejects missing route permission before calling the handler',guard.includes('acceptedPermissions.some(key=>hasPermission(req.user,key))')&&guard.includes('return next();')],
+    ['room kick, mute, ban, unmute and unban resolve their exact permission through the central guard',mapping.includes("if(p==='/api/admin/kick')return 'kick_room'")&&mapping.includes("if(p==='/api/admin/mute')return 'mute_room'")&&mapping.includes("if(p==='/api/admin/ban')return 'ban_room'")&&source.includes("app.post('/api/admin/kick',requireAdmin,")&&source.includes("app.post('/api/admin/mute',requireAdmin,")&&source.includes("app.post('/api/admin/ban',requireAdmin,")&&source.includes("app.post('/api/admin/unmute',requireAdmin,")&&source.includes("app.post('/api/admin/unban',requireAdmin,")],
+    ['member-card action route selects the exact permission by action and uses the audited admin guard',mapping.includes("if(p==='/api/admin/member-action')return ({'global-kick':'global_kick'")&&mapping.includes("'grant-vip':'vip',gift:'gifts'")&&source.includes("app.post('/api/admin/member-action',requireAdmin,")],
+    ['smiley upload uses the central permission map and audited admin guard',mapping.includes("if(p==='/api/admin/chat-tools/smiley-upload')return 'smileys_manage'")&&source.includes("app.post('/api/admin/chat-tools/smiley-upload',requireAdmin,")&&!source.includes("app.post('/api/admin/chat-tools/smiley-upload',requirePermission(")],
+    ['member likes and points edits use audited field-specific permissions',mapping.includes("if(p.startsWith('/api/admin/member-stats/'))return req.body?.field==='likes'?'grant_likes'")&&source.includes("app.patch('/api/admin/member-stats/:name',requireAdmin,(req,res)=>{")],
+    ['member IP inspection uses the audited member_ip guard',mapping.includes("if(p.startsWith('/api/admin/member-ip/'))return 'member_ip'")&&source.includes("app.get('/api/admin/member-ip/:name' ,requireAdmin,(req,res)=>{")],
+    ['direct rank assignment uses the audited rank_assign route guard',mapping.includes("if(p==='/api/admin/rank')return 'rank_assign'")&&source.includes("app.post('/api/admin/rank',requireAdmin,(req,res)=>{")&&!source.includes("app.post('/api/admin/rank',(req,res)=>{requireAuth(req,res,()=>{")],
+    ['reset-likes, gift and VIP award routes use the audited route guard',source.includes("app.post('/api/admin/reset-likes',requireAdmin,")&&source.includes("app.post('/api/admin/gift',requireAdmin,")&&source.includes("app.post('/api/admin/gift-vip',requireAdmin,")],
+    ['member transfer and rank-permission management use audited guards',source.includes("app.post('/api/admin/move-member',requireAdmin,")&&source.includes("app.get('/api/admin/permissions',requireAdmin,")&&source.includes("app.put('/api/admin/permissions',requireAdmin,")],
+    ['welcome message reads and writes use the audited welcome_manage guard',mapping.includes("if(p==='/api/admin/welcome-messages')return 'welcome_manage'")&&source.includes("app.get('/api/admin/welcome-messages',requireAdmin,")&&source.includes("app.put('/api/admin/welcome-messages',requireAdmin,")],
+    ['subscription management endpoints use the audited subscriptions_manage guard',mapping.includes("if(p.startsWith('/api/admin/subscriptions'))return 'subscriptions_manage'")&&source.includes("app.get('/api/admin/subscriptions',requireAdmin,")&&source.includes("app.post('/api/admin/subscriptions/plans',requireAdmin,")&&source.includes("app.delete('/api/admin/subscriptions/plans/:id',requireAdmin,")&&source.includes("app.post('/api/admin/subscriptions/assign',requireAdmin,")&&source.includes("app.post('/api/admin/subscriptions/cancel',requireAdmin,")],
+    ['ad campaign endpoints use the audited ads_manage guard',mapping.includes("if(p.startsWith('/api/admin/ads'))return 'ads_manage'")&&source.includes("app.get('/api/admin/ads',requireAdmin,")&&source.includes("app.post('/api/admin/ads',requireAdmin,")&&source.includes("app.patch('/api/admin/ads/:id',requireAdmin,")&&source.includes("app.delete('/api/admin/ads/:id',requireAdmin,")],
+    ['control center endpoints use the audited control_center_manage guard',mapping.includes("if(p.startsWith('/api/admin/control-center'))return 'control_center_manage'")&&source.includes("app.get('/api/admin/control-center',requireAdmin,")&&source.includes("app.put('/api/admin/control-center',requireAdmin,")],
+    ['central admin guard accepts any one of an explicitly mapped permission set',source.includes('const acceptedPermissions=Array.isArray(permission)?permission:[permission]')&&source.includes('acceptedPermissions.some(key=>hasPermission(req.user,key))')],
+    ['rank artwork and rank-list reads preserve their distinct OR permissions under audited guards',mapping.includes("if(p==='/api/admin/rank-art')return ['rank_art_manage','member_decoration_manage']")&&mapping.includes("if(p==='/api/admin/ranks')return ['rank_assign','rank_art_manage','member_decoration_manage']")&&source.includes("app.get('/api/admin/rank-art',requireAdmin,")&&source.includes("app.get('/api/admin/ranks' ,requireAdmin,")],
+    ['rank artwork writes and chat-banner routes use their exact audited permissions',mapping.includes("if(p.startsWith('/api/admin/rank-art/'))return 'rank_art_manage'")&&mapping.includes("if(p.startsWith('/api/admin/chat-banners'))return 'chat_banners_manage'")&&source.includes("app.post('/api/admin/rank-art/upload',requireAdmin,")&&source.includes("app.put('/api/admin/rank-art/assign',requireAdmin,")&&source.includes("app.delete('/api/admin/rank-art/:id',requireAdmin,")&&source.includes("app.get('/api/admin/chat-banners',requireAdmin,")&&source.includes("app.post('/api/admin/chat-banners/:rank',requireAdmin,")&&source.includes("app.delete('/api/admin/chat-banners/:rank',requireAdmin,")],
+    ['member decoration and bot settings use their exact audited permissions',mapping.includes("if(p==='/api/admin/member-decoration')return 'member_decoration_manage'")&&mapping.includes("if(p.startsWith('/api/admin/bots'))return 'bots_manage'")&&source.includes("app.put('/api/admin/member-decoration',requireAdmin,")&&source.includes("app.get('/api/admin/bots',requireAdmin,")&&source.includes("app.put('/api/admin/bots',requireAdmin,")],
+    ['account permissions and site security settings use audited exact permission guards',mapping.includes("if(p.startsWith('/api/admin/account-permissions/'))return 'permission_manage'")&&mapping.includes("if(p==='/api/admin/site-settings'||p==='/api/admin/login-history')return 'site_admin'")&&source.includes("app.get('/api/admin/account-permissions/:name',requireAdmin,")&&source.includes("app.put('/api/admin/account-permissions/:name',requireAdmin,")&&source.includes("app.get('/api/admin/site-settings',requireAdmin,")&&source.includes("app.put('/api/admin/site-settings',requireAdmin,")&&source.includes("app.get('/api/admin/login-history',requireAdmin,")],
+    ['health, backup and restore routes use audited single/alternative site permissions',mapping.includes("if(p==='/api/admin/health')return ['health_view','site_admin']")&&mapping.includes("if(p.startsWith('/api/admin/backup/'))return 'site_admin'")&&mapping.includes("if(p.startsWith('/api/admin/restore/database/'))return 'site_admin'")&&source.includes("app.get('/api/admin/health',requireAdmin,")&&source.includes("app.get('/api/admin/backup/database',requireAdmin,")&&source.includes("app.get('/api/admin/backup/full',requireAdmin,")&&source.includes("app.post('/api/admin/restore/database/preview',requireAdmin,")&&source.includes("app.post('/api/admin/restore/database/confirm',requireAdmin,")],
+    ['gift deletion and catalogue upload/deletion use audited gifts permissions',mapping.includes("if(p==='/api/admin/gift/delete')return 'gifts'")&&mapping.includes("if(p.startsWith('/api/admin/gifts/catalog/'))return 'gift_catalog_manage'")&&source.includes("app.post('/api/admin/gift/delete',requireAdmin,")&&source.includes("app.post('/api/admin/gifts/catalog/upload',requireAdmin,")&&source.includes("app.post('/api/admin/gifts/catalog/delete',requireAdmin,")],
+    ['chat tools require either management permission centrally while retaining per-section change checks',mapping.includes("if(p==='/api/admin/chat-tools')return req.method==='GET'?'shortcuts_manage':['shortcuts_manage','smileys_manage']")&&source.includes("app.put('/api/admin/chat-tools',requireAdmin,")&&source.includes("!same(shortcuts,db.chatShortcuts||[])&&!hasPermission(req.user,'shortcuts_manage')")&&source.includes("!same(smileys,db.customSmileys||[])&&!hasPermission(req.user,'smileys_manage')")],
+    ['admin data read uses the same any-permission rule as its payload filter',mapping.includes("if(p==='/api/admin/data')return ALL_PERMISSION_KEYS")&&source.includes("app.get('/api/admin/data',requireAdmin,")&&source.includes('Object.keys(PERMISSION_CATALOG).some(p=>hasPermission(req.user,p))')],
+    ['admin data permission mapping is reachable before other route mappings, with no shadowing conditional',mapping.indexOf("if(p==='/api/admin/data')return ALL_PERMISSION_KEYS;")>=0&&mapping.indexOf("if(p==='/api/admin/data')return ALL_PERMISSION_KEYS;")<mapping.indexOf("if(p==='/api/admin/audit-logs')")&&!mapping.includes("if(p==='/api/admin/data'){" )],
+    ['admin audit entries are appended immutably and restored when the audit save fails',guard.includes('const auditBefore=db.adminAuditLogs')&&guard.includes('if(db.adminAuditLogs!==auditBefore')&&guard.includes('const previous=db.adminAuditLogs')&&guard.includes('db.adminAuditLogs=[{id:Date.now()')&&guard.includes("catch(error){if(previous===undefined)delete db.adminAuditLogs;else db.adminAuditLogs=previous")]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('admin route permission and audit tests',error.message); }
+
+
+// Subscription, ad-campaign, and site-module administration must commit as one state change.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const auditStart=source.indexOf('function subscriptionAudit('),auditEnd=source.indexOf("\napp.get('/api/admin/subscriptions'",auditStart),auditFn=source.slice(auditStart,auditEnd);
+  const plansStart=source.indexOf("app.post('/api/admin/subscriptions/plans'");
+  const deletePlanStart=source.indexOf("app.delete('/api/admin/subscriptions/plans/:id'");
+  const assignStart=source.indexOf("app.post('/api/admin/subscriptions/assign'");
+  const cancelStart=source.indexOf("app.post('/api/admin/subscriptions/cancel'");
+  const adsStart=source.indexOf("app.post('/api/admin/ads'");
+  const adsPatchStart=source.indexOf("app.patch('/api/admin/ads/:id'");
+  const adsDeleteStart=source.indexOf("app.delete('/api/admin/ads/:id'");
+  const controlStart=source.indexOf("app.put('/api/admin/control-center'");
+  const plans=source.slice(plansStart,deletePlanStart),deletePlan=source.slice(deletePlanStart,assignStart),assign=source.slice(assignStart,cancelStart),cancel=source.slice(cancelStart,adsStart),adsCreate=source.slice(adsStart,adsPatchStart),adsPatch=source.slice(adsPatchStart,adsDeleteStart),adsDelete=source.slice(adsDeleteStart,source.indexOf("\napp.get('/api/public/ads'",adsDeleteStart)),control=source.slice(controlStart,source.indexOf("\n\n// Existing site settings",controlStart));
+  const checks=[
+    ['subscription audit entries are immutable so failed business writes can restore the prior audit history',auditFn.includes('const previous=db.adminAuditLogs')&&auditFn.includes('db.adminAuditLogs=[{id:crypto.randomUUID()')&&auditFn.includes('...(Array.isArray(previous)?previous:[])')],
+    ['subscription plan create/delete restore both plans and audit logs on failed save',plans.includes('previousPlans=db.subscriptionPlans,previousAudit=db.adminAuditLogs')&&plans.includes('db.subscriptionPlans=previousPlans')&&deletePlan.includes('db.subscriptionPlans=previousPlans')&&deletePlan.includes('db.adminAuditLogs=previousAudit')],
+    ['subscription assign/cancel restore subscriptions, member profile and audit history',assign.includes('previousSubscriptions=db.subscriptions,previousAudit=db.adminAuditLogs')&&assign.includes('profileSnapshot=originalProfile?{...originalProfile}:null')&&assign.includes('db.subscriptions=previousSubscriptions')&&cancel.includes('db.subscriptions=previousSubscriptions')&&cancel.includes('db.adminAuditLogs=previousAudit')],
+    ['subscription grant and cancellation histories are capped at 100 records',assign.includes("sub.history=sub.history.slice(0,100)")&&cancel.includes("sub.history=sub.history.slice(0,100)")],
+    ['subscription reactivation reuses the latest prior account record instead of appending another row',source.includes('function prepareSubscriptionGrant(records,name,now)')&&assign.includes('prepareSubscriptionGrant(previousSubscriptions,name,now)')&&assign.includes('sub.startsAt=prepared.wasActive?(sub.startsAt||now):now;')],
+    ['subscription grant preparation copies only the target history and preserves unrelated records',source.includes('subscription={...existing,history:Array.isArray(existing.history)?existing.history.slice():[]}')&&source.includes('const subscriptions=Array.isArray(records)?records.slice():[]')],
+    ['subscription grant preparation selects the latest prior cancelled or expired record when no active term exists',source.includes('let newestAt=-Infinity;')&&source.includes('if(updatedAt>=newestAt){newestAt=updatedAt;index=i;}')],
+    ['subscription cancellation clones only the target history rather than every account history',cancel.includes('index===selection.index?{...x,history:Array.isArray(x.history)?x.history.slice():[]}:x')&&!cancel.includes('.map(x=>({...x,history:Array.isArray(x.history)?x.history.slice():[]}))')],
+    ['ad create/update/delete restore campaign and audit state on failed save',adsCreate.includes('previousCampaigns=db.adCampaigns,previousAudit=db.adminAuditLogs')&&adsCreate.includes('db.adCampaigns=previousCampaigns')&&adsPatch.includes('db.adCampaigns=previousCampaigns')&&adsDelete.includes('db.adCampaigns=previousCampaigns')&&adsDelete.includes('db.adminAuditLogs=previousAudit')],
+    ['control-center module changes restore the previous settings and audit state on failed save',control.includes('previousSettings=db.siteSettings,previousAudit=db.adminAuditLogs')&&control.includes('db.siteSettings=previousSettings')&&control.includes('db.adminAuditLogs=previousAudit')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('subscription and ad transaction checks',error.message); }
+
+
+// Subscription lifecycle record selection must be deterministic and avoid per-renewal row growth.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function prepareSubscriptionGrant(');
+  const end=source.indexOf("app.get('/api/admin/subscriptions'",start);
+  const helper=source.slice(start,end);
+  assert.ok(start>=0&&end>start,'subscription grant helper must be present');
+  let generated=0;
+  const context={keyName:value=>String(value||'').trim().toLowerCase(),crypto:{randomUUID:()=> 'generated-'+(++generated)}};
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.run=prepareSubscriptionGrant;',context);
+  const activeHistory=[{at:10,action:'grant-or-renew'}],active={id:'active-1',name:'Alice',status:'active',expiresAt:500,updatedAt:20,history:activeHistory},unrelated={id:'other-1',name:'Bob',status:'cancelled',updatedAt:30,history:[{at:30}]};
+  const activeResult=context.run([active,unrelated],'ALICE',100);
+  assert.equal(activeResult.subscriptions.length,2);
+  assert.equal(activeResult.subscription.id,'active-1');
+  assert.equal(activeResult.wasActive,true);
+  assert.notEqual(activeResult.subscription.history,activeHistory);
+  assert.equal(active.history.length,1);
+  assert.equal(activeResult.subscriptions[1],unrelated);
+  const old={id:'old-cancelled',name:'Alice',status:'cancelled',updatedAt:10,history:[{at:10}]},latest={id:'latest-expired',name:'alice',status:'active',expiresAt:50,updatedAt:20,history:[{at:20}]};
+  const reactivated=context.run([old,latest],'Alice',100);
+  assert.equal(reactivated.subscriptions.length,2);
+  assert.equal(reactivated.subscription.id,'latest-expired');
+  assert.equal(reactivated.wasActive,false);
+  const created=context.run([], 'Charlie', 100);
+  assert.equal(created.subscriptions.length,1);
+  assert.equal(created.subscription.id,'generated-1');
+  assert.equal(created.wasActive,false);
+  pass('subscription grants reuse active or latest historical account records, preserve unrelated rows, and create only for new accounts');
+  const diagnosticStart=source.indexOf('function summarizeActiveSubscriptionDuplicates(');
+  const diagnosticEnd=source.indexOf('function prepareSubscriptionGrant(',diagnosticStart);
+  assert.ok(diagnosticStart>=0&&diagnosticEnd>diagnosticStart,'active subscription duplicate diagnostic must be present');
+  const diagnosticContext={keyName:value=>String(value||'').trim().toLowerCase()};
+  vm.createContext(diagnosticContext);
+  vm.runInContext(source.slice(diagnosticStart,diagnosticEnd)+';globalThis.run=summarizeActiveSubscriptionDuplicates;',diagnosticContext);
+  const duplicates=diagnosticContext.run([
+    {id:'a1',name:'Alice',status:'active',expiresAt:500},
+    {id:'a2',name:' alice ',status:'active',expiresAt:600},
+    {id:'a3',name:'ALICE',status:'cancelled',expiresAt:900},
+    {id:'b1',name:'Bob',status:'active',expiresAt:50},
+    {id:'c1',name:'Charlie',status:'active',expiresAt:500}
+  ],100);
+  assert.equal(duplicates.length,1);
+  assert.equal(duplicates[0].name,'Alice');
+  assert.equal(duplicates[0].count,2);
+  assert.deepEqual(Array.from(duplicates[0].ids),['a1','a2']);
+  pass('subscription duplicate diagnostics report only overlapping active records and never mutate source data');
+} catch(error) { fail('subscription lifecycle record selection',error.message); }
+
+
+
+// Subscription cancellation must select one exact, finite, active account record.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function selectActiveSubscriptionForCancellation(');
+  const end=source.indexOf('\nfunction prepareSubscriptionGrant',start);
+  assert.ok(start>=0&&end>start,'subscription cancellation selector must be present');
+  const context={keyName:value=>String(value||'').trim().toLowerCase()};
+  vm.createContext(context);
+  vm.runInContext(source.slice(start,end)+';globalThis.run=selectActiveSubscriptionForCancellation;',context);
+  const records=[
+    {id:'alice-old',name:'Alice',status:'active',expiresAt:500},
+    {id:'alice-new',name:' alice ',status:'active',expiresAt:700},
+    {id:'alice-expired',name:'ALICE',status:'active',expiresAt:50},
+    {id:'alice-cancelled',name:'Alice',status:'cancelled',expiresAt:900},
+    {id:'bob-active',name:'Bob',status:'active',expiresAt:900},
+    {id:'alice-infinite',name:'Alice',status:'active',expiresAt:'Infinity'}
+  ];
+  const before=JSON.stringify(records);
+  assert.equal(context.run(records,'Alice','',100).status,'ambiguous','multiple active terms require an explicit ID');
+  const selected=context.run(records,'ALICE','alice-new',100);
+  assert.equal(selected.status,'ok');
+  assert.equal(selected.index,1);
+  assert.equal(selected.subscription.id,'alice-new');
+  assert.equal(context.run(records,'Alice','missing-id',100).status,'not-found','an ID from another or nonexistent term cannot be substituted');
+  const unique=context.run(records,'Bob','',100);
+  assert.equal(unique.status,'ok');
+  assert.equal(unique.index,4);
+  assert.equal(context.run(records,'Nobody','',100).status,'not-found');
+  assert.equal(context.run(records,'Alice','',800).status,'not-found','expired records are not cancellable');
+  assert.equal(JSON.stringify(records),before,'selection must not mutate subscription history or records');
+  pass('subscription cancellation selector requires exact IDs for duplicates and ignores expired, cancelled, and non-finite terms');
+  const routeStart=source.indexOf("app.post('/api/admin/subscriptions/cancel'");
+  const routeEnd=source.indexOf('// Campaign ads:',routeStart);
+  const route=source.slice(routeStart,routeEnd);
+  assert.ok(route.includes('selectActiveSubscriptionForCancellation(db.subscriptions,name,subscriptionId,Date.now())'));
+  assert.ok(route.includes('index===selection.index')&&route.includes('db.subscriptions[selection.index]'));
+  assert.ok(!route.includes('x.id===subExists.id'));
+  pass('subscription cancellation updates only the selected array record, even if corrupt duplicate IDs exist');
+} catch(error) { fail('subscription cancellation exact-record selection',error.message); }
+
+// VIP entitlement resolution combines manual grants with every valid VIP subscription.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('let vipSubscriptionIndexSource=null;');
+  const end=source.indexOf('\nfunction defaultStatus',start);
+  assert.ok(start>=0&&end>start,'vipActive helper must be present');
+  let now=1000,keyNameCalls=0;
+  const context={
+    Date:{now:()=>now},
+    keyName:value=>{keyNameCalls++;return String(value||'').trim().toLowerCase();},
+    db:{subscriptions:[]},
+    profile:name=>context.profiles[String(name).toLowerCase()]||{},
+    profiles:{alice:{}}
+  };
+  vm.createContext(context);
+  vm.runInContext(source.slice(start,end)+';globalThis.run=vipActive;',context);
+  const run=()=>context.run('ALICE');
+  assert.equal(run(),false);
+  context.profiles.alice.vipManualUntil=2000;
+  assert.equal(run(),true,'manual VIP grant remains active');
+  context.profiles.alice.vipManualUntil=500;
+  assert.equal(run(),false,'expired manual grant is inactive');
+  context.profiles.alice.vipUntil=1800;
+  delete context.profiles.alice.vipSubscriptionId;
+  assert.equal(run(),true,'legacy manual VIP without a subscription link remains compatible');
+  context.profiles.alice.vipSubscriptionId='legacy-sub';
+  context.db.subscriptions=[
+    {id:'legacy-sub',name:'Alice',status:'active',expiresAt:1800},
+    {id:'other-sub',name:' alice ',status:'active',expiresAt:2200,grantsVip:true},
+    {id:'expired-sub',name:'Alice',status:'active',expiresAt:900,grantsVip:true},
+    {id:'cancelled-sub',name:'Alice',status:'cancelled',expiresAt:2500,grantsVip:true}
+  ];
+  assert.equal(run(),true,'another active VIP subscription preserves entitlement');
+  context.db.subscriptions=[{id:'legacy-sub',name:'Alice',status:'active',expiresAt:1800,grantsVip:false}];
+  assert.equal(run(),false,'an explicitly non-VIP linked subscription never grants VIP');
+  context.db.subscriptions=[{id:'legacy-sub',name:'Alice',status:'active',expiresAt:1800}];
+  assert.equal(run(),true,'legacy linked subscriptions without grantsVip remain compatible');
+  context.db.subscriptions=context.db.subscriptions.filter(x=>x.id!=='other-sub'&&x.id!=='legacy-sub');
+  assert.equal(run(),false,'a stale linked subscription does not grant VIP');
+  context.db.subscriptions=[
+    {id:'missing-expiry',name:'Alice',status:'active',grantsVip:true},
+    {id:'invalid-expiry',name:'Alice',status:'active',expiresAt:'not-a-date',grantsVip:true},
+    {id:'infinite-expiry',name:'Alice',status:'active',expiresAt:'Infinity',grantsVip:true}
+  ];
+  assert.equal(run(),false,'missing, malformed, and non-finite expiry values never grant VIP');
+  assert.equal(context.profiles.alice.vipSubscriptionId,'legacy-sub','read-only VIP resolution does not mutate profile data');
+  const bulkSubscriptions=Array.from({length:300},(_,index)=>({id:'bulk-'+index,name:'member-'+index,status:'active',expiresAt:5000,grantsVip:true}));
+  bulkSubscriptions.push({id:'alice-bulk',name:'Alice',status:'active',expiresAt:1800,grantsVip:true});
+  context.db.subscriptions=bulkSubscriptions;
+  const callsBeforeBulk=keyNameCalls;
+  for(let i=0;i<8;i++)assert.equal(run(),true);
+  const bulkIndexCost=keyNameCalls-callsBeforeBulk===bulkSubscriptions.length+8;
+  now=2000;
+  assert.equal(run(),false,'cached subscription candidates still expire against the current clock');
+  context.db.subscriptions=[{id:'replacement',name:'Alice',status:'active',expiresAt:3000,grantsVip:true}];
+  now=2000;
+  const replacementWorks=run()===true;
+  const replacementIndexCost=keyNameCalls-callsBeforeBulk===bulkSubscriptions.length+8+1+2;
+  assert.ok(bulkIndexCost&&replacementWorks&&replacementIndexCost,'subscription scan should happen once per array generation, with expiry checked on every lookup');
+  pass('VIP resolution preserves manual grants, indexes active subscriptions once per database generation, refreshes on replacement, checks live expiry, and never mutates profile data');
+} catch(error) { fail('VIP entitlement resolution',error.message); }
+
+// Private chat read cursors and hide lists must be durable, bounded, and rollback-safe.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const readStart=source.indexOf("app.post('/api/private/read'");
+  const readAllStart=source.indexOf("app.post('/api/private/read-all'");
+  const hideStart=source.indexOf("app.post('/api/private/hide'");
+  const contactsStart=source.indexOf("app.get('/api/private/contacts'");
+  const read=source.slice(readStart,readAllStart),readAll=source.slice(readAllStart,hideStart),hide=source.slice(hideStart,contactsStart);
+  const checks=[
+    ['private read cursor writes are persisted and restore the prior cursor map on failure',read.includes('previous=db.privateRead,next={...(db.privateRead||{})')&&read.includes('catch(error){if(previous===undefined)delete db.privateRead;else db.privateRead=previous')&&read.includes('.slice(0,500)')],
+    ['private read-all persists a bounded 500-contact cursor map and rolls back on failure',readAll.includes('Object.fromEntries(Object.entries(mine).sort')&&readAll.includes('.slice(0,500)')&&readAll.includes('catch(error){if(previous===undefined)delete db.privateRead;else db.privateRead=previous')],
+    ['private hide clones nested state before mutation and restores whole roots if save fails',hide.includes('previousHidden=db.privateHidden,previousRead=db.privateRead')&&hide.includes('hiddenRoot[me]=hiddenList')&&hide.includes('if(previousHidden===undefined)delete db.privateHidden;else db.privateHidden=previousHidden')&&hide.includes('if(previousRead===undefined)delete db.privateRead;else db.privateRead=previousRead')],
+    ['private hide caps stored contacts and deletes media only after successful persistence',hide.includes('hiddenList.length>=500')&&hide.indexOf('try{save();}')<hide.indexOf('fs.unlinkSync(path.join(PRIVATE_MEDIA_DIR,filename))')],
+    ['rank assignment clones audit history before mutation and rank permission rollback restores updatedAt',source.includes('db.rankAudit=Array.isArray(db.rankAudit)?db.rankAudit.slice():[]')&&source.includes('if(hadUpdatedAt)definition.updatedAt=previousUpdatedAt;else delete definition.updatedAt')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('private chat read/hide and rank transaction checks',error.message); }
+
+
+// All member-targeting admin endpoints must respect hierarchy; VIP/status writes roll back.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const ipStart=source.indexOf("app.get('/api/admin/member-ip/:name'");
+  const artStart=source.indexOf("app.get('/api/admin/rank-art'");
+  const decorStart=source.indexOf("app.put('/api/admin/member-decoration'");
+  const botStart=source.indexOf("app.get('/api/admin/bots'");
+  const vipStart=source.indexOf("app.post('/api/admin/gift-vip'");
+  const revokeStart=source.indexOf("app.post('/api/admin/vip/:name/revoke'");
+  const moveStart=source.indexOf("app.post('/api/admin/move-member'");
+  const statusStart=source.indexOf("app.post('/api/admin/profile/status'");
+  const muteStart=source.indexOf("app.post('/api/admin/mute'");
+  const ip=source.slice(ipStart,artStart),decor=source.slice(decorStart,botStart),vip=source.slice(vipStart,revokeStart),revoke=source.slice(revokeStart,moveStart),status=source.slice(statusStart,muteStart);
+  const checks=[
+    ['member IP disclosure blocks lower-ranked staff from inspecting higher-ranked accounts',ip.includes('if(denyHigherRankTarget(req.user,n,res))return')],
+    ['per-member decoration changes enforce higher-rank protection',decor.includes('if(denyHigherRankTarget(req.user,n,res))return')],
+    ['direct VIP grant/revoke restore the previous profile when persistence fails',vip.includes('catch(error){if(hadProfile){for(const key of Object.keys(p))delete p[key];Object.assign(p,previous);}else delete db.profiles[n]')&&revoke.includes('catch(error){if(hadProfile){for(const key of Object.keys(p))delete p[key];Object.assign(p,previous);}else delete db.profiles[n]')],
+    ['admin profile-status updates restore the prior profile when save fails',status.includes('const hadProfile=Object.prototype.hasOwnProperty.call(db.profiles,name)')&&status.includes('catch(error){if(hadProfile){for(const key of Object.keys(p))delete p[key];Object.assign(p,previous);}else delete db.profiles[name]')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('member-target hierarchy and VIP transaction checks',error.message); }
+
+// Announcement publication/deletion must persist before emitting, and roll back on disk failure.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function publishAnnouncement(item){');
+  const end=source.indexOf('function scheduleAllPermanentAnnouncements(){',start);
+  if(start<0||end<0)throw new Error('announcement transaction helpers not found');
+  const block=source.slice(start,end);
+  const makeContext=(failSave=false)=>{
+    const events=[],item={id:'a1',duration:'15m',at:1,text:'hello'};
+    const db={announcements:[item],messages:[{id:'a1-message',announcementId:'a1'}]};
+    const context={db,Date,Set,Map,Object,Number,String,Math,ANNOUNCEMENT_INTERVAL_MS:900000,
+      announcementMessage:(x,at,id)=>({id,announcementId:x.id,type:'announcement',at,text:x.text}),
+      io:{emit:(...args)=>events.push(['emit',...args])},
+      save:()=>{events.push(['save']);if(failSave)throw new Error('disk failure');},
+      scheduleAllPermanentAnnouncements:()=>events.push(['reschedule']),
+      console:{error:(...args)=>events.push(['error',...args])},
+      setTimeout:(fn,ms)=>({fn,ms,unref(){}}),clearTimeout:()=>{},
+    };
+    vm.createContext(context);
+    vm.runInContext(block+';globalThis.publish=publishAnnouncement;globalThis.remove=removeAnnouncement;',context);
+    return {context,events,item,db};
+  };
+  const success=makeContext(false);success.context.publish(success.item);
+  const publishOk=success.events[0]?.[0]==='save'&&success.events[1]?.[0]==='emit'&&success.db.messages.length===2;
+  const failed=makeContext(true),oldMessages=failed.db.messages;
+  let publishThrew=false;try{failed.context.publish(failed.item);}catch{publishThrew=true;}
+  const publishRollback=publishThrew&&failed.db.messages===oldMessages&&failed.item.lastPublishedAt===undefined&&failed.events.every(x=>x[0]!=='emit');
+  const delSuccess=makeContext(false);delSuccess.context.remove('a1');
+  const deleteOk=delSuccess.events[0]?.[0]==='save'&&delSuccess.events.some(x=>x[0]==='emit')&&delSuccess.db.announcements.length===0;
+  const delFail=makeContext(true),delMessages=delFail.db.messages,delAnnouncements=delFail.db.announcements;
+  let deleteThrew=false;try{delFail.context.remove('a1');}catch{deleteThrew=true;}
+  const deleteRollback=deleteThrew&&delFail.db.messages===delMessages&&delFail.db.announcements===delAnnouncements&&delFail.events.every(x=>x[0]!=='emit');
+  if(publishOk&&publishRollback&&deleteOk&&deleteRollback)pass('announcement publish/delete save before socket events and restore memory on persistence failure');
+  else fail('announcement publish/delete transaction safety',JSON.stringify({publishOk,publishRollback,deleteOk,deleteRollback}));
+} catch(error) { fail('announcement publish/delete transaction safety',error.message); }
+
+// Timed announcement expiry retries after a failed save rather than silently losing its only timer.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function publishAnnouncement(item){');
+  const end=source.indexOf('function scheduleAllPermanentAnnouncements(){',start);
+  const block=source.slice(start,end),timers=[],item={id:'timed-1',duration:'15m',at:1};
+  const db={announcements:[item],messages:[{id:'announcement-old',announcementId:'timed-1'}]};
+  let saveAttempts=0;
+  const context={db,Date,Set,Map,Object,Number,String,Math,ANNOUNCEMENT_INTERVAL_MS:900000,
+    announcementMessage:(x,at,id)=>({id,announcementId:x.id,type:'announcement',at}),
+    io:{emit:()=>{}},save:()=>{saveAttempts++;if(saveAttempts===1)throw new Error('disk failure');},
+    scheduleAllPermanentAnnouncements:()=>{},console:{error:()=>{}},
+    setTimeout:(fn,ms)=>{const timer={fn,ms,unref(){}};timers.push(timer);return timer;},clearTimeout:()=>{},
+  };
+  vm.createContext(context);
+  vm.runInContext(block+';globalThis.remove=removeAnnouncement;globalThis.expiry=scheduleAnnouncementExpiry;',context);
+  context.expiry(item);timers[0].fn();
+  const retryScheduled=timers.length===2&&timers[1].ms>=1000&&db.announcements.length===1;
+  timers[1].fn();
+  const retryCommitted=saveAttempts===2&&db.announcements.length===0&&db.messages.length===0;
+  if(retryScheduled&&retryCommitted)pass('timed announcement expiry retries durable deletion after transient save failure');
+  else fail('timed announcement expiry retry',JSON.stringify({retryScheduled,retryCommitted,saveAttempts,timerCount:timers.length,db}));
+} catch(error) { fail('timed announcement expiry retry',error.message); }
+
 // Scheduled announcements must not replay alongside welcome cards on room entry.
 try {
   const source = fs.readFileSync(server, 'utf8');
@@ -277,7 +1275,7 @@ try {
   const publish = source.match(/function publishAnnouncement\([\s\S]*?\n}/);
   if (publish && source.includes("room:'__broadcast__'") && publish[0].includes("io.emit('message',message)") && !publish[0].includes('io.to(')) pass('announcements are broadcast once to all connected users regardless of room');
   else fail('announcements reach users outside rooms without duplicate room fan-out');
-  if (source.includes('publishAnnouncement(item);\n  if(temporary)scheduleAnnouncementExpiry(item);else schedulePermanentAnnouncement(item);')) pass('both temporary and administrative announcements publish immediately on save');
+  if (source.includes('try{const published=publishAnnouncement(item);if(!published.length)throw new Error')) pass('both temporary and administrative announcements publish immediately after durable commit');
   else fail('both announcement types publish immediately on creation');
   if (html.includes("socket.on('message',m=>{if(m?.type==='announcement'||m.room===currentRoom)addMessage(m)})") && !html.includes("m.role==='owner'?'صاحب الموقع'")) pass('clients display global announcements and omit redundant owner/admin role text');
   else fail('client global announcement display and concise author identity');
@@ -306,13 +1304,41 @@ try {
 try {
   const source = fs.readFileSync(server, 'utf8');
   const html = fs.readFileSync(mainPath, 'utf8');
-  if (source.includes('const timeoutCall=()=>{if(activeCallPairs.get(pair)!==state||state.answered)return;const callee=socketUsers.get(target[0]);if(callee&&voiceSpeakers.get(callee.room)?.has(target[0]))') && source.includes('waitingOnRoomMic') && source.includes('if(!state||state.callee!==sid||state.caller!==target[0])return;') && source.includes('if(!canMedia(target[1]))')) pass('incoming call timeout is extended while the callee is speaking on a room mic');
+  if (source.includes('const timeoutCall=()=>{if(activeCallPairs.get(pair)!==state||state.answered)return;if(Date.now()-state.created>120000){clearActiveCallPair(pair)') && source.includes('const callee=socketUsers.get(target[0]);if(callee&&voiceSpeakers.get(callee.room)?.has(target[0]))') && source.includes('waitingOnRoomMic') && source.includes('if(!state||state.callee!==sid||state.caller!==target[0])return;') && source.includes('if(!canMedia(target[1]))')) pass('incoming call stays pending during room-mic use but is hard-expired after its maximum lifetime');
   else fail('incoming call remains pending during room-mic use');
   if (source.includes("if(voiceSpeakers.get(u.room)?.has(sid))return socket.emit('call-answer-denied',{reason:'room-mic'})") && html.includes("socket.on('call-answer-denied'") && html.includes('acceptedIncomingCallForRetry')) pass('server blocks call answers during room-mic use and restores the incoming card');
   else fail('server-side room-mic call-answer guard');
   if (html.includes("socket.on('voice-mic-granted',d=>{voiceRequestPending=false;micRaised=true;startVoiceMesh(d)})")) pass('client marks the room mic active immediately when the server grants it');
   else fail('room mic state is updated immediately on grant');
 } catch (error) { fail('incoming call persistence checks', error.message); }
+
+// Completed private calls must release their timeout handles and captured socket closures immediately.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function clearActiveCallPair(');
+  const end=source.indexOf('\nconst activeVoicePairs',start);
+  assert.ok(start>=0&&end>start,'active-call cleanup helper must exist');
+  const cleared=[];
+  const context={activeCallPairs:new Map(),clearTimeout:timer=>cleared.push(timer)};
+  vm.createContext(context);
+  vm.runInContext(source.slice(start,end)+';globalThis.run=clearActiveCallPair;',context);
+  const timer={id:'call-timeout'};
+  const state={timeout:timer};
+  context.activeCallPairs.set('a::b',state);
+  assert.equal(context.run('a::b'),true);
+  assert.deepEqual(cleared,[timer]);
+  assert.equal(state.timeout,null);
+  assert.equal(context.activeCallPairs.size,0);
+  assert.equal(context.run('missing'),false);
+  const offerLine=source.split('\n').find(line=>line.includes("socket.on('call-offer'"));
+  const answerLine=source.split('\n').find(line=>line.includes("socket.on('call-answer'"));
+  assert.ok(offerLine&&offerLine.includes('state.timeout=setTimeout(timeoutCall,60000)'));
+  assert.ok(offerLine.indexOf('Date.now()-state.created>120000')<offerLine.indexOf('voiceSpeakers.get(callee.room)'),'room microphone must not extend pending call retention beyond the negotiation TTL');
+  assert.ok(answerLine&&answerLine.includes('if(state.timeout){clearTimeout(state.timeout);state.timeout=null;}'));
+  for(const line of source.split('\n').filter(line=>line.includes("socket.on('call-reject'")||line.includes("socket.on('call-end'")||line.includes("socket.on('disconnect'")))assert.ok(!line.includes('activeCallPairs.delete('));
+  assert.ok(source.includes('for(const pair of activeCallPairs.keys())clearActiveCallPair(pair);'));
+  pass('private-call timeout handles are cancelled on answer, rejection, end, disconnect, expiry, and database restore');
+} catch(error) { fail('private-call timer memory cleanup',error.message); }
 
 // Exit-room control matches the supplied door-arrow reference and keeps its action.
 try {
@@ -336,7 +1362,7 @@ try {
   const source = fs.readFileSync(server, 'utf8');
   const saveFn = source.match(/function save\(\)\s*\{[\s\S]*?\n\}/);
   const loadBlock = source.match(/let db;[\s\S]*?\nfor \(const \[k,v\] of Object\.entries\(defaults\(\)\)/);
-  if (saveFn && ['.tmp', "fs.openSync(tempFile, 'wx'", 'JSON.stringify(snapshot)', 'privateMessages: []', 'fs.renameSync(tempFile, DB_FILE)'].every(x => saveFn[0].includes(x)) && !saveFn[0].includes('fs.fsyncSync')) pass('database writes use compact atomic replacement and never persist private messages');
+  if (saveFn && ['.tmp', "fs.openSync(tempFile, 'wx'", 'writeJsonSync(fd, snapshot)', 'privateMessages: []', 'fs.fsyncSync(fd)', 'fs.renameSync(tempFile, DB_FILE)'].every(x => saveFn[0].includes(x))) pass('database writes use fsynced atomic replacement and never persist private messages');
   else fail('database writes use compact atomic replacement and never persist private messages');
   if (loadBlock && loadBlock[0].includes("error.code === 'ENOENT'") && loadBlock[0].includes('fs.copyFileSync(DB_FILE, recoveryCopy') && loadBlock[0].includes('Refusing to start with an invalid database')) pass('corrupt database is preserved and startup fails closed');
   else fail('corrupt database is preserved and startup fails closed');
@@ -350,7 +1376,7 @@ try {
   if (!saveFn) throw new Error('save() implementation not found');
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-atomic-save-'));
   try {
-    const context = { fs, crypto, DATA_DIR: tempDir, DB_FILE: path.join(tempDir, 'data.json'), db: { users: { test: { likes: 7 } }, messages: [], privateMessages: [{text:'secret'}] }, process: { pid: process.pid } };
+    const context = { fs, crypto, writeJsonSync, validateJsonFile, refreshLastKnownGoodDatabase:()=>{}, DATA_DIR: tempDir, DB_FILE: path.join(tempDir, 'data.json'), db: { users: { test: { likes: 7 } }, messages: [], privateMessages: [{text:'secret'}] }, process: { pid: process.pid } };
     vm.createContext(context);
     vm.runInContext(`${saveFn[0]}\nglobalThis.performSave = save;`, context);
     context.performSave();
@@ -360,6 +1386,35 @@ try {
     else fail('atomic save writes valid JSON and leaves no temporary files');
   } finally { fs.rmSync(tempDir, { recursive: true, force: true }); }
 } catch (error) { fail('atomic save runtime fixture', error.message); }
+
+// A malformed serialized candidate must never replace the committed database or rotate recovery state.
+try{
+  const source=fs.readFileSync(server,'utf8');
+  const saveFn=source.match(/function save\(\)\s*\{[\s\S]*?\n\}/);
+  if(!saveFn)throw new Error('save() implementation not found');
+  const tempDir=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-invalid-save-'));
+  try{
+    const databaseFile=path.join(tempDir,'data.json');
+    const committed='{"generation":1}';
+    fs.writeFileSync(databaseFile,committed);
+    let recoveryRotations=0;
+    const context={
+      fs,crypto,validateJsonFile,
+      writeJsonSync:fd=>fs.writeSync(fd,'{broken'),
+      refreshLastKnownGoodDatabase:()=>{recoveryRotations++;},
+      DATA_DIR:tempDir,DB_FILE:databaseFile,
+      db:{users:{member:{likes:2}},messages:[],privateMessages:[]},
+      process:{pid:process.pid}
+    };
+    vm.createContext(context);
+    vm.runInContext(saveFn[0]+'\nglobalThis.performSave=save;',context);
+    assert.throws(()=>context.performSave());
+    assert.equal(fs.readFileSync(databaseFile,'utf8'),committed);
+    assert.equal(recoveryRotations,0);
+    assert.deepEqual(fs.readdirSync(tempDir),['data.json']);
+    pass('database save rejects malformed candidates before recovery rotation or atomic replacement and removes the temp file');
+  }finally{fs.rmSync(tempDir,{recursive:true,force:true});}
+}catch(error){fail('invalid database candidate atomic-save fixture',error.message);}
 
 // Exercise the real uploaded-signature function against small byte fixtures.
 try {
@@ -384,6 +1439,58 @@ try {
   else fail('upload signature validator accepts valid containers and rejects MIME spoofing');
 } catch (error) { fail('upload signature fixture tests', error.message); }
 
+
+
+// Deleting from a missing catalog must not initialize or mutate catalog state.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const routeStart = source.indexOf("app.post('/api/admin/gifts/catalog/delete'");
+  const routeEnd = source.indexOf("app.", routeStart + 8);
+  const route = routeStart >= 0 ? source.slice(routeStart, routeEnd > routeStart ? routeEnd : routeStart + 1800) : '';
+  if (route.includes("const catalog=category==='vip'?db.vipGiftCatalog:db.giftCatalog;if(!Array.isArray(catalog))return res.status(404)") && !route.includes('db.giftCatalog=Array.isArray') && !route.includes('db.vipGiftCatalog=Array.isArray')) pass('missing gift catalog deletion does not initialize catalog state');
+  else fail('missing gift catalog deletion does not initialize catalog state');
+} catch (error) { fail('gift catalog deletion no-mutation regression', error.message); }
+
+
+
+// Failed admin gift send must remove a profile that the route created only for this attempted mutation.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const routeStart = source.indexOf("app.post('/api/admin/gift',requireAdmin,(req,res)");
+  const routeEnd = source.indexOf("app.post('/api/admin/gift/delete'", routeStart);
+  const route = routeStart >= 0 && routeEnd > routeStart ? source.slice(routeStart, routeEnd) : '';
+  if (route.includes('const hadProfile=Object.prototype.hasOwnProperty.call(db.profiles,n),p=profile(n)') && route.includes("if(!hadProfile)delete db.profiles[n];")) pass('failed admin gift send removes newly created profile');
+  else fail('failed admin gift send removes newly created profile');
+} catch (error) { fail('admin gift-send profile rollback regression', error.message); }
+
+// Failed gift-catalog upload must roll back a newly initialized catalog property as well as the item/file.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const routeStart = source.indexOf("app.post('/api/admin/gifts/catalog/upload'");
+  const routeEnd = source.indexOf("app.post('/api/admin/gifts/catalog/delete'", routeStart);
+  const route = routeStart >= 0 && routeEnd > routeStart ? source.slice(routeStart, routeEnd) : '';
+  if (route.includes("catalogKey=category==='vip'?'vipGiftCatalog':'giftCatalog',hadCatalog=Object.prototype.hasOwnProperty.call(db,catalogKey),previousCatalog=db[catalogKey]") && route.includes("if(!Array.isArray(previousCatalog)){if(hadCatalog)db[catalogKey]=previousCatalog;else delete db[catalogKey];}")) pass('failed gift-catalog upload restores absent catalog state');
+  else fail('failed gift-catalog upload restores absent catalog state');
+} catch (error) { fail('gift-catalog upload rollback regression', error.message); }
+
+// Deleting a nonexistent gift must not create a profile or trigger profile() expiry mutations.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const routeStart = source.indexOf("app.post('/api/admin/gift/delete'");
+  const routeEnd = source.indexOf("function countGifImageFrames", routeStart);
+  const route = routeStart >= 0 && routeEnd > routeStart ? source.slice(routeStart, routeEnd) : '';
+  if (route.includes("const p=db.profiles[n];if(!p||!Array.isArray(p.gifts)||!p.gifts.length)return res.status(404)") && !route.includes('const p=profile(n)')) pass('deleting a missing gift does not create or mutate a profile');
+  else fail('deleting a missing gift does not create or mutate a profile');
+} catch (error) { fail('gift deletion no-mutation regression', error.message); }
+
+// Socket.IO session ownership: a superseded socket must not reclaim a session by emitting join again.
+try {
+  const source = fs.readFileSync(server, 'utf8');
+  const joinHandler = source.match(/socket\.on\('join',[\s\S]*?\n  \}\);/);
+  if (joinHandler && joinHandler[0].includes('socket.data.sid!==requestedSid||!isCurrentSessionSocket(socket)') && joinHandler[0].includes('sessionUser(requestedSid)')) pass('superseded Socket.IO sessions cannot reclaim ownership through join');
+  else fail('superseded Socket.IO sessions cannot reclaim ownership through join');
+} catch (error) { fail('Socket.IO session ownership guard', error.message); }
+
 // All upload routes must validate actual file bytes, and room-message HTTP fallback
 // must prove that the same session joined the requested Socket.IO room.
 try {
@@ -407,11 +1514,13 @@ try {
   const vip = source.match(/app\.post\('\/api\/admin\/gift-vip',[\s\S]*?\n\}\);/);
   const rank = source.match(/app\.post\('\/api\/admin\/rank',[\s\S]*?\n\}\);/);
   const css = fs.readFileSync(mainPath, 'utf8');
-  if (gift && gift[0].includes('denyBadgeForRank(n,p,res)') && gift[0].includes('delete p.vipUntil') && gift[0].includes('p.gifts=[record]')) pass('new gift replaces the previous gift/VIP but never replaces an active rank');
+  if (gift && gift[0].includes('denyBadgeForRank(n,p,res)') && gift[0].includes('delete p.vipManualUntil') && gift[0].includes('p.gifts=[record]')) pass('new gift replaces the previous gift/VIP but never replaces an active rank');
   else fail('new gift replaces the previous gift/VIP but never replaces an active rank');
-  if (vip && vip[0].includes('denyBadgeForRank(n,p,res)') && vip[0].includes('p.gifts=[]') && vip[0].includes('p.vipUntil=')) pass('VIP replaces a previous gift but never replaces an active rank');
+  if (vip && vip[0].includes('denyBadgeForRank(n,p,res)') && vip[0].includes('p.gifts=[]') && vip[0].includes('p.vipManualUntil=')) pass('VIP replaces a previous gift but never replaces an active rank');
   else fail('VIP replaces a previous gift but never replaces an active rank');
-  if (rank && rank[0].includes('p.gifts=[]') && rank[0].includes('delete p.vipUntil')) pass('new visual rank replaces previous gift and VIP');
+  if (css.includes('Number(x?.profile?.vipManualUntil)>Date.now()') && css.includes('!x?.profile?.vipSubscriptionId&&Number(x?.profile?.vipUntil)>Date.now()')) pass('member VIP badge uses manual expiry and never treats a stale linked subscription expiry as manual VIP');
+  else fail('member VIP badge uses manual expiry and never treats a stale linked subscription expiry as manual VIP');
+  if (rank && rank[0].includes('p.gifts=[]') && rank[0].includes('delete p.vipManualUntil')) pass('new visual rank replaces previous gift and VIP');
   else fail('new visual rank replaces previous gift and VIP');
   if (css.includes('rimaz-identity-layout-canonical-v469314') && css.includes('function personalBannerIdentity') && css.includes('onlineIdentity') && css.includes('.memberNameLine') && css.includes('.memberSub')) pass('online-members panel uses one layout with name and status beside rank');
   else fail('online-members status/name/rank unified layout');
@@ -426,12 +1535,14 @@ try {
     ['only strictly higher ranked targets are protected', source.includes('targetLevel>actorLevel')],
     ['legacy member-action VIP and gift handlers reject badge replacement on ranked accounts', source.includes("if(action==='grant-vip')") && source.includes("if(action==='gift')") && (source.match(/denyBadgeForRank\(n,p,res\)/g)||[]).length >= 4],
     ['ordinary members/guests and the site owner are excluded from the new rank comparison', source.includes('if(!actor||isOwner(actor)||!targetName||isOwnerName(targetName))return false')],
+    ['permission_manage does not bypass hierarchy for ordinary moderation or profile actions', !source.includes("if(hasPermission(actor,'permission_manage'))return false;")],
+    ['delegated permission editing is the only explicit higher-rank exception and cannot grant permissions the actor lacks', source.includes('permission_manage is an explicit delegated exception here') && source.includes('requested.some(p=>!own.has(p))')],
     ['rank guard returns the requested Arabic permission message', source.includes('صلاحية هذه الرتبة أعلى منك') && source.includes('HIGHER_RANK_PROTECTED')],
     ['central member actions enforce hierarchy before moderation and global bans', source.includes("app.post('/api/admin/member-action'") && source.includes('denyHigherRankTarget(actor,n,res)')],
     ['room ban/mute helper enforces hierarchy server-side', source.includes('function roomAction(type,req,res)') && source.includes('denyHigherRankTarget(req.user,name,res)')],
-    ['profile name/color edits and avatar deletion enforce hierarchy after owner-protection handling', source.includes("app.patch('/api/admin/profile/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);const protectedTarget=getUser(n)||getGuest(n);if((isOwnerName(n)||isOwner({name:n,role:protectedTarget?.role}))&&!isOwner(req.user))") && source.includes("app.delete('/api/admin/avatar/:name',requireAdmin,(req,res)=>{const n=accountKey(req.params.name);const target=getUser(n)||getGuest(n);") && source.includes('if(denyHigherRankTarget(req.user,n,res))return')],
+    ['profile name/color edits and avatar deletion enforce hierarchy after owner-protection handling', source.includes("app.patch('/api/admin/profile/:name',requireAdmin,(req,res)=>{") && source.includes("app.delete('/api/admin/avatar/:name',requireAdmin,(req,res)=>{") && source.includes('notifyOwnerProtectedAttempt(req.user,action)') && source.includes('if(denyHigherRankTarget(req.user,n,res))return')],
     ['direct rank assignment enforces hierarchy and generic role route is retired', source.includes("app.post('/api/admin/rank'") && source.includes('if(denyHigherRankTarget(actor,n,res))return') && !source.includes("app.post('/api/admin/role'") && !source.includes('role_assign')],
-    ['additional member edits and removals enforce hierarchy', source.includes("app.patch('/api/admin/member-stats/:name',requireAuth,(req,res)=>{const n=accountKey(req.params.name);if(denyHigherRankTarget(req.user,n,res))return") && source.includes("app.put('/api/admin/account-permissions/:name'") && source.includes("if(action==='delete-user')") && source.includes("app.post('/api/admin/unban'") && source.includes('if(denyHigherRankTarget(req.user,name,res))return')],
+    ['additional member edits and removals enforce hierarchy', source.includes("app.patch('/api/admin/member-stats/:name',requireAdmin,(req,res)=>{") && source.includes("app.put('/api/admin/account-permissions/:name'") && source.includes("if(action==='delete-user')") && source.includes("app.post('/api/admin/unban'") && source.includes('if(denyHigherRankTarget(req.user,n,res))return')],
     ['rank badge cannot be replaced by gift or VIP', source.includes('function denyBadgeForRank(name,p,res)') && source.includes('if(!hasActiveVisualRank(p))return false') && source.includes('لا يمكن استبدالها بهدية أو VIP')],
     ['member-action gifts replace rather than accumulate', source.includes("if(action==='gift')") && source.includes('p.gifts=[record]') && !source.includes('p.gifts.unshift(record)')]
   ];
@@ -444,19 +1555,70 @@ try {
     ['highest admin can act on lower admin tier', simulate({name:'admin-full'}, 'admin-shield') === false],
     ['equal ranks can act on each other', simulate({name:'super-white'}, 'super-white') === false],
     ['ordinary member target is not added to rank protection', simulate({name:'super-red'}, 'ordinary-member') === false],
-    ['site owner remains outside the new rank guard', simulate({name:'super-red',owner:true}, 'admin-full') === false]
+    ['site owner remains outside the new rank guard', simulate({name:'super-red',owner:true}, 'admin-full') === false],
+    ['delegated permission manager cannot bypass higher-rank protection for moderation', simulate({name:'super-red',fullAdmin:true}, 'admin-shield') === true]
   ];
   for (const [label, ok] of scenarios) ok ? pass(label) : fail(label);
 } catch (error) { fail('rank hierarchy regression checks', error.message); }
 
-// Chat messages are persisted in a short batch rather than synchronously per message.
+// Chat messages must remain queued until durable storage commits them; retries are bounded and admission is explicit.
 try {
   const source=fs.readFileSync(server,'utf8');
   const add=source.match(/function addMessage\(m\)\s*\{[\s\S]*?\n\}/);
-  const batch=source.match(/function scheduleMessageSave\(delay=350\)\s*\{[\s\S]*?\n\}/);
-  if(add&&batch&&!add[0].includes('save()')&&add[0].includes('scheduleMessageSave()')&&batch[0].includes('},delay)') && batch[0].includes('scheduleMessageSave(3000)')&&batch[0].includes('save()')&&source.includes('function gracefulShutdown(signal)')) pass('chat message writes are batched and flushed during graceful shutdown');
-  else fail('chat message write batching and shutdown flush');
+  const batch=source.match(/function scheduleMessageSave\(delay=100\)\s*\{[\s\S]*?\n\}/);
+  const flush=source.match(/function flushMessageWrites\(\)\s*\{[\s\S]*?\n\}/);
+  if(add&&batch&&flush&&add[0].includes('pendingMessageWrites.push({message:m,resolve,reject})')
+    &&add[0].includes('MAX_PENDING_MESSAGE_WRITES')&&add[0].includes('shutdownStarted')
+    &&batch[0].includes('flushMessageWrites()')&&batch[0].includes('shutdownStarted')
+    &&flush[0].includes('save()')&&flush[0].includes('db.messages=previousMessages')
+    &&flush[0].includes('pendingMessageWrites.splice(0,batch.length)')
+    &&flush[0].includes('scheduleMessageSave(retryDelay)')
+    &&!flush[0].includes('pendingMessageWrites.splice(0)')
+    &&!flush[0].includes('entry.reject(error)')
+    &&source.includes('const MAX_PENDING_MESSAGE_WRITES=1000')
+    &&source.includes("res.status(queueFull?503:500)")
+    &&source.includes("الخادم مشغول بحفظ الرسائل، حاول بعد قليل")
+    &&source.includes('function gracefulShutdown(signal)'))
+    pass('chat message writes retain the pending queue across repeated save failures, use capped backoff and a bounded admission limit, and flush during graceful shutdown');
+  else fail('chat message write batching, durable retry queue, and shutdown flush');
 } catch(error){fail('chat write batching checks',error.message);}
+
+// Exercise the real queue functions with transient and persistent storage failures.
+(async()=>{
+  try{
+    const source=fs.readFileSync(server,'utf8');
+    const start=source.indexOf('let shutdownStarted=false;');
+    const end=source.indexOf('\nfunction notify(name,item)',start);
+    if(start<0||end<0)throw new Error('chat persistence queue block was not found');
+    const block=source.slice(start,end);
+    let failures=2,saved=[];
+    const delays=[];
+    const context={
+      setTimeout:(fn,delay)=>{delays.push(delay);return {fn,unref(){}};},
+      clearTimeout:()=>{},
+      console:{error:()=>{}},
+      db:{messages:[{id:'existing'}]},
+      save(){if(failures-->0)throw new Error('simulated disk failure');saved=context.db.messages.map(item=>item.id);}
+    };
+    vm.createContext(context);
+    vm.runInContext(block+';globalThis.enqueue=addMessage;globalThis.flush=flushMessageWrites;',context);
+    const committed=context.enqueue({id:'queued'});
+    const overflow=await context.enqueue({id:'overflow'}).then(()=>false,error=>/queue is full/.test(error.message));
+    const first=context.flush();
+    const retainedAfterFirst=first===false&&context.pendingMessageWrites.length===1&&context.db.messages.length===1;
+    const second=context.flush();
+    const retainedAfterSecond=second===false&&context.pendingMessageWrites.length===1&&context.db.messages.length===1;
+    const third=context.flush();
+    await committed;
+    const retryWorks=overflow&&retainedAfterFirst&&retainedAfterSecond&&third===true
+      &&context.pendingMessageWrites.length===0&&saved.join(',')==='existing,queued'
+      &&delays.includes(100)&&delays.includes(1000)&&delays.includes(2000);
+    context.shutdownStarted=true;
+    const rejectsDuringShutdown=await context.enqueue({id:'late'}).then(()=>false,error=>/shutting down/.test(error.message));
+    if(retryWorks&&rejectsDuringShutdown)pass('chat queue retains messages through repeated disk failures, retries with increasing delays, rejects overflow clearly, and blocks writes during shutdown');
+    else fail('chat queue runtime retry and admission behavior',JSON.stringify({overflow,retainedAfterFirst,retainedAfterSecond,third,retryWorks,rejectsDuringShutdown,delays,saved}));
+  }catch(error){fail('chat queue runtime retry and admission behavior',error.message);}
+})();
 
 // Public room and wall content have a 24-hour retention policy with media cleanup.
 try {
@@ -517,77 +1679,11 @@ try {
 // across rooms if the database write fails.
 try {
   const source = fs.readFileSync(server, 'utf8');
-  const route = source.match(/app\.post\('\/api\/admin\/broadcast',[\s\S]*?\n\}\);/);
-  if (route && route[0].includes('previousAnnouncements') && route[0].includes('previousMessages') && route[0].includes("try{save()}catch(e)") && route[0].includes('publishAnnouncement(item)') && route[0].includes('scheduleAnnouncementExpiry(item)') && route[0].includes('schedulePermanentAnnouncement(item)') && source.includes("const ANNOUNCEMENT_INTERVAL_MS=15*60*1000") && source.includes("room:'__broadcast__'") && source.includes("io.emit('message',message)") && source.includes('function roomHistoryWithAnnouncements(roomId,viewer,createdAt=0)') && source.includes('roomHistoryWithAnnouncements(room,u,Number(u.created)||0)') && source.includes("title:item.title||'إعلان إداري'")) pass('site-wide announcement publication is atomic, live to all sessions, and timed from first publication');
+  const routeStart=source.indexOf("app.post('/api/admin/broadcast'");
+  const routeEnd=source.indexOf("\n});",routeStart);
+  const route=routeStart>=0&&routeEnd>=0?source.slice(routeStart,routeEnd+4):'';
+  if (route && route.includes('previousAnnouncements') && route.includes('previousMessages') && route.includes('publishAnnouncement(item)') && route.includes('Announcement publication transaction failed') && route.includes('scheduleAnnouncementExpiry(item)') && route.includes('schedulePermanentAnnouncement(item)') && source.includes("const ANNOUNCEMENT_INTERVAL_MS=15*60*1000") && source.includes("room:'__broadcast__'") && source.includes("io.emit('message',message)") && source.includes('function roomHistoryWithAnnouncements(roomId,viewer,createdAt=0)') && source.includes('roomHistoryWithAnnouncements(room,u,Number(u.created)||0)') && source.includes("title:item.title||'إعلان إداري'")) pass('site-wide announcement publication commits its record, message and schedule metadata before broadcasting');
   else fail('site-wide announcement delivery is persisted atomically and timed correctly');
-} catch (error) { fail('announcement transaction checks', error.message); }
-
-// Session revocation: logout disconnects every socket using that session, and a
-// global ban terminates the live transport so it cannot keep private messaging.
-try {
-  const source = fs.readFileSync(server, 'utf8');
-  const logoutRoute = source.match(/app\.post\('\/api\/logout',[\s\S]*?\n\}\);/);
-  const removeFn = source.match(/function removeFromChat\([\s\S]*?\n/);
-  const privateSocket = source.match(/socket\.on\('private-message',[\s\S]*?\n/);
-  if (logoutRoute && logoutRoute[0].includes('so.data?.sid===sid') && logoutRoute[0].includes('so.disconnect(true)')) pass('logout revokes all sockets for the logged-out session');
-  else fail('logout revokes all sockets for the logged-out session');
-  if (removeFn && removeFn[0].includes('if(banned)so.disconnect(true)')) pass('global bans disconnect live sockets');
-  else fail('global bans disconnect live sockets');
-  if (privateSocket && privateSocket[0].includes('globalBanned(u.name,socketClientIp(socket))')) pass('globally banned users cannot send private messages over existing sockets');
-  else fail('globally banned users cannot send private messages over existing sockets');
-} catch (error) { fail('session revocation checks', error.message); }
-
-
-// Private media must be stored outside the public /uploads mount and served only
-// through an authenticated sender/recipient-checked endpoint.
-try {
-  const source = fs.readFileSync(server, 'utf8');
-  const mediaRoute = source.match(/app\.get\('\/api\/private\/media\/:filename',[\s\S]*?\n\}\);/);
-  const mediaUpload = source.match(/app\.post\('\/api\/media',[\s\S]*?\n\}\);/);
-  const hideRoute = source.match(/app\.post\('\/api\/private\/hide',[\s\S]*?\n\}\);/);
-  const html = fs.readFileSync(mainPath, 'utf8');
-  if (source.includes("let PRIVATE_MEDIA_DIR = path.join(DATA_DIR, 'private-media')") && source.includes('migratePrivateMediaToProtectedStorage()') && mediaRoute && mediaRoute[0].includes('requireAuth') && mediaRoute[0].includes('keyName(message.from)') && mediaRoute[0].includes('keyName(message.to)')) pass('private media is isolated and restricted to conversation participants');
-  else fail('private media is isolated and restricted to conversation participants');
-  if (mediaUpload && mediaUpload[0].includes('media.url=\'/api/private/media/\'') && mediaUpload[0].includes('fs.renameSync(req.file.path,privatePath)')) pass('new private uploads are moved out of public uploads storage');
-  else fail('new private uploads are moved out of public uploads storage');
-  if (html.includes("fetch(url,{headers:{'x-session':sid},cache:'no-store'})") && html.includes('URL.createObjectURL(await r.blob())') && html.includes('revealPrivateMedia(this)')) pass('private media loads only after explicit reveal using session auth and protected blobs');
-  else fail('private media UI fetches with session auth and renders protected blobs');
-  if (hideRoute && hideRoute[0].includes('Private conversation hide failed:') && hideRoute[0].includes('Private media cleanup failed:')) pass('ending a private conversation rolls back on failure and removes orphaned attachments');
-  else fail('ending a private conversation rolls back on failure and removes orphaned attachments');
-} catch (error) { fail('private media privacy checks', error.message); }
-
-
-// Exercise startup migration with a legacy public-path private attachment.
-try {
-  const source = fs.readFileSync(server, 'utf8');
-  const migration = source.match(/function migratePrivateMediaToProtectedStorage\(\)\s*\{[\s\S]*?\n\}/);
-  if (!migration) throw new Error('private media migration function not found');
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-private-media-'));
-  try {
-    const publicDir = path.join(tempDir, 'uploads'), privateDir = path.join(tempDir, 'private-media');
-    fs.mkdirSync(publicDir); fs.mkdirSync(privateDir);
-    const filename = '1720000000000-abcd1234.png';
-    fs.writeFileSync(path.join(publicDir, filename), Buffer.from([137,80,78,71,13,10,26,10]));
-    const context = { fs, path, UP_DIR: publicDir, PRIVATE_MEDIA_DIR: privateDir, db: { privateMessages: [{ media: { url: `/uploads/${filename}` } }] }, save: () => { context.saved = true; }, console: { log: () => {}, error: () => {} } };
-    vm.createContext(context);
-    vm.runInContext(`${migration[0]}\nglobalThis.migrate = migratePrivateMediaToProtectedStorage;`, context);
-    context.migrate();
-    const migrated = context.db.privateMessages[0].media.url === `/api/private/media/${filename}` && fs.existsSync(path.join(privateDir, filename)) && !fs.existsSync(path.join(publicDir, filename)) && context.saved;
-    if (migrated) pass('legacy private uploads migrate from public storage without losing file bytes');
-    else fail('legacy private uploads migrate from public storage without losing file bytes');
-  } finally { fs.rmSync(tempDir, { recursive: true, force: true }); }
-} catch (error) { fail('private media migration fixture', error.message); }
-
-// Unified rank/account permission edits are atomic; the duplicate generic role route is retired.
-try {
- const source=fs.readFileSync(server,'utf8');
- const permissionRoute=source.slice(source.indexOf("app.put('/api/admin/permissions'"),source.indexOf("app.get('/api/admin/account-permissions'"));
- const accountRoute=source.slice(source.indexOf("app.put('/api/admin/account-permissions/:name'"),source.indexOf("app.get('/api/admin/welcome-messages'"));
- const rankRoute=source.match(/app\.post\('\/api\/admin\/rank',[\s\S]*?app\.get\('\/api\/admin\/member-ip/);
- if(source.includes("app.post('/api/admin/role'"))fail('obsolete generic role endpoint removed');else pass('obsolete generic role endpoint removed');
- if(permissionRoute.includes('const previous=[...(definition.permissions||[])]')&&permissionRoute.includes('definition.permissions=previous'))pass('rank permission edits roll back on persistence failure');else fail('rank permission edits roll back on persistence failure');
- if(accountRoute.includes('db.accountPermissions[key]=[...new Set(requested)]')&&accountRoute.includes('db.accountPermissions[key]=previous'))pass('per-account permission edits save exact replacement and roll back on failure');else fail('per-account permission edits save exact replacement and roll back on failure');
- if(rankRoute&&rankRoute[0].includes('previousProfile=JSON.parse(JSON.stringify(p))')&&rankRoute[0].includes('Rank assignment persistence failed:')&&rankRoute[0].includes('db.rankAudit=previousRankAudit')&&rankRoute[0].includes('previousNotifications'))pass('rank grants restore profile, audit history, and inbox notifications if persistence fails');else fail('rank grants restore profile, audit history, and inbox notifications if persistence fails');
 } catch(error){fail('unified permission persistence checks',error.message)}
 
 // WebRTC signaling must be tied to a server-authorized offer, validate payloads,
@@ -597,7 +1693,7 @@ try {
   const offer = source.match(/socket\.on\('call-offer',[\s\S]*?\n/);
   const answer = source.match(/socket\.on\('call-answer',[\s\S]*?\n/);
   const ice = source.match(/socket\.on\('ice',[\s\S]*?\n/);
-  const disconnect = source.includes("socket.on('disconnect'") && source.includes('activeCallPairs.delete(pair)');
+  const disconnect = source.includes("socket.on('disconnect'") && source.includes('clearActiveCallPair(pair)');
   const ok = source.includes('const activeCallPairs = new Map()') && source.includes('function allowCallSignal(') && source.includes('function validSessionDescription(') && source.includes('function validIceCandidate(')
     && offer && offer[0].includes("validSessionDescription(d.offer,'offer')") && offer[0].includes('allowCallSignal(sid)')
     && answer && answer[0].includes("validSessionDescription(d.answer,'answer')") && answer[0].includes('state.callee!==sid')
@@ -674,7 +1770,7 @@ try {
  if(!src.includes('if(Array.isArray(accountSet))return new Set(accountSet.filter(p=>Object.hasOwn(PERMISSION_CATALOG,p)))'))throw new Error('per-account exact permission set missing');
  if(!ui.includes('هذا التخصيص يستبدل صلاحيات الرتبة لهذا الحساب وحده'))throw new Error('per-account exact override is not explained in the UI');
  if(!ui.includes('resetAccountPermissions'))throw new Error('reset-to-rank control missing');
- if(!src.includes("db.accountPermissions[key]=[...new Set(requested)]"))throw new Error('member permissions are not saved as an exact replacement');
+ if(!src.includes("nextMap[key]=[...new Set(requested)];db.accountPermissions=nextMap"))throw new Error('member permissions are not saved as an exact replacement');
  if(src.includes("if(p==='/api/admin/role')return 'role_assign'")||src.includes("role_assign:'تغيير المناصب الإدارية'"))throw new Error('obsolete generic role assignment still exists');
  pass('v46.74 seven-rank-only model and exact account-level permission overrides');
 } catch(error) { fail('v46.74 permission architecture regression',error.message); }
@@ -720,11 +1816,12 @@ try {
   const src=fs.readFileSync(server,'utf8');
   const html=fs.readFileSync(mainPath,'utf8');
   const checks=[
-    ['v46.69 stores bounded login history without raw full IP addresses',src.includes('loginHistory=db.loginHistory.slice(0,1000)')&&src.includes("split('.').slice(0,3).join('.')+'.0'")&&src.includes("recordLoginEvent(req,real,'member','normal')")],
-    ['v46.69 site settings are owner/delegated-site-admin protected and registration/guest gates are server-enforced',src.includes("app.put('/api/admin/site-settings',requireAuth")&&src.includes("hasPermission(req.user,'site_admin')")&&src.includes('db.siteSettings?.allowRegistration===false')&&src.includes('db.siteSettings?.allowGuests===false')],
-    ['v46.69 database backup is protected and excludes active sessions',src.includes("app.get('/api/admin/backup/database',requireAuth")&&src.includes('database:{...db,sessions:{}}')&&src.includes("app.get('/api/admin/login-history',requireAuth")],
-    ['v46.69 delegated health diagnostics report database and uploads sizes without destructive actions',src.includes("app.get('/api/admin/health',requireAuth")&&src.includes('const uploads=walk(UP_DIR)')&&src.includes('heapUsed:memory.heapUsed')],
-    ['v46.69 VIP grants support bounded durations and explicit revocation',src.includes('days<1||days>365')&&src.includes("app.post('/api/admin/vip/:name/revoke',requireAuth")&&src.includes('delete p.vipGrantedAt')],
+    ['v46.69 stores bounded login history without raw full IP addresses',src.includes('db.loginHistory=[{id:crypto.randomUUID()')&&src.includes('].slice(0,1000)')&&src.includes("split('.').slice(0,3).join('.')+'.0'")&&src.includes("recordLoginEvent(req,real,'member','normal')")],
+    ['v46.69 site settings are owner/delegated-site-admin protected and registration/guest gates are server-enforced',src.includes("app.put('/api/admin/site-settings',requireAdmin")&&src.includes("hasPermission(req.user,'site_admin')")&&src.includes('db.siteSettings?.allowRegistration===false')&&src.includes('db.siteSettings?.allowGuests===false')],
+    ['v46.69 site-settings rollback restores audit-log root on persistence failure',src.includes('oldAudit=Array.isArray(db.adminAuditLogs)?db.adminAuditLogs.slice():db.adminAuditLogs')&&src.includes('else db.adminAuditLogs=oldAudit')],
+    ['v46.69 database backup is protected and excludes active sessions',src.includes("app.get('/api/admin/backup/database',requireAdmin")&&src.includes('database:{...db,sessions:{},privateMessages:[]}')&&src.includes("app.get('/api/admin/login-history',requireAdmin")],
+    ['v46.69 delegated health diagnostics report database and uploads sizes without destructive actions',src.includes("app.get('/api/admin/health',requireAdmin")&&src.includes('const uploads=walk(UP_DIR)')&&src.includes('heapUsed:memory.heapUsed')],
+    ['v46.69 VIP grants support bounded durations and explicit revocation',src.includes('days<1||days>365')&&src.includes("app.post('/api/admin/vip/:name/revoke',requireAdmin")&&src.includes('delete p.vipGrantedAt')],
     ['v46.69 owner admin UI includes settings, login history export and database backup',html.includes("adminTab('site')")&&html.includes('saveSiteSettings()')&&html.includes('exportLoginHistory()')&&html.includes('downloadDatabaseBackup()')&&html.includes('loadPublicSiteSettings()')],
   ];
   for(const [label,ok] of checks) ok?pass(label):fail(label);
@@ -760,7 +1857,7 @@ try {
   if (!repairHtml.includes('rimaz-member-layout-single-source-v46937') || repairHtml.includes('rimaz-final-online-presence-and-permission-repair-v46-29') || repairHtml.includes('rimaz-chat-members-rank-alignment-fix-v1') || repairHtml.includes('rimaz-online-members-status-final-v2')) throw new Error('legacy online layout rules remain or unified layout is missing');
   if (!membersRoute || !membersRoute[0].includes('registeredKeys.has(normalized)') || !membersRoute[0].includes('seenMemberKeys.has(normalized)')) throw new Error('member directory does not suppress legacy guest/registered duplicates');
   if (!repairServer.includes('const registeredAccountKeys=new Set(Object.keys(db.users||{}).map(keyName))') || !repairServer.includes('registeredAccountKeys.has(k)||seenAdminAccountKeys.has(k)')) throw new Error('admin data does not suppress duplicate account identities');
-  if (!repairServer.includes("app.get('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")) throw new Error('welcome-message GET route still blocks rank permission');
+  if (!repairServer.includes("app.get('/api/admin/welcome-messages',requireAdmin,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")) throw new Error('welcome-message GET route still blocks rank permission');
   if (!repairHtml.includes("welcome:hasClientPermission('welcome_manage')") || !repairHtml.includes("if(!allowedTabs[t])")) throw new Error('welcome editor is not gated by the exact welcome_manage permission');
   pass('online-members CSS cleanup, legacy duplicate identity suppression, and rank-based welcome permissions');
 } catch (error) { fail('v46.29 regression checks', error.message); }
@@ -947,6 +2044,7 @@ try {
   ['health monitor permission is grouped in rank editor',html.includes("'stats_view','health_view','chat_filter_manage'")],
   ['health permission is removed from automatic full-admin grants and requires opt-in',src.includes('healthViewPermissionMigrationVersion||0)<2')&&src.includes("filter(permission=>permission!=='health_view')")&&src.includes("filter(key=>key!=='health_view')")&&src.includes('db.healthViewPermissionMigrationVersion=2')],
   ['health diagnostics expose V8 heap and external memory metrics',src.includes('heapTotal:memory.heapTotal,external:memory.external,arrayBuffers:memory.arrayBuffers||0')],
+  ['health diagnostics expose wall/media, retained admin collections, and transient timer/cache counts',src.includes('wallPosts:(db.wall||[]).length')&&src.includes('wallMediaPosts:(db.wall||[]).filter(post=>!!post?.media?.url).length')&&src.includes('adCampaigns:(db.adCampaigns||[]).length')&&src.includes('subscriptions:(db.subscriptions||[]).length')&&src.includes('permanentAnnouncementTimers:permanentAnnouncementTimers.size')&&src.includes('privateMessageWindows:privateMessageWindows.size')],
  ]; for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error){fail('v46.93 health monitor permission checks',error.message)}
 
@@ -962,10 +2060,10 @@ try {
     ['site module defaults preserve all existing features as enabled', serverText.includes("DEFAULT_SITE_MODULES={wall:true,privateChat:true,voiceRooms:true,videoCalls:true,gifts:true}") && serverText.includes('db.siteSettings.modules[key]=db.siteSettings.modules[key]!==false')],
     ['site settings API is owner/delegated-site-admin protected and persists only known module switches', serverText.includes("!isOwner(req.user)&&!hasPermission(req.user,'site_admin')") && serverText.includes('Object.keys(DEFAULT_SITE_MODULES)') && serverText.includes('modules[key]=b.modules[key]===true')],
     ['wall module is enforced on read, write, and like endpoints', serverText.includes("app.get('/api/wall',(req,res)=>")===false && serverText.includes("app.get('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("app.post('/api/wall',requireAuth,(req,res)=>{if(!siteModuleEnabled('wall'))") && serverText.includes("if(!siteModuleEnabled('wall'))return res.status(403)")],
-    ['private chat module is enforced on history, contacts, media, and Socket.IO send', serverText.includes("app.get('/api/private/history',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))") && serverText.includes("app.get('/api/private/contacts',requireAuth,(req,res)=>{\n  if(!siteModuleEnabled('privateChat'))") && serverText.includes("socket.on('private-message',d=>{const u=socket.data.user;if(!u||!isCurrentSessionSocket(socket)||!d?.to)return;if(!siteModuleEnabled('privateChat'))")],
+    ['private chat module is enforced on history, contacts, media, and Socket.IO send', serverText.includes("app.get('/api/private/history',requireAuth,(req,res)=>{if(!siteModuleEnabled('privateChat'))") && serverText.includes("app.get('/api/private/contacts',requireAuth,(req,res)=>{\n  if(!siteModuleEnabled('privateChat'))") && serverText.includes("socket.on('private-message',async(d,acknowledge)=>{") && serverText.includes("if(!siteModuleEnabled('privateChat'))")],
     ['voice room module is enforced on join, mic requests, and peer signaling', serverText.includes("targetRoom.kind==='voice'&&!siteModuleEnabled('voiceRooms')") && serverText.includes("socket.on('request-mic',({room,raised,seatIndex}={})=>{\n    if(!isCurrentSessionSocket(socket))return;\n    if(!siteModuleEnabled('voiceRooms'))") && serverText.includes("socket.on('voice-peer-offer',d=>{if(!isCurrentSessionSocket(socket)||!siteModuleEnabled('voiceRooms'))")],
     ['video-call module is enforced on call offer and answer', serverText.includes("socket.on('call-offer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))") && serverText.includes("socket.on('call-answer',d=>{if(!isCurrentSessionSocket(socket))return;if(!siteModuleEnabled('videoCalls'))return")],
-    ['gift module is enforced on send, upload, and catalogue deletion', serverText.includes("app.post('/api/admin/gift',(req,res)=>{requireAuth(req,res,()=>{if(!siteModuleEnabled('gifts'))") && serverText.includes("app.post('/api/admin/gifts/catalog/upload',requireAuth,uploadSmallImage.single('file'),validateUploadedContent('image'),(req,res)=>{if(!siteModuleEnabled('gifts'))") && serverText.includes("app.post('/api/admin/gifts/catalog/delete',requireAuth,(req,res)=>{if(!siteModuleEnabled('gifts'))")],
+    ['gift module is enforced on send, upload, and catalogue deletion', serverText.includes("app.post('/api/admin/gift',requireAdmin,(req,res)=>{requireAuth(req,res,()=>{if(!siteModuleEnabled('gifts'))") && serverText.includes("app.post('/api/admin/gifts/catalog/upload',requireAdmin,(req,res,next)=>requireAuth(req,res,()=>{if(!siteModuleEnabled('gifts'))") && serverText.includes("if(!hasPermission(req.user,'gift_catalog_manage'))return res.status(403)") && serverText.includes("}),uploadSmallImage.single('file'),validateUploadedContent('image')") && serverText.includes("app.post('/api/admin/gifts/catalog/delete',requireAdmin,(req,res)=>{if(!siteModuleEnabled('gifts'))")],
     ['admin UI exposes all five module switches and saves them', ['moduleWall','modulePrivateChat','moduleVoiceRooms','moduleVideoCalls','moduleGifts'].every(id=>htmlText.includes(id)) && htmlText.includes('saveSiteSettings()') && htmlText.includes('إدارة الإضافات والوحدات المدمجة')],
     ['mobile admin navigation has larger touch targets and bounded sticky scrolling', htmlText.includes('position:sticky;top:0;z-index:5;max-height:32vh;overflow-y:auto') && htmlText.includes('min-height:34px')],
     ['module flags are included in public settings and server health diagnostics', serverText.includes('modules:{...(s.modules||{})}') && serverText.includes('modules:{...DEFAULT_SITE_MODULES,...(db.siteSettings?.modules||{})}')],
@@ -1003,35 +2101,171 @@ try {
   const serverText = fs.readFileSync(server, 'utf8');
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const checks = [
-    ['restore preview and confirm routes support delegated site_admin while preserving owner in backup', serverText.includes("app.post('/api/admin/restore/database/preview',requireAuth") && serverText.includes("app.post('/api/admin/restore/database/confirm',requireAuth") && (serverText.match(/hasPermission\(req\.user,'site_admin'\)/g)||[]).length>=2 && serverText.includes("protectedOwnerName=process.env.OWNER_NAME||\'owner\'")],
+    ['restore preview and confirm routes support delegated site_admin while preserving owner in backup', serverText.includes("app.post('/api/admin/restore/database/preview',requireAdmin") && serverText.includes("app.post('/api/admin/restore/database/confirm',requireAdmin") && (serverText.match(/hasPermission\(req\.user,'site_admin'\)/g)||[]).length>=2 && serverText.includes("protectedOwnerName=process.env.OWNER_NAME||\'owner\'")],
     ['restore upload is disk-backed in a private staging directory and capped at 20MB', serverText.includes('multer.diskStorage({destination:RESTORE_TMP_DIR') && serverText.includes('mode:0o700') && serverText.includes('fileSize:20*1024*1024') && !serverText.includes('multer.memoryStorage()')],
-    ['pending restore previews retain only staged-file metadata, not a parsed database object', serverText.includes('filePath:uploadedFile.path,summary:checked.summary') && !serverText.includes('pendingDatabaseRestores.set(token,{database:checked.clean') && serverText.includes('MAX_PENDING_DATABASE_RESTORES=2')],
-    ['expired restore previews delete their staged files on a recurring unref timer', serverText.includes('function discardDatabaseRestorePreview') && serverText.includes('fs.unlinkSync(item.filePath)') && serverText.includes('setInterval(purgeExpiredDatabaseRestores,30*1000)') && serverText.includes('databaseRestoreCleanupTimer.unref?.()')],
-    ['restore accepts only known versioned Rimaz JSON formats and validates schema', serverText.includes("['rimaz-database-backup','rimaz-full-backup']") && serverText.includes('function validateDatabaseRestoreFile') && serverText.includes('النسخة لا تحتوي البنية الأساسية لقاعدة بيانات ريماز') && serverText.includes('function restoreContainsOwner') && serverText.includes('النسخة لا تحتوي حساب صاحب الموقع')],
+    ['pending restore previews retain only staged-file metadata, not a parsed database object', serverText.includes('filePath:uploadedFile.path,summary,') && !serverText.includes('pendingDatabaseRestores.set(token,{database:checked.clean') && serverText.includes('MAX_PENDING_DATABASE_RESTORES=2')],
+    ['expired restore previews delete their staged files on a recurring unref timer', serverText.includes('function discardDatabaseRestorePreview') && serverText.includes('removeRestoreStagedFile(item.filePath)') && serverText.includes('setInterval(purgeExpiredDatabaseRestores,30*1000)') && serverText.includes('databaseRestoreCleanupTimer.unref?.()')],
+    ['restore accepts only known versioned Rimaz JSON formats and validates schema', serverText.includes("['rimaz-database-backup','rimaz-full-backup']") && serverText.includes('function validateDatabaseRestoreData') && serverText.includes('inspectDatabaseRestoreFile(uploadedFile.path') && serverText.includes('validateDatabaseRestoreData(readJsonFile(pending.filePath,{maxBytes:20*1024*1024}))') && serverText.includes('db = readJsonFile(DB_FILE);') && serverText.includes('النسخة لا تحتوي البنية الأساسية لقاعدة بيانات ريماز') && serverText.includes('function restoreContainsOwner') && serverText.includes('النسخة لا تحتوي حساب صاحب الموقع')],
     ['restore preview uses a short-lived random token bound to the requesting admin', serverText.includes('crypto.randomBytes(32).toString(\'hex\')') && serverText.includes('expiresAt:Date.now()+5*60*1000') && serverText.includes('pending.owner!==keyName(req.user.name)')],
-    ['restore confirmation revalidates the staged file and commits the audited replacement before disconnecting sessions', serverText.includes("confirmation!=='استعادة ريماز'") && serverText.includes(".pre-restore-") && serverText.includes("validateDatabaseRestoreFile(fs.readFileSync(pending.filePath,'utf8'))") && serverText.includes('db=checked.clean') && serverText.includes('db=previous')],
+    ['restore confirmation revalidates the staged file and commits the audited replacement before disconnecting sessions', serverText.includes("confirmation!=='استعادة ريماز'") && serverText.includes(".pre-restore-") && serverText.includes('validateDatabaseRestoreData(readJsonFile(pending.filePath,{maxBytes:20*1024*1024}))') && serverText.includes("fs.copyFileSync(DB_FILE,recoveryFile,fs.constants.COPYFILE_EXCL)") && serverText.includes("fs.chmodSync(recoveryFile,0o600)") && serverText.includes("fs.openSync(recoveryFile,'r+')") && !serverText.includes('const recoveryData=fs.readFileSync(DB_FILE)') && serverText.includes('fs.fsyncSync(recoveryFd)') && serverText.includes('recoveryReady=true') && serverText.includes('if(recoveryFile&&!recoveryReady)') && serverText.includes('db=checked.clean') && serverText.includes('db=previous') && serverText.includes('previousPrivateMessages=previous.privateMessages;') && serverText.includes('previous=null;') && serverText.includes('db=null;') && serverText.includes('if(databasePersisted)restoreDatabaseFileFromRecovery(recoveryFile);') && serverText.includes('db=readJsonFile(recoveryFile);') && serverText.includes('db.privateMessages=previousPrivateMessages||[];') && (()=>{const start=serverText.indexOf("app.post('/api/admin/restore/database/confirm',requireAdmin");const end=serverText.indexOf("\\napp.get('/api/admin/data'",start);const block=serverText.slice(start,end);return block.indexOf('save();')>=0&&block.indexOf('save();')<block.indexOf('fs.copyFileSync(DB_FILE,recoveryFile,fs.constants.COPYFILE_EXCL');})()],
     ['restore clears sessions and disconnects active sockets', serverText.includes('db.sessions={};db.privateMessages=[];') && serverText.includes('io.disconnectSockets(true)')],
+    ['restore invalidates in-memory sessions, room membership, and pending cleanup timers before disconnect callbacks', (()=>{const start=serverText.indexOf("app.post('/api/admin/restore/database/confirm',requireAdmin");const end=serverText.indexOf("\napp.get('/api/admin/data'",start);const block=serverText.slice(start,end);const invalidate=block.indexOf('sessions.clear();');const disconnect=block.indexOf('io.disconnectSockets(true)');return invalidate>=0&&disconnect>invalidate&&block.includes('socketUsers.clear();')&&block.includes('roomSockets.clear();')&&block.includes('for(const pair of activeCallPairs.keys())clearActiveCallPair(pair);')&&block.includes('activeVoicePairs.clear();')&&block.includes('privateDisconnectTimers.clear();')&&block.includes('privateMessageWindows.clear();')&&block.includes('sessionDisconnectTimers.clear();')&&block.includes('voiceSpeakers.clear();')&&block.includes('privateMediaPlaybackTickets.clear();');})()],
     ['admin UI previews counts and requires typed confirmation before restore', htmlText.includes('previewDatabaseRestore()') && htmlText.includes('confirmDatabaseRestore()') && htmlText.includes('استعادة ريماز') && htmlText.includes('accept=".json,application/json"')],
     ['browser entry files remain identical after restore UI update', fs.readFileSync(mainPath,'utf8')===fs.readFileSync(publicPath,'utf8')]
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
-  const helperStart=serverText.indexOf('function validateDatabaseRestoreFile(source){');
+  const helperStart=serverText.indexOf('function validateDatabaseRestoreData(parsed){');
   const helperEnd=serverText.indexOf('function restoreContainsOwner(',helperStart);
   let runtimeRestoreChecks=false;
   try{
     const helperSource=serverText.slice(helperStart,helperEnd);
     const defaultsFixture=()=>({users:{},guests:{},sessions:{old:'session'},messages:[],wall:[],wallEnabled:true,notifications:{},announcements:[],adminAuditLogs:[],loginHistory:[],ownerSetupCompleted:false,giftCatalogV3Initialized:false,smileysSeedVersion:0,smileysSeeded:false,rankDefinitions:[],siteSettings:{},chatFilter:{},welcomeMessages:[],profiles:{},lastLike:{},accountPermissions:{},rankAudit:[],giftCatalog:[],chatShortcuts:[],customSmileys:[],rooms:[],roomBans:{},roomMutes:{},roomKicks:{},globalBans:{},globalIpBans:{},wallLikes:{},wallComments:{},privateMessages:[{text:'ephemeral'}],privateHidden:{},privateRead:{},ignored:{}});
-    const validate=vm.runInNewContext(helperSource+';validateDatabaseRestoreFile;',{Buffer,defaults:defaultsFixture});
+    const validate=vm.runInNewContext(helperSource+';validateDatabaseRestoreData;',{defaults:defaultsFixture});
     const database=defaultsFixture();database.users={Ali:{role:'owner'}};database.guests={Guest:{}};database.rooms=[{id:'public'}];database.messages=[{text:'hello'}];database.sessions={secret:'must-not-restore'};database.privateMessages=[{text:'not-persisted'}];
-    const validJson=JSON.stringify({format:'rimaz-database-backup',version:1,createdAt:'2026-01-01T00:00:00Z',appVersion:'test',database});
-    const valid=validate(Buffer.from(validJson));
-    const validString=validate(validJson);
-    const badFormat=(()=>{try{validate(Buffer.from(JSON.stringify({format:'unknown',version:1,database})));return false;}catch(_){return true;}})();
-    const badSchema=(()=>{try{validate(Buffer.from(JSON.stringify({format:'rimaz-database-backup',version:1,database:{users:[],guests:{},rooms:[],messages:[]}})));return false;}catch(_){return true;}})();
-    runtimeRestoreChecks=valid.summary.members===1&&valid.summary.guests===1&&valid.summary.rooms===1&&valid.summary.messages===1&&Object.keys(valid.clean.sessions).length===0&&valid.clean.privateMessages.length===0&&validString.summary.members===1&&badFormat&&badSchema;
+    const valid=validate({format:'rimaz-database-backup',version:1,createdAt:'2026-01-01T00:00:00Z',appVersion:'test',database});
+    const badFormat=(()=>{try{validate({format:'unknown',version:1,database});return false;}catch(_){return true;}})();
+    const badSchema=(()=>{try{validate({format:'rimaz-database-backup',version:1,database:{users:[],guests:{},rooms:[],messages:[]}});return false;}catch(_){return true;}})();
+    runtimeRestoreChecks=valid.summary.members===1&&valid.summary.guests===1&&valid.summary.rooms===1&&valid.summary.messages===1&&Object.keys(valid.clean.sessions).length===0&&valid.clean.privateMessages.length===0&&badFormat&&badSchema;
   }catch(_){runtimeRestoreChecks=false;}
   runtimeRestoreChecks?pass('restore validator runtime fixtures accept valid backup, clear sessions, and reject bad format/schema'):fail('restore validator runtime fixtures');
 } catch (error) { fail('v46.71.0 database restore checks', error.message); }
+
+// Disk rollback must restore the previous database atomically without retaining its old object graph.
+try {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rimaz-restore-rollback-'));
+  try {
+    const liveFile = path.join(tempDir, 'live.json');
+    const recoveryFile = path.join(tempDir, 'recovery.json');
+    fs.writeFileSync(liveFile, '{"state":"new"}');
+    fs.writeFileSync(recoveryFile, '{"state":"previous"}', { mode: 0o600 });
+    const serverText = fs.readFileSync(server, 'utf8');
+    const helperStart = serverText.indexOf('function restoreDatabaseFileFromRecovery(recoveryFile){');
+    const helperEnd = serverText.indexOf('\n}\n', helperStart);
+    if (helperStart < 0 || helperEnd < 0) throw new Error('rollback helper not found');
+    const helperSource = serverText.slice(helperStart, helperEnd + 2);
+    const restore = vm.runInNewContext(helperSource + ';restoreDatabaseFileFromRecovery;', { fs, crypto, process, DB_FILE: liveFile, DATA_DIR: tempDir });
+    restore(recoveryFile);
+    assert.equal(fs.readFileSync(liveFile, 'utf8'), '{"state":"previous"}');
+    assert.equal(fs.readFileSync(recoveryFile, 'utf8'), '{"state":"previous"}');
+    assert.equal(fs.statSync(liveFile).mode & 0o777, 0o600);
+    pass('restore rollback atomically reinstates the preserved file with restrictive permissions');
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+} catch (error) { fail('restore disk rollback runtime fixture', error.message); }
+
+// Restore upload gate: serialize expensive uploads/parsing and release on every terminal request event.
+try {
+  const serverText=fs.readFileSync(server,'utf8');
+  const checks=[
+    ['restore preview is guarded before Multer receives the upload',serverText.includes("app.post('/api/admin/restore/database/preview',requireAdmin,restoreUploadGate,(req,res)=>{")],
+    ['restore upload gate caps in-flight uploads at one and releases on finish, close, or abort',serverText.includes('const restoreUploadGate=createRestoreUploadGate(1)')&&serverText.includes("res.once('finish',release)")&&serverText.includes("res.once('close',release)")&&serverText.includes("req.once('aborted',release)")]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+  const start=serverText.indexOf('function createRestoreUploadGate(maxConcurrent){');
+  const end=serverText.indexOf('const restoreUploadGate=createRestoreUploadGate(1);',start);
+  let runtime=false;
+  try{
+    const create=vm.runInNewContext(serverText.slice(start,end)+';createRestoreUploadGate;');
+    const gate=create(1);
+    const response=()=>{const events={};return {events,statusCode:200,payload:null,once(name,fn){events[name]=fn;},status(code){this.statusCode=code;return this;},json(payload){this.payload=payload;return this;},emit(name){events[name]?.();}};};
+    const request=()=>({events:{},once(name,fn){this.events[name]=fn;},emit(name){this.events[name]?.();}});
+    const req1=request(),res1=response();let next1=0;gate(req1,res1,()=>next1++);
+    const req2=request(),res2=response();let next2=0;gate(req2,res2,()=>next2++);
+    const blocked=next1===1&&next2===0&&res2.statusCode===429&&!!res2.payload;
+    res1.emit('finish');
+    const req3=request(),res3=response();let next3=0;gate(req3,res3,()=>next3++);
+    res3.emit('close');res3.emit('finish');
+    const req4=request(),res4=response();let next4=0;gate(req4,res4,()=>next4++);
+    runtime=blocked&&next3===1&&next4===1;
+  }catch(_){runtime=false;}
+  runtime?pass('restore upload gate runtime fixture serializes uploads and safely releases exactly once'):fail('restore upload gate runtime fixture');
+}catch(error){fail('restore upload gate checks',error.message);}
+ 
+// Restore preview must use the streaming inspector, not materialize the replacement database graph.
+try {
+  const serverText = fs.readFileSync(server, 'utf8');
+  const start = serverText.indexOf("app.post('/api/admin/restore/database/preview'");
+  const end = serverText.indexOf("\napp.post('/api/admin/restore/database/confirm'", start);
+  const route = start >= 0 && end > start ? serverText.slice(start, end) : '';
+  const usesInspector = route.includes('inspectDatabaseRestoreFile(uploadedFile.path') &&
+    route.includes('template:defaults()') && !route.includes('readJsonFile(uploadedFile.path');
+  usesInspector ? pass('restore preview validates backup without materializing the replacement database') : fail('restore preview streaming inspection route');
+} catch (error) { fail('restore preview streaming inspection route', error.message); }
+
+// Rejected restore uploads must be removed from their private staging directory, not public uploads.
+try {
+  const serverText=fs.readFileSync(server,'utf8');
+  const helperStart=serverText.indexOf('function removeRestoreStagedFile(filePath){');
+  const helperEnd=serverText.indexOf('\nfunction discardDatabaseRestorePreview',helperStart);
+  if(helperStart<0||helperEnd<0)throw new Error('restore staging cleanup helper not found');
+  const helperSource=serverText.slice(helperStart,helperEnd);
+  const deleted=[],warnings=[];
+  const root=path.resolve('/tmp/rimaz-restore-staging');
+  const valid=path.join(root,'restore-123-'+('a'.repeat(32))+'.json');
+  const symlink=path.join(root,'restore-124-'+('b'.repeat(32))+'.json');
+  const context={
+    path,RESTORE_TMP_DIR:root,
+    fs:{
+      lstatSync(file){
+        if(file===symlink)return {isFile:()=>false,isSymbolicLink:()=>true};
+        return {isFile:()=>true,isSymbolicLink:()=>false};
+      },
+      unlinkSync(file){deleted.push(file);}
+    },
+    console:{warn(...args){warnings.push(args);}}
+  };
+  vm.runInNewContext(helperSource+'\nthis.removeRestoreStagedFile=removeRestoreStagedFile;',context);
+  const removed=context.removeRestoreStagedFile(valid);
+  const rejectedOutside=context.removeRestoreStagedFile('/tmp/outside/restore-125-'+('c'.repeat(32))+'.json');
+  const rejectedName=context.removeRestoreStagedFile(path.join(root,'other.json'));
+  const rejectedSymlink=context.removeRestoreStagedFile(symlink);
+  const routeStart=serverText.indexOf("app.post('/api/admin/restore/database/preview'");
+  const routeEnd=serverText.indexOf("\napp.post('/api/admin/restore/database/confirm'",routeStart);
+  const route=routeStart>=0&&routeEnd>routeStart?serverText.slice(routeStart,routeEnd):'';
+  const discardStart=serverText.indexOf('function discardDatabaseRestorePreview(');
+  const discardEnd=serverText.indexOf('function purgeExpiredDatabaseRestores()',discardStart);
+  const discard=serverText.slice(discardStart,discardEnd);
+  const ok=removed===true&&rejectedOutside===false&&rejectedName===false&&rejectedSymlink===false&&
+    deleted.length===1&&deleted[0]===valid&&warnings.length===3&&
+    route.includes('removeRestoreStagedFile(uploadedFile.path)')&&!route.includes('removeUploadedFile(uploadedFile)')&&
+    discard.includes('removeRestoreStagedFile(item.filePath)');
+  ok?pass('rejected restore uploads and expired previews clean only regular files owned by the private restore staging directory'):fail('restore staging cleanup safety and rejected-upload regression');
+}catch(error){fail('restore staging cleanup safety and rejected-upload regression',error.message);}
+
+// Restore preview admission: reject full queues before Multer writes or JSON parsing.
+try {
+  const serverText = fs.readFileSync(server, 'utf8');
+  const helperStart = serverText.indexOf('function restorePreviewCapacityAvailable(ownerName){');
+  const helperEnd = serverText.indexOf('\nconst databaseRestoreCleanupTimer', helperStart);
+  const helperSource = helperStart >= 0 && helperEnd > helperStart ? serverText.slice(helperStart, helperEnd) : '';
+  let runtimeCapacityChecks = false;
+  try {
+    const fixture = vm.runInNewContext(
+      'const MAX_PENDING_DATABASE_RESTORES=2; const pendingDatabaseRestores=new Map(); const keyName=x=>String(x||"").trim().toLowerCase();' +
+      helperSource + '; ({capacity:restorePreviewCapacityAvailable, queue:pendingDatabaseRestores});'
+    );
+    const capacity = fixture.capacity;
+    const queue = fixture.queue;
+    queue.set('a', {owner:'admin'});
+    queue.set('b', {owner:'other'});
+    const sameOwnerCanReplace = capacity('admin') === true;
+    queue.set('c', {owner:'third'});
+    const fullForNewOwner = capacity('admin') === false;
+    queue.clear();
+    queue.set('a', {owner:'admin'});
+    queue.set('b', {owner:'admin'});
+    const sameOwnerDuplicatesCanBeReplaced = capacity('admin') === true;
+    runtimeCapacityChecks = sameOwnerCanReplace && fullForNewOwner && sameOwnerDuplicatesCanBeReplaced;
+  } catch (_) { runtimeCapacityChecks = false; }
+  runtimeCapacityChecks ? pass('restore preview capacity preserves same-owner replacement and blocks a full queue') : fail('restore preview capacity runtime fixture');
+  const routeStart = serverText.indexOf("app.post('/api/admin/restore/database/preview',requireAdmin,restoreUploadGate");
+  const routeEnd = serverText.indexOf("\napp.post('/api/admin/restore/database/confirm'", routeStart);
+  const route = routeStart >= 0 && routeEnd > routeStart ? serverText.slice(routeStart, routeEnd) : '';
+  const preflightBeforeMulter = route.indexOf('restorePreviewCapacityAvailable(req.user.name)') >= 0 &&
+    route.indexOf('restorePreviewCapacityAvailable(req.user.name)') < route.indexOf("restoreUpload.single('backup')");
+  preflightBeforeMulter ? pass('restore queue capacity is checked before Multer upload and JSON parsing') : fail('restore queue capacity preflight ordering');
+} catch (error) { fail('restore preview capacity preflight checks', error.message); }
 
 // v46.93.72: bound transient session state, disk-stage restore previews, and index room presence.
 try {
@@ -1039,9 +2273,9 @@ try {
   const checks = [
     ['anti-spam state is deleted when a disconnected session is finally removed', serverText.includes('clearSessionTransientState(sid);') && serverText.includes('botMessageWindows.delete(sid)')],
     ['orphaned transient session maps are periodically pruned without interrupting reconnect grace', serverText.includes('function pruneOrphanedSessionState()') && serverText.includes('setInterval(pruneOrphanedSessionState,5*60*1000)') && serverText.includes('if(!sessions.has(sid)||(!socketUsers.has(sid)&&!sessionDisconnectTimers.has(sid)))botMessageWindows.delete(sid)')],
-    ['logout and successful database restore clear transient session state', serverText.includes('clearSessionTransientState(sid);\n  for(const so') && serverText.includes('botMessageWindows.clear();callSignalWindows.clear();voiceSignalWindows.clear();welcomeSentSessions.clear()')],
+    ['logout and successful database restore clear transient session state', serverText.includes('clearSessionTransientState(sid);\n  for(const so') && serverText.includes('botMessageWindows.clear();') && serverText.includes('callSignalWindows.clear();') && serverText.includes('voiceSignalWindows.clear();') && serverText.includes('welcomeSentSessions.clear();') && serverText.includes('voiceSpeakers.clear();') && serverText.includes('privateMediaPlaybackTickets.clear();')],
     ['presence context indexes active sessions by room and room counts use that index', serverText.includes('const activeByRoom = new Map()') && serverText.includes('activeByRoom.set(roomKey,roomEntries=[])') && serverText.includes('context.activeByRoom?.get(String(room))')],
-    ['restore confirmation is transactional before active sockets are disconnected', serverText.indexOf('db.adminAuditLogs.unshift',serverText.indexOf("app.post('/api/admin/restore/database/confirm'")) < serverText.indexOf('save();',serverText.indexOf("app.post('/api/admin/restore/database/confirm'")) && serverText.indexOf('save();',serverText.indexOf("app.post('/api/admin/restore/database/confirm'")) < serverText.indexOf('io.disconnectSockets(true)',serverText.indexOf("app.post('/api/admin/restore/database/confirm'"))]
+    ['restore confirmation is transactional before active sockets are disconnected', (()=>{const start=serverText.indexOf("app.post('/api/admin/restore/database/confirm'");const end=serverText.indexOf("\\napp.get('/api/admin/data'",start);const block=serverText.slice(start,end);const audit=block.indexOf('db.adminAuditLogs.unshift');const save=block.indexOf('save();',audit);const disconnect=block.indexOf('io.disconnectSockets(true)');return audit>=0&&save>audit&&disconnect>save;})()]
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
   let transientRuntime=false;
@@ -1049,10 +2283,10 @@ try {
     const helperStart=serverText.indexOf('function clearSessionTransientState(sid){');
     const helperEnd=serverText.indexOf('const sessionTransientCleanupTimer=',helperStart);
     const helperSource=serverText.slice(helperStart,helperEnd);
-    const botMessageWindows=new Map([['gone',{}],['live',{}]]),callSignalWindows=new Map([['gone',{}]]),voiceSignalWindows=new Map([['gone',{}]]),welcomeSentSessions=new Set(['gone','live']),sessions=new Map([['gone',{}],['live',{}]]),socketUsers=new Map([['live',{}]]),sessionDisconnectTimers=new Map([['gone',{}]]);
-    const helpers=vm.runInNewContext(helperSource+';({clearSessionTransientState,pruneOrphanedSessionState})',{botMessageWindows,callSignalWindows,voiceSignalWindows,welcomeSentSessions,sessions,socketUsers,sessionDisconnectTimers});
+    const botMessageWindows=new Map([['gone',{}],['live',{}]]),privateMessageWindows=new Map([['gone',{}]]),callSignalWindows=new Map([['gone',{}]]),voiceSignalWindows=new Map([['gone',{}]]),welcomeSentSessions=new Set(['gone','live']),sessions=new Map([['gone',{}],['live',{}]]),socketUsers=new Map([['live',{}]]),sessionDisconnectTimers=new Map([['gone',{}]]);
+    const helpers=vm.runInNewContext(helperSource+';({clearSessionTransientState,pruneOrphanedSessionState})',{botMessageWindows,privateMessageWindows,callSignalWindows,voiceSignalWindows,welcomeSentSessions,sessions,socketUsers,sessionDisconnectTimers});
     helpers.clearSessionTransientState('gone');
-    const cleared=!botMessageWindows.has('gone')&&!callSignalWindows.has('gone')&&!voiceSignalWindows.has('gone')&&!welcomeSentSessions.has('gone');
+    const cleared=!botMessageWindows.has('gone')&&!privateMessageWindows.has('gone')&&!callSignalWindows.has('gone')&&!voiceSignalWindows.has('gone')&&!welcomeSentSessions.has('gone');
     botMessageWindows.set('orphan',{});sessions.set('orphan',{});
     helpers.pruneOrphanedSessionState();
     transientRuntime=cleared&&!botMessageWindows.has('orphan')&&botMessageWindows.has('live')&&welcomeSentSessions.has('live');
@@ -1065,10 +2299,11 @@ try {
   const serverText = fs.readFileSync(server, 'utf8');
   const htmlText = fs.readFileSync(mainPath, 'utf8');
   const checks = [
-    ['full backup route supports delegated site_admin and streams gzip archive', serverText.includes("app.get('/api/admin/backup/full',requireAuth") && serverText.includes('source=Readable.from(fullBackupTar()),archive=zlib.createGzip') && serverText.includes('source.pipe(archive).pipe(res)')],
-    ['full backup includes sanitized database snapshot, uploads, and private-media', serverText.includes("name:'database/rimaz-database.json'") && serverText.includes("['uploads',UP_DIR],['private-media',PRIVATE_MEDIA_DIR]") && serverText.includes('sessions:{}')],
-    ['archive traversal skips symbolic links and streams file data instead of loading all media into RAM', serverText.includes('if(item.isSymbolicLink())continue') && serverText.includes('fs.createReadStream(entry.disk)')],
-    ['admin page offers both database-only and full media backup downloads', htmlText.includes("downloadFullBackup()") && htmlText.includes("'/api/admin/backup/full'") && htmlText.includes('نسخة كاملة مع الصور والوسائط')],
+    ['full backup route supports delegated site_admin and uses pipeline to cancel streams on response close', serverText.includes("app.get('/api/admin/backup/full',requireAdmin") && serverText.includes('return sendFullBackupResponse(res)') && serverText.includes('source=Readable.from(fullBackupTar(prepared.entries,prepared.firstEntry))') && serverText.includes('pipeline(source,archive,res') && serverText.includes("const { Readable, pipeline } = require('stream')")],
+    ['full backup snapshots referenced public uploads before streaming and omits private media with excluded private conversations', serverText.includes("name:'database/rimaz-database.json'") && serverText.includes('createBackupMediaSnapshot({database:snapshot.database,uploadDirectory:UP_DIR,dataDirectory:DATA_DIR})') && serverText.includes('for(const entry of mediaSnapshot.entries)yield entry') && !serverText.includes("['uploads',UP_DIR],['private-media',PRIVATE_MEDIA_DIR]") && (serverText.match(/database:\{\.\.\.db,sessions:\{\},privateMessages:\[\]\}/g)||[]).length===2],
+     ['database-only backup excludes transient private conversations', serverText.includes("app.get('/api/admin/backup/database',requireAdmin") && serverText.includes('database:{...db,sessions:{},privateMessages:[]}')],
+    ['backup streams immutable hard-link snapshots and rejects symlink media sources', serverText.includes('fs.createReadStream(entry.disk)') && serverText.includes('mediaSnapshot.cleanup()') && fs.readFileSync(path.join(root,'lib','backup-media-snapshot.js'),'utf8').includes('fs.linkSync(source, target)') && fs.readFileSync(path.join(root,'lib','backup-media-snapshot.js'),'utf8').includes('sourceStat.isSymbolicLink()')],
+    ['admin page offers both database-only and full media backup downloads', htmlText.includes("downloadFullBackup()") && htmlText.includes("fetch('/api/admin/backup/full-ticket'") && htmlText.includes('نسخة كاملة مع الصور والوسائط') && htmlText.includes('لا تتضمن وسائط المحادثات الخاصة') && !htmlText.includes('مجلدي uploads و private-media')],
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
   const start = serverText.indexOf('function tarOctal('), end = serverText.indexOf('// Owner-only site controls', start);
@@ -1077,11 +2312,29 @@ try {
   try {
     fs.mkdirSync(path.join(temp, 'uploads')); fs.mkdirSync(path.join(temp, 'private-media'));
     fs.writeFileSync(path.join(temp, 'uploads', 'sample.txt'), 'rimaz backup sample');
-    const context = {Buffer,fs,path,Date,db:{users:{sample:{name:'sample'}},sessions:{secret:'must-not-export'}},UP_DIR:path.join(temp,'uploads'),PRIVATE_MEDIA_DIR:path.join(temp,'private-media'),require:(id)=>id==='./package.json'?{version:'test'}:require(id)};
+    fs.writeFileSync(path.join(temp, 'private-media', 'private.mp4'), 'private chat media must not be included');
+    const context = {Buffer,fs,path,crypto,Date,writeJsonSync,createBackupMediaSnapshot,DB_FILE:path.join(temp,'data.json'),DATA_DIR:temp,process:{pid:process.pid},db:{users:{sample:{name:'sample'}},sessions:{secret:'must-not-export'},messages:[{media:{url:'/uploads/sample.txt'}}],privateMessages:[{media:{url:'/api/private/media/private.mp4'}}]},UP_DIR:path.join(temp,'uploads'),PRIVATE_MEDIA_DIR:path.join(temp,'private-media'),require:(id)=>id==='./package.json'?{version:'test'}:require(id)};
     vm.runInNewContext(serverText.slice(start,end)+"\nthis.make=async()=>{const parts=[];for await(const part of fullBackupTar())parts.push(part);return Buffer.concat(parts)};",context);
     context.make().then(buf=>{
-      const ok=buf.length%512===0&&buf.subarray(257,263).toString()==='ustar\0'&&buf.includes(Buffer.from('database/rimaz-database.json'))&&buf.includes(Buffer.from('uploads/sample.txt'))&&buf.includes(Buffer.from('rimaz backup sample'))&&!buf.includes(Buffer.from('must-not-export'));
-      ok?pass('full backup USTAR stream includes media and excludes active session tokens'):fail('full backup USTAR stream content and alignment');
+      const ok=buf.length%512===0&&buf.subarray(257,263).toString()==='ustar\0'&&buf.includes(Buffer.from('database/rimaz-database.json'))&&buf.includes(Buffer.from('uploads/sample.txt'))&&buf.includes(Buffer.from('rimaz backup sample'))&&!buf.includes(Buffer.from('private-media/private.mp4'))&&!buf.includes(Buffer.from('private chat media must not be included'))&&!buf.includes(Buffer.from('must-not-export'));
+      ok?pass('full backup USTAR stream includes referenced public uploads and excludes private-chat media and active session tokens'):fail('full backup USTAR stream content and alignment');
+      let restoreDrillOk=false,restoreDrillDetail='';
+      try{
+        const archivePath=path.join(temp,'full-backup.tar.gz'),extractDir=path.join(temp,'restore-drill');
+        fs.mkdirSync(extractDir);
+        fs.writeFileSync(archivePath,require('node:zlib').gzipSync(buf));
+        const listing=spawnSync('tar',['-tzf',archivePath],{encoding:'utf8'});
+        if(listing.error||listing.status!==0)throw new Error('tar listing failed: '+(listing.error?.message||listing.stderr||listing.status));
+        if(!listing.stdout.includes('database/rimaz-database.json')||!listing.stdout.includes('uploads/sample.txt'))throw new Error('archive entry listing is incomplete: '+listing.stdout);
+        const extracted=spawnSync('tar',['-xzf',archivePath,'-C',extractDir],{encoding:'utf8'});
+        if(extracted.error||extracted.status!==0)throw new Error('tar extraction failed: '+(extracted.error?.message||extracted.stderr||extracted.status));
+        const restored=JSON.parse(fs.readFileSync(path.join(extractDir,'database','rimaz-database.json'),'utf8'));
+        if(restored.database.users.sample.name!=='sample')throw new Error('restored database content mismatch');
+        if(Object.keys(restored.database.sessions||{}).length!==0||(restored.database.privateMessages||[]).length!==0)throw new Error('transient sessions/private messages were not excluded');
+        if(fs.readFileSync(path.join(extractDir,'uploads','sample.txt'),'utf8')!=='rimaz backup sample')throw new Error('restored media content mismatch');
+        restoreDrillOk=true;
+      }catch(error){restoreDrillDetail=error.message;}
+      if(restoreDrillOk)pass('isolated full-backup restore drill extracts the archive and verifies database plus referenced media parity');else fail('isolated full-backup restore drill',restoreDrillDetail);
       fs.rmSync(temp,{recursive:true,force:true});
       if(failures.length){console.error(`\n${failures.length} verification check(s) failed.`);process.exitCode=1;}else console.log('\nAll local static and archive checks passed. Live-server testing is still required.');
     }).catch(error=>{fail('full backup USTAR stream test',error.message);fs.rmSync(temp,{recursive:true,force:true});process.exitCode=1;});
@@ -1149,19 +2402,20 @@ try {
  const checks=[
   ['v46.76.0 one-time migration adds new permissions only to previously full-permission admin rank/accounts',src.includes('adminFeaturePermissionMigrationVersion')&&src.includes('previous.every(key=>(adminFull.permissions||[]).includes(key))')&&src.includes('previous.every(key=>permissions.includes(key))')],
   ['v46.76.0 subscription endpoints require subscriptions_manage',src.includes("subscriptions_manage:'إدارة خطط")&&src.includes("app.get('/api/admin/subscriptions'")&&src.includes("app.post('/api/admin/subscriptions/assign'")&&src.includes("app.post('/api/admin/subscriptions/cancel'")],
-  ['subscription renewal extends from the later of now or current expiry',src.includes('const start=Math.max(now,Number(sub.expiresAt)||now)')],
+  ['subscription renewal extends from the later of now or current expiry',src.includes('start=Math.max(now,Number(sub.expiresAt)||now)')],
   ['subscription plan VIP expiry is linked to the subscription and removed on cancellation',src.includes('memberProfile.vipSubscriptionId=sub.id')&&src.includes('memberProfile.vipSubscriptionId===sub.id')],
   ['ad campaign management validates image and URL and supports scheduling',src.includes("app.post('/api/admin/ads'")&&src.includes('endsAt<=startsAt')&&src.includes("/^https?:\\/\\//i.test(url)")&&src.includes("app.get('/api/public/ads'")],
   ['control center has independent permission-gated read/write routes',src.includes("app.get('/api/admin/control-center'")&&src.includes("app.put('/api/admin/control-center'")&&src.includes("hasPermission(req.user,'control_center_manage')")],
   ['new administration capabilities appear in rank permission editor',html.includes("'ads_manage'")&&html.includes("'subscriptions_manage'")&&html.includes("'control_center_manage'")],
   ['new admin tabs are visible only when their matching permissions are granted',html.includes("adminTab('ads')")&&html.includes("adminTab('subscriptions')")&&html.includes("adminTab('controlcenter')")&&html.includes("subscriptions:hasClientPermission('subscriptions_manage')")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'index.html'),'utf8')],
-  ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAuth,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
+  ['v46.76.1 Arabic welcome editor has add/delete/enable/save controls and uses existing permission-gated API',html.includes('async function welcomeMessagesEditor()')&&html.includes('function addWelcomeMessageRow()')&&html.includes('function removeWelcomeMessageRow(')&&html.includes('async function saveWelcomeMessages()')&&html.includes("else if(t==='welcome'){b.innerHTML=await welcomeMessagesEditor()}")&&src.includes("app.put('/api/admin/welcome-messages',requireAdmin,(req,res)=>{if(!hasPermission(req.user,'welcome_manage'))")],
   ['both browser entry files are identical',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(path.join(root,'public','index.html'),'utf8')],
   ['v46.93.72 package version',pkgNow.version==='46.93.72'],
   ['hero image uses the public static root without a broken /public fallback',!html.includes("this.src='/public/rimaz-hero.jpg") && html.includes('src=\"rimaz-hero.jpg?v=3\"')],
   ['v46.82 standard gift catalogue keeps the generic unnumbered label',src.includes("name:'هدية'")],
   ['v46.84 VIP catalogue is reset with a new migration version and the supplied asset',src.includes('vipGiftCatalogV7Initialized')&&src.includes("image:'/vip-gifts/vip-special.gif'")],
+  ['smiley gallery seed migration preserves member-added entries after version 9',src.includes("if(Number(db.smileysSeedVersion||0)<9){" )&&!src.includes('db.customSmileys.length!==desiredCount')],
   ['v46.83 member-card gift picker loads both catalogues from the member-authorized endpoint',html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("d=await api('/api/chat-tools')")&&html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes('d.vipGifts')&&!html.slice(html.indexOf('async function sendGift(n)'),html.indexOf('function renderGiftPicker()')).includes("/api/admin/data")&&src.includes("vipGifts:hasPermission(req.user,'gifts')?(db.vipGiftCatalog||[]):[]")],
   ['v46.83 member-card and admin gift send paths preserve gift category',html.includes("jsq(g.category||'gift')")&&html.includes("g.category||'gift')")&&html.includes("category:g.category||'gift'")],
   ['v46.84 obsolete VIP gift assignments are removed while VIP membership remains intact',src.includes('vipGiftCatalogV7Initialized')&&src.includes("String(g?.category||'')!=='vip'")&&src.includes("startsWith('/vip-gifts/')")&&!src.includes('delete profileData.vipUntil')],
@@ -1232,7 +2486,7 @@ try {
   ['v46.93.2 authorized members can manage their personal banner and oversized images are compressed',html.includes('choosePersonalBanner')&&html.includes("canvas.toBlob(resolve,'image/webp',0.84)")&&html.includes('deletePersonalBanner')],
   ['v46.93.2 member information panel renders the personal banner',html.includes('personalBannerIdentity(p,dn')&&html.includes('rimazProfileMiniAvatar')&&html.includes('profileTop')],
   ['v46.93.32 legacy banner permission migrates to personal only and full-admin migration is bounded',src.includes("set.add('personal_banner');set.delete('banner_upload')")&&src.includes('bannerPermissionsSplitMigrationVersion')&&src.includes("previous.every(key=>(adminFull.permissions||[]).includes(key))")],
-  ['v46.93.32 rank banner endpoints require chat_banners_manage and are restricted to seven ranks',src.includes("app.get('/api/admin/chat-banners',requireAuth")&&src.includes("hasPermission(user,'chat_banners_manage')")&&src.includes('canManageChatBanners(req.user)')&&src.includes("app.post('/api/admin/chat-banners/:rank'")&&src.includes("app.delete('/api/admin/chat-banners/:rank'")],
+  ['v46.93.32 rank banner endpoints require chat_banners_manage and are restricted to seven ranks',src.includes("app.get('/api/admin/chat-banners',requireAdmin")&&src.includes("hasPermission(user,'chat_banners_manage')")&&src.includes('canManageChatBanners(req.user)')&&src.includes("app.post('/api/admin/chat-banners/:rank'")&&src.includes("app.delete('/api/admin/chat-banners/:rank'")],
   ['v46.93.32 rank banner display is inherited by rank and personal banner takes precedence',src.includes('p.rankBanner=visualRank?.bannerUrl||')&&html.includes('banner=p.banner||p.rankBanner||')&&html.includes('personal=!!p.banner')],
   ['v46.93.32 login waits for an explicit login-button submit even when credentials autofill',html.includes("mode==='new'?'submit':'button'")&&html.includes("mode==='in'?'onclick=\"doLogin()\"':''")&&html.includes("'current-password'")],
   ['v46.93.32 admin banner tab and controls are gated by chat_banners_manage',html.includes("adminTab('chatbanners')")&&html.includes("chatbanners:hasClientPermission('chat_banners_manage')")&&html.includes("allowedTabs={")&&html.includes("chatbanners:hasClientPermission('chat_banners_manage')")],
@@ -1283,7 +2537,7 @@ try {
     ['call answer exempts the recipient and revalidates only the original caller', answerLine.includes('if(!canMedia(target[1]))') && !answerLine.includes('!canMedia(u)') && answerLine.includes('state.callee!==sid')],
     ['retired staff/media/mic bypass permissions are absent from catalog and UI', !source.includes("staff_notice:'") && !source.includes("staff_media:'") && !source.includes("voice_mic_override:'") && !client.includes("'staff_notice'") && !client.includes("'staff_media'") && !client.includes("'voice_mic_override'")],
     ['permission schema version reflects the retired bypass capabilities', source.includes('permissionSchemaVersion:10') && client.includes('permissionSchemaVersion:compatibility.permissionSchemaVersion||10')],
-    ['private text messages remain independent of likes restrictions', source.includes("socket.on('private-message',d=>") && !/socket\.on\('private-message',d=>[\s\S]{0,1200}likes/.test(source)]
+    ['private text messages remain independent of likes restrictions', source.includes("socket.on('private-message',async(d,acknowledge)=>") && (()=>{const start=source.indexOf("socket.on('private-message',async(d,acknowledge)=>");const end=source.indexOf("socket.on('call-offer'",start);return start>=0&&end>start&&!source.slice(start,end).includes('canMedia(');})()]
   ];
   for (const [label, ok] of checks) ok ? pass(label) : fail(label);
 
@@ -1404,7 +2658,7 @@ try {
   ['private text is nested under sender identity, not avatar row',html.includes('pmsgTitle') && html.includes('pmsgIdentity') && /<div class=\"pmsgIdentity\"><div class=\"pmsgTitle\"[\s\S]*?<div class=\"pmsgText\">/.test(html)],
   ['wall post shortcut resolver does not mutate composer and postWall does not call expansion mutator',html.includes('async function wallTextForSend(input)') && /async function postWall\(\)\{[^}]*wallTextForSend\(input\)[^}]*\}/.test(html) && !/async function postWall\(\)\{[^}]*expandChatShortcut\(input,true\)[^}]*\}/.test(html)],
     ['private video obtains a short-lived authorized stream URL instead of buffering the full file into a Blob',html.includes("fetch('/api/private/media-ticket'")&&html.includes("if(type==='video')")&&html.includes('src=\"${esc(streamUrl)}\"')],
-    ['private playback tickets are random, expire, and are bound to the requesting account and exact filename',source.includes('privateMediaPlaybackTickets = new Map()')&&source.includes('crypto.randomBytes(32).toString(\'hex\')')&&source.includes('expiresAt:now+15*60*1000')&&source.includes('account:keyName(req.user.name)')],
+    ['private playback tickets are random, expire, and are bound to the requesting account and exact filename',source.includes('privateMediaPlaybackTickets = new Map()')&&source.includes('crypto.randomBytes(32).toString(\'hex\')')&&source.includes('expiresAt:now+15*60*1000')&&source.includes('createPrivateMediaPlaybackTicket(filename,keyName(req.user.name),now)')&&source.includes('MAX_PRIVATE_MEDIA_TICKETS=4096')&&source.includes('MAX_PRIVATE_MEDIA_TICKETS_PER_ACCOUNT=32')],
     ['stream endpoint rechecks participant authorization and serves byte ranges without exposing the private media directory',source.includes("app.get('/api/private/media-stream/:filename'")&&source.includes("'Accept-Ranges':'bytes'")&&source.includes('keyName(message.from)===ticket.account||keyName(message.to)===ticket.account')],
     ['private and wall inline media share the same 320px width and 210px height limits',html.includes('width:min(100%,320px)!important;max-width:320px!important;max-height:210px!important')&&html.includes('@media(max-width:600px){.privateInlineMedia,.wallInlineMedia{width:min(100%,320px)!important;max-width:320px!important;max-height:210px!important}}')],
     ['private media is structurally nested below sender identity, not below the full avatar row',html.includes('</div><div class=\"privateMediaArea\" id=\"${placeholderId}\">')&&html.includes('.pmsgIdentity>.privateMediaArea{margin-top:2px!important;margin-left:0!important;}')],
@@ -1414,6 +2668,39 @@ try {
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('v46.93.52 private media streaming/layout checks',error.message); }
 
+// Private-media playback ticket helper is exercised behaviourally, not only by source-text assertions.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function createPrivateMediaPlaybackTicket(filename,account,now=Date.now()){');
+  const end=source.indexOf('const privateMediaPlaybackTicketCleanup=',start);
+  if(start<0||end<=start)throw new Error('private-media ticket helper boundaries not found');
+  const helper=source.slice(start,end);
+  const context={crypto,privateMediaPlaybackTickets:new Map(),MAX_PRIVATE_MEDIA_TICKETS:4096,MAX_PRIVATE_MEDIA_TICKETS_PER_ACCOUNT:32};
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.issue=createPrivateMediaPlaybackTicket;',context);
+  const first=context.issue('video.mp4','alice',1000);
+  assert.equal(first.reused,false);
+  assert.match(first.token,/^[a-f0-9]{64}$/);
+  assert.equal(first.ticket.account,'alice');
+  assert.equal(first.ticket.filename,'video.mp4');
+  assert.equal(first.ticket.expiresAt,1000+15*60*1000);
+  const reused=context.issue('video.mp4','alice',2000);
+  assert.equal(reused.token,first.token);
+  assert.equal(reused.reused,true);
+  assert.equal(reused.ticket.expiresAt,2000+15*60*1000);
+  assert.notEqual(context.issue('video.mp4','bob',2000).token,first.token);
+  for(let n=1;n<32;n++)context.issue('file-'+n,'alice',3000);
+  assert.equal(context.issue('overflow','alice',3000).error,'account-limit');
+  context.issue('expired','stale-account',0);
+  const expiredToken=[...context.privateMediaPlaybackTickets.entries()].find(([,ticket])=>ticket.account==='stale-account')[0];
+  assert.equal(context.issue('new','fresh-account',15*60*1000+1).error,undefined);
+  assert.equal(context.privateMediaPlaybackTickets.has(expiredToken),false);
+  context.privateMediaPlaybackTickets.clear();
+  for(let n=0;n<4096;n++)context.privateMediaPlaybackTickets.set('t'+n,{filename:'f'+n,account:'account-'+n,expiresAt:999999999});
+  assert.equal(context.issue('global-overflow','another-account',1).error,'global-limit');
+  pass('private-media tickets enforce account/global caps, reuse same-file tickets, bind accounts, random token format and expiry cleanup');
+} catch(error) { fail('private-media playback ticket behavioural regression checks',error.message); }
+
 // v46.93.38: private media delivery must fan out to every active recipient session.
 try {
   const source=fs.readFileSync(server,'utf8');
@@ -1422,7 +2709,9 @@ try {
   const checks=[
     ['v46.93.72 package version is current (private-media regression suite)',pkgNow.version==='46.93.72'],
     ['private media verifies an active recipient account and fans out to all its active sessions',route.includes('hasConnectedSessionForUser(to)')&&route.includes("emitToUser(to,'private-media',m)")&&!route.includes('targetSocket[0]')],
-    ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',m)")&&source.includes("emitToUser(to,'private-media',m)")],
+    ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',message)")&&source.includes("emitToUser(to,'private-media',m)")],
+    ['private media upload enforces the private-chat module switch and removes rejected uploads',route.includes("if(scope==='private'&&!siteModuleEnabled('privateChat')){removeUploadedFile(req.file);return res.status(403)")&&route.indexOf("if(scope==='private'&&!siteModuleEnabled('privateChat'))")<route.indexOf("db.privateMessages=[...")],
+    ['wall media upload enforces the wall module switch and uses the shared bounded wall commit',route.includes("if(scope==='wall'&&!siteModuleEnabled('wall')){removeUploadedFile(req.file);return res.status(403)")&&route.indexOf("if(scope==='wall'&&!siteModuleEnabled('wall'))")<route.indexOf('appendWallPost(post)')&&route.includes('appendWallPost(post)')&&!route.includes('db.wall.push(post)')],
     ['QuickTime MOV uploads have a safe extension and require a valid ISO-BMFF signature',source.includes("'video/quicktime':'.mov'")&&source.includes("['video/mp4','video/quicktime'].includes(mime) && actual==='mp4'")],
     ['private conversation media remains transient and is not persisted by save()',source.includes('const snapshot = { ...db, privateMessages: [] }')&&source.includes('purgePrivateHistoryAtStartup()')]
   ];
@@ -1491,6 +2780,302 @@ try {
 } catch(error) { fail('v46.93.43 public alignment regression checks',error.message); }
 
 
+// v46.93.73 candidate: private playback ticket storage must have hard global and per-account bounds.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('const MAX_PRIVATE_MEDIA_TICKETS=4096;');
+  const end=source.indexOf('const privateMediaPlaybackTicketCleanup=',start);
+  if(start<0||end<0)throw new Error('bounded ticket helper was not found');
+  const helper=source.slice(start,end);
+  let tokenSequence=0;
+  const context={privateMediaPlaybackTickets:new Map(),crypto:{randomBytes:()=>({toString:()=>('token-'+String(++tokenSequence))})}};
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.issueTicket=createPrivateMediaPlaybackTicket;',context);
+  const first=context.issueTicket('video-a.mp4','member-a',1000);
+  const reused=context.issueTicket('video-a.mp4','member-a',2000);
+  let accountLimitPassed=true;
+  for(let i=1;i<32;i++)if(context.issueTicket('video-'+i+'.mp4','member-a',2000).error)accountLimitPassed=false;
+  const accountLimit=context.issueTicket('video-over-limit.mp4','member-a',2000);
+  let globalLimitPassed=true;
+  const globalMap=context.privateMediaPlaybackTickets;
+  let fillIndex=0;
+  while(globalMap.size<4096){const result=context.issueTicket('asset-'+fillIndex+'.mp4','account-'+fillIndex,2000);if(result.error){globalLimitPassed=false;break;}fillIndex++;}
+  const globalLimit=context.issueTicket('last.mp4','another-account',2000);
+  const afterExpiry=context.issueTicket('fresh.mp4','member-a',1000000);
+  const ok=!!first.token&&reused.token===first.token&&reused.reused===true&&reused.ticket.expiresAt===902000&&accountLimitPassed&&accountLimit.error==='account-limit'&&globalLimitPassed&&globalLimit.error==='global-limit'&&afterExpiry.token&&globalMap.size===1;
+  if(ok)pass('private playback ticket cache reuses valid tokens, expires stale entries, and enforces 32/account + 4096/global caps');
+  else fail('private playback ticket cache bounds',JSON.stringify({first:!!first.token,reused:reused.token===first.token,accountLimitPassed,accountLimit:accountLimit.error,globalLimitPassed,globalLimit:globalLimit.error,afterExpiry:!!afterExpiry.token,size:globalMap.size}));
+} catch(error) { fail('private playback ticket cache bounds',error.message); }
+
+
+// Startup recovery: persisted sessions from a prior process receive the reconnect grace,
+// then are removed in one durable batch unless a socket reconnects or a disconnect timer owns them.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('const startupSessionDatabase=db;');
+  const end=source.indexOf('function clearPrivateConversationForUser(name){',start);
+  if(start<0||end<0)throw new Error('startup session cleanup block was not found');
+  const block=source.slice(start,end);
+  const stale={name:'stale-guest',type:'guest'};
+  const active={name:'active-member',type:'member'};
+  const pending={name:'pending-member',type:'member'};
+  const sessions=new Map([['stale',stale],['active',active],['pending',pending]]);
+  const db={sessions:{stale,active,pending},guests:{'stale-guest':{name:'stale-guest'}},profiles:{'stale-guest':{status:'guest'}},wallReadAt:{'stale-guest':7}};
+  const socketUsers=new Map([['active',{name:'active-member'}]]);
+  const sessionDisconnectTimers=new Map([['pending',{}]]);
+  const callbacks=[],cleared=[];
+  let saves=0,emits=0;
+  const context={db,sessions,socketUsers,sessionDisconnectTimers,SESSION_DISCONNECT_GRACE_MS:60000,
+    hasConnectedSessionForUser:name=>[...socketUsers.values()].some(x=>x.name===name),
+    save:()=>{saves++;},clearSessionTransientState:sid=>cleared.push(sid),emitState:()=>{emits++;},
+    keyName:x=>String(x||'').toLowerCase(),console:{log(){},error(){}},
+    setTimeout:(fn,ms)=>{callbacks.push({fn,ms});return {unref(){}};}
+  };
+  vm.createContext(context);
+  vm.runInContext(block+';globalThis.runStartupCleanup=cleanupOrphanedStartupSessions;',context);
+  const grace=callbacks[0]?.ms===60000;
+  callbacks[0]?.fn();
+  const ok=grace&&!sessions.has('stale')&&sessions.has('active')&&sessions.has('pending')&&!Object.hasOwn(db.sessions,'stale')&&Object.hasOwn(db.sessions,'active')&&Object.hasOwn(db.sessions,'pending')&&!db.guests['stale-guest']&&!db.profiles['stale-guest']&&!Object.hasOwn(db.wallReadAt,'stale-guest')&&saves===1&&emits===1&&cleared.length===1&&cleared[0]==='stale';
+  if(ok)pass('startup removes orphaned persisted sessions after 60s in one save while preserving reconnected and already-disconnecting sessions');
+  else fail('startup orphaned-session cleanup',JSON.stringify({grace,sessionKeys:[...sessions.keys()],dbSessionKeys:Object.keys(db.sessions),guest:!!db.guests['stale-guest'],wallReadAt:db.wallReadAt,saves,emits,cleared}));
+} catch(error) { fail('startup orphaned-session cleanup',error.message); }
+
+// A failed batch save must restore session and guest state and schedule a bounded retry.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('const startupSessionDatabase=db;');
+  const end=source.indexOf('function clearPrivateConversationForUser(name){',start);
+  const block=source.slice(start,end);
+  const guest={name:'rollback-guest',type:'guest'};
+  const sessions=new Map([['guest-session',guest]]);
+  const db={sessions:{'guest-session':guest},guests:{'rollback-guest':{name:'rollback-guest'}},profiles:{'rollback-guest':{status:'guest'}},wallReadAt:{'rollback-guest':3}};
+  const callbacks=[];
+  const context={db,sessions,socketUsers:new Map(),sessionDisconnectTimers:new Map(),SESSION_DISCONNECT_GRACE_MS:60000,
+    hasConnectedSessionForUser:()=>false,save:()=>{throw new Error('simulated disk failure');},
+    clearSessionTransientState:()=>{},emitState:()=>{},keyName:x=>String(x||'').toLowerCase(),
+    console:{log(){},error(){}},setTimeout:(fn,ms)=>{callbacks.push({fn,ms});return {unref(){}};}
+  };
+  vm.createContext(context);
+  vm.runInContext(block+';globalThis.runStartupCleanup=cleanupOrphanedStartupSessions;',context);
+  callbacks[0]?.fn();
+  const ok=sessions.get('guest-session')===guest&&db.sessions['guest-session']===guest&&!!db.guests['rollback-guest']&&!!db.profiles['rollback-guest']&&db.wallReadAt['rollback-guest']===3&&callbacks.length===2&&callbacks[1].ms===30000;
+  if(ok)pass('startup orphaned-session cleanup rolls back atomically and retries after a save failure');
+  else fail('startup orphaned-session rollback',JSON.stringify({session:!!sessions.get('guest-session'),dbSession:!!db.sessions['guest-session'],guest:!!db.guests['rollback-guest'],profile:!!db.profiles['rollback-guest'],wallReadAt:db.wallReadAt,callbacks:callbacks.map(x=>x.ms)}));
+} catch(error) { fail('startup orphaned-session rollback',error.message); }
+
+
+// Runtime room-state cleanup must remove empty room buckets and all voice negotiation state
+// whenever a session leaves, is kicked/banned, moves rooms, or disconnects.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function removeSessionFromRoomRuntime(sid,room){');
+  const end=source.indexOf('\nconst sessionDisconnectTimers',start);
+  if(start<0||end<0)throw new Error('room runtime cleanup helper was not found');
+  const helper=source.slice(start,end);
+  const roomSockets=new Map([['voice-room',new Set(['leaving','peer'])],['empty-room',new Set(['leaving'])]]);
+  const voiceSpeakers=new Map([['voice-room',new Map([['leaving',{sid:'leaving'}],['peer',{sid:'peer'}]])],['empty-room',new Map([['leaving',{sid:'leaving'}]])]]);
+  const activeVoicePairs=new Map([
+    ['voice-room::leaving::peer',{room:'voice-room',a:'leaving',b:'peer'}],
+    ['empty-room::leaving::other',{room:'empty-room',a:'leaving',b:'other'}]
+  ]);
+  const peerEvents=[],voiceStates=[];
+  const context={roomSockets,voiceSpeakers,activeVoicePairs,
+    clearVoicePairsForSession:(room,sid)=>{for(const [key,state] of activeVoicePairs)if(state.room===room&&(state.a===sid||state.b===sid))activeVoicePairs.delete(key);},
+    socketBySession:sid=>({emit:(event,payload)=>peerEvents.push({sid,event,payload})}),
+    emitVoiceState:room=>voiceStates.push(room)
+  };
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.removeRoomState=removeSessionFromRoomRuntime;',context);
+  context.removeRoomState('leaving','voice-room');
+  const retained=roomSockets.get('voice-room')?.has('peer')&&voiceSpeakers.get('voice-room')?.has('peer');
+  const pairCleared=!([...activeVoicePairs.values()].some(x=>x.room==='voice-room'&&(x.a==='leaving'||x.b==='leaving')));
+  const peerNotified=peerEvents.some(x=>x.sid==='peer'&&x.event==='voice-peer-left'&&x.payload.sid==='leaving');
+  context.removeRoomState('leaving','empty-room');
+  const emptyBucketsRemoved=!roomSockets.has('empty-room')&&!voiceSpeakers.has('empty-room');
+  const emptyPairCleared=!([...activeVoicePairs.values()].some(x=>x.room==='empty-room'&&x.a==='leaving'));
+  const ok=retained&&pairCleared&&peerNotified&&emptyBucketsRemoved&&emptyPairCleared&&voiceStates.includes('voice-room')&&voiceStates.includes('empty-room');
+  if(ok)pass('room runtime cleanup removes departed speakers and voice pairs, notifies peers, and deletes empty room buckets');
+  else fail('room runtime cleanup',JSON.stringify({retained,pairCleared,peerNotified,emptyBucketsRemoved,emptyPairCleared,voiceStates,peerEvents,remainingPairs:[...activeVoicePairs.values()]}));
+} catch(error) { fail('room runtime cleanup',error.message); }
+
+// All server-side removal paths must use the same room cleanup routine.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const checks=[
+    ['global kick/ban clears room runtime state',source.includes("so.leave(oldRoom);removeSessionFromRoomRuntime(sid2,oldRoom)")],
+    ['member-card kick/ban clears room runtime state',source.includes("so?.leave(room);removeSessionFromRoomRuntime(sid2,room)")],
+    ['room ban clears runtime state and active room metadata',source.includes("s?.leave(room); removeSessionFromRoomRuntime(sid,room);if(s?.data?.user)s.data.user.room='';")],
+    ['admin kick clears runtime state and active room metadata',source.includes("so?.leave(room);removeSessionFromRoomRuntime(sid2,room);if(so?.data?.user)so.data.user.room='';")],
+    ['room move and replacement clear prior room runtime state',source.includes("removeSessionFromRoomRuntime(sid,previousRoom)")],
+    ['explicit leave and disconnect clear room runtime state',source.includes("socket.leave(room);removeSessionFromRoomRuntime(sid,room)")&&source.includes("removeSessionFromRoomRuntime(sid,room);\n    }")],
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('room cleanup call-site regression',error.message); }
+
+
+// Deleting a room must evict its live sockets and release all room-scoped runtime state.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function clearDeletedRoomRuntime(room){');
+  const end=source.indexOf('\nconst sessionDisconnectTimers',start);
+  if(start<0||end<0)throw new Error('deleted-room cleanup helper was not found');
+  const helper=source.slice(start,end);
+  const roomSockets=new Map([['deleted-room',new Set(['sid-a','sid-b'])]]);
+  const socketUsers=new Map([['sid-a',{room:'deleted-room'}],['sid-b',{room:'deleted-room'}]]);
+  const voiceSpeakers=new Map([['deleted-room',new Map([['sid-a',{sid:'sid-a'}]])]]);
+  const activeVoicePairs=new Map([['pair',{room:'deleted-room',a:'sid-a',b:'sid-b'}]]);
+  const events=[],left=[];
+  const sockets=new Map(['sid-a','sid-b'].map(sid=>[sid,{data:{user:{room:'deleted-room'}},leave:room=>left.push([sid,room]),emit:(event,payload)=>events.push([sid,event,payload])}]));
+  const context={roomSockets,socketUsers,voiceSpeakers,activeVoicePairs,
+    socketBySession:sid=>sockets.get(sid),
+    removeSessionFromRoomRuntime:(sid,room)=>{roomSockets.get(room)?.delete(sid);voiceSpeakers.get(room)?.delete(sid);for(const [key,state] of activeVoicePairs)if(state.room===room&&(state.a===sid||state.b===sid))activeVoicePairs.delete(key);},
+  };
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.clearDeleted=clearDeletedRoomRuntime;',context);
+  context.clearDeleted('deleted-room');
+  const ok=left.length===2&&left.every(x=>x[1]==='deleted-room')&&[...sockets.values()].every(s=>s.data.user.room==='')&&[...socketUsers.values()].every(s=>s.room==='')&&!roomSockets.has('deleted-room')&&!voiceSpeakers.has('deleted-room')&&activeVoicePairs.size===0&&events.filter(x=>x[1]==='kicked'&&x[2].deleted===true).length===2;
+  if(ok)pass('deleting a room evicts connected members and clears room sockets, speakers, and voice negotiations');
+  else fail('deleted-room runtime cleanup',JSON.stringify({left,roomSockets:[...roomSockets.keys()],voiceSpeakers:[...voiceSpeakers.keys()],socketRooms:[...socketUsers.values()].map(x=>x.room),pairs:activeVoicePairs.size,events}));
+} catch(error) { fail('deleted-room runtime cleanup',error.message); }
+
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const route=source.split('\n').find(line=>line.startsWith("app.delete('/api/admin/room/:id'"));
+  const ok=!!route&&route.includes('clearDeletedRoomRuntime(req.params.id)')&&route.indexOf('clearDeletedRoomRuntime(req.params.id)')>route.indexOf('try{save()}catch');
+  if(ok)pass('room deletion invokes runtime cleanup only after the database save succeeds');
+  else fail('room deletion cleanup ordering');
+} catch(error) { fail('room deletion cleanup ordering',error.message); }
+
+
+  
+// Public-retention cleanup must commit database changes before emitting deletions or unlinking media.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function cleanupExpiredPublicContent(now=Date.now()){');
+  const end=source.indexOf('cleanupExpiredPublicContent();',start);
+  if(start<0||end<0)throw new Error('public retention function was not found');
+  const fn=source.slice(start,end);
+  const oldMessage={id:'old-message',room:'public',at:1,type:'text',media:{url:'/uploads/old-message.mp4'}};
+  const announcement={id:'old-announcement',room:'public',at:1,type:'announcement'};
+  const recentMessage={id:'recent-message',room:'public',at:100000000-1000,type:'text'};
+  const oldPrivate={id:'old-private',room:'private',at:1,type:'text'};
+  const oldPost={id:'old-post',at:1,media:{url:'/uploads/old-wall.mp4'}};
+  const recentPost={id:'recent-post',at:100000000-1000};
+  const db={messages:[oldMessage,announcement,recentMessage,oldPrivate],wall:[oldPost,recentPost],wallLikes:{'old-post':['x'],'recent-post':['y']},wallComments:{'old-post':['z']}};
+  const events=[];
+  const context={db,PUBLIC_RETENTION_MS:86400000,io:{emit:(name,payload)=>events.push(['emit',name,payload])},
+    removePublicUploadIfUnreferenced:url=>events.push(['unlink',url]),
+    save:()=>{events.push(['save',db.messages.map(x=>x.id),db.wall.map(x=>x.id)]);},
+    console:{log:()=>events.push(['log']),error:()=>{}},Date,Set};
+  vm.createContext(context);
+  vm.runInContext(fn+';globalThis.runRetention=cleanupExpiredPublicContent;',context);
+  context.runRetention(100000000);
+  const savedFirst=events[0]?.[0]==='save';
+  const removedCorrectly=db.messages.length===3&&!db.messages.some(x=>x.id==='old-message')&&db.messages.some(x=>x.id==='old-announcement')&&db.messages.some(x=>x.id==='old-private')&&db.wall.length===1&&db.wall[0].id==='recent-post'&&!Object.hasOwn(db.wallLikes,'old-post')&&!Object.hasOwn(db.wallComments,'old-post');
+  const emittedAfterSave=events.filter(x=>x[0]==='emit').every(x=>events.indexOf(x)>0);
+  const filesRemovedAfterSave=events.filter(x=>x[0]==='unlink').length===2&&events.findIndex(x=>x[0]==='unlink')>0;
+  const ok=savedFirst&&removedCorrectly&&emittedAfterSave&&filesRemovedAfterSave;
+  if(ok)pass('public retention saves database removals before broadcasting deletions and unlinking expired media');
+  else fail('public retention save-before-delete',JSON.stringify({savedFirst,removedCorrectly,emittedAfterSave,filesRemovedAfterSave,events,db}));
+} catch(error) { fail('public retention save-before-delete',error.message); }
+
+// If the durable retention save fails, restore the exact previous collections and keep files/client state untouched.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function cleanupExpiredPublicContent(now=Date.now()){');
+  const end=source.indexOf('cleanupExpiredPublicContent();',start);
+  const fn=source.slice(start,end);
+  const oldMessage={id:'old-message',room:'public',at:1,type:'text',media:{url:'/uploads/old-message.mp4'}};
+  const oldPost={id:'old-post',at:1,media:{url:'/uploads/old-wall.mp4'}};
+  const messages=[oldMessage],wall=[oldPost],wallLikes={'old-post':['x']},wallComments={'old-post':['y']};
+  const db={messages,wall,wallLikes,wallComments};
+  const events=[];
+  const context={db,PUBLIC_RETENTION_MS:86400000,io:{emit:(name,payload)=>events.push(['emit',name,payload])},
+    removePublicUploadIfUnreferenced:url=>events.push(['unlink',url]),
+    save:()=>{throw new Error('simulated disk failure');},
+    console:{log:()=>{},error:()=>events.push(['error'])},Date,Set};
+  vm.createContext(context);
+  vm.runInContext(fn+';globalThis.runRetention=cleanupExpiredPublicContent;',context);
+  context.runRetention(100000000);
+  const ok=db.messages===messages&&db.wall===wall&&db.wallLikes['old-post'][0]==='x'&&db.wallComments['old-post'][0]==='y'&&events.length===1&&events[0][0]==='error';
+  if(ok)pass('public retention rolls back memory and preserves media when the durable save fails');
+  else fail('public retention rollback',JSON.stringify({sameMessages:db.messages===messages,sameWall:db.wall===wall,likes:db.wallLikes,comments:db.wallComments,events}));
+} catch(error) { fail('public retention rollback',error.message); }
+
+// Wall text and media posts must share the same bounded, durable commit path.
+try{
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('const MAX_WALL_POSTS=300;');
+  const end=source.indexOf('function cleanupExpiredPublicContent(now=Date.now()){',start);
+  if(start<0||end<0)throw new Error('bounded wall commit helper was not found');
+  const helper=source.slice(start,end);
+  const wall=Array.from({length:300},(_,index)=>({id:'post-'+(index+1),media:index===0?{url:'/uploads/evicted-wall.mp4'}:null}));
+  const db={wall,wallLikes:{'post-1':['member-a'],'post-2':['member-b']},wallComments:{'post-1':['old-comment'],'post-2':['keep-comment']}};
+  const events=[];
+  const context={db,save:()=>events.push(['save',db.wall.length]),removePublicUploadIfUnreferenced:url=>events.push(['unlink',url])};
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.appendTestWallPost=appendWallPost;',context);
+  const removed=context.appendTestWallPost({id:'post-301',media:null});
+  const ok=db.wall.length===300&&db.wall[0].id==='post-2'&&db.wall[299].id==='post-301'
+    &&removed.length===1&&removed[0].id==='post-1'
+    &&!Object.hasOwn(db.wallLikes,'post-1')&&!Object.hasOwn(db.wallComments,'post-1')
+    &&db.wallLikes['post-2'][0]==='member-b'&&db.wallComments['post-2'][0]==='keep-comment'
+    &&events[0]?.[0]==='save'&&events[1]?.[0]==='unlink'&&events[1]?.[1]==='/uploads/evicted-wall.mp4';
+  if(ok)pass('wall text/media shared commit bounds posts at 300 and cleans evicted metadata/media only after save');
+  else fail('bounded wall commit runtime fixture',JSON.stringify({length:db.wall.length,first:db.wall[0]?.id,last:db.wall.at(-1)?.id,removed:removed.map(x=>x.id),likes:db.wallLikes,comments:db.wallComments,events}));
+}catch(error){fail('bounded wall commit runtime fixture',error.message);}
+
+// A failed bounded wall save must restore the exact prior collections and preserve evicted media.
+try{
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('const MAX_WALL_POSTS=300;');
+  const end=source.indexOf('function cleanupExpiredPublicContent(now=Date.now()){',start);
+  if(start<0||end<0)throw new Error('bounded wall commit helper was not found');
+  const helper=source.slice(start,end);
+  const wall=Array.from({length:300},(_,index)=>({id:'post-'+(index+1),media:index===0?{url:'/uploads/keep-on-failure.mp4'}:null}));
+  const likes={'post-1':['member-a']},comments={'post-1':['comment']};
+  const db={wall,wallLikes:likes,wallComments:comments};
+  const events=[];
+  const context={db,save:()=>{events.push('save');throw new Error('simulated disk failure');},removePublicUploadIfUnreferenced:url=>events.push('unlink:'+url)};
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.appendTestWallPost=appendWallPost;',context);
+  let rejected=false;try{context.appendTestWallPost({id:'post-301',media:null});}catch(error){rejected=/simulated disk failure/.test(error.message);}
+  const ok=rejected&&db.wall===wall&&db.wallLikes===likes&&db.wallComments===comments
+    &&db.wall.length===300&&db.wall[0].id==='post-1'&&events.length===1&&events[0]==='save';
+  if(ok)pass('failed wall post save rolls back exact wall metadata and never unlinks evicted media');
+  else fail('bounded wall commit rollback fixture',JSON.stringify({rejected,sameWall:db.wall===wall,sameLikes:db.wallLikes===likes,sameComments:db.wallComments===comments,events}));
+}catch(error){fail('bounded wall commit rollback fixture',error.message);}
+
+// Permanent member-number lookups must use a rebuilt-once index, not rescan the registry for every account.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function memberNumberIdentity(name,type)');
+  const end=source.indexOf('function getMemberNumber(name,type)',start);
+  if(start<0||end<0)throw new Error('member-number allocator block not found');
+  const allocator=source.slice(start,end);
+  const registry={'member:alice':5,'member:bob':5,'guest:former-visitor':9};
+  const db={memberNumbers:registry,nextMemberNumber:10};
+  let valuesCalls=0;
+  const objectApi={values:value=>{valuesCalls++;return Object.values(value);}};
+  const context={db,Object:objectApi,Map,Number,Math,String,keyName:value=>String(value||'').trim().toLowerCase()};
+  vm.createContext(context);
+  vm.runInContext(allocator+';globalThis.allocate=allocateMemberNumber;globalThis.getIndexSource=()=>memberNumberIndexSource;',context);
+  const alice=context.allocate('alice','member',{});
+  const bob=context.allocate('bob','member',{});
+  const charlie=context.allocate('charlie','member',{});
+  const charlieAgain=context.allocate('charlie','member',{memberNumber:charlie});
+  const duplicateRepair=alice===10&&bob===5&&new Set([alice,bob,charlie]).size===3;
+  const orphanReservation=db.memberNumbers['guest:former-visitor']===9&&charlie!==9;
+  const fastRepeatedLookup=charlieAgain===charlie&&valuesCalls===1&&context.getIndexSource()===registry;
+  db.memberNumbers={'member:restored':12};db.nextMemberNumber=13;
+  const restored=context.allocate('restored','member',{});
+  const afterRestore=context.allocate('new-account','member',{});
+  const indexRebuilt=restored===12&&afterRestore===13&&valuesCalls===2;
+  if(duplicateRepair&&orphanReservation&&fastRepeatedLookup&&indexRebuilt)
+    pass('member-number index avoids per-account registry scans, repairs duplicate IDs once, preserves orphan reservations, and rebuilds after database replacement');
+  else fail('indexed member-number allocation',JSON.stringify({alice,bob,charlie,charlieAgain,valuesCalls,orphanReservation,restored,afterRestore}));
+} catch(error) { fail('indexed member-number allocation',error.message); }
+
 // v46.93.55: permanent member/visitor numbers and number-first online-member search.
 try {
   const source=fs.readFileSync(server,'utf8');
@@ -1511,8 +3096,854 @@ try {
   ['admin and rank like grants persist amount and sender in recipient notifications',fs.readFileSync(server,'utf8').includes("notify(n,{type:'like-received',from:req.user.name,text:likeText,amount,likes})")&&fs.readFileSync(server,'utf8').includes("notify(n,{type:'like-received',from:actor.name,text:likeText,amount,likes:target.likes})")],
   ['private typing indicator is a dedicated sibling row between the message scroller and minimize button',html.includes('id="privateBody" class="privateBody"><div id="privateMessages" class="privateMessages"></div></div><div id="privateTypingIndicator" class="privateTypingIndicator"')&&html.includes('flex:0 0 20px')&&!html.includes('body.appendChild(el)')&&!html.includes('body.appendChild(typingIndicator)')],
   ['private minimize button remains right-aligned in RTL without covering the typing row',html.includes('privateMinimize{position:relative!important')&&html.includes('margin:0 5px 2px 0!important')&&html.includes('align-self:flex-start!important')&&html.includes('width:max-content!important')],
-  ['private history refresh only replaces message nodes and cannot delete the sibling typing indicator',html.includes("const b=document.getElementById('privateMessages');if(b){b.replaceChildren()")&&!html.includes("b.innerHTML=''")&&html.includes('id="privateBody" class="privateBody"><div id="privateMessages"')&&html.includes('id="privateTypingIndicator" class="privateTypingIndicator"')],
+  ['private history refresh only replaces message nodes and cannot delete the sibling typing indicator',(()=>{const start=html.indexOf('function renderMergedPrivateHistory(');const end=html.indexOf('function privateSenderBadge',start);const renderer=html.slice(start,end);return start>=0&&end>start&&renderer.includes("const body=document.getElementById('privateMessages');if(!body)return;")&&renderer.includes('body.replaceChildren()')&&!renderer.includes("document.getElementById('privateBody')")&&html.includes('id="privateBody" class="privateBody"><div id="privateMessages"')&&html.includes('id="privateTypingIndicator" class="privateTypingIndicator"');})()],
   ['browser entry files remain synchronized',fs.readFileSync(mainPath,'utf8')===fs.readFileSync(publicPath,'utf8')]
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
 } catch(error) { fail('v46.93.55 member-number regression checks',error.message); }
+// Socket leave-room requests must be bound to the authenticated socket's current room.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf("socket.on('leave-room'");
+  const end=source.indexOf("socket.on('send-message'",start);
+  const handler=source.slice(start,end);
+  const ok=handler.includes('room!==u.room')&&handler.includes('!socket.rooms.has(room)')&&handler.includes('removeSessionFromRoomRuntime(sid,room)')&&handler.includes("socket.data.user.room=''");
+  if(ok)pass('leave-room handler verifies active room and Socket.IO membership before mutating room state');else fail('leave-room room-membership authorization',handler.slice(0,500));
+} catch(error) { fail('leave-room room-membership authorization',error.message); }
+
+// Room voice negotiation state must expire and remain bounded under abandoned peer negotiations.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const offer=source.slice(source.indexOf("socket.on('voice-peer-offer'"),source.indexOf("socket.on('voice-peer-answer'"));
+  const answer=source.slice(source.indexOf("socket.on('voice-peer-answer'"),source.indexOf("socket.on('voice-peer-ice'"));
+  const ice=source.slice(source.indexOf("socket.on('voice-peer-ice'"),source.indexOf("socket.on('leave-room'"));
+  const ok=source.includes('const MAX_ACTIVE_VOICE_PAIRS=8192')&&source.includes('const VOICE_PAIR_TTL_MS=120000')&&source.includes('pruneActiveVoicePairs()')&&offer.includes('activeVoicePairs.size>=MAX_ACTIVE_VOICE_PAIRS')&&answer.includes('Date.now()-state.created>VOICE_PAIR_TTL_MS')&&ice.includes('Date.now()-state.created>VOICE_PAIR_TTL_MS')&&ice.includes('state.a!==sid&&state.b!==sid');
+  if(ok)pass('voice negotiation pairs expire, are capacity-bounded, and ICE relays require the authorized pair');else fail('bounded voice negotiation lifecycle');
+} catch(error) { fail('bounded voice negotiation lifecycle',error.message); }
+
+// A pending private call cannot be answered after its negotiation window or after the caller socket disappears.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf("socket.on('call-answer'");
+  const end=source.indexOf("socket.on('call-reject'",start);
+  const handler=source.slice(start,end);
+  const ok=handler.includes('Date.now()-state.created>120000')&&handler.includes('clearActiveCallPair(pair)')&&handler.includes("socketBySession(state.caller)");
+  if(ok)pass('private call answers reject expired pending offers and missing caller sockets');else fail('private call answer expiry enforcement');
+} catch(error) { fail('private call answer expiry enforcement',error.message); }
+
+
+// Authorization must run before multipart upload middleware to prevent unauthorized disk/CPU consumption.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const giftStart=source.indexOf("app.post('/api/admin/gifts/catalog/upload'");
+  const giftEnd=source.indexOf("app.post('/api/admin/gifts/catalog/delete'",giftStart);
+  const adsStart=source.indexOf("app.post('/api/admin/ads'");
+  const adsEnd=source.indexOf("app.patch('/api/admin/ads/:id'",adsStart);
+  const gift=source.slice(giftStart,giftEnd),ads=source.slice(adsStart,adsEnd);
+  const giftUpload=gift.indexOf("uploadSmallImage.single('file')");
+  const adsUpload=ads.indexOf("uploadImage.single('file')");
+  const checks=[
+    ['gift catalog upload authenticates, checks module and permission before parsing multipart data',giftStart>=0&&giftUpload>0&&gift.indexOf('requireAuth')<giftUpload&&gift.indexOf("siteModuleEnabled('gifts')")<giftUpload&&gift.indexOf("hasPermission(req.user,'gift_catalog_manage')")<giftUpload],
+    ['ad campaign upload authenticates and checks campaign permission before parsing multipart data',adsStart>=0&&adsUpload>0&&ads.indexOf('requireAuth')<adsUpload&&ads.indexOf('canManageAds(req.user)')<adsUpload]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('upload authorization ordering checks',error.message); }
+
+
+// Room-owner and avatar eligibility checks must also precede multipart file parsing.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const roomStart=source.indexOf("app.post('/api/rooms/:id/image'");
+  const roomEnd=source.indexOf("function clearRoomImage",roomStart);
+  const avatarStart=source.indexOf("app.post('/api/profile/avatar'");
+  const avatarEnd=source.indexOf("app.delete('/api/profile/avatar'",avatarStart);
+  const room=source.slice(roomStart,roomEnd),avatar=source.slice(avatarStart,avatarEnd);
+  const roomUpload=room.indexOf("uploadImage.single('file')");
+  const avatarUpload=avatar.indexOf("uploadImage.single('file')");
+  const checks=[
+    ['room image upload verifies room existence and owner/manager authorization before parsing multipart data',roomStart>=0&&roomUpload>0&&room.indexOf('requireAuth')<roomUpload&&room.indexOf("db.rooms.find(x=>x.id===req.params.id)")<roomUpload&&room.indexOf("hasPermission(req.user,'room_image_manage')")<roomUpload],
+    ['avatar upload checks the likes eligibility rule before parsing multipart data',avatarStart>=0&&avatarUpload>0&&avatar.indexOf('requireAuth')<avatarUpload&&avatar.indexOf('?.likes??getGuest(req.user.name)?.likes??0)<10')<avatarUpload]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('room/avatar upload authorization ordering checks',error.message); }
+
+
+// Shutdown must retry a previously failed batch and must not exit successfully with queued messages.
+(async()=>{
+  try{
+    const source=fs.readFileSync(server,'utf8');
+    const helperStart=source.indexOf('async function persistPendingMessagesDuringShutdown(');
+    const helperEnd=source.indexOf('\nfunction gracefulShutdown',helperStart);
+    if(helperStart<0||helperEnd<0)throw new Error('shutdown persistence helper was not found');
+    const helper=source.slice(helperStart,helperEnd);
+    const makeContext=(failures)=>{
+      let left=failures,saved=[],resolved=0;
+      const context={
+        messageSaveTimer:null,pendingMessageWrites:[{message:{id:'queued'},resolve:()=>resolved++,reject:()=>{}}],
+        messageSaveAttempts:1,db:{messages:[{id:'existing'}]},
+        clearTimeout:()=>{},setTimeout:(fn)=>setTimeout(fn,1),
+        save(){if(left-->0)throw new Error('simulated transient disk failure');saved=context.db.messages.map(x=>x.id);},
+        console:{error(){}}
+      };
+      vm.createContext(context);
+      vm.runInContext(helper+';globalThis.flushAtShutdown=persistPendingMessagesDuringShutdown;',context);
+      return {context,get saved(){return saved;},get resolved(){return resolved;}};
+    };
+    const transient=makeContext(1);
+    const recovered=await transient.context.flushAtShutdown(3,1);
+    const retryWorks=recovered===true&&transient.context.pendingMessageWrites.length===0&&transient.saved.join(',')==='existing,queued'&&transient.resolved===1;
+    const permanent=makeContext(5);
+    const remainsPending=await permanent.context.flushAtShutdown(2,1)===false&&permanent.context.pendingMessageWrites.length===1&&permanent.context.db.messages.length===1;
+    if(retryWorks&&remainsPending)pass('shutdown retries transient message-save failures and retains uncommitted messages on persistent failure');
+    else fail('shutdown pending-message retry fixture',JSON.stringify({retryWorks,remainsPending}));
+    const shutdownStart=source.indexOf('function gracefulShutdown(signal){');
+    const shutdownEnd=source.indexOf("\nprocess.once('SIGTERM'",shutdownStart);
+    const shutdown=source.slice(shutdownStart,shutdownEnd);
+    if(shutdown.includes('shutdownStarted=true')&&shutdown.indexOf('io.close(')<shutdown.indexOf('persistPendingMessagesDuringShutdown')&&shutdown.includes('pendingMessageWrites.length===0?0:1'))pass('graceful shutdown stops new writes, closes transports, drains queued messages, and exits nonzero if any remain');
+    else fail('graceful shutdown lifecycle ordering');
+    const runShutdown=async failSave=>{
+      const events=[];
+      const context={
+        shutdownStarted:false,messageSaveTimer:null,pendingMessageWrites:[],messageSaveAttempts:0,db:{messages:[]},
+        clearTimeout:()=>{},setTimeout:()=>({}),
+        save(){if(failSave)throw new Error('simulated final save failure');},
+        io:{close:callback=>{events.push('transport-closed');callback();}},
+        process:{exit:code=>events.push(['exit',code])},
+        console:{error:()=>{}}
+      };
+      vm.createContext(context);
+      vm.runInContext(helper+'\n'+shutdown+'\ngracefulShutdown("SIGTERM");',context);
+      await new Promise(resolve=>setTimeout(resolve,0));
+      return events;
+    };
+    const cleanExit=await runShutdown(false),failedExit=await runShutdown(true);
+    const exitCodes=cleanExit.some(event=>Array.isArray(event)&&event[0]==='exit'&&event[1]===0)
+      &&failedExit.some(event=>Array.isArray(event)&&event[0]==='exit'&&event[1]===1);
+    if(exitCodes)pass('graceful shutdown reports success only after a successful final database save');
+    else fail('graceful shutdown final-save exit status',JSON.stringify({cleanExit,failedExit}));
+    const runInFlightShutdown=async failSave=>{
+      const events=[];
+      let closeCallback=null;
+      const pendingEntry={
+        message:{id:'in-flight-http-message'},
+        resolve(){events.push('request-resolved');if(closeCallback)closeCallback();},
+        reject(){events.push('request-rejected');if(closeCallback)closeCallback();}
+      };
+      const context={
+        shutdownStarted:false,messageSaveTimer:null,pendingMessageWrites:[pendingEntry],messageSaveAttempts:0,db:{messages:[]},
+        clearTimeout, setTimeout:(fn,delay)=>setTimeout(fn,delay===10000?10000:0),
+        save(){events.push('save-attempt');if(failSave)throw new Error('simulated persistent disk failure');},
+        io:{close:callback=>{events.push('transport-close-started');closeCallback=()=>{events.push('transport-closed');callback();};if(!context.pendingMessageWrites.length)closeCallback();}},
+        process:{exit:code=>events.push(['exit',code])},
+        console:{error:()=>{}}
+      };
+      vm.createContext(context);
+      vm.runInContext(helper+'\n'+shutdown+'\ngracefulShutdown("SIGTERM");',context);
+      await new Promise(resolve=>setTimeout(resolve,30));
+      return events;
+    };
+    const inFlightSaved=await runInFlightShutdown(false);
+    const inFlightFailed=await runInFlightShutdown(true);
+    const savedExit=inFlightSaved.some(event=>Array.isArray(event)&&event[0]==='exit'&&event[1]===0)
+      &&inFlightSaved.indexOf('request-resolved')<inFlightSaved.indexOf('transport-closed');
+    const failedInFlightExit=inFlightFailed.some(event=>Array.isArray(event)&&event[0]==='exit'&&event[1]===1)
+      &&inFlightFailed.includes('request-rejected')&&inFlightFailed.includes('transport-closed');
+    if(savedExit&&failedInFlightExit)pass('shutdown drains an in-flight HTTP chat request before waiting for transport close, and releases it with nonzero exit when persistence remains unavailable');
+    else fail('shutdown in-flight HTTP message deadlock regression',JSON.stringify({inFlightSaved,inFlightFailed}));
+  }catch(error){fail('shutdown persistence regression checks',error.message);}
+})();
+ 
+// Repository hygiene and release-artifact regression checks.
+try {
+  const ignore = fs.readFileSync(path.join(root, '.gitignore'), 'utf8');
+  const dockerIgnore = fs.readFileSync(path.join(root, '.dockerignore'), 'utf8');
+  const validateWorkflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'validate-project.yml'), 'utf8');
+  const packageManifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const lockManifest = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
+  const dockerfile = fs.readFileSync(path.join(root, 'Dockerfile'), 'utf8');
+  const sortedDependencies = value => JSON.stringify(Object.entries(value || {}).sort(([a],[b]) => a.localeCompare(b)));
+  const nestedLegacy = path.join(root, 'rimaz-chat-iraqi-main');
+  const checks = [
+    ['local dependencies and runtime directories are ignored by Git', ignore.includes('/node_modules/') && ignore.includes('/data/') && ignore.includes('/uploads/') && ignore.includes('/private-media/')],
+    ['runtime temporary files and database recovery copies are ignored by Git', ignore.includes('*.tmp') && ignore.includes('*.corrupt-*') && ignore.includes('*.pre-restore-*') && ignore.includes('.npmrc') && ignore.includes('*.sqlite') && ignore.includes('*.db') && ignore.includes('*.pem') && ignore.includes('backups/')],
+    ['the intentional root data placeholder remains tracked and documented', fs.existsSync(path.join(root, 'data.json')) && fs.readFileSync(path.join(root, 'data.json'), 'utf8').includes('Initial placeholder only')],
+    ['root and public Google verification files remain present and byte-identical', fs.existsSync(path.join(root, 'google1a84d9d1dec7b85d.html')) && fs.existsSync(path.join(root, 'public', 'google1a84d9d1dec7b85d.html')) && fs.readFileSync(path.join(root, 'google1a84d9d1dec7b85d.html'), 'utf8') === fs.readFileSync(path.join(root, 'public', 'google1a84d9d1dec7b85d.html'), 'utf8')],
+    ['the incomplete nested project duplicate is removed', !fs.existsSync(nestedLegacy)],
+    ['the obsolete write-enabled ZIP self-sync workflow is removed', !fs.existsSync(path.join(root, '.github', 'workflows', 'unzip-upload.yml'))],
+    ['the standalone tracked archive-audit workflow is removed after its checks moved into the artifact job', !fs.existsSync(path.join(root, '.github', 'workflows', 'audit-rootfix-archive.yml'))],
+    ['release archive is not tracked in Git and is ignored locally', !fs.existsSync(path.join(root, 'rimaz-final-deep-audit-46.93.72.zip')) && ignore.includes('/rimaz-final-deep-audit-46.93.72.zip')],
+    ['Docker build exclusions no longer reference the deleted nested project', !dockerIgnore.includes('rimaz-chat-iraqi-main/')],
+    ['committed npm lockfile v3 matches package identity and dependency declarations', lockManifest.lockfileVersion === 3 && !!lockManifest.packages?.[''] && lockManifest.packages[''].name === packageManifest.name && lockManifest.packages[''].version === packageManifest.version && sortedDependencies(lockManifest.packages[''].dependencies) === sortedDependencies(packageManifest.dependencies) && sortedDependencies(lockManifest.packages[''].devDependencies) === sortedDependencies(packageManifest.devDependencies)],
+    ['production Docker image installs only the locked production dependency graph', dockerfile.includes('RUN npm ci --omit=dev') && !dockerfile.includes('npm install --omit=dev')],
+    ['permanent CI requires npm ci and verifies the dependency tree', validateWorkflow.includes('npm ci --no-audit --no-fund') && validateWorkflow.includes('npm ls --depth=0')],
+    ['release archive artifact is built only after validation on explicit dispatch for approved branches', (() => { const gate = validateWorkflow.match(/^\s*if:\s*(.+)$/m)?.[1] || ''; const allowed = [...gate.matchAll(/github\.ref == 'refs\/heads\/([^']+)'/g)].map(([, branch]) => branch); const required = ['main', 'safety/validate-and-backup-before-sync', 'review/rimaz-clean-integration-2026-11-27', 'fix/bound-private-media-ticket-cache', 'fix/persistent-data-symlink-boundary']; return validateWorkflow.includes('build-release-archive:') && validateWorkflow.includes('needs: validate') && gate.includes("github.event_name == 'workflow_dispatch'") && required.every(branch => allowed.includes(branch)); })()],
+    ['release artifact upload is read-only and does not create bot commits', validateWorkflow.includes('actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9') && validateWorkflow.includes('retention-days: 30') && validateWorkflow.includes('contents: read') && !validateWorkflow.includes('contents: write') && !validateWorkflow.includes('git push') && !validateWorkflow.includes('git add rimaz-final-deep-audit-46.93.72.zip')],
+    ['release artifact is extracted and independently tested before upload', validateWorkflow.includes('Extract and test release archive') && validateWorkflow.includes('npm ci --no-audit --no-fund') && validateWorkflow.includes('npm test') && validateWorkflow.includes('docker build --pull -t rimaz-chat-iraqi:release-archive .')],
+    ['release archive builder checks exact tracked-file parity, safe paths, symlinks, CRC and expanded size', validateWorkflow.includes("git','ls-files','-z") && validateWorkflow.includes('z.testzip()') && validateWorkflow.includes('actual!=set(paths)') && validateWorkflow.includes('stat.S_IFLNK') && validateWorkflow.includes('Unsafe path:') && validateWorkflow.includes('total>500*1024*1024')],
+    ['pull-request validation runs for repository configuration and documentation changes', validateWorkflow.includes("'lib/**'") && validateWorkflow.includes("'scripts/**'") && validateWorkflow.includes("'*.md'") && validateWorkflow.includes("'docs/**/*.md'") && validateWorkflow.includes("'.gitignore'") && validateWorkflow.includes("'.editorconfig'") && validateWorkflow.includes("'.gitattributes'") && validateWorkflow.includes("'.nvmrc'") && validateWorkflow.includes('node-version-file: .nvmrc') && validateWorkflow.includes('cancel-in-progress: true') && validateWorkflow.includes("'.github/**'")],
+    ['CI smoke-tests the production container HTTP page and Socket.IO handshake', validateWorkflow.includes('Smoke-test production container HTTP and Socket.IO') && validateWorkflow.includes('curl --fail --silent http://127.0.0.1:3000/') && validateWorkflow.includes('transport=polling') && validateWorkflow.includes("grep -q '^0{'")]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label);
+} catch (error) {
+  fail('repository hygiene and release-artifact checks', error.message);
+}
+
+
+// Documentation layout: keep root focused and ensure every indexed document resolves.
+try {
+  const docsRoot = path.join(root, 'docs');
+  const indexPath = path.join(docsRoot, 'README.md');
+  const index = fs.readFileSync(indexPath, 'utf8');
+  const requiredDocs = [
+    'REPOSITORY-STRUCTURE.md',
+    'project/CHECKPOINT-2026-11-25.md',
+    'audits/CODE-AUDIT.md',
+    'audits/FINAL-DEEP-AUDIT.md',
+    'audits/AUDIT-FOLLOWUP-2026-11-24.md',
+    'audits/RUNTIME-RESOURCE-AUDIT-2026-11-24.md',
+    'audits/TRANSACTION-SAFETY-AUDIT-2026-11-24.md',
+    'operations/DEPLOYMENT-46.93.72.md'
+  ];
+  const staleRootDocs = [
+    'CHECKPOINT-2026-11-24.md','HANDOFF-2026-11-24.md','CODE-AUDIT.md',
+    'FINAL-DEEP-AUDIT.md','AUDIT-FOLLOWUP-2026-11-24.md',
+    'RUNTIME-RESOURCE-AUDIT-2026-11-24.md','TRANSACTION-SAFETY-AUDIT-2026-11-24.md',
+    'DEPLOYMENT-46.93.72.md','REPAIR-NOTES-46.93.72.md'
+  ];
+  const markdownFiles = [
+    'README.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'docs/README.md',
+    ...requiredDocs.map(file => path.join('docs', file))
+  ];
+  const brokenMarkdownLinks = [];
+  for (const file of markdownFiles) {
+    const markdown = fs.readFileSync(path.join(root, file), 'utf8');
+    for (const match of markdown.matchAll(/\]\(([^)]+)\)/g)) {
+      const link = match[1].trim();
+      if (/^(https?:|mailto:|#)/i.test(link)) continue;
+      const target = link.split('#')[0].split('?')[0];
+      if (target && !fs.existsSync(path.resolve(root, path.dirname(file), target))) {
+        brokenMarkdownLinks.push({file, link});
+      }
+    }
+  }
+  const missingDocs = requiredDocs.filter(file => !fs.existsSync(path.join(docsRoot, file)));
+  const scatteredDocs = staleRootDocs.filter(file => fs.existsSync(path.join(root, file)));
+  const allowedRootDocs = new Set(['README.md', 'CHANGELOG.md', 'CONTRIBUTING.md']);
+  const scatteredRootMarkdown = fs.readdirSync(root)
+    .filter(file => file.toLowerCase().endsWith('.md') && !allowedRootDocs.has(file));
+  const checks = [
+    ['all project, audit, and operations documents are in their categorized docs folders', missingDocs.length === 0],
+    ['all repository Markdown files contain only valid relative links', brokenMarkdownLinks.length === 0],
+    ['categorized reports are not scattered in the repository root', scatteredDocs.length === 0],
+    ['repository root keeps only its standard top-level Markdown guides', scatteredRootMarkdown.length === 0]
+  ];
+  for (const [label, ok] of checks) ok ? pass(label) : fail(label, JSON.stringify({missingDocs,brokenMarkdownLinks,scatteredDocs,scatteredRootMarkdown}));
+} catch (error) {
+  fail('documentation structure regression checks', error.message);
+}
+
+
+// Repository guidance files are part of the supported contributor workflow.
+try {
+  const required = [
+    'CONTRIBUTING.md',
+    '.nvmrc',
+    '.editorconfig',
+    '.gitattributes',
+    '.github/pull_request_template.md',
+    '.github/dependabot.yml'
+  ];
+  const missing = required.filter(file => !fs.existsSync(path.join(root, file)));
+  if (missing.length === 0) pass('repository contributor guidance and file-format policies are present');
+  else fail('repository contributor guidance and file-format policies are present', missing.join(', '));
+} catch (error) {
+  fail('repository contributor guidance and file-format policies are present', error.message);
+}
+
+
+// Public room messages are not visible or acknowledged until their batched disk commit succeeds.
+(async()=>{
+  try {
+    const source=fs.readFileSync(server,'utf8');
+    const queue=source.match(/let shutdownStarted=false;\nlet messageSaveTimer=null;\nlet pendingMessageWrites=\[\];[\s\S]*?function addMessage\(m\)\{[\s\S]*?\n\}/);
+    if(!queue)throw new Error('message persistence queue not found');
+    const makeContext=(initialFailures=0)=>{
+      let failuresLeft=initialFailures, activeTimer=null, saved=[];
+      let context;
+      context={
+        db:{messages:[{id:'committed'}]},
+        console:{error(){}},
+        save(){
+          if(failuresLeft>0){failuresLeft--;throw new Error('simulated disk failure');}
+          saved=context.db.messages.map(message=>message.id);
+        },
+        setTimeout(fn,delay){activeTimer={fn,delay,unref(){}};return activeTimer;},
+        clearTimeout(timer){if(activeTimer===timer)activeTimer=null;}
+      };
+      vm.createContext(context);
+      vm.runInContext(queue[0]+'\nglobalThis.enqueue=addMessage;globalThis.state=()=>({pending:pendingMessageWrites.length,attempts:messageSaveAttempts});',context);
+      return {context,getTimer:()=>activeTimer,getSaved:()=>saved};
+    };
+    const ok=makeContext();
+    const committed=ok.context.enqueue({id:'new-message'});
+    const hiddenBeforeCommit=ok.context.db.messages.length===1&&ok.context.state().pending===1;
+    ok.getTimer().fn();
+    await committed;
+    const commitBeforeResolve=ok.context.db.messages.map(x=>x.id).join(',')==='committed,new-message'&&ok.getSaved().join(',')==='committed,new-message';
+
+    const retry=makeContext(1);
+    const retried=retry.context.enqueue({id:'retry-message'});
+    retry.getTimer().fn();
+    const rollbackOnFailure=retry.context.db.messages.length===1&&retry.context.state().pending===1&&retry.getTimer().delay===1000;
+    retry.getTimer().fn();
+    await retried;
+    const retryCommit=retry.context.db.messages.map(x=>x.id).join(',')==='committed,retry-message'&&retry.getSaved().join(',')==='committed,retry-message';
+
+    if(hiddenBeforeCommit&&commitBeforeResolve&&rollbackOnFailure&&retryCommit)
+      pass('chat message queue hides uncommitted messages, commits before resolving, and retries failed writes without memory leakage');
+    else fail('chat message queue commit/rollback fixture',JSON.stringify({hiddenBeforeCommit,commitBeforeResolve,rollbackOnFailure,retryCommit}));
+  } catch(error) { fail('chat message queue commit/rollback fixture',error.message); }
+})();
+
+// Both public transports must await durable persistence before acknowledging or broadcasting a message.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const http=source.match(/app\.post\('\/api\/message',[\s\S]*?\n\}\);/);
+  const socketStart=source.indexOf("socket.on('send-message',async(d,acknowledge)=>");
+  const socketEnd=source.indexOf("socket.on('private-typing'",socketStart);
+  const socket=socketStart>=0&&socketEnd>socketStart?source.slice(socketStart,socketEnd):'';
+  const checks=[
+    ['HTTP room messages await the disk commit before broadcast and success response',!!http&&http[0].indexOf('await addMessage(m)')<http[0].indexOf("io.to(room).emit('message',m)")&&http[0].indexOf('await addMessage(m)')<http[0].indexOf('res.json({ok:true,message:m})')],
+    ['Socket.IO room messages await the disk commit before broadcast',!!socket&&socket.indexOf('await addMessage(message)')<socket.indexOf("io.to(room).emit('message',message)")],
+    ['room message enqueue does not expose pending writes through db.messages',source.includes('pendingMessageWrites.push({message:m,resolve,reject})')&&!source.includes('function addMessage(m){\n  db.messages.push(m)')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('chat durable-acknowledgement regression checks',error.message); }
+
+
+
+ // HTTP and Socket.IO must report identical built-in bot command failures.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const httpStart=source.indexOf("app.post('/api/message'");
+  const httpEnd=source.indexOf("\n});",httpStart);
+  const socketStart=source.indexOf("socket.on('send-message',async(d,acknowledge)=>");
+  const socketEnd=source.indexOf("socket.on('private-typing'",socketStart);
+  const http=httpStart>=0&&httpEnd>httpStart?source.slice(httpStart,httpEnd):'';
+  const socket=socketStart>=0&&socketEnd>socketStart?source.slice(socketStart,socketEnd):'';
+  const commandStart=source.indexOf('async function processBuiltInBotCommand(');
+  const commandEnd=source.indexOf('\n}',commandStart);
+  const command=commandStart>=0&&commandEnd>commandStart?source.slice(commandStart,commandEnd):'';
+  const checks=[
+    ['HTTP and Socket.IO both call the shared built-in bot command handler',http.includes('processBuiltInBotCommand(joinedSocket,u,room,text')&&socket.includes('processBuiltInBotCommand(socket,u,room,text,message=>{commandError=message;})')],
+    ['HTTP bot command failures are returned as HTTP errors rather than false success',http.includes('botCommandError')&&http.includes('res.status(botCommandError.status).json')],
+    ['the shared bot handler reports missing admin notice text as HTTP 400 and socket error',command.includes('onError(message,400)')&&command.includes("socket.emit('error-msg',{error:message})")],
+    ['the shared bot handler reports missing admin permission as HTTP 403 and socket error',command.includes('onError(message,403)')&&command.includes("socket.emit('error-msg',{error:message})")],
+    ['admin notice commands remain protected by canNotice authorization',command.includes('if(!canNotice(user))')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('HTTP and Socket.IO bot-command parity regression checks',error.message); }
+
+
+// Logout must not cancel reconnect-grace cleanup until the durable session deletion succeeds.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf("app.post('/api/logout',requireAuth");
+  const end=source.indexOf("\n});",start);
+  const route=start>=0&&end>start?source.slice(start,end):'';
+  const saveIndex=route.indexOf('try{save()}catch(e)');
+  const failureIndex=route.indexOf("return res.status(500).json({error:'تعذر حفظ تسجيل الخروج، حاول مرة أخرى'})");
+  const cancelIndex=route.indexOf('cancelSessionDisconnectCleanup(sid);');
+  const clearIndex=route.indexOf('clearSessionTransientState(sid);');
+  const disconnectIndex=route.indexOf('so.disconnect(true)');
+  const checks=[
+    ['logout keeps the reconnect-grace timer active until session deletion is durably saved',saveIndex>=0&&failureIndex>saveIndex&&cancelIndex>failureIndex],
+    ['failed logout restores the session and returns without clearing transient reconnect state',route.includes('sessions.set(sid,u);db.sessions[sid]=u;')&&failureIndex>0&&clearIndex>failureIndex],
+    ['successful logout cancels the grace timer before clearing transient state and disconnecting sockets',cancelIndex>=0&&clearIndex>cancelIndex&&disconnectIndex>clearIndex]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('logout reconnect-grace rollback regression checks',error.message); }
+
+
+// Disconnected-session cleanup must retry after a transient durable-save failure.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function scheduleSessionDisconnectCleanup(sid,user){');
+  const end=source.indexOf('const startupSessionDatabase=',start);
+  const helper=start>=0&&end>start?source.slice(start,end):'';
+  const catchStart=helper.indexOf('try{save();}catch(error){');
+  const catchEnd=helper.indexOf('\n    }',catchStart);
+  const failure=catchStart>=0&&catchEnd>catchStart?helper.slice(catchStart,catchEnd):'';
+  const checks=[
+    ['disconnected-session cleanup restores the session after a failed durable save',failure.includes('sessions.set(sid,current);db.sessions[sid]=current;')],
+    ['failed disconnected-session cleanup schedules a fresh bounded reconnect-grace retry',failure.includes('scheduleSessionDisconnectCleanup(sid,current);')],
+    ['transient state is cleared only after the cleanup save succeeds',helper.indexOf('clearSessionTransientState(sid);')>catchEnd&&helper.indexOf('clearSessionTransientState(sid);')>helper.indexOf('try{save();}')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('disconnected-session cleanup retry regression checks',error.message); }
+
+
+// Rejected blocked terms must not consume the public-chat anti-spam quota in either transport.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const httpStart=source.indexOf("app.post('/api/message'");
+  const httpEnd=source.indexOf("\n});",httpStart);
+  const socketStart=source.indexOf("socket.on('send-message',async(d,acknowledge)=>");
+  const socketEnd=source.indexOf("socket.on('private-typing'",socketStart);
+  const http=httpStart>=0&&httpEnd>httpStart?source.slice(httpStart,httpEnd):'';
+  const socket=socketStart>=0&&socketEnd>socketStart?source.slice(socketStart,socketEnd):'';
+  const checks=[
+    ['HTTP rejects blocked public-chat terms before consuming the anti-spam quota',http.indexOf('blockedChatTerm(text)')>=0&&http.indexOf('blockedChatTerm(text)')<http.indexOf('roomMessageRateLimitError(sessionId,text)')],
+    ['Socket.IO rejects blocked public-chat terms before consuming the anti-spam quota',socket.indexOf('blockedChatTerm(text)')>=0&&socket.indexOf('blockedChatTerm(text)')<socket.indexOf('roomMessageRateLimitError(sid,text)')],
+    ['both transports retain anti-spam protection before processing built-in bot commands',http.indexOf('roomMessageRateLimitError(sessionId,text)')<http.indexOf('processBuiltInBotCommand(joinedSocket')&&socket.indexOf('roomMessageRateLimitError(sid,text)')<socket.indexOf('processBuiltInBotCommand(socket')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('blocked-term anti-spam quota ordering regression checks',error.message); }
+
+// HTTP fallback and Socket.IO public messages must expose the same role/VIP metadata.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const httpStart=source.indexOf("app.post('/api/message'");
+  const socketStart=source.indexOf("socket.on('send-message'");
+  const http=source.slice(httpStart,source.indexOf("\n});",httpStart));
+  const socket=source.slice(socketStart,source.indexOf("\n  socket.on(",socketStart));
+  const checks=[
+    ['HTTP and Socket.IO public messages both include effective role metadata',http.includes('role:roleOf(u)')&&socket.includes('role:roleOf(u)')],
+    ['HTTP and Socket.IO public messages both include effective VIP state',http.includes('vip:vipActive(u.name)')&&socket.includes('vip:vipActive(u.name)')],
+    ['both transports retain the same likes and profile metadata',http.includes('likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)')&&socket.includes('likes:userLikes(u),role:roleOf(u),vip:vipActive(u.name),profile:profile(u.name)')],
+    ['HTTP and Socket.IO both identify ordinary public chat messages as text',http.includes("type:'text'")&&socket.includes("type:'text'")]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('HTTP and Socket.IO public message payload parity checks',error.message); }
+
+
+// Failed rank assignment must restore exact object/root existence, not leave migration-shaped defaults behind.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf("app.post('/api/admin/rank'");
+  const end=source.indexOf("app.get('/api/admin/member-ip/",start);
+  const route=start>=0&&end>start?source.slice(start,end):'';
+  const checks=[
+    ['rank assignment snapshots whether the target profile existed before mutation',route.includes('hadProfile=Object.prototype.hasOwnProperty.call(db.profiles||{},n)')],
+    ['rank assignment removes a profile created only by a failed transaction',route.includes('if(hadProfile)db.profiles[n]=previousProfile;else delete db.profiles[n];')],
+    ['rank assignment restores the original rank-audit root or removes the newly created root',route.includes("if(hadRankAudit)db.rankAudit=previousRankAudit;else delete db.rankAudit;")],
+    ['rank assignment restores notification root existence and the target inbox exactly',route.includes('hadNotificationsRoot=Object.prototype.hasOwnProperty.call(db,\'notifications\')')&&route.includes('if(hadNotificationsRoot){if(hadMemberNotifications)db.notifications[n]=previousNotifications;else delete db.notifications[n];}else delete db.notifications;')]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('rank assignment exact rollback regression checks',error.message); }
+
+
+// Private-message rate limiting applies only after recipient and content eligibility checks.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const helperStart=source.indexOf('const privateMessageWindows=new Map();');
+  const helperEnd=source.indexOf('function clearSessionTransientState(sid){',helperStart);
+  if(helperStart<0||helperEnd<0)throw new Error('private-message limiter helper not found');
+  const helper=source.slice(helperStart,helperEnd);
+  const context={Map,Date};
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.allow=allowPrivateMessage;',context);
+  const repeated=[context.allow('sid','same',1000),context.allow('sid','same',1001),context.allow('sid','same',1002),context.allow('sid','same',1003)];
+  const distinct=[context.allow('sid','one',1004),context.allow('sid','two',1005),context.allow('sid','three',1006),context.allow('sid','four',1007)];
+  const reset=context.allow('sid','after-window',6001);
+  const empty=context.allow('sid','   ',6002);
+  const start=source.indexOf("socket.on('private-message'");
+  const end=source.indexOf("socket.on('call-offer'",start);
+  const route=source.slice(start,end);
+  const rate=route.indexOf('allowPrivateMessage(sid,text)');
+  const checks=[
+    ['private-message limiter allows three identical messages and rejects the fourth',repeated.join(',')==='true,true,true,false'],
+    ['private-message limiter enforces seven messages per five-second window across distinct content',distinct.slice(0,3).every(Boolean)&&distinct[3]===false],
+    ['private-message limiter resets after its five-second window and rejects empty messages',reset===true&&empty===false],
+    ['private-message limiter runs after blocked-term, recipient, privacy, ignore, and online checks',rate>route.indexOf('blockedChatTerm(text)')&&rate>route.indexOf('getUser(to)')&&rate>route.indexOf('tp.privateOpen===false')&&rate>route.indexOf('ignored)return')&&rate>route.indexOf('hasConnectedSessionForUser(to)')],
+    ['private-message limiter runs before the accepted message is appended and delivered',rate>=0&&rate<route.indexOf('db.privateMessages=[...')&&rate<route.indexOf("emitToUser(to,'private-message',message)")]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('private-message rate-limit ordering regression checks',error.message); }
+
+// Private-media playback tickets must remain bounded, reusable, expiring, and account-bound.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const helperStart=source.indexOf('const privateMediaPlaybackTickets = new Map();');
+  const helperEnd=source.indexOf('for (const [sid,s] of Object.entries(db.sessions||{}))',helperStart);
+  if(helperStart<0||helperEnd<0)throw new Error('private-media ticket helper block not found');
+  const helper=source.slice(helperStart,helperEnd);
+  let randomCounter=0;
+  const context={Map,Date,crypto:{randomBytes:()=>Buffer.alloc(32,++randomCounter)},setInterval:()=>({unref(){}})};
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.issue=createPrivateMediaPlaybackTicket;globalThis.ticketMap=privateMediaPlaybackTickets;globalThis.accountLimit=MAX_PRIVATE_MEDIA_TICKETS_PER_ACCOUNT;globalThis.globalLimit=MAX_PRIVATE_MEDIA_TICKETS;',context);
+  const first=context.issue('clip-a.mp4','alice',1000);
+  const reused=context.issue('clip-a.mp4','alice',2000);
+  const separate=context.issue('clip-b.mp4','alice',2100);
+  const refreshed=first.ticket.expiresAt===2000+15*60*1000;
+  const reuseOk=first.token===reused.token&&reused.reused===true&&separate.token!==first.token&&separate.reused===false&&refreshed;
+  const accountContext={Map,Date,crypto:{randomBytes:()=>Buffer.alloc(32,++randomCounter)},setInterval:()=>({unref(){}})};
+  vm.createContext(accountContext);
+  vm.runInContext(helper+';globalThis.issue=createPrivateMediaPlaybackTicket;globalThis.ticketMap=privateMediaPlaybackTickets;',accountContext);
+  let accountResults;
+  for(let i=0;i<32;i++)accountResults=accountContext.issue('file-'+i+'.mp4','alice',3000);
+  const accountLimited=accountContext.issue('file-over.mp4','alice',3000);
+  const otherAccount=accountContext.issue('other.mp4','bob',3000);
+  const accountOk=accountContext.ticketMap.size===33&&accountLimited.error==='account-limit'&&!otherAccount.error;
+  const expiryContext={Map,Date,crypto:{randomBytes:()=>Buffer.alloc(32,++randomCounter)},setInterval:()=>({unref(){}})};
+  vm.createContext(expiryContext);
+  vm.runInContext(helper+';globalThis.issue=createPrivateMediaPlaybackTicket;globalThis.ticketMap=privateMediaPlaybackTickets;',expiryContext);
+  expiryContext.ticketMap.set('expired',{filename:'old.mp4',account:'alice',expiresAt:999});
+  const afterExpiry=expiryContext.issue('new.mp4','alice',1000);
+  const expiryOk=!expiryContext.ticketMap.has('expired')&&!afterExpiry.error&&expiryContext.ticketMap.size===1;
+  const globalContext={Map,Date,crypto:{randomBytes:()=>Buffer.alloc(32,++randomCounter)},setInterval:()=>({unref(){}})};
+  vm.createContext(globalContext);
+  vm.runInContext(helper+';globalThis.issue=createPrivateMediaPlaybackTicket;globalThis.ticketMap=privateMediaPlaybackTickets;',globalContext);
+  for(let i=0;i<4096;i++)globalContext.ticketMap.set('existing-'+i,{filename:'f-'+i,account:'user-'+i,expiresAt:999999});
+  const globalLimited=globalContext.issue('overflow.mp4','new-user',1000);
+  const routeStart=source.indexOf("app.get('/api/private/media-stream/:filename'");
+  const routeEnd=source.indexOf("\n});",routeStart);
+  const route=routeStart>=0&&routeEnd>routeStart?source.slice(routeStart,routeEnd):'';
+  const ticketDeclaration=route.indexOf('const ticket=privateMediaPlaybackTickets.get(token)');
+  const ticketUse=route.indexOf('ticket.expiresAt');
+  const routeOk=ticketDeclaration>=0&&ticketUse>ticketDeclaration&&route.includes('ticket.filename!==filename')&&route.includes('keyName(message.from)===ticket.account||keyName(message.to)===ticket.account');
+  const checks=[
+    ['private-media playback tickets reuse the same account/file token and refresh the 15-minute expiry',reuseOk],
+    ['private-media playback tickets enforce 32 active tickets per account without blocking another account',accountOk],
+    ['expired private-media tickets are pruned before issuing a replacement',expiryOk],
+    ['private-media playback ticket cache rejects entries beyond the 4096 global cap',globalLimited.error==='global-limit'&&globalContext.ticketMap.size===4096],
+    ['private-media stream route declares and validates the ticket before reading ticket fields and rechecks account ownership',routeOk]
+  ];
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('private-media playback ticket regression checks',error.message); }
+
+ 
+try { const healthServerText=fs.readFileSync(server,'utf8'),healthHtmlText=fs.readFileSync(mainPath,'utf8');const health=healthServerText.slice(healthServerText.indexOf("app.get('/api/admin/health'"),healthServerText.indexOf("app.get('/api/admin/backup/database'")); if(health.includes('ipAttribution:{trustedProxyConfigured:!!process.env.TRUSTED_PROXY_CIDRS')&&healthHtmlText.includes('توثيق بروكسي IP')&&healthHtmlText.includes('نطاقات البروكسي الموثوقة غير مهيأة'))pass('admin health panel exposes trusted-proxy readiness without disclosing configured CIDRs');else fail('trusted-proxy readiness health indicator'); } catch(error){fail('trusted-proxy readiness health indicator',error.message);}
+
+// Startup cleanup removes only old Rimaz backup temporaries and preserves unrelated/fresh paths.
+try {
+  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-backup-temp-cleanup-'));
+  const staleAt=new Date(Date.now()-8*24*60*60*1000);
+  const staleMedia=path.join(temp,'.rimaz-backup-media-stale');
+  const freshMedia=path.join(temp,'.rimaz-backup-media-fresh');
+  fs.mkdirSync(staleMedia);fs.writeFileSync(path.join(staleMedia,'upload.bin'),'stale');
+  fs.mkdirSync(freshMedia);
+  fs.utimesSync(staleMedia,staleAt,staleAt);
+  const staleDb=path.join(temp,'data.json.123.full-backup.0123456789abcdef.tmp');
+  const freshDb=path.join(temp,'data.json.123.database-backup.abcdef0123456789.tmp');
+  const unrelated=path.join(temp,'data.json.123.other.0123456789abcdef.tmp');
+  fs.writeFileSync(staleDb,'stale');fs.writeFileSync(freshDb,'fresh');fs.writeFileSync(unrelated,'keep');
+  fs.utimesSync(staleDb,staleAt,staleAt);
+  const linked=path.join(temp,'.rimaz-backup-media-link');
+  fs.symlinkSync(staleMedia,linked);
+  const cleaned=cleanupStaleBackupTemps(temp,path.join(temp,'data.json'));
+  assert.equal(cleaned.removedDirectories,1);
+  assert.equal(cleaned.removedFiles,1);
+  assert.equal(fs.existsSync(staleMedia),false);
+  assert.equal(fs.existsSync(staleDb),false);
+  assert.equal(fs.existsSync(freshMedia),true);
+  assert.equal(fs.existsSync(freshDb),true);
+  assert.equal(fs.existsSync(unrelated),true);
+  assert.equal(fs.lstatSync(linked).isSymbolicLink(),true);
+  fs.rmSync(temp,{recursive:true,force:true});
+  pass('startup cleanup removes only stale backup temp directories/files and preserves fresh or unrelated data');
+} catch(error) { fail('stale backup temp cleanup regression checks',error.message); }
+
+// Container health metrics must parse cgroup v2 counters without failing when the host does not expose them.
+try {
+  const fixture = {
+    '/fake/memory.current':'67108864',
+    '/fake/memory.peak':'94371840',
+    '/fake/memory.max':'134217728',
+    '/fake/memory.events':'low 0\nhigh 2\nmax 3\noom 1\noom_kill 1',
+    '/fake/cpu.stat':'usage_usec 123456\nuser_usec 100000\nsystem_usec 23456\nnr_periods 20\nnr_throttled 4\nthrottled_usec 8000'
+  };
+  const metrics=readCgroupMetrics('/fake',file=>{if(!(file in fixture)){const error=new Error('missing');error.code='ENOENT';throw error;}return fixture[file];});
+  assert.equal(metrics.available,true);
+  assert.equal(metrics.memory.currentBytes,67108864);
+  assert.equal(metrics.memory.limitBytes,134217728);
+  assert.equal(metrics.memory.peakBytes,94371840);
+  assert.equal(metrics.memory.oomKillEvents,1);
+  assert.equal(metrics.cpu.throttledPeriods,4);
+  const cpuOnly=readCgroupMetrics('/cpu-only',file=>{
+    if(file==='/cpu-only/cpu.stat')return 'usage_usec 9000\nnr_periods 12\nnr_throttled 3';
+    const error=new Error('missing');error.code='ENOENT';throw error;
+  });
+  assert.equal(cpuOnly.available,true);
+  assert.equal(cpuOnly.memory.currentBytes,null);
+  assert.equal(cpuOnly.cpu.usageMicros,9000);
+  assert.equal(cpuOnly.cpu.throttledPeriods,3);
+  const healthHtml=fs.readFileSync(path.join(root,'index.html'),'utf8');
+  assert.ok(healthHtml.includes("${cm.currentBytes!==null&&cm.currentBytes!==undefined?mb(cm.currentBytes):'غير متاح'}"));
+  assert.ok(!healthHtml.includes("${cg.available?mb(cm.currentBytes):'غير متاح'}"));
+  const unavailable=readCgroupMetrics('/missing',file=>{const error=new Error('missing');error.code='ENOENT';throw error;});
+  assert.equal(unavailable.available,false);
+  pass('cgroup health metrics report memory limits, peaks, OOM kills and CPU throttling, including CPU-only and unavailable environments');
+} catch(error) { fail('cgroup health metrics regression checks',error.message); }
+
+// Client IP attribution must ignore all forwarding headers unless the immediate peer is trusted.
+try {
+  const untrusted = createTrustedProxyTrust('');
+  const trusted = createTrustedProxyTrust('127.0.0.1/32,::1/128');
+  const spoofed = resolveClientIp({'cf-connecting-ip':'203.0.113.9','x-real-ip':'203.0.113.10','x-forwarded-for':'203.0.113.11'},'198.51.100.7',untrusted,'cf-connecting-ip');
+  const noHeaderConfigured = resolveClientIp({'cf-connecting-ip':'203.0.113.9'},'127.0.0.1',trusted);
+  const trustedCf = resolveClientIp({'cf-connecting-ip':'203.0.113.9','x-real-ip':'203.0.113.10'},'127.0.0.1',trusted,'cf-connecting-ip');
+  const trustedReal = resolveClientIp({'cf-connecting-ip':'203.0.113.9','x-real-ip':'203.0.113.10'},'::1',trusted,'x-real-ip');
+  const wrongHeaderOnly = resolveClientIp({'cf-connecting-ip':'203.0.113.9'},'127.0.0.1',trusted,'x-real-ip');
+  const invalidTrusted = resolveClientIp({'cf-connecting-ip':'not-an-ip'},'127.0.0.1',trusted,'cf-connecting-ip');
+  const multiValueTrusted = resolveClientIp({'cf-connecting-ip':'203.0.113.9, 203.0.113.10'},'127.0.0.1',trusted,'cf-connecting-ip');
+  const forwardedChain = resolveClientIp({'x-forwarded-for':'203.0.113.9, 127.0.0.1'},'127.0.0.1',trusted,'x-forwarded-for');
+  assert.equal(normalizeTrustedProxyHeader(' CF-Connecting-IP '),'cf-connecting-ip');
+  assert.equal(normalizeTrustedProxyHeader('x-arbitrary-ip'),'');
+  assert.equal(spoofed,'198.51.100.7');
+  assert.equal(noHeaderConfigured,'127.0.0.1');
+  assert.equal(trustedCf,'203.0.113.9');
+  assert.equal(trustedReal,'203.0.113.10');
+  assert.equal(wrongHeaderOnly,'127.0.0.1');
+  assert.equal(invalidTrusted,'127.0.0.1');
+  assert.equal(multiValueTrusted,'127.0.0.1');
+  assert.equal(forwardedChain,'203.0.113.9');
+  assert.equal(resolveClientIp({'cf-connecting-ip':'203.0.113.9'},'::ffff:198.51.100.7',untrusted,'cf-connecting-ip'),'198.51.100.7');
+  pass('client IP resolution requires an explicit trusted proxy CIDR and one selected sanitized header, rejects ambiguous values, and safely resolves X-Forwarded-For chains');
+} catch(error) { fail('trusted proxy client IP regression checks',error.message); }
+
+// Full backup media must be captured with the database state and include only referenced public uploads.
+try {
+  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-backup-media-snapshot-'));
+  const uploads=path.join(temp,'uploads');fs.mkdirSync(uploads);
+  const publicFile=path.join(uploads,'public.png'),orphanFile=path.join(uploads,'orphan.png');
+  fs.writeFileSync(publicFile,'public bytes');fs.writeFileSync(orphanFile,'orphan bytes');
+  const snapshot=createBackupMediaSnapshot({database:{messages:[{media:{url:'/uploads/public.png'}}],privateMessages:[{media:{url:'/api/private/media/private.mp4'}}]},uploadDirectory:uploads,dataDirectory:temp});
+  try {
+    const entry=snapshot.entries.find(item=>item.name==='uploads/public.png');
+    const orphanIncluded=snapshot.entries.some(item=>item.name==='uploads/orphan.png');
+    const sameInode=!!entry&&fs.statSync(entry.disk).ino===fs.statSync(publicFile).ino;
+    fs.unlinkSync(publicFile);
+    const survivesOriginalRemoval=!!entry&&fs.existsSync(entry.disk)&&fs.readFileSync(entry.disk,'utf8')==='public bytes';
+    if(entry&&!orphanIncluded&&sameInode&&survivesOriginalRemoval)pass('backup hard-links referenced public uploads and preserves them across later deletion');
+    else fail('backup referenced public-media snapshot consistency');
+  } finally { snapshot.cleanup(); }
+  if(fs.readdirSync(temp).every(name=>name==='uploads'))pass('backup media snapshot cleanup removes its temporary directory');
+  else fail('backup media snapshot cleanup');
+  fs.rmSync(temp,{recursive:true,force:true});
+} catch(error) { fail('backup media snapshot regression checks',error.message); }
+
+// Upload cleanup must never unlink a public file that remains referenced by committed database state.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function removeUploadedFile(file){');
+  const end=source.indexOf('\nfunction restoreDatabaseFileFromRecovery',start);
+  if(start<0||end<0)throw new Error('upload cleanup helper not found');
+  const deleted=[];
+  const warnings=[];
+  const containsStoredUrl=(value,url,seen=new Set())=>{
+    if(value===url)return true;
+    if(!value||typeof value!=='object'||seen.has(value))return false;
+    seen.add(value);
+    return Object.values(value).some(child=>containsStoredUrl(child,url,seen));
+  };
+  const context={
+    fs:{unlinkSync(file){deleted.push(file);}},
+    path,
+    UP_DIR:path.resolve('/tmp/rimaz-upload-guard/uploads'),
+    db:{profiles:{alice:{avatar:'/uploads/keep.jpg'}}},
+    containsStoredUrl,
+    console:{warn(...args){warnings.push(args);}}
+  };
+  vm.runInNewContext(source.slice(start,end)+'\nthis.removeUploadedFile=removeUploadedFile;',context);
+  context.removeUploadedFile({path:path.join(context.UP_DIR,'keep.jpg')});
+  context.removeUploadedFile({path:path.join(context.UP_DIR,'orphan.jpg')});
+  context.removeUploadedFile({path:'/tmp/rimaz-restore-preview.tmp'});
+  assert.deepEqual(deleted,[path.join(context.UP_DIR,'orphan.jpg')]);
+  assert.equal(warnings.length,2);
+  pass('upload cleanup preserves referenced and out-of-directory files while removing only orphan files inside UP_DIR');
+} catch(error) { fail('referenced public upload cleanup guard',error.message); }
+
+// Backup snapshot collection must ignore chat text and fail closed for broken media references.
+try {
+  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-backup-media-integrity-'));
+  const uploads=path.join(temp,'uploads');fs.mkdirSync(uploads);
+  fs.writeFileSync(path.join(uploads,'present.png'),'ok');
+  fs.writeFileSync(path.join(uploads,'gift.png'),'gift');
+  fs.writeFileSync(path.join(uploads,'smiley.png'),'custom smiley');
+  const sharedGift={giftImage:'/uploads/gift.png'};
+  fs.writeFileSync(path.join(uploads,'rank-art.png'),'rank art');
+  const rankDefinition={artUrl:'/uploads/rank-art.png'};
+  for(const name of ['banner.png','banner-url.png','cover.png','background.png','decoration.png'])fs.writeFileSync(path.join(uploads,name),name);
+  const refs=createBackupMediaSnapshot({database:{
+    messages:[{text:'/uploads/not-a-file.png',media:{url:'/uploads/present.png'}}],
+    profiles:{alice:{avatar:'/uploads/present.png',banner:'/uploads/banner.png',cover:'/uploads/cover.png',background:'/uploads/background.png',customDecorationImage:'/uploads/decoration.png',gifts:[sharedGift]}},
+    rankDefinitions:[rankDefinition,{bannerUrl:'/uploads/banner-url.png'}],
+    giftCatalog:[{image:'/uploads/gift.png'}],
+    customSmileys:[{id:'custom-smiley',icon:'/uploads/smiley.png'}]
+  },uploadDirectory:uploads,dataDirectory:temp});
+  try { assert.deepEqual(refs.entries.map(entry=>entry.name),['uploads/background.png','uploads/banner-url.png','uploads/banner.png','uploads/cover.png','uploads/decoration.png','uploads/gift.png','uploads/present.png','uploads/rank-art.png','uploads/smiley.png']); } finally { refs.cleanup(); }
+  assert.throws(()=>createBackupMediaSnapshot({database:{profiles:{alice:{avatar:'/uploads/missing.png'}}},uploadDirectory:uploads,dataDirectory:temp}),/Referenced public upload is missing/);
+  assert.throws(
+    ()=>createBackupMediaSnapshot({database:{profiles:{alice:{avatar:'/uploads/missing-a.png'},bob:{avatar:'/uploads/missing-b.png'}}},uploadDirectory:uploads,dataDirectory:temp}),
+    error=>/missing-a\.png/.test(error.message)&&/missing-b\.png/.test(error.message)
+  );
+  fs.symlinkSync(path.join(uploads,'present.png'),path.join(uploads,'link.png'));
+  assert.throws(()=>createBackupMediaSnapshot({database:{profiles:{alice:{avatar:'/uploads/link.png'}}},uploadDirectory:uploads,dataDirectory:temp}),/not a regular file/);
+  assert.equal(fs.readdirSync(temp).filter(name=>name.startsWith('.rimaz-backup-media-')).length,0);
+  pass('backup ignores ordinary chat text, rejects missing or symlinked referenced media, and cleans failed snapshots');
+  fs.rmSync(temp,{recursive:true,force:true});
+} catch(error) { fail('backup media integrity regression checks',error.message); }
+
+// Database backups must serialize to a restrictive temporary file and stream from disk,
+// never build a database-sized JSON string or Buffer in the live request path.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const helperStart=source.indexOf('function createDatabaseBackupTempFile(snapshot,purpose){');
+  const helperEnd=source.indexOf('async function* fullBackupTarEntries(){',helperStart);
+  if(helperStart<0||helperEnd<0)throw new Error('database backup temporary-file helper not found');
+  const helper=source.slice(helperStart,helperEnd);
+  const tempDir=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-backup-stream-'));
+  try{
+    const context={fs,path,crypto,writeJsonSync,DB_FILE:path.join(tempDir,'rimaz.json'),process:{pid:process.pid}};
+    vm.createContext(context);
+    vm.runInContext(helper+';globalThis.createBackup=createDatabaseBackupTempFile;',context);
+    const snapshot={format:'rimaz-database-backup',database:{members:[{name:'أحمد',message:'💚🌹'.repeat(5000)}],sessions:{},privateMessages:[]}};
+    const file=context.createBackup(snapshot,'test');
+    const actual=fs.readFileSync(file,'utf8');
+    const expected=JSON.stringify(snapshot,null,2);
+    const mode=fs.statSync(file).mode&0o777;
+    const valid=actual===expected&&mode===0o600;
+    fs.unlinkSync(file);
+    const cycle={};cycle.self=cycle;
+    let rejected=false;
+    try{context.createBackup(cycle,'cycle');}catch(error){rejected=/circular/i.test(String(error.message));}
+    const clean=fs.readdirSync(tempDir).length===0;
+    if(valid)pass('database backup temp writer preserves pretty JSON byte-for-byte and creates mode-0600 disk files');else fail('database backup temp writer serialization or file permissions');
+    if(rejected&&clean)pass('database backup temp writer rejects circular data and removes partial files');else fail('database backup temp writer failure cleanup');
+  }finally{fs.rmSync(tempDir,{recursive:true,force:true});}
+  const fullStart=source.indexOf('async function* fullBackupTarEntries(){');
+  const fullEnd=source.indexOf('async function prepareFullBackupEntries(){',fullStart);
+  const full=fullStart>=0&&fullEnd>fullStart?source.slice(fullStart,fullEnd):'';
+  const fullOk=full.includes("createDatabaseBackupTempFile(snapshot,'full-backup')")&&full.includes("yield {name:'database/rimaz-database.json',disk:databaseBackupFile")&&full.includes('finally{')&&full.includes('fs.unlinkSync(databaseBackupFile)')&&!full.includes('JSON.stringify(snapshot')&&!full.includes('Buffer.from(');
+  const databaseStart=source.indexOf("app.get('/api/admin/backup/database'");
+  const databaseEnd=source.indexOf("app.get('/api/admin/backup/full'",databaseStart);
+  const databaseRoute=databaseStart>=0&&databaseEnd>databaseStart?source.slice(databaseStart,databaseEnd):'';
+  const databaseOk=databaseRoute.includes("createDatabaseBackupTempFile(snapshot,'database-backup')")&&databaseRoute.includes('fs.createReadStream(backupFile)')&&databaseRoute.includes("stream.once('close',cleanup)")&&databaseRoute.includes("res.once('close'")&&!databaseRoute.includes('JSON.stringify(snapshot')&&!databaseRoute.includes('res.send(body)');
+  if(fullOk)pass('full tar backup streams the database temp file and removes it in generator finally');else fail('full tar backup must not materialize a full JSON string or Buffer');
+  if(databaseOk)pass('database-only backup streams the restrictive temp file and cleans it after completion or disconnect');else fail('database-only backup must stream and clean its temporary file');
+} catch(error) { fail('bounded-memory database backup regression checks',error.message); }
+
+
+// The full-backup TAR entry generator must release its database snapshot file
+// on normal exhaustion, explicit iterator cancellation, and downstream failure.
+(async()=>{
+  const source=fs.readFileSync(server,'utf8');
+  const helperStart=source.indexOf('function createDatabaseBackupTempFile(snapshot,purpose){');
+  const generatorStart=source.indexOf('async function* fullBackupTarEntries(){',helperStart);
+  const generatorEnd=source.indexOf('async function prepareFullBackupEntries(){',generatorStart);
+  if(helperStart<0||generatorStart<0||generatorEnd<0)throw new Error('backup helper/generator boundaries not found');
+  const executable=source.slice(helperStart,generatorEnd);
+  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rimaz-tar-generator-cleanup-'));
+  const uploads=path.join(temp,'uploads'),privateMedia=path.join(temp,'private-media');
+  fs.mkdirSync(uploads);fs.mkdirSync(privateMedia);
+  fs.writeFileSync(path.join(uploads,'sample.txt'),'public snapshot content');
+  fs.writeFileSync(path.join(privateMedia,'private.mp4'),'private media excluded');
+  const context={
+    fs,path,crypto,writeJsonSync,createBackupMediaSnapshot,DB_FILE:path.join(temp,'data.json'),DATA_DIR:temp,db:{users:{alice:{name:'أحمد'}},sessions:{old:{name:'stale'}},messages:[{media:{url:'/uploads/sample.txt'}}],privateMessages:[{media:{url:'/api/private/media/private.mp4'}}]},
+    UP_DIR:uploads,PRIVATE_MEDIA_DIR:privateMedia,process:{pid:process.pid},
+    require:(name)=>name==='./package.json'?{version:'test'}:require(name),console
+  };
+  vm.createContext(context);
+  vm.runInContext(executable+';globalThis.createEntries=fullBackupTarEntries;',context);
+  const checks=[];
+  try{
+    const cancelled=context.createEntries();
+    const first=await cancelled.next();
+    const cancelledFile=first.value?.disk;
+    const cancelledValid=!first.done&&first.value?.name==='database/rimaz-database.json'&&cancelledFile&&fs.existsSync(cancelledFile)&&JSON.parse(fs.readFileSync(cancelledFile,'utf8')).database.users.alice.name==='أحمد';
+    const snapshotDirectory=fs.readdirSync(temp).find(name=>name.startsWith('.rimaz-backup-media-'));
+    await cancelled.return();
+    checks.push(['full-backup TAR generator removes database and hard-link media snapshots when the consumer cancels',cancelledValid&&!fs.existsSync(cancelledFile)&&(!snapshotDirectory||!fs.existsSync(path.join(temp,snapshotDirectory)))]);
+
+    const completed=context.createEntries();
+    const normalFirst=await completed.next();
+    const normalFile=normalFirst.value?.disk;
+    const mediaEntry=await completed.next();
+    const mediaFile=mediaEntry.value?.disk;
+    let normalExhausted=false;
+    while(!normalExhausted){const item=await completed.next();normalExhausted=item.done;}
+    checks.push(['full-backup TAR generator snapshots referenced public media and cleans all files after normal exhaustion',!normalFirst.done&&normalFile&&mediaEntry.value?.name==='uploads/sample.txt'&&mediaFile&&normalExhausted&&!fs.existsSync(normalFile)&&!fs.existsSync(mediaFile)]);
+
+    const blockedUploads=path.join(temp,'uploads-is-file');
+    fs.writeFileSync(blockedUploads,'not a directory');
+    context.UP_DIR=blockedUploads;
+    const failed=context.createEntries();
+    let rejected=false;
+    try{await failed.next();}catch(error){rejected=error.message.includes('Referenced public upload is missing or unreadable')&&error.cause?.code==='ENOTDIR';}
+    const leftover=fs.readdirSync(temp).filter(name=>name.startsWith('data.json.')||name.startsWith('.rimaz-backup-media-'));
+    checks.push(['full-backup TAR generator cleans database and media snapshots when snapshot creation fails',rejected&&leftover.length===0]);
+  }finally{
+    fs.rmSync(temp,{recursive:true,force:true});
+  }
+  for(const [label,ok] of checks)ok?pass(label):fail(label);
+})().catch(error=>{fail('full-backup TAR generator cleanup lifecycle tests',error.message);process.exitCode=1;});
+
+
+// Full-backup preparation must complete integrity checks before HTTP archive headers are sent.
+(async()=>{
+  const source=fs.readFileSync(server,'utf8');
+  const prepareStart=source.indexOf('async function prepareFullBackupEntries(){');
+  const prepareEnd=source.indexOf('\nasync function* fullBackupTar(',prepareStart);
+  if(prepareStart<0||prepareEnd<0)throw new Error('full-backup preparation helper boundaries not found');
+  const prepareSource=source.slice(prepareStart,prepareEnd);
+  const goodContext={fullBackupTarEntries:()=>({next:async()=>({done:false,value:{name:'database/rimaz-database.json'}})})};
+  vm.createContext(goodContext);
+  vm.runInContext(prepareSource+';globalThis.prepare=prepareFullBackupEntries;',goodContext);
+  const prepared=await goodContext.prepare();
+  const preparationOk=prepared.firstEntry?.value?.name==='database/rimaz-database.json'&&typeof prepared.entries.next==='function';
+
+  const sendStart=source.indexOf('async function sendFullBackupResponse(res){');
+  const sendEnd=source.indexOf('\n\n// Owner-only site controls',sendStart);
+  if(sendStart<0||sendEnd<0)throw new Error('full-backup response helper boundaries not found');
+  const sendSource=source.slice(sendStart,sendEnd);
+  const sendContext={prepareFullBackupEntries:async()=>{throw new Error('Backup media integrity check failed. Referenced public upload is missing');},console:{error(){}}};
+  vm.createContext(sendContext);
+  vm.runInContext(sendSource+';globalThis.send=sendFullBackupResponse;',sendContext);
+  const response={statusCode:0,body:null,headers:0,status(code){this.statusCode=code;return this;},json(value){this.body=value;return this;},set(){this.headers++;return this;}};
+  await sendContext.send(response);
+  const responseOk=response.statusCode===409&&response.headers===0&&/وسائط مفقود/.test(response.body?.error||'');
+  preparationOk?pass('full-backup integrity preflight captures the first database entry before streaming'):fail('full-backup integrity preflight preparation');
+  responseOk?pass('missing referenced media returns a clear pre-stream HTTP conflict instead of a broken archive'):fail('full-backup missing-media response must be sent before archive headers');
+})().catch(error=>{fail('full-backup preflight response regression tests',error.message);process.exitCode=1;});
+
+ // Chat delivery protocol regression tests.
+try {
+ const source=fs.readFileSync(server,'utf8');
+ const client=fs.readFileSync(path.join(root,'public','index.html'),'utf8');
+ const checks=[
+  ['public Socket.IO acknowledgement follows durable save and broadcast',/await addMessage\(message\)[\s\S]*?io\.to\(room\)\.emit\('message',message\)[\s\S]*?return \{ok:true,messageId:message\.id\}/.test(source)],
+  ['private Socket.IO acknowledgement follows accepted message delivery',/socket\.on\('private-message',async\(d,acknowledge\)=>[\s\S]*?socket\.emit\('private-message',message\)[\s\S]*?return \{ok:true,messageId:message\.id\}/.test(source)],
+  ['public and private requests use separate bounded idempotency scopes',source.includes("d?.requestId,'public'")&&source.includes("d?.requestId,'private'")&&source.includes('socketMessageRequestCache')],
+  ['idempotency cache hard-caps pending entries and refuses admission when no settled entry can be evicted',/if\(socketMessageRequestCache\.size>=SOCKET_MESSAGE_REQUEST_LIMIT\)[\s\S]*?if\(evictableKey===null\)return Promise\.resolve\(\{ok:false,error:[^}]+\}\)[\s\S]*?socketMessageRequestCache\.delete\(evictableKey\)[\s\S]*?socketMessageRequestCache\.set\(cacheKey,entry\)/.test(source)&&!source.includes('while(socketMessageRequestCache.size>SOCKET_MESSAGE_REQUEST_LIMIT)')],
+  ['composers wait for acknowledgements and preserve drafts on timeout',client.includes('socket.timeout(15000).emit(event')&&client.includes('احتفظنا برسالتك')&&client.includes('احتفظنا برسالتك الخاصة')],
+  ['private history merges live messages and rejects stale async results',client.includes('renderMergedPrivateHistory')&&client.includes('privateMessageBuffer.values()')&&client.includes('historyGeneration!==privateHistoryLoadGeneration')],
+  ['locked-room password stays in page memory and is reused on reconnect',client.includes('currentRoomPassword')&&client.includes('joinRoom(currentRoom,currentRoomPassword)')],
+  ['expired sessions are reported by server and handled by client',source.includes("socket.emit('session-expired'")&&client.includes("socket.on('session-expired'")],
+ ];
+ for(const [label,ok] of checks)ok?pass(label):fail(label);
+} catch(error) { fail('chat delivery protocol regression tests',error.message); }
+
+;(async()=>{
+ const runtimeSource=fs.readFileSync(server,'utf8');
+ const helperStart=runtimeSource.indexOf('const SOCKET_MESSAGE_REQUEST_LIMIT=');
+ const helperEnd=runtimeSource.indexOf("\nio.on('connection'",helperStart);
+ if(helperStart<0||helperEnd<0)throw new Error('request idempotency helper boundaries not found');
+ const fixture={Map,Date,Promise,console,crypto:require('node:crypto')};
+ vm.runInNewContext(runtimeSource.slice(helperStart,helperEnd)+';globalThis.execute=executeSocketMessageRequest;globalThis.cache=socketMessageRequestCache;globalThis.limit=SOCKET_MESSAGE_REQUEST_LIMIT;',fixture);
+ const resolvers=[],pending=[];
+ for(let i=0;i<fixture.limit;i++)pending.push(fixture.execute('session-test',`pending_${i}`,'public',()=>new Promise(resolve=>resolvers.push(resolve))));
+ const overflow=await fixture.execute('session-test','overflow_000','public',()=>({ok:true}));
+ if(overflow?.ok!==false||fixture.cache.size!==fixture.limit||resolvers.length!==fixture.limit)throw new Error('pending request admission exceeded its hard capacity instead of rejecting safely');
+ for(const resolve of resolvers)resolve({ok:true});
+ await Promise.all(pending);
+ if(fixture.cache.size!==fixture.limit)throw new Error('request cache capacity changed after pending requests settled');
+ let conflictingTaskRan=false;
+ const firstResult=await fixture.execute('session-test','same_request_001','public',()=>({ok:true,value:'original'}),'payload-original');
+ const conflictingResult=await fixture.execute('session-test','same_request_001','public',()=>{conflictingTaskRan=true;return {ok:true,value:'conflict'};},'payload-conflict');
+ if(firstResult?.value!=='original'||conflictingResult?.ok!==false||conflictingTaskRan)throw new Error('reusing a request ID with a different payload was not rejected');
+ const retryResult=await fixture.execute('session-test','same_request_001','public',()=>({ok:true,value:'unexpected'}),'payload-original');
+ if(retryResult?.value!=='original')throw new Error('same-payload retry did not reuse the original result');
+ pass('idempotency request cache binds each request ID to its payload fingerprint');
+ pass('idempotency request cache enforces its hard cap under fully concurrent pending load');
+})().catch(error=>{fail('idempotency request cache hard-cap runtime test',error.message);process.exitCode=1;});

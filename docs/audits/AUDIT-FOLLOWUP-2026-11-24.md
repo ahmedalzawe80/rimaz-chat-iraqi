@@ -1,5 +1,7 @@
 # Rimaz runtime follow-up audit — 2026-11-24
 
+> **Historical snapshot (2026-11-24).** This audit describes the source and deployment evidence available on its review date. It is not the current branch or production status. For the latest repository state, see the [2026-11-27 checkpoint](../project/CHECKPOINT-2026-11-27.md) and [repository cleanup inventory](REPOSITORY-CLEANUP-INVENTORY-2026-11-26.md).
+
 ## Scope
 Read-only review of the working branch `safety/validate-and-backup-before-sync` after the Deplexo deployment/log review. No runtime source changes, no deployment, no restart, no production data access, and no destructive workflow execution were performed.
 
@@ -42,3 +44,29 @@ Read-only review of the working branch `safety/validate-and-backup-before-sync` 
 - No application runtime code was changed.
 - No merge to `main`, production restart, deployment, or ZIP sync was performed.
 - The manual ZIP workflow still contains `rsync -a --delete`; do not run it without reviewing the exact archive, runtime-data exclusions, and a verified restore procedure, followed by explicit user approval.
+
+
+## Subsequent follow-up — admin-data permission routing (2026-11-24)
+
+A later review of the current working branch found a shadowed permission rule in `permissionForAdminPath`: an early `/api/admin/data` condition always returned `panel_access`, making the later `ALL_PERMISSION_KEYS` rule unreachable. This contradicted the route's own permission-filtered payload and the existing regression-test intent.
+
+- Corrected the route mapping to return `ALL_PERMISSION_KEYS` directly before the other route mappings. The handler still filters every data group according to the caller's actual permissions; this does not grant additional capabilities to the caller.
+- Added a regression assertion that verifies the all-permissions mapping is reachable before the remaining route rules and that the shadowing conditional does not return.
+- Source fix commit: `9ec6ebbf71a2467aee67115a37e33cc9950c93df`.
+- Regression-test commit: `a7bfce38ebdbebf10495c1a063d89a0fbf15b578`.
+- Exact-source validation run [#704](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45469789989) succeeded: 603 checks, zero failures, locked dependency verification, JavaScript syntax, and production Docker build.
+- The post-validation archive job also succeeded: 394 files, 16,357,277 bytes, extracted-archive validation with 603 checks and zero failures, Docker build, and npm audit with 0 vulnerabilities.
+- Archive-only head after CI: `a49f10afcda33eac55ea974c60ee57e866f4e28c`.
+
+This follow-up changes the historical "read-only/no runtime changes" statement above only for the later commits listed here. It does not represent live-server or production verification. `main` remains unchanged, PR #3 remains draft/open/unmerged, and no Deplexo deployment, restart, ZIP sync, or live-data modification was performed.
+
+## Superseding repository and archive check — 2026-11-24 19:42 UTC
+
+The opening sections above preserve the original read-only runtime audit and its historical branch snapshot. The current source candidate and release boundary are:
+
+- Source/documentation candidate `7b47b00f662867b89e17ef1597337eb697166eba` passed [Actions run #708](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45472720285), including 603 regression checks with zero failures and a successful production Docker build.
+- The extracted archive passed its own 603 regression checks, HTML parity, Docker build, and production dependency installation with zero reported vulnerabilities.
+- Latest archive-only commit: `50c61f0d55513e3840ea71fdff14e609042fa2ed`, changing only the ZIP (16,359,829 bytes).
+- The current tree contains no nested duplicate project directory and only one release ZIP. The removed nested `data.json` and Google verification file were compared against retained copies and were byte-identical; the root placeholder and root/public verification files remain.
+- PR #3 remains draft/open/unmerged on `safety/validate-and-backup-before-sync`; production `main` remains unchanged at `a2c74fded15ea5cfde38d310a84c3c8edfe994b3`.
+- The source and archive are CI-validated only. No Deplexo deployment, live-volume backup, restore, or staging runtime test has been performed. Those remain mandatory before promotion.

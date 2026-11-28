@@ -4,7 +4,6 @@ node_modules
 *.zip
 *.log
 .DS_Store
-rimaz-chat-iraqi-main/
 
 # Runtime state and uploaded/private media must never enter the Docker image.
 data.json
@@ -15,3 +14,23 @@ private-media/
 *.tmp
 *.corrupt-*
 *.pre-restore-*
+
+# Credentials, certificates, local backups and generated artifacts.
+.npmrc
+.env
+.env.*
+!.env.example
+secrets/
+backups/
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite
+*.sqlite3
+*.db
+*.sql
+*.dump
+coverage/
+.npm/
+.cache/

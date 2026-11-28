@@ -1,3 +1,47 @@
+## Subscription lifecycle and constrained-runtime validation — 2026-11-28 (no application version change)
+
+- Reuse the latest prior subscription record when an account is reactivated after cancellation or expiry, instead of creating a new database row on every lifecycle; preserve the existing per-record history and its 100-event limit.
+- Clone only the target subscription history during grant/cancellation transactions, avoiding unnecessary copies of unrelated account histories while preserving rollback behavior.
+- Added runtime regression fixtures for active renewal, expired/cancelled reactivation, new-account creation, history isolation, and unrelated-record preservation.
+- Validated the exact review branch with passing regression tests, production Docker build, and HTTP/Socket.IO integration smoke tests under 128 MiB RAM and 0.25 vCPU. CI cgroup peaks varied from 80.6 MiB to 100.2 MiB across two successful runs; these are CI measurements, not live Deplexo readings.
+- Campaign creation/deletion remains explicit administration; no arbitrary campaign or historical-subscription deletion/retention cap was introduced.
+
+## Release packaging modernization — 2026-11-27
+
+- Removed the 16 MB generated release ZIP from the tracked repository and removed the separate archive-audit workflow. The release ZIP is now built in GitHub Actions runner temporary storage only after an explicit dispatch and successful source validation, then uploaded as a 30-day workflow artifact.
+- The artifact job validates exact tracked-file parity, safe paths, symlink/duplicate/CRC/compression limits, extracts and tests the archive, and builds its Docker image before upload. It has read-only repository permissions and creates no binary Git commits.
+- Added regression assertions for the artifact-only release lifecycle and updated repository navigation and release documentation. Ordinary source pushes remain direct repository updates and do not require manual ZIP editing or upload.
+
+## Repository automation safety — 2026-11-27
+
+- Removed the obsolete write-enabled ZIP self-sync workflow. Its exact-`main` parity precondition meant it could not promote a feature-branch candidate, while its rollback-branch creation, `rsync --delete`, and Git-push steps added unnecessary write capability.
+- Retained the validated release-archive builder and read-only archive audit. Application source integration remains pull-request based; archive refresh does not merge, deploy, or touch live data.
+
+## Runtime and restore maintenance — 2026-11-25 (no application version change)
+
+- Coordinated full-backup streaming with Node.js pipeline teardown so client cancellation propagates through the gzip/source chain and the generator can run its temporary-file cleanup.
+- Added restore-preview capacity preflight before Multer upload and JSON parsing. A full queue is rejected early while same-admin preview replacement remains supported.
+- Added regression coverage for backup iterator cleanup, upload cancellation lifecycle, and restore preview queue capacity/order.
+- Added a pinned, zero-dependency streaming JSON reader for startup database loading and restore preview/confirmation, avoiding a full UTF-16 source-string copy while parsing.
+- During restore confirmation, the current database is durably saved and copied to a restrictive recovery file, then its in-memory object graph is released before the replacement is parsed. Failed restores reload the previous snapshot from disk and reattach transient private messages; if the replacement had been persisted, the database file is atomically rolled back.
+- Regression coverage now includes chunk-split Unicode, duplicate keys, prototype-safe __proto__ handling, malformed/BOM/deep/oversized files, multi-megabyte input, and disk-backed rollback.
+- These changes reduce peak-memory duplication but do not establish that the 128 MB hosting memory issue is fixed; restore preview still holds the live database and replacement object graph together, and staging/load verification remains required.
+
+## Repository maintenance — 2026-11-24 (no application version change)
+
+- Organized project continuity notes, engineering audits, and operations records under `docs/project/`, `docs/audits/`, and `docs/operations/`; the root keeps the standard README, CHANGELOG, and CONTRIBUTING guides among Markdown files.
+- Added a repository structure guide, categorized documentation index, and regression checks for broken links and reports scattered in the root.
+- Removed the incomplete nested `rimaz-chat-iraqi-main/` duplicate after confirming it contained only a placeholder data file and a duplicate Google verification file.
+- Added a genuine npm v3 lockfile generated on Node.js 24, verified clean `npm ci`, and changed production Docker installation to `npm ci --omit=dev`.
+- Updated README, contributor guidance, deployment notes, and CI so clean installs use the committed lockfile; CI checks the dependency tree before running regression tests and building Docker.
+- Added regression assertions for lockfile/package manifest consistency, locked Docker installation, and the permanent CI contract.
+- Rebuilt the audited ZIP deterministically from 394 tracked candidate files after archive audit detected that the previous archive had drifted from the reviewed package manifest.
+- Added archive parity checks for package manifest, lockfile, Dockerfile, server/browser entry files, regression checks, and public assets; archive validation also rejects traversal, symlinks, duplicate file paths, and oversized/compression-bomb entries.
+- Hardened manual source sync to refuse stale archives and to run locked dependency, regression, and Docker checks before and after synchronization.
+- Added `.editorconfig`, `.gitattributes`, `.nvmrc`, `CONTRIBUTING.md`, a pull-request template, Dependabot schedules, and immutable SHA pins for GitHub Actions.
+- Kept the audited source ZIP at the repository root because the archive-audit and guarded manual-sync workflows depend on that exact path.
+- No production data or hosting volume was changed.
+
 ## v46.93.72 (2026-11-22)
 
 - Fixed transient anti-spam state lifecycle: per-session message windows are removed only after the reconnect grace period ends and the session removal is durably saved; orphaned transient entries are also swept periodically.
@@ -633,3 +677,14 @@
 - Added request method/path and stack trace to unhandled request error logs (query strings are excluded so media ticket tokens are not logged).
 - Updated regression checks to validate image signatures on disk, media-serving behavior, and package version.
 - Historical Deplexo log error `ReferenceError: ticket is not defined` was already fixed in the private media ticket route in an earlier release; this version keeps that fix and adds more diagnostic logging.
+
+
+## 2026-11-25 — Restore preview and repository hardening
+- Added a token-level streaming restore inspector. Preview validates the versioned backup format, database field types, owner presence, and member/guest/room/message/wall counts without retaining the replacement database object graph.
+- Kept full schema validation at confirmation. Confirmation creates a restrictive disk recovery copy, releases the previous database object before parsing the replacement, and atomically restores the previous database file if persistence fails.
+- Added regression coverage for owner-role case sensitivity, duplicate JSON/account keys, configured owner matching, schema failures, unique account counts, and multi-megabyte message arrays.
+- Added a bounded-chunk JSON reader/writer, restore upload admission control, and cancellable full-backup stream cleanup.
+- Exact source/test commit `cbf0f15119ff0be6eee6bd8fa7fc76c019c82841` passed [Actions run #45602868789](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45602868789): 626 regression checks, syntax, locked install, dependency tree, and Docker build. The refreshed archive was extracted and independently passed install, tests, HTML parity, and Docker build.
+- This does not prove the historical 128 MB Deplexo memory issue is fixed; staging restore and representative-load memory evidence remain mandatory.
+
+- Added a CI runtime smoke step that starts the production Docker image and verifies both the homepage HTTP response and Socket.IO polling handshake. This checks isolated startup, not staging or production memory behavior.

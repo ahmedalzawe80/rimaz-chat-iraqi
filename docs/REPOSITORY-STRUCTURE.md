@@ -1,0 +1,153 @@
+# Repository structure and file ownership
+
+This guide explains why each top-level area exists and which files must remain in place. The goal is a small, predictable repository root without breaking runtime paths or deployment automation.
+
+## Directory map
+
+```text
+.
+├── .github/
+│   ├── dependabot.yml
+│   ├── pull_request_template.md
+│   └── workflows/
+│       └── validate-project.yml
+├── docs/
+│   ├── audits/
+│   ├── operations/
+│   └── project/
+├── lib/
+│   ├── backup-media-snapshot.js
+│   ├── backup-temp-cleanup.js
+│   ├── cgroup-metrics.js
+│   ├── client-ip.js
+│   ├── data-directory.js
+│   ├── json-reader.js
+│   ├── json-writer.js
+│   └── restore-inspector.js
+├── public/
+│   ├── gifts/
+│   ├── smileys/
+│   └── vip-gifts/
+├── scripts/
+│   └── chat-integration-smoke.js
+├── .dockerignore
+├── .editorconfig
+├── .gitattributes
+├── .gitignore
+├── .nvmrc
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── Dockerfile
+├── README.md
+├── data.json                 # tracked warning placeholder
+├── google1a84d9d1dec7b85d.html
+├── index.html
+├── package-lock.json         # exact npm dependency graph
+├── package.json
+├── server.js
+└── verify.js
+```
+
+The repository root currently has 16 tracked files. Each has an identified runtime, dependency, editor/Git, documentation, domain-verification, build, test, or audited-release role; the root is intentionally not a dumping ground. Keep these entry points at the root rather than moving them merely to reduce the visible file count. The two HTML entry copies and two domain-verification copies have separate serving/verification roles and must remain synchronized.
+
+## Root files that must not be moved casually
+
+| File | Why it stays at the root |
+|---|---|
+| `.dockerignore` | Defines the build-context boundary; keeps runtime data, local dependencies, archives, and repository-only files out of Docker builds |
+| `.editorconfig` | Shared editor formatting defaults for contributors and tooling |
+| `.gitattributes` | Git text/binary and line-ending normalization rules |
+| `.gitignore` | Excludes local dependencies, runtime data, secrets, backups, and generated artifacts from Git |
+| `.nvmrc` | Canonical Node.js major-version pin consumed by local nvm and CI |
+| `CHANGELOG.md` | Chronological record of application and repository changes |
+| `CONTRIBUTING.md` | Required branch, validation, review, and data-safety process |
+| `README.md` | Project entry point: setup, runtime configuration, layout, and safe workflow |
+| `server.js` | Application start command and Docker image expect this path |
+| `package.json` | npm and Docker build resolve dependencies from the project root |
+| `package-lock.json` | `npm ci` and the production Docker build use this exact dependency graph |
+| `index.html` | Main browser entry file and server SEO integration |
+| `Dockerfile` | Hosting and CI build from the repository root |
+| `verify.js` | Current npm test script runs this file |
+| `data.json` | Tracked warning placeholder retained for repository/workflow compatibility; it is not production data |
+| `google1a84d9d1dec7b85d.html` | Domain verification endpoint; keep it byte-identical to the copy under `public/` |
+
+
+`public/index.html` is a synchronized fallback copy of the root `index.html`. The regression suite checks that the two copies remain byte-identical.
+
+## Tooling consistency
+
+`.nvmrc` is the single Node.js major-version source for local development and GitHub Actions. `package.json` constrains supported runtime versions, while the Dockerfile uses the matching Node 24 base image. `package-lock.json` records the resolved dependency tree; local development, CI, and Docker use `npm ci` to install it without re-resolving version ranges.
+
+## Persistence and JSON helpers
+
+- `lib/data-directory.js` resolves the persistent database directory and prevents accidental initialization or redirection of an existing hosted member database.
+- `lib/json-reader.js` incrementally parses the live database and restore-confirmation file in bounded chunks, with a nesting limit and without allocating a full source-text string.
+- `lib/json-writer.js` serializes database snapshots in bounded chunks for durable atomic writes and backup staging.
+- `lib/restore-inspector.js` validates staged restore previews from JSON tokens without retaining the full replacement database graph.
+- `lib/backup-media-snapshot.js` snapshots only structured references to public uploads using hard links, and fails closed if a referenced file is missing or unsafe.
+- `lib/backup-temp-cleanup.js` removes only recognized backup temp artifacts older than seven days after an interrupted export; fresh and unrelated files are preserved.
+- `lib/client-ip.js` accepts forwarding headers only when the immediate peer matches explicitly configured trusted proxy CIDRs.
+- `lib/cgroup-metrics.js` reads optional cgroup v2 memory/OOM/CPU counters for the owner health panel.
+- `scripts/chat-integration-smoke.js` runs authenticated server-side integration checks from CI against the constrained production container.
+- Keep persistence helpers separate from `server.js` so file-format and failure behavior can be regression-tested independently.
+
+## Runtime assets
+
+Built-in gifts, smileys, and VIP gifts are served from `public/gifts/`, `public/smileys/`, and `public/vip-gifts/`. The server discovers these files dynamically. Built-in gift IDs are derived from the sorted asset list, so deleting or renaming an apparently duplicate image can shift generated IDs and affect existing catalog references. Do not deduplicate or rename media until the catalog migration and stored references have been verified.
+
+Some files have identical contents but distinct names. Two duplicate pairs are intentional synchronized copies (root/public HTML and Google verification); other identical media files are retained because their filenames participate in dynamic asset discovery.
+
+## Documentation ownership
+
+- `docs/project/`: dated continuation checkpoints; `CHECKPOINT-2026-11-27.md` is the latest recorded reference, while earlier checkpoints are retained as history. `docs/README.md` links the latest checkpoint first.
+- `docs/audits/`: security, runtime-resource, and transaction-safety findings.
+- `docs/operations/`: release gate and deployment procedures.
+- `docs/README.md`: navigation index for maintained documentation.
+
+Keep implementation entry points in the root, application media in `public/`, and non-runtime reports in the appropriate `docs/` category.
+
+## Data and release safety
+
+The full application export contains the database and structured references to public uploads. Transient private messages and their private-media files are intentionally excluded because private conversations are not persisted. An independent persistent-volume backup must be planned separately.
+
+Git history and rollback branches cover tracked repository files only. They do not back up the live Deplexo persistent volume, database, uploads, or private media. Never replace live data with the tracked placeholder or a source archive. Production promotion requires a separately verified volume backup, a restore test, staging smoke tests, and explicit approval.
+
+
+## Historical tree snapshot before release-artifact migration — 2026-11-27
+
+At this earlier review point, a recursive tree inspection returned 416 entries: 404 tracked file blobs and 12 directory entries. The root then contained 17 files and five directories. These are historical counts from before the release ZIP and standalone archive-audit workflow were removed; see the current-tree section below.
+
+The current tree has 17 Markdown documentation files, organized by audit, operations, and project continuity. Public assets remain in the three catalog directories and other required `public/` paths; the current public asset/file count is 360. No nested second application directory, extra root ZIP, or backup/temp dump was found.
+
+The latest source/test commit `f60b85fe6f84fd997a500546880c10949a170d46` passed both jobs in Actions run [#45943098064](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45943098064). The branch tip `4c8309f86c589b4afac04253efb6cb1fc2126971` is the subsequent archive-only commit. See the repository cleanup inventory for the detailed file and duplicate-media classifications.
+
+These counts are a dated snapshot and should be refreshed after structural changes. They do not imply that production data, the Deplexo volume, or live media were inspected.
+
+
+## Release archive lifecycle — 2026-11-27
+
+The release ZIP is no longer tracked in the repository. It is generated in GitHub Actions runner temporary storage only after explicit dispatch and successful source validation, then uploaded as a downloadable workflow artifact. This keeps the 16-file repository root free of generated binary archives and avoids archive-only Git commits.
+
+The `build-release-archive` job runs only after an explicit `workflow_dispatch` on `main` or an approved maintenance branch, and only after the source-validation job succeeds. It builds the archive outside the repository, checks safe paths and exact tracked-file parity, tests the extracted project, builds the Docker image, and uploads a 30-day Actions artifact. Ordinary pushes do not create ZIP files or binary commits. This process does not promote code to `main` or deploy; integrate application changes through the reviewed pull-request process.
+
+**Dispatch availability prerequisite:** GitHub exposes a manually dispatched workflow only after its workflow file exists on the repository's default branch. At this checkpoint, `main` still contains only the legacy `.github/workflows/unzip-upload.yml`; `validate-project.yml` is present in draft PR #1 and has not been merged. Therefore the new artifact job is configured and validated by source CI, but cannot yet be dispatched from GitHub. After the prerequisite workflow reaches `main` through an approved PR, select the updated maintenance branch when dispatching the artifact build. No merge is performed as part of this cleanup.
+
+
+## Current tree after release-artifact migration — 2026-11-27
+
+- The root now contains **16 tracked files** and five directories. The generated ZIP is no longer tracked; it is produced in CI temporary storage and uploaded as a 30-day Actions artifact.
+- The standalone `audit-rootfix-archive.yml` workflow has been removed because its safety checks now run inside `validate-project.yml`'s artifact job. Only the unified validation/release workflow remains under `.github/workflows/`.
+- The tree therefore has **401 tracked file blobs + 12 directory entries = 413 total entries**. The 17 Markdown files and 360 public files are unchanged. The nested duplicate project directory remains absent.
+- The exact tree at commit `67f05c8b5cdef080272f1178b98a12b2e6205929` passed Actions run [#45948606723](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45948606723): dependency verification, JavaScript syntax, full regression suite, production Docker build, and constrained HTTP/Socket.IO smoke all succeeded. The regression suite also checked all repository Markdown relative links. The optional `build-release-archive` job was skipped because this was an ordinary push; the embedded archive build/extraction scripts were syntax-checked and exercised against a synthetic fixture, but the actual GitHub artifact upload still requires an explicit workflow dispatch. No media or live data was changed.
+
+
+## Latest exact candidate tree validation — 2026-11-27
+
+- Exact head `accd5e8d67b89ba0e5dfcd282f90ec70c951c411` passed [Actions run #45949927455](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45949927455), including the full regression suite, production Docker build, and constrained HTTP/Socket.IO smoke. The pull-request path filter now explicitly includes `scripts/**` so changes to the integration smoke script also trigger validation.
+- Recursive tree: **413 entries = 401 files + 12 directories**, not truncated; root **16 files**; one workflow file; no symlinks; no tracked files larger than 5 MiB; public assets **360**. The ZIP, nested project duplicate, and database dumps are absent.
+- The archive artifact job is intentionally skipped on push events. Its first real upload remains blocked until the current safety workflow is updated onto the default branch through the reviewed PR sequence; no merge has been performed.
+
+
+### Documentation follow-up verification — 2026-11-27
+
+The historical archive and inventory notes were refreshed on exact head `e752b8755b2d3411d7b635ab2db6ede62ac7b243`. Actions run [#45950194769](https://github.com/ahmedalzawe80/rimaz-chat-iraqi/actions/runs/45950194769) passed. A fresh local-link scan across all 17 Markdown files returned zero broken links; no escaped newline formatting remains. Tree counts are unchanged at 413 entries, 401 tracked files, 12 directories, 16 root files, and 360 public assets.
