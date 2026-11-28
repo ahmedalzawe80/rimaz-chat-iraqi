@@ -1059,6 +1059,46 @@ try {
 } catch(error) { fail('subscription lifecycle record selection',error.message); }
 
 
+
+// VIP entitlement resolution combines manual grants with every valid VIP subscription.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function vipActive(name){');
+  const end=source.indexOf('\nfunction defaultStatus',start);
+  assert.ok(start>=0&&end>start,'vipActive helper must be present');
+  let now=1000;
+  const context={
+    Date:{now:()=>now},
+    keyName:value=>String(value||'').trim().toLowerCase(),
+    db:{subscriptions:[]},
+    profile:name=>context.profiles[String(name).toLowerCase()]||{},
+    profiles:{alice:{}}
+  };
+  vm.createContext(context);
+  vm.runInContext(source.slice(start,end)+';globalThis.run=vipActive;',context);
+  const run=()=>context.run('ALICE');
+  assert.equal(run(),false);
+  context.profiles.alice.vipManualUntil=2000;
+  assert.equal(run(),true,'manual VIP grant remains active');
+  context.profiles.alice.vipManualUntil=500;
+  assert.equal(run(),false,'expired manual grant is inactive');
+  context.profiles.alice.vipUntil=1800;
+  delete context.profiles.alice.vipSubscriptionId;
+  assert.equal(run(),true,'legacy manual VIP without a subscription link remains compatible');
+  context.profiles.alice.vipSubscriptionId='legacy-sub';
+  context.db.subscriptions=[
+    {id:'legacy-sub',name:'Alice',status:'active',expiresAt:1800},
+    {id:'other-sub',name:' alice ',status:'active',expiresAt:2200,grantsVip:true},
+    {id:'expired-sub',name:'Alice',status:'active',expiresAt:900,grantsVip:true},
+    {id:'cancelled-sub',name:'Alice',status:'cancelled',expiresAt:2500,grantsVip:true}
+  ];
+  assert.equal(run(),true,'another active VIP subscription preserves entitlement');
+  context.db.subscriptions=context.db.subscriptions.filter(x=>x.id!=='other-sub'&&x.id!=='legacy-sub');
+  assert.equal(run(),false,'a stale linked subscription does not grant VIP');
+  assert.equal(context.profiles.alice.vipSubscriptionId,'legacy-sub','read-only VIP resolution does not mutate profile data');
+  pass('VIP resolution preserves manual grants and recognizes any active VIP subscription without mutating stored data');
+} catch(error) { fail('VIP entitlement resolution',error.message); }
+
 // Private chat read cursors and hide lists must be durable, bounded, and rollback-safe.
 try {
   const source=fs.readFileSync(server,'utf8');
