@@ -105,6 +105,9 @@ try{
   assert.match(serverSourceForResourceLimits,/express\.json\(\{\s*limit:\s*HTTP_JSON_BODY_LIMIT\s*\}\)/);
   assert.match(serverSourceForResourceLimits,/express\.urlencoded\(\{\s*extended:\s*true,\s*limit:\s*'64kb',\s*parameterLimit:\s*100\s*\}\)/);
   assert.match(serverSourceForResourceLimits,/err\?\.type===['\"]entity\.too\.large['\"]/);
+  assert.match(serverSourceForResourceLimits,/const runtimeCounts=\{activeSockets:io\.sockets\.sockets\.size/);
+  assert.match(serverSourceForResourceLimits,/pendingMessageWrites:pendingMessageWrites\.length/);
+  assert.match(serverSourceForResourceLimits,/activeVoicePairs:activeVoicePairs\.size/);
   pass('HTTP and Socket.IO payload ceilings bound per-request memory and disable WebSocket compression buffers');
 }catch(error){fail('HTTP and Socket.IO payload memory ceilings',error.message);}
 
