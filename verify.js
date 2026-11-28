@@ -1060,6 +1060,46 @@ try {
 
 
 
+// Subscription cancellation must select one exact, finite, active account record.
+try {
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('function selectActiveSubscriptionForCancellation(');
+  const end=source.indexOf('\nfunction prepareSubscriptionGrant',start);
+  assert.ok(start>=0&&end>start,'subscription cancellation selector must be present');
+  const context={keyName:value=>String(value||'').trim().toLowerCase()};
+  vm.createContext(context);
+  vm.runInContext(source.slice(start,end)+';globalThis.run=selectActiveSubscriptionForCancellation;',context);
+  const records=[
+    {id:'alice-old',name:'Alice',status:'active',expiresAt:500},
+    {id:'alice-new',name:' alice ',status:'active',expiresAt:700},
+    {id:'alice-expired',name:'ALICE',status:'active',expiresAt:50},
+    {id:'alice-cancelled',name:'Alice',status:'cancelled',expiresAt:900},
+    {id:'bob-active',name:'Bob',status:'active',expiresAt:900},
+    {id:'alice-infinite',name:'Alice',status:'active',expiresAt:'Infinity'}
+  ];
+  const before=JSON.stringify(records);
+  assert.equal(context.run(records,'Alice','',100).status,'ambiguous','multiple active terms require an explicit ID');
+  const selected=context.run(records,'ALICE','alice-new',100);
+  assert.equal(selected.status,'ok');
+  assert.equal(selected.index,1);
+  assert.equal(selected.subscription.id,'alice-new');
+  assert.equal(context.run(records,'Alice','missing-id',100).status,'not-found','an ID from another or nonexistent term cannot be substituted');
+  const unique=context.run(records,'Bob','',100);
+  assert.equal(unique.status,'ok');
+  assert.equal(unique.index,4);
+  assert.equal(context.run(records,'Nobody','',100).status,'not-found');
+  assert.equal(context.run(records,'Alice','',800).status,'not-found','expired records are not cancellable');
+  assert.equal(JSON.stringify(records),before,'selection must not mutate subscription history or records');
+  pass('subscription cancellation selector requires exact IDs for duplicates and ignores expired, cancelled, and non-finite terms');
+  const routeStart=source.indexOf("app.post('/api/admin/subscriptions/cancel'");
+  const routeEnd=source.indexOf('// Campaign ads:',routeStart);
+  const route=source.slice(routeStart,routeEnd);
+  assert.ok(route.includes('selectActiveSubscriptionForCancellation(db.subscriptions,name,subscriptionId,Date.now())'));
+  assert.ok(route.includes('index===selection.index')&&route.includes('db.subscriptions[selection.index]'));
+  assert.ok(!route.includes('x.id===subExists.id'));
+  pass('subscription cancellation updates only the selected array record, even if corrupt duplicate IDs exist');
+} catch(error) { fail('subscription cancellation exact-record selection',error.message); }
+
 // VIP entitlement resolution combines manual grants with every valid VIP subscription.
 try {
   const source=fs.readFileSync(server,'utf8');
