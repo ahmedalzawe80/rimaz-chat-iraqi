@@ -1093,6 +1093,10 @@ try {
     {id:'cancelled-sub',name:'Alice',status:'cancelled',expiresAt:2500,grantsVip:true}
   ];
   assert.equal(run(),true,'another active VIP subscription preserves entitlement');
+  context.db.subscriptions=[{id:'legacy-sub',name:'Alice',status:'active',expiresAt:1800,grantsVip:false}];
+  assert.equal(run(),false,'an explicitly non-VIP linked subscription never grants VIP');
+  context.db.subscriptions=[{id:'legacy-sub',name:'Alice',status:'active',expiresAt:1800}];
+  assert.equal(run(),true,'legacy linked subscriptions without grantsVip remain compatible');
   context.db.subscriptions=context.db.subscriptions.filter(x=>x.id!=='other-sub'&&x.id!=='legacy-sub');
   assert.equal(run(),false,'a stale linked subscription does not grant VIP');
   context.db.subscriptions=[
