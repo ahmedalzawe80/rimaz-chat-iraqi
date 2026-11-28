@@ -2251,7 +2251,7 @@ try {
  const checks=[
   ['v46.76.0 one-time migration adds new permissions only to previously full-permission admin rank/accounts',src.includes('adminFeaturePermissionMigrationVersion')&&src.includes('previous.every(key=>(adminFull.permissions||[]).includes(key))')&&src.includes('previous.every(key=>permissions.includes(key))')],
   ['v46.76.0 subscription endpoints require subscriptions_manage',src.includes("subscriptions_manage:'إدارة خطط")&&src.includes("app.get('/api/admin/subscriptions'")&&src.includes("app.post('/api/admin/subscriptions/assign'")&&src.includes("app.post('/api/admin/subscriptions/cancel'")],
-  ['subscription renewal extends from the later of now or current expiry',src.includes('const start=Math.max(now,Number(sub.expiresAt)||now)')],
+  ['subscription renewal extends from the later of now or current expiry',src.includes('start=Math.max(now,Number(sub.expiresAt)||now)')],
   ['subscription plan VIP expiry is linked to the subscription and removed on cancellation',src.includes('memberProfile.vipSubscriptionId=sub.id')&&src.includes('memberProfile.vipSubscriptionId===sub.id')],
   ['ad campaign management validates image and URL and supports scheduling',src.includes("app.post('/api/admin/ads'")&&src.includes('endsAt<=startsAt')&&src.includes("/^https?:\\/\\//i.test(url)")&&src.includes("app.get('/api/public/ads'")],
   ['control center has independent permission-gated read/write routes',src.includes("app.get('/api/admin/control-center'")&&src.includes("app.put('/api/admin/control-center'")&&src.includes("hasPermission(req.user,'control_center_manage')")],
