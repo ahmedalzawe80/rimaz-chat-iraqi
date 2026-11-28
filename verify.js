@@ -1320,6 +1320,7 @@ try {
   const offerLine=source.split('\n').find(line=>line.includes("socket.on('call-offer'"));
   const answerLine=source.split('\n').find(line=>line.includes("socket.on('call-answer'"));
   assert.ok(offerLine&&offerLine.includes('state.timeout=setTimeout(timeoutCall,60000)'));
+  assert.ok(offerLine.indexOf('Date.now()-state.created>120000')<offerLine.indexOf('voiceSpeakers.get(callee.room)'),'room microphone must not extend pending call retention beyond the negotiation TTL');
   assert.ok(answerLine&&answerLine.includes('if(state.timeout){clearTimeout(state.timeout);state.timeout=null;}'));
   for(const line of source.split('\n').filter(line=>line.includes("socket.on('call-reject'")||line.includes("socket.on('call-end'")||line.includes("socket.on('disconnect'")))assert.ok(!line.includes('activeCallPairs.delete('));
   assert.ok(source.includes('for(const pair of activeCallPairs.keys())clearActiveCallPair(pair);'));
