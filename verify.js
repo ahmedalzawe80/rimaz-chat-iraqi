@@ -2523,7 +2523,7 @@ try {
     ['private media verifies an active recipient account and fans out to all its active sessions',route.includes('hasConnectedSessionForUser(to)')&&route.includes("emitToUser(to,'private-media',m)")&&!route.includes('targetSocket[0]')],
     ['private media fan-out uses the same account-wide helper as private text delivery',source.includes('function emitToUser(name,event,payload)')&&source.includes("emitToUser(to,'private-message',message)")&&source.includes("emitToUser(to,'private-media',m)")],
     ['private media upload enforces the private-chat module switch and removes rejected uploads',route.includes("if(scope==='private'&&!siteModuleEnabled('privateChat')){removeUploadedFile(req.file);return res.status(403)")&&route.indexOf("if(scope==='private'&&!siteModuleEnabled('privateChat'))")<route.indexOf("db.privateMessages=[...")],
-    ['wall media upload enforces the wall module switch and removes rejected uploads',route.includes("if(scope==='wall'&&!siteModuleEnabled('wall')){removeUploadedFile(req.file);return res.status(403)")&&route.indexOf("if(scope==='wall'&&!siteModuleEnabled('wall'))")<route.indexOf("db.wall.push(post)")],
+    ['wall media upload enforces the wall module switch and uses the shared bounded wall commit',route.includes("if(scope==='wall'&&!siteModuleEnabled('wall')){removeUploadedFile(req.file);return res.status(403)")&&route.indexOf("if(scope==='wall'&&!siteModuleEnabled('wall'))")<route.indexOf('appendWallPost(post)')&&route.includes('appendWallPost(post)')&&!route.includes('db.wall.push(post)')],
     ['QuickTime MOV uploads have a safe extension and require a valid ISO-BMFF signature',source.includes("'video/quicktime':'.mov'")&&source.includes("['video/mp4','video/quicktime'].includes(mime) && actual==='mp4'")],
     ['private conversation media remains transient and is not persisted by save()',source.includes('const snapshot = { ...db, privateMessages: [] }')&&source.includes('purgePrivateHistoryAtStartup()')]
   ];
@@ -2813,6 +2813,50 @@ try {
   if(ok)pass('public retention rolls back memory and preserves media when the durable save fails');
   else fail('public retention rollback',JSON.stringify({sameMessages:db.messages===messages,sameWall:db.wall===wall,likes:db.wallLikes,comments:db.wallComments,events}));
 } catch(error) { fail('public retention rollback',error.message); }
+
+// Wall text and media posts must share the same bounded, durable commit path.
+try{
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('const MAX_WALL_POSTS=300;');
+  const end=source.indexOf('function cleanupExpiredPublicContent(now=Date.now()){',start);
+  if(start<0||end<0)throw new Error('bounded wall commit helper was not found');
+  const helper=source.slice(start,end);
+  const wall=Array.from({length:300},(_,index)=>({id:'post-'+(index+1),media:index===0?{url:'/uploads/evicted-wall.mp4'}:null}));
+  const db={wall,wallLikes:{'post-1':['member-a'],'post-2':['member-b']},wallComments:{'post-1':['old-comment'],'post-2':['keep-comment']}};
+  const events=[];
+  const context={db,save:()=>events.push(['save',db.wall.length]),removePublicUploadIfUnreferenced:url=>events.push(['unlink',url])};
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.appendTestWallPost=appendWallPost;',context);
+  const removed=context.appendTestWallPost({id:'post-301',media:null});
+  const ok=db.wall.length===300&&db.wall[0].id==='post-2'&&db.wall[299].id==='post-301'
+    &&removed.length===1&&removed[0].id==='post-1'
+    &&!Object.hasOwn(db.wallLikes,'post-1')&&!Object.hasOwn(db.wallComments,'post-1')
+    &&db.wallLikes['post-2'][0]==='member-b'&&db.wallComments['post-2'][0]==='keep-comment'
+    &&events[0]?.[0]==='save'&&events[1]?.[0]==='unlink'&&events[1]?.[1]==='/uploads/evicted-wall.mp4';
+  if(ok)pass('wall text/media shared commit bounds posts at 300 and cleans evicted metadata/media only after save');
+  else fail('bounded wall commit runtime fixture',JSON.stringify({length:db.wall.length,first:db.wall[0]?.id,last:db.wall.at(-1)?.id,removed:removed.map(x=>x.id),likes:db.wallLikes,comments:db.wallComments,events}));
+}catch(error){fail('bounded wall commit runtime fixture',error.message);}
+
+// A failed bounded wall save must restore the exact prior collections and preserve evicted media.
+try{
+  const source=fs.readFileSync(server,'utf8');
+  const start=source.indexOf('const MAX_WALL_POSTS=300;');
+  const end=source.indexOf('function cleanupExpiredPublicContent(now=Date.now()){',start);
+  if(start<0||end<0)throw new Error('bounded wall commit helper was not found');
+  const helper=source.slice(start,end);
+  const wall=Array.from({length:300},(_,index)=>({id:'post-'+(index+1),media:index===0?{url:'/uploads/keep-on-failure.mp4'}:null}));
+  const likes={'post-1':['member-a']},comments={'post-1':['comment']};
+  const db={wall,wallLikes:likes,wallComments:comments};
+  const events=[];
+  const context={db,save:()=>{events.push('save');throw new Error('simulated disk failure');},removePublicUploadIfUnreferenced:url=>events.push('unlink:'+url)};
+  vm.createContext(context);
+  vm.runInContext(helper+';globalThis.appendTestWallPost=appendWallPost;',context);
+  let rejected=false;try{context.appendTestWallPost({id:'post-301',media:null});}catch(error){rejected=/simulated disk failure/.test(error.message);}
+  const ok=rejected&&db.wall===wall&&db.wallLikes===likes&&db.wallComments===comments
+    &&db.wall.length===300&&db.wall[0].id==='post-1'&&events.length===1&&events[0]==='save';
+  if(ok)pass('failed wall post save rolls back exact wall metadata and never unlinks evicted media');
+  else fail('bounded wall commit rollback fixture',JSON.stringify({rejected,sameWall:db.wall===wall,sameLikes:db.wallLikes===likes,sameComments:db.wallComments===comments,events}));
+}catch(error){fail('bounded wall commit rollback fixture',error.message);}
 
 // v46.93.55: permanent member/visitor numbers and number-first online-member search.
 try {
