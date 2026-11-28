@@ -882,7 +882,7 @@ try {
   const checks=[
     ['global ban restores both name/IP ban maps and notifies only after save',globalBan.includes('previousGlobalBans=db.globalBans,previousGlobalIpBans=db.globalIpBans')&&globalBan.includes('catch(error){if(previousGlobalBans===undefined)delete db.globalBans')&&globalBan.indexOf('try{save();}')<globalBan.indexOf("emitToUser(n,'admin-action-notice'")],
     ['member-card like and reset actions restore the old count after failed save',grant.includes('catch(error){target.likes=previous')&&reset.includes('catch(error){target.likes=previous')],
-    ['member-card VIP and gift actions restore VIP and gift fields after failed save',vip.includes('hadGifts=Object.prototype.hasOwnProperty.call(p,\'gifts\')')&&vip.includes('catch(error){if(hadVipUntil)p.vipUntil=previousVipUntil')&&gift.includes('catch(error){if(hadVipUntil)p.vipUntil=previousVipUntil')],
+    ['member-card VIP and gift actions restore manual VIP and gift fields after failed save',vip.includes('hadGifts=Object.prototype.hasOwnProperty.call(p,\'gifts\')')&&vip.includes('hadVipUntil=Object.prototype.hasOwnProperty.call(p,\'vipManualUntil\')')&&vip.includes('catch(error){if(hadVipUntil)p.vipManualUntil=previousVipUntil')&&gift.includes('catch(error){if(hadVipUntil)p.vipManualUntil=previousVipUntil')],
     ['member-card room ban/mute restore room lists and notify only after save',ban.includes('catch(error){if(hadRoom)db.roomBans[room]=previousRoom')&&ban.indexOf('try{save();}')<ban.indexOf("emitToUser(n,'admin-action-notice'")&&mute.includes('catch(error){if(hadRoom)db.roomMutes[room]=previousRoom')]
   ];
   for(const [label,ok] of checks)ok?pass(label):fail(label);
